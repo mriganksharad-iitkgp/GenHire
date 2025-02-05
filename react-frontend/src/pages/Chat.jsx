@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 
 import Styles from "./Chat.module.css";
@@ -12,70 +12,61 @@ export default function Chat() {
 
 	const [menuOpen, setMenuOpen] = useState(false);
 
-	function onSend(e) {
+	// In your Chat.js file, update the onSend function:
+
+    const onSend = useCallback((e) => {
 		e.preventDefault();
 		const query = input.trim();
-
+	  
 		if (query === "") {
-			setInput("");
-			return;
+		  setInput("");
+		  return;
 		}
-
-		chatContent[Object.keys(chatContent).length] = {
-			query,
-			response: "Loading...",
+	  
+		const newChatContent = { ...chatContent };
+		const newIndex = Object.keys(newChatContent).length;
+		newChatContent[newIndex] = {
+		  query,
+		  response: "Loading...",
 		};
-		setChatContent(chatContent);
+		setChatContent(newChatContent);
 		setInput("");
-
-		// scroll to bottom
+	  
 		targetRef.current.scrollTop = targetRef.current.scrollHeight;
-
-		// convert chatContent to object and remove last message
+	  
 		let history = {};
-		if (typeof chatContent === "array") {
-			chatContent.forEach((pair, idx) => {
-				if (idx == chatContent.length - 1) return;
-				history[idx] = pair;
-			});
-		} else {
-			Object.keys(chatContent).forEach((idx) => {
-				if (idx == Object.keys(chatContent).length - 1) return;
-				history[idx] = chatContent[idx];
-			});
-		}
-
-		// // send chat content to model and get response
-		// fetch("http://10.29.8.94:5000/api/anwser_question", {
-		// 	method: "POST",
-		// 	headers: {
-		// 		"Content-Type": "application/json",
-		// 	},
-		// 	body: JSON.stringify({
-		// 		question: query,
-		// 		history: history,
-		// 	}),
-		// })
-		// 	.then((response) => {
-		// 		response.json().then((data) => {
-		// 			// copy chat content and update last message
-		// 			let temp = { ...chatContent };
-		// 			temp[Object.keys(chatContent).length - 1] = {
-		// 				query,
-		// 				response: data.result,
-		// 			};
-		// 		});
-		// 	})
-		// 	.catch((error) => {
-		// 		alert("Error in sending message: " + error.message);
-
-		// 		// remove from chat content and put in input
-		// 		let temp = { ...chatContent };
-		// 		delete temp[Object.keys(chatContent).length - 1];
-		// 		setChatContent(temp);
-		// 		setInput(query);
-		// 	});
-	}
+		Object.keys(newChatContent).forEach((idx) => {
+		  if (parseInt(idx) === newIndex) return;
+		  history[idx] = newChatContent[idx];
+		});
+	  
+		fetch("http://localhost:5000/api/answer_question", {
+		  method: "POST",
+		  headers: {
+			"Content-Type": "application/json",
+		  },
+		  body: JSON.stringify({ question: query, history }),
+		})
+		  .then((response) => response.json())
+		  .then((data) => {
+			const updatedChatContent = { ...newChatContent };
+			updatedChatContent[newIndex] = {
+			  query,
+			  response: data.result,
+			};
+			setChatContent(updatedChatContent);
+		  })
+		  .catch((error) => {
+			const updatedChatContent = { ...newChatContent };
+			updatedChatContent[newIndex] = {
+			  query,
+			  response: "⚠️ Error: Could not fetch response. Please try again later.",
+			};
+			setChatContent(updatedChatContent);
+		  });
+	  }, [chatContent, input]);
+	  
+  
 
 	// form submit on Shift+Enter
 	useEffect(() => {
