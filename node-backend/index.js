@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-import OpenAI from "openai";
 import dotenv from "dotenv";
+import Groq from "groq-sdk";  // Import Groq SDK
 
 dotenv.config();
 
@@ -12,44 +12,44 @@ const PORT = 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: process.env.OPENROUTER_API_KEY,
-    defaultHeaders: {
-        "HTTP-Referer": process.env.SITE_URL || "http://localhost:3000", 
-        "X-Title": process.env.SITE_NAME || "HR Tech",
-    },
+// Initialize Groq API
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY, // Ensure you have set this in your .env file
 });
 
 app.post("/api/answer_question", async (req, res) => {
     try {
-      const { question, history } = req.body;
-      console.log(question);
-      console.log(history);
+        const { question, history } = req.body;
+        console.log("User Question:", question);
+        console.log("Conversation History:", history);
+
+        // Construct chat history for Groq API
         const messages = [
             ...Object.values(history).map(({ query, response }) => (
                 [{ role: "user", content: query }, { role: "assistant", content: response }]
             )).flat(),
             { role: "user", content: question }
         ];
-        console.log(messages);
-        const completion = await openai.chat.completions.create({
-          model: "openai/gpt-4o",
-          messages
-      });
-      
-      console.log('Completion:', completion);  // Log the entire completion object
-      
-      if (!completion.choices || completion.choices.length === 0) {
-          throw new Error('No choices returned from API');
-      }
-      
-      res.json({ result: completion.choices[0].message.content });
-  } catch (error) {
-      console.error("Error fetching response:", error);
-      console.error("Error details:", JSON.stringify(error, null, 2));  // Log detailed error information
-      res.status(500).json({ result: "⚠️ Error: Could not fetch response. Please try again later." });
-  }
+
+        console.log("Formatted Messages:", messages);
+
+        // API call to Groq
+        const completion = await groq.chat.completions.create({
+            model: "llama3-70b-8192",  // Specify the Groq model (adjust based on your need)
+            messages,
+        });
+
+        console.log("Groq API Response:", completion);
+
+        if (!completion.choices || completion.choices.length === 0) {
+            throw new Error("No choices returned from Groq API");
+        }
+
+        res.json({ result: completion.choices[0].message.content });
+    } catch (error) {
+        console.error("Error fetching response:", error);
+        res.status(500).json({ result: "⚠️ Error: Could not fetch response. Please try again later." });
+    }
 });
 
 app.listen(PORT, () => {
