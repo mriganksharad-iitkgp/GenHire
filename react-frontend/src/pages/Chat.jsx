@@ -27,6 +27,7 @@ export default function Chat() {
       recognitionRef.current.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setInput(transcript);
+        console.log(transcript);
         setIsRecording(false);
       };
 
@@ -114,7 +115,7 @@ export default function Chat() {
           setChatContent(updatedChatContent);
         });
     },
-    [chatContent, input]
+    [chatContent,input]
   );
 
   // Optionally send the message on Shift+Enter key press
@@ -180,12 +181,12 @@ export default function Chat() {
           )}
 
           {/* Draft Bubble: Show current input (which might come from speech recognition) */}
-          {input.trim() !== "" && (
+          {/* {input.trim() !== "" && (
             <div className={`${Styles["message-box"]} ${Styles["user"]}`}>
               <img src={"../android-chrome-512x512.png"} alt="logo" />
               <div className={Styles["message"]}>{input}</div>
             </div>
-          )}
+          )} */}
         </div>
         <form onSubmit={onSend} className={Styles["chat-box-footer"]}>
           <textarea
