@@ -55,8 +55,8 @@ class PDFProcessor:
         return response
 
 def main():
-    document_pdf_path = "your_document.pdf"  # Path to the document for querying
-    groq_api_key = "ygsk_ZaLxxqoasJ2mZnr7xBvdWGdyb3FY6srg1TAGebA2tKjkcuBwoLuK"  # Replace with actual API key
+    document_pdf_path = "Eric Ries - The Lean Startup.pdf"  # Path to the document for querying
+    groq_api_key = "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"  # Replace with actual API key
     
     processor = PDFProcessor(document_pdf_path, groq_api_key)
     query_text = input("Please enter your query: ").strip()
