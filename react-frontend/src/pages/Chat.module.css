@@ -317,4 +317,16 @@
 	  opacity: 1;
 	}
   }
+  .speakerButton {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	margin-left: 10px;
+	font-size: 1rem;
+	color: #555;
+	transition: color 0.2s ease;
+  }
   
+  .speakerButton:hover {
+	color: #000;
+  }

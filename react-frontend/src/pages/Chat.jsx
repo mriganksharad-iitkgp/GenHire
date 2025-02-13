@@ -7,11 +7,16 @@ export default function Chat() {
   const [chatContent, setChatContent] = useState({});
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  // isSpeaking tracks if any response is currently being spoken
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  // speakingIndex is used to know which response is being read out
+  const [speakingIndex, setSpeakingIndex] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Refs for scrolling and for the Speech Recognition instance
   const targetRef = useRef();
   const recognitionRef = useRef(null);
+  const currentUtteranceRef = useRef(null);
 
   // Initialize Speech Recognition API (if supported)
   useEffect(() => {
@@ -54,6 +59,42 @@ export default function Chat() {
       recognitionRef.current.start();
       setIsRecording(true);
     }
+  };
+
+  // Toggle Text-to-Speech: If the provided message is already speaking, stop it;
+  // otherwise, cancel any current utterance and start speaking this message.
+  const toggleSpeech = (idx, text) => {
+    if (!window.speechSynthesis) {
+      console.error("Speech Synthesis API is not supported in this browser.");
+      return;
+    }
+    // If this message is already speaking, stop it.
+    if (isSpeaking && speakingIndex === idx) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      setSpeakingIndex(null);
+      return;
+    }
+    // If some other utterance is speaking, cancel it.
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      setSpeakingIndex(idx);
+    };
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setSpeakingIndex(null);
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      setSpeakingIndex(null);
+    };
+    currentUtteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   };
 
   // Send message function: adds the new message, clears input/draft, and calls backend API
@@ -115,7 +156,7 @@ export default function Chat() {
           setChatContent(updatedChatContent);
         });
     },
-    [chatContent,input]
+    [chatContent, input]
   );
 
   // Optionally send the message on Shift+Enter key press
@@ -132,9 +173,16 @@ export default function Chat() {
   }, [onSend]);
 
   return (
-    <div className={`${Styles["page-container"]} ${menuOpen ? Styles["menuOpen"] : ""}`}>
+    <div
+      className={`${Styles["page-container"]} ${
+        menuOpen ? Styles["menuOpen"] : ""
+      }`}
+    >
       <div className={Styles["chat-menu-container"]}>
-        <div className={Styles["hamburger"]} onClick={() => setMenuOpen(!menuOpen)}>
+        <div
+          className={Styles["hamburger"]}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
           <i className="fa fa-bars" aria-hidden="true" />
         </div>
         {menuOpen && <div className={Styles["chat-list"]}></div>}
@@ -160,15 +208,43 @@ export default function Chat() {
               return (
                 <React.Fragment key={idx}>
                   {pair.query && (
-                    <div className={`${Styles["message-box"]} ${Styles["user"]}`}>
-                      <img src={"../android-chrome-512x512.png"} alt="logo" />
+                    <div
+                      className={`${Styles["message-box"]} ${Styles["user"]}`}
+                    >
+                      <img
+                        src={"../android-chrome-512x512.png"}
+                        alt="logo"
+                      />
                       <div className={Styles["message"]}>{pair.query}</div>
                     </div>
                   )}
                   {pair.response && (
-                    <div className={`${Styles["message-box"]} ${Styles["gpt"]}`}>
-                      <img src={"../android-chrome-512x512.png"} alt="logo" />
-                      <div className={Styles["message"]}>{pair.response}</div>
+                    <div
+                      className={`${Styles["message-box"]} ${Styles["gpt"]}`}
+                    >
+                      <img
+                        src={"../android-chrome-512x512.png"}
+                        alt="logo"
+                      />
+                      <div className={Styles["message"]}>
+                        {pair.response}
+                        {/* Speaker/Stop Button to control text-to-speech */}
+                        <button
+                          onClick={() => toggleSpeech(idx, pair.response)}
+                          className={Styles["speakerButton"]}
+                          title={
+                            isSpeaking && speakingIndex === idx
+                              ? "Stop Speech"
+                              : "Read Aloud"
+                          }
+                        >
+                          {isSpeaking && speakingIndex === idx ? (
+                            <i className="fa fa-stop" aria-hidden="true" />
+                          ) : (
+                            <i className="fa fa-volume-up" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </React.Fragment>
@@ -176,11 +252,12 @@ export default function Chat() {
             })
           ) : (
             <div className={Styles["message-box-empty"]}>
-              This could be a good place to start a conversation. Ask me anything!
+              This could be a good place to start a conversation. Ask me
+              anything!
             </div>
           )}
 
-          {/* Draft Bubble: Show current input (which might come from speech recognition) */}
+          {/* Uncomment if you want to show a draft bubble for the current input */}
           {/* {input.trim() !== "" && (
             <div className={`${Styles["message-box"]} ${Styles["user"]}`}>
               <img src={"../android-chrome-512x512.png"} alt="logo" />
@@ -200,10 +277,11 @@ export default function Chat() {
             type="button"
             onClick={handleVoiceInput}
             className={isRecording ? Styles.recording : ""}
+            title={isRecording ? "Stop Listening" : "Start Voice Input"}
           >
             <i className="fa fa-microphone" aria-hidden="true" />
           </button>
-          <button type="submit">
+          <button type="submit" title="Send Message">
             <i className="fa fa-paper-plane" aria-hidden="true" />
           </button>
         </form>
