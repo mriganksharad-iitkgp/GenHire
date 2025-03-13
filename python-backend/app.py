@@ -59,10 +59,13 @@ def upload_files():
     jd_file.save(jd_path)
     cv_file.save(cv_path)
 
+    similarity = float(processor.get_similarity(cv_path, jd_path))
+
     return jsonify({
         "message": "Files uploaded successfully!",
         "jd_file_path": jd_path,
-        "cv_file_path": cv_path
+        "cv_file_path": cv_path,
+        "similarity": similarity
     }), 200
 
 # New route to view a file from the server by given file path

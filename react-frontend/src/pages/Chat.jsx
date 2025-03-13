@@ -118,7 +118,7 @@ export default function Chat() {
 			});
 			const data = await response.json();
 			if (response.ok) {
-				alert(data.message);
+				alert(data.message + " Similarity: " + data.similarity);
 				setJdFilePath(data.jd_file_path);
 				setCvFilePath(data.cv_file_path);
 			} else {

@@ -1,16 +1,70 @@
-import warnings
-import os
-from colorama import Fore, Style, init
+import pandas as pd
+from pypdf import PdfReader
+from nltk import pos_tag, sent_tokenize, word_tokenize
+from nltk.corpus import stopwords
+import string
+import re
+import torch
+from transformers import AutoModel, AutoTokenizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 from llama_index.llms.groq import Groq
 from llama_index.core import SimpleDirectoryReader, ServiceContext, VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.core.node_parser import SentenceWindowNodeParser
 from llama_index.core.indices.postprocessor import MetadataReplacementPostProcessor, SentenceTransformerRerank
 from llama_index.core import QueryBundle, Settings
-#from copy import deepcopy
+import warnings
+from colorama import init, Fore
+import os
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 init(autoreset=True)
+
+def extract_text_from_pdf(file_path):
+    reader = PdfReader(file_path)
+    text = "".join(page.extract_text() for page in reader.pages if page.extract_text())
+    return text
+
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub('[^a-zA-Z]', ' ', text)
+    sentences = sent_tokenize(text)
+    features = ""
+    stop_words = set(stopwords.words("english"))
+    
+    for sent in sentences:
+        words = word_tokenize(sent)
+        words = [word for word in words if word not in stop_words and word not in string.punctuation]
+        tagged_words = pos_tag(words)
+        filtered_words = [word for word, tag in tagged_words if tag not in ['DT', 'IN', 'TO', 'PRP', 'WP']]
+        features += " ".join(filtered_words) + " "
+    
+    return features.strip()
+
+def get_embeddings(text, model, tokenizer, device):
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
+    outputs = model(**inputs)
+    embeddings = outputs.last_hidden_state.mean(dim=1).detach().cpu().numpy()
+    return embeddings
+
+def compute_cosine_similarity(cv_pdf, jd_pdf):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model_name = "bert-base-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name).to(device)
+    
+    cv_text = extract_text_from_pdf(cv_pdf)
+    jd_text = extract_text_from_pdf(jd_pdf)
+    
+    cv_features = preprocess_text(cv_text)
+    jd_features = preprocess_text(jd_text)
+    
+    cv_embedding = get_embeddings(cv_features, model, tokenizer, device)
+    jd_embedding = get_embeddings(jd_features, model, tokenizer, device)
+    
+    similarity_score = cosine_similarity(cv_embedding, jd_embedding)[0][0]
+    return similarity_score
 
 class PDFProcessor:
     def __init__(self, document_pdf_path, groq_api_key):
@@ -19,11 +73,9 @@ class PDFProcessor:
         self.documents = self.load_documents()
     
     def load_documents(self):
-        """Loads the document for querying."""
         return SimpleDirectoryReader(input_files=[self.document_pdf_path]).load_data()
     
     def query_document(self, query_text, sentence_window_size=5, embed_model="local:BAAI/bge-small-en-v1.5", save_dir="sentence_index", similarity_top_k=6, rerank_top_n=2):
-        """Queries the document using a sentence window approach."""
         Settings.llm = self.llm
         Settings.embed_model = embed_model
         Settings.node_parser = SentenceWindowNodeParser.from_defaults(
@@ -53,6 +105,11 @@ class PDFProcessor:
         query_engine = get_sentence_window_query_engine(index, similarity_top_k, rerank_top_n)
         response = query_engine.query(query_text)
         return response
+    
+    def get_similarity(self, cv_pdf, jd_pdf):
+        similarity = compute_cosine_similarity(cv_pdf, jd_pdf)
+        return similarity
+
 
 def main():
     document_pdf_path = "Eric Ries - The Lean Startup.pdf"  # Path to the document for querying
@@ -62,6 +119,11 @@ def main():
     query_text = input("Please enter your query: ").strip()
     response = processor.query_document(query_text)
     print(Fore.GREEN + "Query Response:\n" + str(response))
+    
+    jd_path = "uploads\\jd\\JD1.pdf"  # Replace with actual path
+    cv_path = "uploads\\cv\\PeterConnollyResume-2.pdf"  # Replace with actual path
+    similarity = compute_cosine_similarity(cv_path, jd_path)
+    print("Cosine Similarity:", similarity)
 
 if __name__ == "__main__":
     main()
