@@ -409,7 +409,16 @@ export default function Chat() {
 														Styles["message"]
 													}
 												>
-													{pair.response}
+													{pair.response
+														.split("\n")
+														.map((line, index) => (
+															<React.Fragment
+																key={index}
+															>
+																{line}
+																<br />
+															</React.Fragment>
+														))}
 													<button
 														onClick={() =>
 															toggleSpeech(
