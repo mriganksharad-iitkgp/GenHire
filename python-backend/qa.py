@@ -158,6 +158,33 @@ class PDFProcessor:
     def get_similarity(self, cv_pdf, jd_pdf):
         similarity = compute_cosine_similarity(cv_pdf, jd_pdf)
         return similarity
+    
+    def generate_initial_questions(self, jd_path, cv_path):
+        jd_text = extract_text_from_pdf(jd_path)
+        cv_text = extract_text_from_pdf(cv_path)
+
+        # --- Generate Contextual Interview Questions ---
+        query_text = f"""You are an expert interviewer with deep insights into both technical and behavioral interviewing.
+            Based on the following two documents:
+            
+            Candidate's CV:
+            {cv_text}
+            
+            Job Description:
+            {jd_text}
+            
+            Generate a comprehensive set of interview questions that build on previous responses and ensure a logical follow-up.
+            """
+        interview_questions = self.query_with_sentence_window(
+            sentence_window_size=5,
+            query_text=query_text,
+            embed_model="local:BAAI/bge-small-en-v1.5",
+            save_dir="sentence_index",
+            similarity_top_k=6,
+            rerank_top_n=2
+        )
+        return interview_questions
+
 
 # ----------------- Main Function -----------------
  
@@ -174,32 +201,10 @@ def main():
     cv_path = "uploads\\cv\\PeterConnollyResume-2.pdf"  # Replace with actual path
 
     # --- Compute Cosine Similarity between CV and JD ---
-    similarity = compute_cosine_similarity(cv_path, jd_path)
-    print(Style.BRIGHT + "\nCosine Similarity between CV and JD:", similarity)
+    # similarity = compute_cosine_similarity(cv_path, jd_path)
+    # print(Style.BRIGHT + "\nCosine Similarity between CV and JD:", similarity)
 
-    jd_text = extract_text_from_pdf(jd_path)
-    cv_text = extract_text_from_pdf(cv_path)
-
-    # --- Generate Contextual Interview Questions ---
-    query_text = f"""You are an expert interviewer with deep insights into both technical and behavioral interviewing.
-        Based on the following two documents:
-        
-        Candidate's CV:
-        {cv_text}
-        
-        Job Description:
-        {jd_text}
-        
-        Generate a comprehensive set of interview questions that build on previous responses and ensure a logical follow-up.
-        """
-    interview_questions = processor.query_with_sentence_window(
-        sentence_window_size=5,
-        query_text=query_text,
-        embed_model="local:BAAI/bge-small-en-v1.5",
-        save_dir="sentence_index",
-        similarity_top_k=6,
-        rerank_top_n=2
-    )
+    interview_questions = processor.generate_initial_questions(cv_path, jd_path)
     print(Fore.CYAN + "\nGenerated Contextual Interview Questions:\n")
     print(Fore.YELLOW + interview_questions)
  

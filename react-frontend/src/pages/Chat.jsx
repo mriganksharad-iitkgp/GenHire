@@ -11,6 +11,7 @@ export default function Chat() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [jdFile, setJdFile] = useState(null);
 	const [cvFile, setCvFile] = useState(null);
+	const [isUploading, setIsUploading] = useState(false); // new state for upload status
 
 	const targetRef = useRef();
 	const recognitionRef = useRef(null);
@@ -106,6 +107,7 @@ export default function Chat() {
 			alert("Please upload both JD and CV files.");
 			return;
 		}
+		setIsUploading(true); // set uploading flag
 
 		const formData = new FormData();
 		formData.append("jd", jdFile);
@@ -119,13 +121,25 @@ export default function Chat() {
 			const data = await response.json();
 			if (response.ok) {
 				alert(data.message + " Similarity: " + data.similarity);
+
 				setJdFilePath(data.jd_file_path);
 				setCvFilePath(data.cv_file_path);
+
+				const newChatContent = { ...chatContent };
+				const newIndex = Object.keys(newChatContent).length;
+				newChatContent[newIndex] = {
+					query: "Interview questions based on JD and CV:",
+					response: data.interview_questions,
+				};
+				setChatContent(newChatContent);
+				setInput("");
 			} else {
 				alert(data.error);
 			}
 		} catch (error) {
 			alert("Error uploading files. Please try again.");
+		} finally {
+			setIsUploading(false); // reset uploading flag
 		}
 	};
 
@@ -342,6 +356,16 @@ export default function Chat() {
 								Upload Documents
 							</button>
 						</form>
+						{isUploading && (
+							<p
+								style={{
+									textAlign: "center",
+									marginTop: "10px",
+								}}
+							>
+								Uploading...
+							</p>
+						)}
 					</div>
 
 					{/* Chat Messages */}
