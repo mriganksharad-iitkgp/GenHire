@@ -1,0 +1,98 @@
+.notFoundContainer {
+	height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: #f9f9f9;
+	text-align: center;
+}
+
+.content {
+	max-width: 500px;
+	padding: 40px;
+	background-color: white;
+	border-radius: 10px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.content h1 {
+	font-size: 120px;
+	color: #4a90e2;
+	margin: 0;
+	line-height: 1;
+}
+
+.content h2 {
+	margin: 10px 0 20px;
+	color: #333;
+	font-size: 28px;
+}
+
+.content p {
+	color: #666;
+	margin-bottom: 30px;
+	font-size: 16px;
+}
+
+.actions {
+	margin-top: 30px;
+}
+
+.homeButton {
+	display: inline-block;
+	padding: 12px 30px;
+	background-color: #4a90e2;
+	color: white;
+	border-radius: 6px;
+	text-decoration: none;
+	font-weight: 600;
+	transition: background-color 0.2s ease;
+}
+
+.homeButton:hover {
+	background-color: #3b73b9;
+}
+
+/* Dark mode support */
+:global(.dark) .notFoundContainer {
+	background-color: #1a1a1a;
+}
+
+:global(.dark) .content {
+	background-color: #2a2a2a;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark) .content h1 {
+	color: #5fa4ef;
+}
+
+:global(.dark) .content h2 {
+	color: #f0f0f0;
+}
+
+:global(.dark) .content p {
+	color: #bbb;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+	.content {
+		padding: 30px;
+		margin: 0 20px;
+	}
+
+	.content h1 {
+		font-size: 100px;
+	}
+}
+
+@media (max-width: 480px) {
+	.content h1 {
+		font-size: 80px;
+	}
+
+	.content h2 {
+		font-size: 24px;
+	}
+}

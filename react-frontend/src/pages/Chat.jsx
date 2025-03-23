@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Styles from "./Chat.module.css";
 
 export default function Chat({ interviewId }) {
@@ -8,33 +8,14 @@ export default function Chat({ interviewId }) {
 	const [isRecording, setIsRecording] = useState(false);
 	const [isSpeaking, setIsSpeaking] = useState(false);
 	const [speakingIndex, setSpeakingIndex] = useState(null);
-	const [menuOpen, setMenuOpen] = useState(false);
 	const [jdFile, setJdFile] = useState(null);
 	const [cvFile, setCvFile] = useState(null);
-	const [isUploading, setIsUploading] = useState(false); // new state for upload status
-	const [userMenuOpen, setUserMenuOpen] = useState(false); // state for user menu dropdown
+	const [isUploading, setIsUploading] = useState(false);
 
 	const navigate = useNavigate();
 	const targetRef = useRef();
 	const recognitionRef = useRef(null);
 	const currentUtteranceRef = useRef(null);
-	const userMenuRef = useRef(null); // ref for user menu dropdown
-
-	// Close user menu when clicking outside
-	useEffect(() => {
-		function handleClickOutside(event) {
-			if (
-				userMenuRef.current &&
-				!userMenuRef.current.contains(event.target)
-			) {
-				setUserMenuOpen(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => {
-			document.removeEventListener("mousedown", handleClickOutside);
-		};
-	}, []);
 
 	// Handle logout
 	const handleLogout = () => {
@@ -45,7 +26,6 @@ export default function Chat({ interviewId }) {
 	// Check authentication when component mounts
 	useEffect(() => {
 		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
-		console.log("Checking authentication", isLoggedIn);
 		if (!isLoggedIn) {
 			navigate("/login");
 		}
@@ -68,7 +48,6 @@ export default function Chat({ interviewId }) {
 			recognitionRef.current.onresult = (event) => {
 				const transcript = event.results[0][0].transcript;
 				setInput(transcript);
-				console.log(transcript);
 				setIsRecording(false);
 			};
 
@@ -141,7 +120,7 @@ export default function Chat({ interviewId }) {
 			alert("Please upload both JD and CV files.");
 			return;
 		}
-		setIsUploading(true); // set uploading flag
+		setIsUploading(true);
 
 		const formData = new FormData();
 		formData.append("jd", jdFile);
@@ -173,7 +152,7 @@ export default function Chat({ interviewId }) {
 		} catch (error) {
 			alert("Error uploading files. Please try again.");
 		} finally {
-			setIsUploading(false); // reset uploading flag
+			setIsUploading(false);
 		}
 	};
 
@@ -242,7 +221,7 @@ export default function Chat({ interviewId }) {
 					setChatContent(updatedChatContent);
 				});
 		},
-		[chatContent, input]
+		[chatContent, input, jd_file_path, cv_file_path]
 	);
 
 	// Optionally send the message on Shift+Enter key press
@@ -266,197 +245,116 @@ export default function Chat({ interviewId }) {
 
 			// For now, just set a message in the chat content
 			setChatContent({
-				messages: [
-					{
-						role: "assistant",
-						content: `Welcome to interview #${interviewId}. This is where the conversation will take place.`,
-					},
-				],
+				0: {
+					response: `Welcome to interview #${interviewId}. This is where the conversation will take place.`,
+				},
 			});
 		}
 	}, [interviewId]);
 
 	return (
-		<div
-			className={`${Styles["page-container"]} ${
-				menuOpen ? Styles["menuOpen"] : ""
-			}`}
-		>
-			<div className={Styles["chat-menu-container"]}>
-				<div
-					className={Styles["hamburger"]}
-					onClick={() => setMenuOpen(!menuOpen)}
-				>
-					<i className="fa fa-bars" aria-hidden="true" />
-				</div>
-				{menuOpen && <div className={Styles["chat-list"]}></div>}
-			</div>
+		<div className={Styles["page-container"]}>
 			<div className={Styles["chat-box-container"]}>
-				<div className={Styles["chat-box-header"]}>
-					<Link to="/">
-						<h1>
-							<img
-								src="../android-chrome-512x512.png"
-								alt="logo"
-								height={50}
-								width={50}
-							/>
-							HR Tech
-						</h1>
-					</Link>
-					<div
-						className={Styles["user-avatar-container"]}
-						ref={userMenuRef}
-					>
-						<div
-							className={Styles["user-avatar"]}
-							onClick={() => setUserMenuOpen(!userMenuOpen)}
-						>
-							<img
-								src="../android-chrome-192x192.png"
-								alt="User Avatar"
-							/>
-						</div>
-						{userMenuOpen && (
-							<div className={Styles["user-menu-dropdown"]}>
-								<div
-									className={Styles["user-menu-item"]}
-									onClick={() => navigate("/profile")}
-								>
-									<i
-										className="fa fa-user"
-										aria-hidden="true"
-									></i>
-									Profile
-								</div>
-								<div
-									className={Styles["user-menu-item"]}
-									onClick={handleLogout}
-								>
-									<i
-										className="fa fa-sign-out"
-										aria-hidden="true"
-									></i>
-									Logout
-								</div>
-							</div>
-						)}
-					</div>
-				</div>
+				{/* Main chat interface */}
 				<div className={Styles["chat-content"]}>
-					{/* File Upload Section */}
-					<div className={Styles["file-upload-container"]}>
-						<div className={Styles["upload-header"]}>
-							<i
-								className="fa fa-cloud-upload"
-								aria-hidden="true"
-							/>
-							<h3>Upload Documents</h3>
-							<p>Supported formats: PDF</p>
-						</div>
-						<form
-							onSubmit={handleFileUpload}
-							className={Styles["upload-form"]}
-						>
-							<div className={Styles["file-input-group"]}>
-								<div className={Styles["file-card"]}>
-									<label
-										className={Styles["file-input-label"]}
-									>
-										<i
-											className="fa fa-file-text"
-											aria-hidden="true"
-										/>
-										<span>Job Description</span>
-										<input
-											type="file"
-											accept=".pdf,.docx"
-											onChange={(e) =>
-												setJdFile(e.target.files[0])
-											}
-											className={Styles["hidden-input"]}
-										/>
-										<div className={Styles["file-info"]}>
-											{jdFile
-												? jdFile.name
-												: "No file selected"}
-										</div>
-									</label>
-									{jd_file_path && (
-										<div className={Styles["file-info"]}>
-											<a
-												target="_blank"
-												rel="noopener noreferrer"
-												href={`http://localhost:5000/api/view-file?path=${encodeURIComponent(
-													jd_file_path
-												)}`}
-											>
-												View Uploaded JD
-											</a>
-										</div>
-									)}
-								</div>
-
-								<div className={Styles["file-card"]}>
-									<label
-										className={Styles["file-input-label"]}
-									>
-										<i
-											className="fa fa-user"
-											aria-hidden="true"
-										/>
-										<span>Candidate CV</span>
-										<input
-											type="file"
-											accept=".pdf,.docx"
-											onChange={(e) =>
-												setCvFile(e.target.files[0])
-											}
-											className={Styles["hidden-input"]}
-										/>
-										<div className={Styles["file-info"]}>
-											{cvFile
-												? cvFile.name
-												: "No file selected"}
-										</div>
-									</label>
-									{cv_file_path && (
-										<div className={Styles["file-info"]}>
-											<a
-												target="_blank"
-												rel="noopener noreferrer"
-												href={`http://localhost:5000/api/view-file?path=${encodeURIComponent(
-													cv_file_path
-												)}`}
-											>
-												View Uploaded CV
-											</a>
-										</div>
-									)}
-								</div>
-							</div>
-							<button
-								type="submit"
-								className={Styles["upload-button"]}
-							>
+					{/* Upload form appears at the top if files haven't been uploaded yet */}
+					{(!jd_file_path || !cv_file_path) && (
+						<div className={Styles["file-upload-container"]}>
+							<div className={Styles["upload-header"]}>
 								<i
-									className="fa fa-upload"
+									className="fa fa-cloud-upload"
 									aria-hidden="true"
 								/>
-								Upload Documents
-							</button>
-						</form>
-						{isUploading && (
-							<p
-								style={{
-									textAlign: "center",
-									marginTop: "10px",
-								}}
+								<h3>Upload Documents to Start Interview</h3>
+								<p>Upload a job description and candidate CV</p>
+							</div>
+							<form
+								onSubmit={handleFileUpload}
+								className={Styles["upload-form"]}
 							>
-								Uploading...
-							</p>
-						)}
-					</div>
+								<div className={Styles["file-input-group"]}>
+									<div className={Styles["file-card"]}>
+										<label
+											className={
+												Styles["file-input-label"]
+											}
+										>
+											<i
+												className="fa fa-file-text"
+												aria-hidden="true"
+											/>
+											<span>Job Description</span>
+											<input
+												type="file"
+												accept=".pdf,.docx"
+												onChange={(e) =>
+													setJdFile(e.target.files[0])
+												}
+												className={
+													Styles["hidden-input"]
+												}
+											/>
+											<div
+												className={Styles["file-info"]}
+											>
+												{jdFile
+													? jdFile.name
+													: "No file selected"}
+											</div>
+										</label>
+									</div>
+
+									<div className={Styles["file-card"]}>
+										<label
+											className={
+												Styles["file-input-label"]
+											}
+										>
+											<i
+												className="fa fa-user"
+												aria-hidden="true"
+											/>
+											<span>Candidate CV</span>
+											<input
+												type="file"
+												accept=".pdf,.docx"
+												onChange={(e) =>
+													setCvFile(e.target.files[0])
+												}
+												className={
+													Styles["hidden-input"]
+												}
+											/>
+											<div
+												className={Styles["file-info"]}
+											>
+												{cvFile
+													? cvFile.name
+													: "No file selected"}
+											</div>
+										</label>
+									</div>
+								</div>
+								<button
+									type="submit"
+									className={Styles["upload-button"]}
+									disabled={isUploading}
+								>
+									{isUploading ? (
+										"Processing..."
+									) : (
+										<>
+											<i
+												className="fa fa-upload"
+												aria-hidden="true"
+											/>
+											Upload Documents
+										</>
+									)}
+								</button>
+							</form>
+						</div>
+					)}
 
 					{/* Chat Messages */}
 					<div className={Styles["messages-list"]} ref={targetRef}>
@@ -471,9 +369,9 @@ export default function Chat({ interviewId }) {
 											>
 												<img
 													src={
-														"../android-chrome-512x512.png"
+														"../android-chrome-192x192.png"
 													}
-													alt="logo"
+													alt="User Avatar"
 												/>
 												<div
 													className={
@@ -492,7 +390,7 @@ export default function Chat({ interviewId }) {
 													src={
 														"../android-chrome-512x512.png"
 													}
-													alt="logo"
+													alt="AI Avatar"
 												/>
 												<div
 													className={
@@ -551,18 +449,20 @@ export default function Chat({ interviewId }) {
 							})
 						) : (
 							<div className={Styles["message-box-empty"]}>
-								This could be a good place to start a
-								conversation. Ask me anything!
+								Upload documents to begin the interview process
 							</div>
 						)}
 					</div>
 				</div>
+
+				{/* Input form */}
 				<form onSubmit={onSend} className={Styles["chat-box-footer"]}>
 					<textarea
 						type="text"
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
 						placeholder="Type your message...Press Shift+Enter to send"
+						disabled={!jd_file_path || !cv_file_path}
 					></textarea>
 					<button
 						type="button"
@@ -571,10 +471,15 @@ export default function Chat({ interviewId }) {
 						title={
 							isRecording ? "Stop Listening" : "Start Voice Input"
 						}
+						disabled={!jd_file_path || !cv_file_path}
 					>
 						<i className="fa fa-microphone" aria-hidden="true" />
 					</button>
-					<button type="submit" title="Send Message">
+					<button
+						type="submit"
+						title="Send Message"
+						disabled={!jd_file_path || !cv_file_path}
+					>
 						<i className="fa fa-paper-plane" aria-hidden="true" />
 					</button>
 				</form>

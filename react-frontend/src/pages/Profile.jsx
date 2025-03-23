@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import styles from "./Profile.module.css";
 
 const Profile = () => {
@@ -45,6 +45,24 @@ const Profile = () => {
 				{ date: "2023-09-15", type: "HR Round" },
 				{ date: "2023-09-20", type: "Technical" },
 			],
+		},
+	]);
+
+	// Sample upcoming interviews data
+	const [upcomingInterviews, setUpcomingInterviews] = useState([
+		{
+			id: 123,
+			position: "Technical Interview - Software Engineer",
+			company: "Tech Innovations Inc.",
+			date: "2023-09-15",
+			time: "10:00 AM",
+		},
+		{
+			id: 456,
+			position: "HR Discussion - React Developer",
+			company: "DataViz Solutions",
+			date: "2023-09-28",
+			time: "2:30 PM",
 		},
 	]);
 
@@ -105,16 +123,6 @@ const Profile = () => {
 
 	return (
 		<div className={styles.profileContainer}>
-			<div className={styles.header}>
-				<button
-					className={styles.backButton}
-					onClick={() => navigate("/")}
-				>
-					<i className="fa fa-arrow-left"></i> Back to Chat
-				</button>
-				<h1>Candidate Profile</h1>
-			</div>
-
 			<div className={styles.content}>
 				<div className={styles.sidebar}>
 					<div className={styles.profilePicSection}>
@@ -183,6 +191,59 @@ const Profile = () => {
 								)}
 							</button>
 						</form>
+					</div>
+
+					{/* Application Statistics Card - Moved from Dashboard */}
+					<div className={styles.statsCard}>
+						<h3>Application Status</h3>
+						<div className={styles.statsContainer}>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{applications.length}
+								</span>
+								<span className={styles.statLabel}>
+									Total Applications
+								</span>
+							</div>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{
+										applications.filter(
+											(app) =>
+												app.status === "Shortlisted"
+										).length
+									}
+								</span>
+								<span className={styles.statLabel}>
+									Shortlisted
+								</span>
+							</div>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{
+										applications.filter(
+											(app) =>
+												app.status === "In Progress"
+										).length
+									}
+								</span>
+								<span className={styles.statLabel}>
+									In Progress
+								</span>
+							</div>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{
+										applications.filter(
+											(app) => app.status === "Rejected"
+										).length
+									}
+								</span>
+								<span className={styles.statLabel}>
+									Rejected
+								</span>
+							</div>
+						</div>
 					</div>
 				</div>
 
@@ -299,6 +360,53 @@ const Profile = () => {
 								Update Profile
 							</button>
 						</form>
+					</section>
+
+					{/* Upcoming Interviews Section - Moved from Dashboard */}
+					<section className={styles.interviewsSection}>
+						<h2>Upcoming Interviews</h2>
+						<div className={styles.interviewsList}>
+							{upcomingInterviews.length > 0 ? (
+								upcomingInterviews.map((interview) => (
+									<div
+										key={interview.id}
+										className={styles.interviewItem}
+									>
+										<div className={styles.interviewInfo}>
+											<h4>{interview.position}</h4>
+											<p>{interview.company}</p>
+										</div>
+										<div className={styles.interviewMeta}>
+											<div
+												className={
+													styles.interviewDateTime
+												}
+											>
+												<i className="fa fa-calendar"></i>
+												<span>
+													{new Date(
+														interview.date
+													).toLocaleDateString()}
+													, {interview.time}
+												</span>
+											</div>
+											<Link
+												to={`/interview/${interview.id}`}
+												className={
+													styles.interviewButton
+												}
+											>
+												Join
+											</Link>
+										</div>
+									</div>
+								))
+							) : (
+								<p className={styles.noInterviews}>
+									No upcoming interviews scheduled.
+								</p>
+							)}
+						</div>
 					</section>
 
 					<section className={styles.applicationsSection}>

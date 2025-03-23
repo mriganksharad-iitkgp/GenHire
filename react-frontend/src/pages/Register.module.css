@@ -1,0 +1,173 @@
+.registerContainer {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: #f9f9f9;
+	padding: 20px;
+}
+
+.registerCard {
+	width: 100%;
+	max-width: 500px;
+	background-color: white;
+	border-radius: 10px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+	padding: 40px;
+}
+
+.logoSection {
+	text-align: center;
+	margin-bottom: 30px;
+}
+
+.logoSection h1 {
+	color: #4a90e2;
+	margin: 0 0 10px;
+	font-size: 28px;
+}
+
+.logoSection p {
+	color: #666;
+	margin: 0;
+}
+
+.registerForm {
+	margin-bottom: 20px;
+}
+
+.formGroup {
+	margin-bottom: 20px;
+}
+
+.formGroup label {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 500;
+	color: #333;
+}
+
+.formGroup input {
+	width: 100%;
+	padding: 12px 15px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 16px;
+	transition: border-color 0.3s;
+}
+
+.formGroup input:focus {
+	outline: none;
+	border-color: #4a90e2;
+}
+
+.errorInput {
+	border-color: #e74c3c !important;
+	background-color: #fff8f8;
+}
+
+.errorMessage {
+	color: #e74c3c;
+	font-size: 14px;
+	margin-top: 5px;
+	display: block;
+}
+
+.registerButton {
+	width: 100%;
+	padding: 13px;
+	background-color: #4a90e2;
+	color: white;
+	border: none;
+	border-radius: 6px;
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.registerButton:hover {
+	background-color: #3b73b9;
+}
+
+.registerButton:disabled {
+	background-color: #bbbbbb;
+	cursor: not-allowed;
+}
+
+.loginLink {
+	text-align: center;
+	color: #666;
+	font-size: 15px;
+}
+
+.loginLink a {
+	color: #4a90e2;
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.loginLink a:hover {
+	text-decoration: underline;
+}
+
+/* Dark mode support */
+:global(.dark) .registerContainer {
+	background-color: #1a1a1a;
+}
+
+:global(.dark) .registerCard {
+	background-color: #2a2a2a;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark) .logoSection h1 {
+	color: #5fa4ef;
+}
+
+:global(.dark) .logoSection p {
+	color: #ccc;
+}
+
+:global(.dark) .formGroup label {
+	color: #f0f0f0;
+}
+
+:global(.dark) .formGroup input {
+	background-color: #333;
+	border-color: #444;
+	color: #f0f0f0;
+}
+
+:global(.dark) .errorInput {
+	background-color: rgba(231, 76, 60, 0.1);
+}
+
+:global(.dark) .loginLink {
+	color: #bbb;
+}
+
+:global(.dark) .loginLink a {
+	color: #5fa4ef;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+	.registerCard {
+		padding: 30px;
+	}
+}
+
+@media (max-width: 480px) {
+	.registerCard {
+		padding: 20px;
+	}
+
+	.logoSection h1 {
+		font-size: 24px;
+	}
+
+	.formGroup input {
+		font-size: 14px;
+	}
+}

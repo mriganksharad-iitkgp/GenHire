@@ -1,0 +1,24 @@
+.layoutContainer {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	width: 100%;
+	overflow-x: hidden;
+}
+
+.mainContent {
+	flex: 1;
+	padding-top: 70px; /* Adjust based on navbar height */
+	width: 100%;
+	overflow-x: hidden;
+}
+
+/* Dark mode styles */
+:global(body.dark) .layoutContainer {
+	background-color: #121212;
+	color: #f0f0f0;
+}
+
+:global(body.dark) .mainContent {
+	background-color: #121212;
+}
