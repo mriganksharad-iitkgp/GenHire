@@ -38,8 +38,11 @@ const Login = () => {
 		<div className={styles.loginContainer}>
 			<div className={styles.loginCard}>
 				<div className={styles.logoSection}>
-					<h1>Candidate Portal</h1>
-					<p>Welcome back! Please log in to continue.</p>
+					<h1>CompanyXYZ Careers</h1>
+					<p>
+						Welcome to our talent portal. Please log in to access
+						your application dashboard.
+					</p>
 				</div>
 
 				<form className={styles.loginForm} onSubmit={handleSubmit}>
@@ -86,8 +89,8 @@ const Login = () => {
 
 				<div className={styles.registerSection}>
 					<p>
-						Don't have an account?{" "}
-						<a href="#register">Contact your recruiter</a>
+						New to CompanyXYZ?{" "}
+						<a href="/register">Create an account</a>
 					</p>
 				</div>
 			</div>

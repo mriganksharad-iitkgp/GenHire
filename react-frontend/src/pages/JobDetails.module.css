@@ -515,3 +515,171 @@
 		width: 100%;
 	}
 }
+
+.downloadJdBtn {
+	width: 100%;
+	padding: 10px;
+	background-color: #f0f7ff;
+	color: #4a90e2;
+	border: 1px solid #4a90e2;
+	border-radius: 6px;
+	font-weight: 600;
+	cursor: pointer;
+	margin: 10px 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	transition: all 0.2s ease;
+}
+
+.downloadJdBtn:hover {
+	background-color: #e0ecff;
+}
+
+.downloadJdBtn i {
+	font-size: 16px;
+}
+
+.matchScoreBtn {
+	width: 100%;
+	padding: 10px;
+	background-color: #f7f0ff;
+	color: #7e57c2;
+	border: 1px solid #7e57c2;
+	border-radius: 6px;
+	font-weight: 600;
+	cursor: pointer;
+	margin: 10px 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	transition: all 0.2s ease;
+}
+
+.matchScoreBtn:hover {
+	background-color: #efe5ff;
+}
+
+.matchScoreBtn i {
+	font-size: 16px;
+}
+
+.matchScoreResult {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 20px 0;
+}
+
+.scoreCircle {
+	width: 120px;
+	height: 120px;
+	border-radius: 50%;
+	background: conic-gradient(
+		#4a90e2 0%,
+		#4a90e2 var(--score),
+		#f5f5f5 var(--score),
+		#f5f5f5 100%
+	);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 20px;
+	position: relative;
+}
+
+.scoreCircle::before {
+	content: "";
+	position: absolute;
+	width: 100px;
+	height: 100px;
+	border-radius: 50%;
+	background-color: white;
+}
+
+.scoreValue {
+	position: relative;
+	font-size: 28px;
+	font-weight: bold;
+	color: #333;
+}
+
+.scoreDetails {
+	text-align: center;
+	width: 100%;
+}
+
+.scoreDetails h4 {
+	margin: 0 0 15px;
+	color: #333;
+}
+
+.scoreDetails p {
+	color: #666;
+	margin-bottom: 20px;
+}
+
+.matchCategories {
+	margin-top: 25px;
+}
+
+.matchCategory {
+	margin-bottom: 15px;
+}
+
+.matchCategory h5 {
+	margin: 0 0 5px;
+	font-size: 14px;
+	color: #555;
+	text-align: left;
+}
+
+.progressBar {
+	height: 8px;
+	background-color: #f0f0f0;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.progressFill {
+	height: 100%;
+	background-color: #4a90e2;
+	border-radius: 4px;
+}
+
+/* Dark mode support for match score */
+:global(.dark) .matchScoreBtn {
+	background-color: rgba(126, 87, 194, 0.1);
+	color: #b39ddb;
+	border-color: #b39ddb;
+}
+
+:global(.dark) .matchScoreBtn:hover {
+	background-color: rgba(126, 87, 194, 0.2);
+}
+
+:global(.dark) .scoreCircle::before {
+	background-color: #2a2a2a;
+}
+
+:global(.dark) .scoreValue {
+	color: #fff;
+}
+
+:global(.dark) .scoreDetails h4 {
+	color: #fff;
+}
+
+:global(.dark) .scoreDetails p {
+	color: #bbb;
+}
+
+:global(.dark) .matchCategory h5 {
+	color: #ddd;
+}
+
+:global(.dark) .progressBar {
+	background-color: #444;
+}

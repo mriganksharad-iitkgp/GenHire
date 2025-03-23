@@ -12,6 +12,7 @@ import Interview from "./pages/Interview";
 import JobDetails from "./pages/JobDetails";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import ApplicationView from "./pages/ApplicationView";
 import Layout from "./components/Layout";
 import "./App.css";
 
@@ -50,6 +51,14 @@ function App() {
 					element={
 						<Layout>
 							<JobDetails />
+						</Layout>
+					}
+				/>
+				<Route
+					path="/application/:applicationId"
+					element={
+						<Layout>
+							<ApplicationView />
 						</Layout>
 					}
 				/>

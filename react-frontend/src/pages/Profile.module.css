@@ -389,6 +389,33 @@
 	color: #666;
 }
 
+.applicationActions {
+	margin-top: 15px;
+	border-top: 1px solid #eee;
+	padding-top: 15px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.viewTimelineButton {
+	padding: 8px 15px;
+	background-color: #f0f7ff;
+	color: #4a90e2;
+	border: 1px solid #4a90e2;
+	border-radius: 4px;
+	font-size: 13px;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 500;
+	transition: all 0.2s ease;
+}
+
+.viewTimelineButton:hover {
+	background-color: #e0ecff;
+}
+
 .noApplications {
 	grid-column: 1 / -1;
 	text-align: center;
@@ -613,15 +640,29 @@
 }
 
 :global(.dark) .interviewInfo h4 {
-	color: #f5f5f5;
+	color: #fff;
 }
 
 :global(.dark) .noInterviews {
-	color: #999;
+	color: #aaa;
 }
 
 :global(.dark) .interviewItem:hover {
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+:global(.dark) .applicationActions {
+	border-top: 1px solid #333;
+}
+
+:global(.dark) .viewTimelineButton {
+	background-color: rgba(74, 144, 226, 0.1);
+	color: #6ba4e9;
+	border-color: #4a6e9e;
+}
+
+:global(.dark) .viewTimelineButton:hover {
+	background-color: rgba(74, 144, 226, 0.2);
 }
 
 @media (max-width: 768px) {
@@ -661,4 +702,67 @@
 	.interviewButton {
 		align-self: flex-end;
 	}
+}
+
+/* Tab Navigation */
+.tabNavigation {
+	display: flex;
+	border-bottom: 1px solid #eaeaea;
+	margin-bottom: 25px;
+}
+
+.tabButton {
+	padding: 12px 25px;
+	background: none;
+	border: none;
+	font-size: 16px;
+	font-weight: 500;
+	color: #666;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	position: relative;
+	transition: all 0.2s ease;
+}
+
+.tabButton:hover {
+	color: #4361ee;
+}
+
+.activeTab {
+	color: #4361ee;
+	font-weight: 600;
+}
+
+.activeTab::after {
+	content: "";
+	position: absolute;
+	bottom: -1px;
+	left: 0;
+	width: 100%;
+	height: 3px;
+	background-color: #4361ee;
+}
+
+.tabContent {
+	margin-top: 20px;
+}
+
+/* Dark mode support for tabs */
+:global(.dark) .tabButton {
+	color: #bbb;
+}
+
+:global(.dark) .tabButton:hover,
+:global(.dark) .activeTab {
+	color: #738aed;
+}
+
+:global(.dark) .activeTab::after {
+	background-color: #738aed;
+}
+
+:global(.dark) .tabNavigation {
+	border-bottom-color: #444;
 }

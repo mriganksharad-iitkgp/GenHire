@@ -57,19 +57,19 @@ const Navbar = () => {
 			<div className={styles.navContainer}>
 				<div className={styles.navBrand}>
 					<Link to="/" className={styles.brandLink}>
-						<h1>JobPortal</h1>
+						<h1>CompanyXYZ Careers</h1>
 					</Link>
 				</div>
 
 				<nav className={styles.navLinks}>
 					<Link to="/" className={styles.navLink}>
-						Jobs
+						Open Positions
 					</Link>
 					<Link to="/profile#applications" className={styles.navLink}>
 						My Applications
 					</Link>
 					<Link to="/profile#interviews" className={styles.navLink}>
-						Interviews
+						My Interviews
 					</Link>
 				</nav>
 
@@ -134,14 +134,7 @@ const Navbar = () => {
 									className={styles.dropdownItem}
 								>
 									<i className="fa fa-calendar"></i>
-									Upcoming Interviews
-								</Link>
-								<Link
-									to="/interview/999"
-									className={styles.dropdownItem}
-								>
-									<i className="fa fa-microphone"></i>
-									Practice Interview
+									My Interviews
 								</Link>
 								<button
 									className={styles.dropdownItem}

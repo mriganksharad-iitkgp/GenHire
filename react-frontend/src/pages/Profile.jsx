@@ -4,6 +4,7 @@ import styles from "./Profile.module.css";
 
 const Profile = () => {
 	const navigate = useNavigate();
+	const [activeTab, setActiveTab] = useState("bio"); // Add state for active tab
 	const [cvFile, setCvFile] = useState(null);
 	const [cvFilePath, setCvFilePath] = useState(null);
 	const [isUploading, setIsUploading] = useState(false);
@@ -21,7 +22,7 @@ const Profile = () => {
 	const [applications, setApplications] = useState([
 		{
 			id: 1,
-			company: "Tech Innovations Inc.",
+			company: "CompanyXYZ",
 			position: "Senior Frontend Developer",
 			appliedDate: "2023-08-15",
 			status: "In Progress",
@@ -29,7 +30,7 @@ const Profile = () => {
 		},
 		{
 			id: 2,
-			company: "Global Systems",
+			company: "CompanyXYZ",
 			position: "Full-Stack Developer",
 			appliedDate: "2023-07-10",
 			status: "Rejected",
@@ -37,7 +38,7 @@ const Profile = () => {
 		},
 		{
 			id: 3,
-			company: "DataViz Solutions",
+			company: "CompanyXYZ",
 			position: "React Developer",
 			appliedDate: "2023-09-01",
 			status: "Shortlisted",
@@ -53,14 +54,14 @@ const Profile = () => {
 		{
 			id: 123,
 			position: "Technical Interview - Software Engineer",
-			company: "Tech Innovations Inc.",
+			company: "CompanyXYZ",
 			date: "2023-09-15",
 			time: "10:00 AM",
 		},
 		{
 			id: 456,
 			position: "HR Discussion - React Developer",
-			company: "DataViz Solutions",
+			company: "CompanyXYZ",
 			date: "2023-09-28",
 			time: "2:30 PM",
 		},
@@ -72,7 +73,21 @@ const Profile = () => {
 		if (!isLoggedIn) {
 			navigate("/login");
 		}
+
+		// Check for hash in URL to set active tab
+		const hash = window.location.hash;
+		if (hash === "#applications") {
+			setActiveTab("applications");
+		} else if (hash === "#bio") {
+			setActiveTab("bio");
+		}
 	}, [navigate]);
+
+	// Handle tab change
+	const handleTabChange = (tab) => {
+		setActiveTab(tab);
+		window.location.hash = `#${tab}`;
+	};
 
 	// Handle CV upload
 	const handleCVUpload = async (e) => {
@@ -193,7 +208,7 @@ const Profile = () => {
 						</form>
 					</div>
 
-					{/* Application Statistics Card - Moved from Dashboard */}
+					{/* Application Statistics Card */}
 					<div className={styles.statsCard}>
 						<h3>Application Status</h3>
 						<div className={styles.statsContainer}>
@@ -248,251 +263,359 @@ const Profile = () => {
 				</div>
 
 				<div className={styles.mainContent}>
-					<section className={styles.bioSection}>
-						<h2>Bio Data</h2>
-						<form onSubmit={handleProfileUpdate}>
-							<div className={styles.formRow}>
-								<div className={styles.formGroup}>
-									<label>Full Name</label>
-									<input
-										type="text"
-										value={bioData.name}
-										onChange={(e) =>
-											setBioData({
-												...bioData,
-												name: e.target.value,
-											})
-										}
-									/>
-								</div>
-								<div className={styles.formGroup}>
-									<label>Email</label>
-									<input
-										type="email"
-										value={bioData.email}
-										onChange={(e) =>
-											setBioData({
-												...bioData,
-												email: e.target.value,
-											})
-										}
-									/>
-								</div>
-							</div>
+					{/* Tab Navigation */}
+					<div className={styles.tabNavigation}>
+						<button
+							className={`${styles.tabButton} ${
+								activeTab === "bio" ? styles.activeTab : ""
+							}`}
+							onClick={() => handleTabChange("bio")}
+						>
+							<i className="fa fa-user"></i> Bio Data
+						</button>
+						<button
+							className={`${styles.tabButton} ${
+								activeTab === "applications"
+									? styles.activeTab
+									: ""
+							}`}
+							onClick={() => handleTabChange("applications")}
+						>
+							<i className="fa fa-file-text"></i> Applications
+						</button>
+					</div>
 
-							<div className={styles.formRow}>
-								<div className={styles.formGroup}>
-									<label>Phone</label>
-									<input
-										type="tel"
-										value={bioData.phone}
-										onChange={(e) =>
-											setBioData({
-												...bioData,
-												phone: e.target.value,
-											})
-										}
-									/>
-								</div>
-								<div className={styles.formGroup}>
-									<label>Location</label>
-									<input
-										type="text"
-										value={bioData.location}
-										onChange={(e) =>
-											setBioData({
-												...bioData,
-												location: e.target.value,
-											})
-										}
-									/>
-								</div>
-							</div>
-
-							<div className={styles.formGroup}>
-								<label>Professional Title</label>
-								<input
-									type="text"
-									value={bioData.title}
-									onChange={(e) =>
-										setBioData({
-											...bioData,
-											title: e.target.value,
-										})
-									}
-								/>
-							</div>
-
-							<div className={styles.formGroup}>
-								<label>About Me</label>
-								<textarea
-									rows="4"
-									value={bioData.about}
-									onChange={(e) =>
-										setBioData({
-											...bioData,
-											about: e.target.value,
-										})
-									}
-								></textarea>
-							</div>
-
-							<div className={styles.formGroup}>
-								<label>Skills (comma-separated)</label>
-								<input
-									type="text"
-									value={bioData.skills.join(", ")}
-									onChange={(e) =>
-										setBioData({
-											...bioData,
-											skills: e.target.value
-												.split(",")
-												.map((skill) => skill.trim()),
-										})
-									}
-								/>
-							</div>
-
-							<button
-								type="submit"
-								className={styles.updateButton}
-							>
-								Update Profile
-							</button>
-						</form>
-					</section>
-
-					{/* Upcoming Interviews Section - Moved from Dashboard */}
-					<section className={styles.interviewsSection}>
-						<h2>Upcoming Interviews</h2>
-						<div className={styles.interviewsList}>
-							{upcomingInterviews.length > 0 ? (
-								upcomingInterviews.map((interview) => (
-									<div
-										key={interview.id}
-										className={styles.interviewItem}
-									>
-										<div className={styles.interviewInfo}>
-											<h4>{interview.position}</h4>
-											<p>{interview.company}</p>
+					{/* Tab Content */}
+					<div className={styles.tabContent}>
+						{/* Bio Data Tab */}
+						{activeTab === "bio" && (
+							<section className={styles.bioSection}>
+								<h2>Bio Data</h2>
+								<form onSubmit={handleProfileUpdate}>
+									<div className={styles.formRow}>
+										<div className={styles.formGroup}>
+											<label>Full Name</label>
+											<input
+												type="text"
+												value={bioData.name}
+												onChange={(e) =>
+													setBioData({
+														...bioData,
+														name: e.target.value,
+													})
+												}
+											/>
 										</div>
-										<div className={styles.interviewMeta}>
-											<div
-												className={
-													styles.interviewDateTime
+										<div className={styles.formGroup}>
+											<label>Email</label>
+											<input
+												type="email"
+												value={bioData.email}
+												onChange={(e) =>
+													setBioData({
+														...bioData,
+														email: e.target.value,
+													})
 												}
-											>
-												<i className="fa fa-calendar"></i>
-												<span>
-													{new Date(
-														interview.date
-													).toLocaleDateString()}
-													, {interview.time}
-												</span>
-											</div>
-											<Link
-												to={`/interview/${interview.id}`}
-												className={
-													styles.interviewButton
-												}
-											>
-												Join
-											</Link>
+											/>
 										</div>
 									</div>
-								))
-							) : (
-								<p className={styles.noInterviews}>
-									No upcoming interviews scheduled.
-								</p>
-							)}
-						</div>
-					</section>
 
-					<section className={styles.applicationsSection}>
-						<h2>Job Applications</h2>
-						<div className={styles.applicationsList}>
-							{applications.length > 0 ? (
-								applications.map((app) => (
-									<div
-										key={app.id}
-										className={styles.applicationCard}
-									>
-										<div
-											className={styles.applicationHeader}
-										>
-											<h3>{app.position}</h3>
-											<span
-												className={`${
-													styles.statusBadge
-												} ${
-													styles[
-														app.status
-															.toLowerCase()
-															.replace(" ", "")
-													]
-												}`}
-											>
-												{app.status}
-											</span>
+									<div className={styles.formRow}>
+										<div className={styles.formGroup}>
+											<label>Phone</label>
+											<input
+												type="tel"
+												value={bioData.phone}
+												onChange={(e) =>
+													setBioData({
+														...bioData,
+														phone: e.target.value,
+													})
+												}
+											/>
 										</div>
-										<div
-											className={
-												styles.applicationDetails
+										<div className={styles.formGroup}>
+											<label>Location</label>
+											<input
+												type="text"
+												value={bioData.location}
+												onChange={(e) =>
+													setBioData({
+														...bioData,
+														location:
+															e.target.value,
+													})
+												}
+											/>
+										</div>
+									</div>
+
+									<div className={styles.formGroup}>
+										<label>Professional Title</label>
+										<input
+											type="text"
+											value={bioData.title}
+											onChange={(e) =>
+												setBioData({
+													...bioData,
+													title: e.target.value,
+												})
 											}
-										>
-											<p className={styles.company}>
-												<i className="fa fa-building"></i>{" "}
-												{app.company}
-											</p>
-											<p className={styles.date}>
-												<i className="fa fa-calendar"></i>{" "}
-												Applied on:{" "}
-												{new Date(
-													app.appliedDate
-												).toLocaleDateString()}
-											</p>
-										</div>
-										{app.interviews.length > 0 && (
-											<div className={styles.interviews}>
-												<h4>Interviews</h4>
-												<ul>
-													{app.interviews.map(
-														(interview, idx) => (
-															<li key={idx}>
-																<span
-																	className={
-																		styles.interviewType
-																	}
-																>
-																	{
-																		interview.type
-																	}
-																</span>
-																<span
-																	className={
-																		styles.interviewDate
-																	}
-																>
+										/>
+									</div>
+
+									<div className={styles.formGroup}>
+										<label>About Me</label>
+										<textarea
+											rows="4"
+											value={bioData.about}
+											onChange={(e) =>
+												setBioData({
+													...bioData,
+													about: e.target.value,
+												})
+											}
+										></textarea>
+									</div>
+
+									<div className={styles.formGroup}>
+										<label>Skills (comma-separated)</label>
+										<input
+											type="text"
+											value={bioData.skills.join(", ")}
+											onChange={(e) =>
+												setBioData({
+													...bioData,
+													skills: e.target.value
+														.split(",")
+														.map((skill) =>
+															skill.trim()
+														),
+												})
+											}
+										/>
+									</div>
+
+									<button
+										type="submit"
+										className={styles.updateButton}
+									>
+										Update Profile
+									</button>
+								</form>
+							</section>
+						)}
+
+						{/* Applications Tab */}
+						{activeTab === "applications" && (
+							<>
+								{/* Upcoming Interviews Section */}
+								<section className={styles.interviewsSection}>
+									<h2>Upcoming Interviews</h2>
+									<div className={styles.interviewsList}>
+										{upcomingInterviews.length > 0 ? (
+											upcomingInterviews.map(
+												(interview) => (
+													<div
+														key={interview.id}
+														className={
+															styles.interviewItem
+														}
+													>
+														<div
+															className={
+																styles.interviewInfo
+															}
+														>
+															<h4>
+																{
+																	interview.position
+																}
+															</h4>
+															<p>
+																{
+																	interview.company
+																}
+															</p>
+														</div>
+														<div
+															className={
+																styles.interviewMeta
+															}
+														>
+															<div
+																className={
+																	styles.interviewDateTime
+																}
+															>
+																<i className="fa fa-calendar"></i>
+																<span>
 																	{new Date(
 																		interview.date
 																	).toLocaleDateString()}
+																	,{" "}
+																	{
+																		interview.time
+																	}
 																</span>
-															</li>
-														)
-													)}
-												</ul>
-											</div>
+															</div>
+															<Link
+																to={`/interview/${interview.id}`}
+																className={
+																	styles.interviewButton
+																}
+															>
+																Join
+															</Link>
+														</div>
+													</div>
+												)
+											)
+										) : (
+											<p className={styles.noInterviews}>
+												No upcoming interviews
+												scheduled.
+											</p>
 										)}
 									</div>
-								))
-							) : (
-								<p className={styles.noApplications}>
-									No job applications yet.
-								</p>
-							)}
-						</div>
-					</section>
+								</section>
+
+								{/* Job Applications Section */}
+								<section className={styles.applicationsSection}>
+									<h2>Job Applications</h2>
+									<div className={styles.applicationsList}>
+										{applications.length > 0 ? (
+											applications.map((app) => (
+												<div
+													key={app.id}
+													className={
+														styles.applicationCard
+													}
+												>
+													<div
+														className={
+															styles.applicationHeader
+														}
+													>
+														<h3>{app.position}</h3>
+														<span
+															className={`${
+																styles.statusBadge
+															} ${
+																styles[
+																	app.status
+																		.toLowerCase()
+																		.replace(
+																			" ",
+																			""
+																		)
+																]
+															}`}
+														>
+															{app.status}
+														</span>
+													</div>
+													<div
+														className={
+															styles.applicationDetails
+														}
+													>
+														<p
+															className={
+																styles.company
+															}
+														>
+															<i className="fa fa-building"></i>{" "}
+															{app.company}
+														</p>
+														<p
+															className={
+																styles.date
+															}
+														>
+															<i className="fa fa-calendar"></i>{" "}
+															Applied on:{" "}
+															{new Date(
+																app.appliedDate
+															).toLocaleDateString()}
+														</p>
+													</div>
+													{app.interviews.length >
+														0 && (
+														<div
+															className={
+																styles.interviews
+															}
+														>
+															<h4>Interviews</h4>
+															<ul>
+																{app.interviews.map(
+																	(
+																		interview,
+																		idx
+																	) => (
+																		<li
+																			key={
+																				idx
+																			}
+																		>
+																			<span
+																				className={
+																					styles.interviewType
+																				}
+																			>
+																				{
+																					interview.type
+																				}
+																			</span>
+																			<span
+																				className={
+																					styles.interviewDate
+																				}
+																			>
+																				{new Date(
+																					interview.date
+																				).toLocaleDateString()}
+																			</span>
+																		</li>
+																	)
+																)}
+															</ul>
+														</div>
+													)}
+													<div
+														className={
+															styles.applicationActions
+														}
+													>
+														<Link
+															to={`/application/${app.id}`}
+															className={
+																styles.viewTimelineButton
+															}
+														>
+															<i className="fa fa-info-circle"></i>{" "}
+															View Application
+															Details
+														</Link>
+													</div>
+												</div>
+											))
+										) : (
+											<p
+												className={
+													styles.noApplications
+												}
+											>
+												No job applications yet.
+											</p>
+										)}
+									</div>
+								</section>
+							</>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>

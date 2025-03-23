@@ -85,8 +85,11 @@ const Register = () => {
 		<div className={styles.registerContainer}>
 			<div className={styles.registerCard}>
 				<div className={styles.logoSection}>
-					<h1>JobPortal</h1>
-					<p>Create your account to get started</p>
+					<h1>CompanyXYZ Careers</h1>
+					<p>
+						Create your account to get started with your career at
+						CompanyXYZ
+					</p>
 				</div>
 
 				<form className={styles.registerForm} onSubmit={handleSubmit}>

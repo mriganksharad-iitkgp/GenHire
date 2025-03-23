@@ -8,13 +8,71 @@ const JobDetails = () => {
 	const [job, setJob] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [applyModalOpen, setApplyModalOpen] = useState(false);
+	const [matchScoreModalOpen, setMatchScoreModalOpen] = useState(false);
+	const [matchScore, setMatchScore] = useState(null);
+
+	// Function to handle PDF download
+	const handleDownloadPDF = () => {
+		// In a real app, you would generate a PDF on the server or use a library like jsPDF
+		// Here we'll simulate a download by creating a simple text blob
+
+		if (!job) return;
+
+		const jobTitle = job.title;
+		const jobContent = `
+Job Description: ${job.title}
+Company: ${job.company}
+Location: ${job.location}
+Job Type: ${job.type}
+Experience: ${job.experience}
+Salary: ${job.salary}
+Posted Date: ${job.postedDate}
+
+Description:
+${job.description}
+
+Key Responsibilities:
+${job.responsibilities.map((resp) => `- ${resp}`).join("\n")}
+
+Requirements:
+${job.requirements.map((req) => `- ${req}`).join("\n")}
+
+Benefits:
+${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
+		`;
+
+		const blob = new Blob([jobContent], { type: "text/plain" });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = `${jobTitle.replace(/\s+/g, "-")}-Job-Description.txt`;
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
+	};
+
+	// Function to check CV match score
+	const handleCheckMatchScore = () => {
+		// In a real app, this would call an API to analyze the user's CV against the job
+		// Here we'll simulate a backend response with just a percentage
+		setIsLoading(true);
+
+		setTimeout(() => {
+			// Generate a random score between 60 and 95 to simulate backend response
+			const score = Math.floor(Math.random() * 36) + 60;
+			setMatchScore(score);
+			setMatchScoreModalOpen(true);
+			setIsLoading(false);
+		}, 1000);
+	};
 
 	// Sample job data - in a real app, this would be fetched from an API
 	const sampleJobs = {
 		1001: {
 			id: 1001,
 			title: "Senior Frontend Developer",
-			company: "Tech Innovations Inc.",
+			company: "CompanyXYZ",
 			logo: "../android-chrome-192x192.png",
 			location: "San Francisco, CA (Remote)",
 			type: "Full-time",
@@ -60,7 +118,7 @@ const JobDetails = () => {
 		1002: {
 			id: 1002,
 			title: "Full Stack Engineer",
-			company: "Global Systems",
+			company: "CompanyXYZ",
 			logo: "../android-chrome-192x192.png",
 			location: "New York, NY",
 			type: "Full-time",
@@ -123,7 +181,7 @@ const JobDetails = () => {
 				setJob({
 					id: jobId,
 					title: "Job Position",
-					company: "Example Company",
+					company: "CompanyXYZ",
 					logo: "../android-chrome-192x192.png",
 					location: "Remote",
 					type: "Full-time",
@@ -199,6 +257,12 @@ const JobDetails = () => {
 						>
 							Apply Now
 						</button>
+						<button
+							className={styles.saveButton}
+							onClick={handleDownloadPDF}
+						>
+							<i className="fa fa-file-pdf-o"></i> Download JD
+						</button>
 						<button className={styles.saveButton}>
 							<i className="fa fa-bookmark-o"></i> Save
 						</button>
@@ -261,8 +325,10 @@ const JobDetails = () => {
 								<img src={job.logo} alt={job.company} />
 								<h4>{job.company}</h4>
 								<p>
-									This company information will be implemented
-									in a future update.
+									Join our team at CompanyXYZ and be part of
+									our mission to innovate and transform the
+									industry. We offer competitive benefits and
+									a collaborative work environment.
 								</p>
 							</div>
 						</div>
@@ -274,6 +340,20 @@ const JobDetails = () => {
 								onClick={() => setApplyModalOpen(true)}
 							>
 								Apply Now
+							</button>
+							<button
+								className={styles.downloadJdBtn}
+								onClick={handleDownloadPDF}
+							>
+								<i className="fa fa-file-pdf-o"></i> Download
+								Job Description
+							</button>
+							<button
+								className={styles.matchScoreBtn}
+								onClick={handleCheckMatchScore}
+							>
+								<i className="fa fa-check-circle"></i> Check CV
+								Match Score
 							</button>
 							<p>or</p>
 							<Link
@@ -332,6 +412,63 @@ const JobDetails = () => {
 								}}
 							>
 								Submit Application
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Match Score Modal - Simplified to just show percentage */}
+			{matchScoreModalOpen && (
+				<div className={styles.modalOverlay}>
+					<div className={styles.modal}>
+						<div className={styles.modalHeader}>
+							<h3>CV Match Score</h3>
+							<button
+								className={styles.closeButton}
+								onClick={() => setMatchScoreModalOpen(false)}
+							>
+								<i className="fa fa-times"></i>
+							</button>
+						</div>
+						<div className={styles.modalBody}>
+							<div className={styles.matchScoreResult}>
+								<div
+									className={styles.scoreCircle}
+									style={{ "--score": `${matchScore}%` }}
+								>
+									<span className={styles.scoreValue}>
+										{matchScore}%
+									</span>
+								</div>
+								<div className={styles.scoreDetails}>
+									<h4>
+										Your CV matches {matchScore}% of the job
+										requirements
+									</h4>
+									<p>
+										This score is generated based on how
+										your skills and experience align with
+										the job requirements.
+									</p>
+								</div>
+							</div>
+						</div>
+						<div className={styles.modalFooter}>
+							<button
+								className={styles.cancelButton}
+								onClick={() => setMatchScoreModalOpen(false)}
+							>
+								Close
+							</button>
+							<button
+								className={styles.submitButton}
+								onClick={() => {
+									setMatchScoreModalOpen(false);
+									setApplyModalOpen(true);
+								}}
+							>
+								Apply Now
 							</button>
 						</div>
 					</div>

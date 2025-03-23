@@ -8,9 +8,6 @@ export default function Chat({ interviewId }) {
 	const [isRecording, setIsRecording] = useState(false);
 	const [isSpeaking, setIsSpeaking] = useState(false);
 	const [speakingIndex, setSpeakingIndex] = useState(null);
-	const [jdFile, setJdFile] = useState(null);
-	const [cvFile, setCvFile] = useState(null);
-	const [isUploading, setIsUploading] = useState(false);
 
 	const navigate = useNavigate();
 	const targetRef = useRef();
@@ -30,10 +27,6 @@ export default function Chat({ interviewId }) {
 			navigate("/login");
 		}
 	}, [navigate]);
-
-	// temporary state to store file paths
-	const [jd_file_path, setJdFilePath] = useState(null);
-	const [cv_file_path, setCvFilePath] = useState(null);
 
 	// Initialize Speech Recognition API (if supported)
 	useEffect(() => {
@@ -113,49 +106,6 @@ export default function Chat({ interviewId }) {
 		window.speechSynthesis.speak(utterance);
 	};
 
-	// Handle file upload
-	const handleFileUpload = async (e) => {
-		e.preventDefault();
-		if (!jdFile || !cvFile) {
-			alert("Please upload both JD and CV files.");
-			return;
-		}
-		setIsUploading(true);
-
-		const formData = new FormData();
-		formData.append("jd", jdFile);
-		formData.append("cv", cvFile);
-
-		try {
-			const response = await fetch("http://localhost:5000/api/upload", {
-				method: "POST",
-				body: formData,
-			});
-			const data = await response.json();
-			if (response.ok) {
-				alert(data.message + " Similarity: " + data.similarity);
-
-				setJdFilePath(data.jd_file_path);
-				setCvFilePath(data.cv_file_path);
-
-				const newChatContent = { ...chatContent };
-				const newIndex = Object.keys(newChatContent).length;
-				newChatContent[newIndex] = {
-					query: "Interview questions based on JD and CV:",
-					response: data.interview_questions,
-				};
-				setChatContent(newChatContent);
-				setInput("");
-			} else {
-				alert(data.error);
-			}
-		} catch (error) {
-			alert("Error uploading files. Please try again.");
-		} finally {
-			setIsUploading(false);
-		}
-	};
-
 	// Send message function
 	const onSend = useCallback(
 		(e) => {
@@ -163,11 +113,6 @@ export default function Chat({ interviewId }) {
 			const query = input.trim();
 			if (query === "") {
 				setInput("");
-				return;
-			}
-
-			if (!jd_file_path || !cv_file_path) {
-				alert("Please upload JD and CV files first.");
 				return;
 			}
 
@@ -198,8 +143,7 @@ export default function Chat({ interviewId }) {
 				body: JSON.stringify({
 					question: query,
 					history,
-					jd_file_path,
-					cv_file_path,
+					interview_id: interviewId,
 				}),
 			})
 				.then((response) => response.json())
@@ -221,7 +165,7 @@ export default function Chat({ interviewId }) {
 					setChatContent(updatedChatContent);
 				});
 		},
-		[chatContent, input, jd_file_path, cv_file_path]
+		[chatContent, input, interviewId]
 	);
 
 	// Optionally send the message on Shift+Enter key press
@@ -257,105 +201,6 @@ export default function Chat({ interviewId }) {
 			<div className={Styles["chat-box-container"]}>
 				{/* Main chat interface */}
 				<div className={Styles["chat-content"]}>
-					{/* Upload form appears at the top if files haven't been uploaded yet */}
-					{(!jd_file_path || !cv_file_path) && (
-						<div className={Styles["file-upload-container"]}>
-							<div className={Styles["upload-header"]}>
-								<i
-									className="fa fa-cloud-upload"
-									aria-hidden="true"
-								/>
-								<h3>Upload Documents to Start Interview</h3>
-								<p>Upload a job description and candidate CV</p>
-							</div>
-							<form
-								onSubmit={handleFileUpload}
-								className={Styles["upload-form"]}
-							>
-								<div className={Styles["file-input-group"]}>
-									<div className={Styles["file-card"]}>
-										<label
-											className={
-												Styles["file-input-label"]
-											}
-										>
-											<i
-												className="fa fa-file-text"
-												aria-hidden="true"
-											/>
-											<span>Job Description</span>
-											<input
-												type="file"
-												accept=".pdf,.docx"
-												onChange={(e) =>
-													setJdFile(e.target.files[0])
-												}
-												className={
-													Styles["hidden-input"]
-												}
-											/>
-											<div
-												className={Styles["file-info"]}
-											>
-												{jdFile
-													? jdFile.name
-													: "No file selected"}
-											</div>
-										</label>
-									</div>
-
-									<div className={Styles["file-card"]}>
-										<label
-											className={
-												Styles["file-input-label"]
-											}
-										>
-											<i
-												className="fa fa-user"
-												aria-hidden="true"
-											/>
-											<span>Candidate CV</span>
-											<input
-												type="file"
-												accept=".pdf,.docx"
-												onChange={(e) =>
-													setCvFile(e.target.files[0])
-												}
-												className={
-													Styles["hidden-input"]
-												}
-											/>
-											<div
-												className={Styles["file-info"]}
-											>
-												{cvFile
-													? cvFile.name
-													: "No file selected"}
-											</div>
-										</label>
-									</div>
-								</div>
-								<button
-									type="submit"
-									className={Styles["upload-button"]}
-									disabled={isUploading}
-								>
-									{isUploading ? (
-										"Processing..."
-									) : (
-										<>
-											<i
-												className="fa fa-upload"
-												aria-hidden="true"
-											/>
-											Upload Documents
-										</>
-									)}
-								</button>
-							</form>
-						</div>
-					)}
-
 					{/* Chat Messages */}
 					<div className={Styles["messages-list"]} ref={targetRef}>
 						{Object.keys(chatContent).length > 0 ? (
@@ -449,7 +294,7 @@ export default function Chat({ interviewId }) {
 							})
 						) : (
 							<div className={Styles["message-box-empty"]}>
-								Upload documents to begin the interview process
+								Your interview session will begin shortly
 							</div>
 						)}
 					</div>
@@ -462,7 +307,6 @@ export default function Chat({ interviewId }) {
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
 						placeholder="Type your message...Press Shift+Enter to send"
-						disabled={!jd_file_path || !cv_file_path}
 					></textarea>
 					<button
 						type="button"
@@ -471,15 +315,10 @@ export default function Chat({ interviewId }) {
 						title={
 							isRecording ? "Stop Listening" : "Start Voice Input"
 						}
-						disabled={!jd_file_path || !cv_file_path}
 					>
 						<i className="fa fa-microphone" aria-hidden="true" />
 					</button>
-					<button
-						type="submit"
-						title="Send Message"
-						disabled={!jd_file_path || !cv_file_path}
-					>
+					<button type="submit" title="Send Message">
 						<i className="fa fa-paper-plane" aria-hidden="true" />
 					</button>
 				</form>

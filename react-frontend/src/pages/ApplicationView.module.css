@@ -1,0 +1,446 @@
+.applicationViewContainer {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 20px;
+	background-color: #f9f9f9;
+	min-height: 100vh;
+}
+
+.content {
+	background-color: white;
+	border-radius: 8px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	overflow: hidden;
+}
+
+.header {
+	padding: 15px 20px;
+	border-bottom: 1px solid #eaeaea;
+}
+
+.backButton {
+	background: none;
+	border: none;
+	color: #4a90e2;
+	font-size: 16px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0;
+}
+
+.backButton:hover {
+	color: #3b73b9;
+}
+
+.applicationHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding: 30px;
+	border-bottom: 1px solid #eaeaea;
+	background-color: #f5f7fa;
+	flex-wrap: wrap;
+}
+
+.applicationInfo h1 {
+	margin: 0 0 15px;
+	font-size: 28px;
+	color: #333;
+}
+
+.applicationMeta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	align-items: center;
+}
+
+.company {
+	font-weight: 600;
+	color: #555;
+	font-size: 16px;
+}
+
+.appliedDate {
+	color: #777;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.status {
+	padding: 6px 12px;
+	border-radius: 50px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.inprogress {
+	background-color: #e5f0ff;
+	color: #4a90e2;
+}
+
+.shortlisted {
+	background-color: #e5fff0;
+	color: #2ecc71;
+}
+
+.rejected {
+	background-color: #fff0f0;
+	color: #e74c3c;
+}
+
+.applicationActions {
+	margin-top: 10px;
+}
+
+.viewJobButton {
+	padding: 10px 20px;
+	background-color: #f0f7ff;
+	color: #4a90e2;
+	border: 1px solid #4a90e2;
+	border-radius: 6px;
+	font-weight: 600;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+}
+
+.viewJobButton:hover {
+	background-color: #e0ecff;
+}
+
+.applicationBody {
+	padding: 30px;
+}
+
+.timelineSection h2 {
+	margin: 0 0 25px;
+	font-size: 22px;
+	color: #333;
+	border-bottom: 1px solid #eaeaea;
+	padding-bottom: 10px;
+}
+
+.timeline {
+	position: relative;
+	padding-left: 10px;
+}
+
+.timelineEvent {
+	display: flex;
+	margin-bottom: 40px;
+	position: relative;
+}
+
+.timelineIcon {
+	width: 40px;
+	height: 40px;
+	background-color: #f0f0f0;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 16px;
+	color: #777;
+	z-index: 2;
+	flex-shrink: 0;
+	margin-right: 20px;
+}
+
+.completed .timelineIcon {
+	background-color: #4a90e2;
+	color: white;
+}
+
+.scheduled .timelineIcon {
+	background-color: #f39c12;
+	color: white;
+}
+
+.pending .timelineIcon {
+	background-color: #f0f0f0;
+	color: #777;
+}
+
+.timelineConnector {
+	position: absolute;
+	left: 20px;
+	top: 40px;
+	bottom: -40px;
+	width: 2px;
+	z-index: 1;
+}
+
+.connector {
+	width: 100%;
+	height: 100%;
+	background-color: #e0e0e0;
+}
+
+.completed .connector {
+	background-color: #4a90e2;
+}
+
+.timelineContent {
+	flex: 1;
+	padding: 0 0 0 10px;
+}
+
+.timelineHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	flex-wrap: wrap;
+}
+
+.timelineHeader h3 {
+	margin: 0;
+	font-size: 18px;
+	color: #333;
+}
+
+.timelineDate {
+	font-size: 14px;
+	color: #777;
+}
+
+.timelineContent p {
+	margin: 0 0 15px;
+	color: #555;
+	line-height: 1.5;
+}
+
+.interviewDetails {
+	background-color: #f9f9f9;
+	border-radius: 8px;
+	padding: 20px;
+	margin-top: 15px;
+	border: 1px solid #eaeaea;
+}
+
+.interviewHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 15px;
+	flex-wrap: wrap;
+}
+
+.interviewHeader h4 {
+	margin: 0;
+	font-size: 16px;
+	color: #333;
+}
+
+.interviewActions {
+	display: flex;
+	gap: 10px;
+}
+
+.joinButton,
+.practiceButton {
+	padding: 8px 16px;
+	border-radius: 6px;
+	text-decoration: none;
+	font-size: 14px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.joinButton {
+	background-color: #4a90e2;
+	color: white;
+	border: none;
+}
+
+.joinButton:hover {
+	background-color: #3b73b9;
+}
+
+.practiceButton {
+	background-color: #f0f7ff;
+	color: #4a90e2;
+	border: 1px solid #4a90e2;
+}
+
+.practiceButton:hover {
+	background-color: #e0ecff;
+}
+
+.interviewInfo {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 20px;
+}
+
+.infoItem {
+	display: flex;
+	gap: 15px;
+	align-items: flex-start;
+}
+
+.infoItem i {
+	font-size: 18px;
+	color: #4a90e2;
+	margin-top: 2px;
+}
+
+.infoItem strong {
+	display: block;
+	margin-bottom: 5px;
+	color: #333;
+}
+
+.duration {
+	font-size: 13px;
+	color: #777;
+	margin-top: 3px;
+}
+
+.interviewersList,
+.agendaList,
+.prepList {
+	margin: 8px 0 0;
+	padding-left: 15px;
+}
+
+.interviewersList li,
+.agendaList li,
+.prepList li {
+	margin-bottom: 5px;
+	color: #555;
+}
+
+.loadingContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 60vh;
+	color: #666;
+}
+
+.loader {
+	border: 5px solid #f3f3f3;
+	border-top: 5px solid #4a90e2;
+	border-radius: 50%;
+	width: 40px;
+	height: 40px;
+	animation: spin 1s linear infinite;
+	margin-bottom: 20px;
+}
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
+}
+
+/* Dark mode support */
+:global(.dark) .applicationViewContainer {
+	background-color: #1a1a1a;
+}
+
+:global(.dark) .content {
+	background-color: #2a2a2a;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark) .applicationHeader {
+	background-color: #333;
+	border-bottom: 1px solid #444;
+}
+
+:global(.dark) .applicationInfo h1 {
+	color: #fff;
+}
+
+:global(.dark) .company {
+	color: #ddd;
+}
+
+:global(.dark) .appliedDate {
+	color: #bbb;
+}
+
+:global(.dark) .inprogress {
+	background-color: rgba(74, 144, 226, 0.2);
+}
+
+:global(.dark) .shortlisted {
+	background-color: rgba(46, 204, 113, 0.2);
+}
+
+:global(.dark) .rejected {
+	background-color: rgba(231, 76, 60, 0.2);
+}
+
+:global(.dark) .timelineSection h2 {
+	color: #fff;
+	border-bottom: 1px solid #444;
+}
+
+:global(.dark) .timelineHeader h3 {
+	color: #fff;
+}
+
+:global(.dark) .timelineDate {
+	color: #bbb;
+}
+
+:global(.dark) .timelineContent p {
+	color: #bbb;
+}
+
+:global(.dark) .interviewDetails {
+	background-color: #333;
+	border: 1px solid #444;
+}
+
+:global(.dark) .interviewHeader h4 {
+	color: #fff;
+}
+
+:global(.dark) .infoItem strong {
+	color: #fff;
+}
+
+:global(.dark) .interviewersList li,
+:global(.dark) .agendaList li,
+:global(.dark) .prepList li {
+	color: #bbb;
+}
+
+@media (max-width: 768px) {
+	.applicationHeader {
+		flex-direction: column;
+	}
+
+	.applicationActions {
+		margin-top: 20px;
+	}
+
+	.interviewHeader {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.interviewActions {
+		margin-top: 10px;
+	}
+
+	.interviewInfo {
+		grid-template-columns: 1fr;
+	}
+}
