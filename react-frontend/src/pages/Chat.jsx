@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Styles from "./Chat.module.css";
 
-export default function Chat() {
+export default function Chat({ interviewId }) {
 	const [chatContent, setChatContent] = useState({});
 	const [input, setInput] = useState("");
 	const [isRecording, setIsRecording] = useState(false);
@@ -12,10 +12,44 @@ export default function Chat() {
 	const [jdFile, setJdFile] = useState(null);
 	const [cvFile, setCvFile] = useState(null);
 	const [isUploading, setIsUploading] = useState(false); // new state for upload status
+	const [userMenuOpen, setUserMenuOpen] = useState(false); // state for user menu dropdown
 
+	const navigate = useNavigate();
 	const targetRef = useRef();
 	const recognitionRef = useRef(null);
 	const currentUtteranceRef = useRef(null);
+	const userMenuRef = useRef(null); // ref for user menu dropdown
+
+	// Close user menu when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event) {
+			if (
+				userMenuRef.current &&
+				!userMenuRef.current.contains(event.target)
+			) {
+				setUserMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+		};
+	}, []);
+
+	// Handle logout
+	const handleLogout = () => {
+		localStorage.removeItem("candidateLoggedIn");
+		navigate("/login");
+	};
+
+	// Check authentication when component mounts
+	useEffect(() => {
+		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		console.log("Checking authentication", isLoggedIn);
+		if (!isLoggedIn) {
+			navigate("/login");
+		}
+	}, [navigate]);
 
 	// temporary state to store file paths
 	const [jd_file_path, setJdFilePath] = useState(null);
@@ -224,6 +258,24 @@ export default function Chat() {
 		};
 	}, [onSend]);
 
+	// Load interview data based on interviewId
+	useEffect(() => {
+		if (interviewId) {
+			// This would normally be an API call to fetch interview data
+			console.log(`Loading interview ID: ${interviewId}`);
+
+			// For now, just set a message in the chat content
+			setChatContent({
+				messages: [
+					{
+						role: "assistant",
+						content: `Welcome to interview #${interviewId}. This is where the conversation will take place.`,
+					},
+				],
+			});
+		}
+	}, [interviewId]);
+
 	return (
 		<div
 			className={`${Styles["page-container"]} ${
@@ -252,6 +304,44 @@ export default function Chat() {
 							HR Tech
 						</h1>
 					</Link>
+					<div
+						className={Styles["user-avatar-container"]}
+						ref={userMenuRef}
+					>
+						<div
+							className={Styles["user-avatar"]}
+							onClick={() => setUserMenuOpen(!userMenuOpen)}
+						>
+							<img
+								src="../android-chrome-192x192.png"
+								alt="User Avatar"
+							/>
+						</div>
+						{userMenuOpen && (
+							<div className={Styles["user-menu-dropdown"]}>
+								<div
+									className={Styles["user-menu-item"]}
+									onClick={() => navigate("/profile")}
+								>
+									<i
+										className="fa fa-user"
+										aria-hidden="true"
+									></i>
+									Profile
+								</div>
+								<div
+									className={Styles["user-menu-item"]}
+									onClick={handleLogout}
+								>
+									<i
+										className="fa fa-sign-out"
+										aria-hidden="true"
+									></i>
+									Logout
+								</div>
+							</div>
+						)}
+					</div>
 				</div>
 				<div className={Styles["chat-content"]}>
 					{/* File Upload Section */}
