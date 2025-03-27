@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 import uuid  # new import
 from werkzeug.security import generate_password_hash, check_password_hash
 import hashlib
-import jwt
+import jwt as pyjwt 
 import datetime
 from functools import wraps
 from pymongo import MongoClient
@@ -18,9 +18,9 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@cluster0.yneajzv.mongodb.net/Cluster0?retryWrites=true&w=majority&appName=Cluster0'
+mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@hrtech.yneajzv.mongodb.net/?retryWrites=true&w=majority&appName=hrtech'
 client = MongoClient(mongo_uri)
-career_portal = 'hr_tech'  # Your database name
+career_portal = 'hrtech'  # Your database name
 db = client[career_portal]  # Use the variable directly
 users_collection = db['users']
 
@@ -42,7 +42,7 @@ app.config["CV_FOLDER"] = CV_FOLDER
 app.config["ALLOWED_EXTENSIONS"] = {"pdf"}
 
 def generate_token(user_id):
-    return jwt.encode({
+    return pyjwt.encode({  # Use pyjwt instead of jwt
         'user_id': str(user_id),
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
     }, app.config['SECRET_KEY'], algorithm='HS256')
@@ -56,15 +56,15 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
         
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = pyjwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])  # Use pyjwt here
             current_user = users_collection.find_one({'_id': ObjectId(data['user_id'])})
             
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401
                 
-        except jwt.ExpiredSignatureError:
+        except pyjwt.ExpiredSignatureError:  # And here
             return jsonify({'message': 'Token has expired!'}), 401
-        except jwt.InvalidTokenError:
+        except pyjwt.InvalidTokenError:  # And here
             return jsonify({'message': 'Token is invalid!'}), 401
         
         return f(current_user, *args, **kwargs)
@@ -87,9 +87,6 @@ def register():
     
     if password != confirm_password:
         return jsonify({'error': 'Passwords do not match'}), 400
-    
-    if len(password) < 6:
-        return jsonify({'error': 'Password must be at least 6 characters'}), 400
     
     # Check if user exists
     if users_collection.find_one({'email': email}):
