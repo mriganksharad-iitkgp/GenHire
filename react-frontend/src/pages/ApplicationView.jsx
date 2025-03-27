@@ -7,13 +7,13 @@ const ApplicationView = () => {
 	const navigate = useNavigate();
 	const [isLoading, setIsLoading] = useState(true);
 	const [application, setApplication] = useState(null);
-	const [currentDate] = useState(new Date());
+	const [currentDate, setCurrentDate] = useState(new Date());
 
 	// Sample application data with timeline and detailed interview information
 	const sampleApplications = {
 		1: {
 			id: 1,
-			position: "Senior Frontend Developer",
+			position: "Senior Business Development Manager",
 			company: "CompanyXYZ",
 			jobId: 1001,
 			status: "In Progress",
@@ -39,50 +39,81 @@ const ApplicationView = () => {
 				{
 					id: 3,
 					date: "2023-08-25",
-					type: "Technical Assessment",
+					type: "Skills Assessment",
 					status: "Completed",
 					description:
-						"Online coding assessment was completed successfully.",
-					icon: "fa-code",
+						"Online business strategy assessment was completed successfully.",
+					icon: "fa-chart-line",
 				},
 				{
 					id: 4,
-					date: "2023-09-15",
-					type: "Technical Interview",
+					date: new Date().toISOString().split("T")[0], // Today's date
+					type: "Live Demo Interview",
 					status: "Scheduled",
-					description: "Remote interview with the engineering team.",
+					description:
+						"Test interview scheduled for today to demonstrate the time window feature.",
+					icon: "fa-video-camera",
+					interviewDetails: {
+						id: 999,
+						date: new Date().toISOString().split("T")[0],
+						time:
+							new Date().getHours() +
+							":" +
+							(new Date().getMinutes() < 10 ? "0" : "") +
+							new Date().getMinutes(),
+						duration: "1 hour",
+						type: "Demo",
+						interviewers: ["Test Interviewer (Demo Manager)"],
+						location: "Remote (Platform Chat)",
+						meetingLink: "/interview/999",
+						agenda: [
+							"Demonstration of interview time window feature",
+							"Test of join button functionality",
+						],
+						preparation: [
+							"No preparation needed - this is just a demo",
+						],
+					},
+				},
+				{
+					id: 5,
+					date: "2023-09-15",
+					type: "Business Interview",
+					status: "Scheduled",
+					description:
+						"Remote interview with the business development team.",
 					icon: "fa-video-camera",
 					interviewDetails: {
 						id: 101,
 						date: "2023-09-15",
 						time: "10:00 AM",
 						duration: "1 hour",
-						type: "Technical",
+						type: "Business Strategy",
 						interviewers: [
-							"Sarah Johnson (Engineering Manager)",
-							"Michael Chen (Senior Developer)",
+							"Sarah Johnson (Sales Director)",
+							"Michael Chen (Senior Business Manager)",
 						],
-						location: "Remote (Zoom)",
-						meetingLink: "https://zoom.us/j/1234567890",
+						location: "Remote (Platform Chat)",
+						meetingLink: "/interview/101",
 						agenda: [
-							"Discussion of your previous projects",
-							"Technical questions on React, JavaScript, and responsive design",
-							"Live coding exercise",
+							"Discussion of your previous business development experience",
+							"Questions on sales strategies, client acquisition, and market analysis",
+							"Business case scenario discussion",
 							"Q&A session",
 						],
 						preparation: [
-							"Review your experience with React hooks and state management",
-							"Be prepared to discuss responsive design principles",
-							"Practice explaining your thought process while solving problems",
+							"Review your experience with sales strategies and client relationship management",
+							"Be prepared to discuss business growth examples from past roles",
+							"Practice explaining your approach to business development",
 						],
 					},
 				},
 				{
-					id: 5,
+					id: 6,
 					date: "2023-09-25",
 					type: "Final Interview",
 					status: "Pending",
-					description: "Interview with the CTO and team leads.",
+					description: "Interview with the CCO and team leads.",
 					icon: "fa-users",
 					interviewDetails: {
 						id: 102,
@@ -91,12 +122,11 @@ const ApplicationView = () => {
 						duration: "1 hour",
 						type: "Leadership",
 						interviewers: [
-							"Alex Patterson (CTO)",
-							"Emma Rodriguez (Product Lead)",
+							"Alex Patterson (CCO)",
+							"Emma Rodriguez (Sales Lead)",
 						],
-						location: "Remote (Microsoft Teams)",
-						meetingLink:
-							"https://teams.microsoft.com/l/meetup-join/...",
+						location: "Remote (Platform Chat)",
+						meetingLink: "/interview/102",
 						agenda: [
 							"Discussion about career goals and vision",
 							"Cultural fit assessment",
@@ -104,14 +134,14 @@ const ApplicationView = () => {
 							"Q&A about the company and role",
 						],
 						preparation: [
-							"Prepare questions about the company's technical direction",
+							"Prepare questions about the company's business direction",
 							"Review the company's values and culture",
-							"Be ready to discuss a challenging project you led",
+							"Be ready to discuss a challenging business deal you closed",
 						],
 					},
 				},
 				{
-					id: 6,
+					id: 7,
 					date: "2023-10-01",
 					type: "Decision",
 					status: "Pending",
@@ -122,7 +152,7 @@ const ApplicationView = () => {
 		},
 		2: {
 			id: 2,
-			position: "Full-Stack Developer",
+			position: "Business Development Representative",
 			company: "CompanyXYZ",
 			jobId: 1002,
 			status: "Rejected",
@@ -158,7 +188,7 @@ const ApplicationView = () => {
 		},
 		3: {
 			id: 3,
-			position: "React Developer",
+			position: "Strategic Partnerships Manager",
 			company: "CompanyXYZ",
 			jobId: 1003,
 			status: "Shortlisted",
@@ -195,8 +225,8 @@ const ApplicationView = () => {
 						duration: "30 minutes",
 						type: "HR",
 						interviewers: ["Jessica Kim (HR Manager)"],
-						location: "Phone Call",
-						meetingLink: null,
+						location: "Platform Chat",
+						meetingLink: "/interview/103",
 						agenda: [
 							"Overview of your background and experience",
 							"Discussion about your interest in the company",
@@ -213,35 +243,45 @@ const ApplicationView = () => {
 				{
 					id: 4,
 					date: "2023-09-20",
-					type: "Technical Round",
+					type: "Partnership Strategy Round",
 					status: "Scheduled",
-					description: "Technical interview focused on React skills.",
-					icon: "fa-code",
+					description:
+						"Interview focused on partnership strategy skills.",
+					icon: "fa-handshake-o",
 					interviewDetails: {
 						id: 104,
 						date: "2023-09-20",
 						time: "11:00 AM",
 						duration: "1 hour",
-						type: "Technical",
-						interviewers: ["David Wilson (Frontend Lead)"],
-						location: "Remote (Google Meet)",
-						meetingLink: "https://meet.google.com/abc-defg-hij",
+						type: "Business Strategy",
+						interviewers: ["David Wilson (Partnerships Lead)"],
+						location: "Remote (Platform Chat)",
+						meetingLink: "/interview/104",
 						agenda: [
-							"Technical questions about React, state management, and hooks",
-							"Discussion about your previous React projects",
-							"Problem-solving scenarios",
-							"Code review exercise",
+							"Questions about partnership strategies, contract negotiation, and revenue models",
+							"Discussion about your previous partnership projects",
+							"Problem-solving scenarios for partnership challenges",
+							"Partner acquisition strategy discussion",
 						],
 						preparation: [
-							"Review React fundamentals and hooks",
-							"Be prepared to explain component lifecycle methods",
-							"Practice explaining how you structure React applications",
+							"Review partnership fundamentals and business development strategies",
+							"Be prepared to explain partnership lifecycle management",
+							"Practice explaining how you structure partnership agreements",
 						],
 					},
 				},
 			],
 		},
 	};
+
+	// Update current time every minute to ensure time window logic works correctly
+	useEffect(() => {
+		const timer = setInterval(() => {
+			setCurrentDate(new Date());
+		}, 60000); // update every minute
+
+		return () => clearInterval(timer); // cleanup on unmount
+	}, []);
 
 	useEffect(() => {
 		// Check authentication
@@ -274,17 +314,73 @@ const ApplicationView = () => {
 	// Check if interview is upcoming or past
 	const isInterviewUpcoming = (interviewDate) => {
 		const interview = new Date(interviewDate);
-		return interview > currentDate;
+
+		// Set interview to end of day for more accurate comparison
+		interview.setHours(23, 59, 59, 999);
+
+		return interview >= currentDate;
 	};
 
 	// Check if interview is today
 	const isInterviewToday = (interviewDate) => {
 		const interview = new Date(interviewDate);
+		const today = new Date(currentDate);
+
 		return (
-			interview.getDate() === currentDate.getDate() &&
-			interview.getMonth() === currentDate.getMonth() &&
-			interview.getFullYear() === currentDate.getFullYear()
+			interview.getDate() === today.getDate() &&
+			interview.getMonth() === today.getMonth() &&
+			interview.getFullYear() === today.getFullYear()
 		);
+	};
+
+	// Check if current time is within interview window (30 minutes before and after scheduled time)
+	const isWithinInterviewWindow = (interviewDate, interviewTime) => {
+		// Parse time properly handling both "10:00 AM" and "10:00" formats
+		let hours = 0;
+		let minutes = 0;
+
+		if (interviewTime.includes("AM") || interviewTime.includes("PM")) {
+			// Handle "10:00 AM" format
+			const timeParts = interviewTime
+				.replace(/\s/g, "")
+				.match(/(\d+):(\d+)([APM]+)/i);
+			if (timeParts) {
+				hours = parseInt(timeParts[1]);
+				minutes = parseInt(timeParts[2]);
+				// Adjust hours for PM
+				if (timeParts[3].toUpperCase() === "PM" && hours < 12) {
+					hours += 12;
+				}
+				// Adjust for 12 AM
+				if (timeParts[3].toUpperCase() === "AM" && hours === 12) {
+					hours = 0;
+				}
+			}
+		} else {
+			// Handle "10:00" format
+			const [hoursStr, minutesStr] = interviewTime.split(":");
+			hours = parseInt(hoursStr);
+			minutes = parseInt(minutesStr);
+		}
+
+		// Create interview date object
+		const interview = new Date(interviewDate);
+		interview.setHours(hours, minutes, 0, 0);
+
+		const windowStart = new Date(interview.getTime() - 30 * 60000); // 30 minutes before
+		const windowEnd = new Date(interview.getTime() + 30 * 60000); // 30 minutes after
+
+		// For debugging
+		console.log("Current time:", currentDate);
+		console.log("Interview time:", interview);
+		console.log("Window start:", windowStart);
+		console.log("Window end:", windowEnd);
+		console.log(
+			"Is within window:",
+			currentDate >= windowStart && currentDate <= windowEnd
+		);
+
+		return currentDate >= windowStart && currentDate <= windowEnd;
 	};
 
 	// Format interview time for display
@@ -294,6 +390,17 @@ const ApplicationView = () => {
 		} else {
 			return `${formatDate(interviewDate)} at ${interviewTime}`;
 		}
+	};
+
+	// Get interview status text
+	const getInterviewStatus = (interviewDate, interviewTime) => {
+		if (!isInterviewToday(interviewDate)) {
+			return "Upcoming";
+		}
+		if (isWithinInterviewWindow(interviewDate, interviewTime)) {
+			return "In Progress";
+		}
+		return "Scheduled";
 	};
 
 	if (isLoading) {
@@ -417,22 +524,49 @@ const ApplicationView = () => {
 															{event
 																.interviewDetails
 																.meetingLink && (
-																<a
-																	href={
+																<>
+																	{isWithinInterviewWindow(
 																		event
 																			.interviewDetails
-																			.meetingLink
-																	}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	className={
-																		styles.joinButton
-																	}
-																>
-																	<i className="fa fa-video-camera"></i>{" "}
-																	Join
-																	Interview
-																</a>
+																			.date,
+																		event
+																			.interviewDetails
+																			.time
+																	) ? (
+																		<a
+																			href={
+																				event
+																					.interviewDetails
+																					.meetingLink
+																			}
+																			target="_blank"
+																			rel="noopener noreferrer"
+																			className={
+																				styles.joinButton
+																			}
+																		>
+																			<i className="fa fa-video-camera"></i>{" "}
+																			Join
+																			Interview
+																		</a>
+																	) : (
+																		<span
+																			className={
+																				styles.joinButtonDisabled
+																			}
+																		>
+																			<i className="fa fa-clock-o"></i>{" "}
+																			{getInterviewStatus(
+																				event
+																					.interviewDetails
+																					.date,
+																				event
+																					.interviewDetails
+																					.time
+																			)}
+																		</span>
+																	)}
+																</>
 															)}
 															<Link
 																to={`/interview/${event.interviewDetails.id}?practice=true`}

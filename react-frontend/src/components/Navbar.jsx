@@ -68,9 +68,6 @@ const Navbar = () => {
 					<Link to="/profile#applications" className={styles.navLink}>
 						My Applications
 					</Link>
-					<Link to="/profile#interviews" className={styles.navLink}>
-						My Interviews
-					</Link>
 				</nav>
 
 				<div className={styles.navActions}>
@@ -128,13 +125,6 @@ const Navbar = () => {
 								>
 									<i className="fa fa-file-text"></i>
 									My Applications
-								</Link>
-								<Link
-									to="/profile#interviews"
-									className={styles.dropdownItem}
-								>
-									<i className="fa fa-calendar"></i>
-									My Interviews
 								</Link>
 								<button
 									className={styles.dropdownItem}
