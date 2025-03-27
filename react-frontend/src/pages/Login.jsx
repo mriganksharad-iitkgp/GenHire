@@ -13,23 +13,30 @@ const Login = () => {
 		e.preventDefault();
 		setIsLoading(true);
 		setError("");
-
-		// Simulate API call for authentication
+	
 		try {
-			// Replace with actual authentication logic
-			setTimeout(() => {
-				if (email && password) {
-					// Successful login logic
-					localStorage.setItem("candidateLoggedIn", "true");
-					console.log("Logged in");
-					navigate("/");
-				} else {
-					setError("Invalid credentials. Please try again.");
-				}
-				setIsLoading(false);
-			}, 1000);
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/login`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ email, password }),
+			});
+	
+			const data = await response.json();
+	
+			if (!response.ok) {
+				throw new Error(data.error || 'Login failed');
+			}
+	
+			// Store token and user data
+			localStorage.setItem('token', data.token);
+			localStorage.setItem('user', JSON.stringify(data.user));
+			
+			navigate('/');
 		} catch (error) {
-			setError("An error occurred. Please try again.");
+			setError(error.message);
+		} finally {
 			setIsLoading(false);
 		}
 	};

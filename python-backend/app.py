@@ -4,10 +4,25 @@ from flask_cors import CORS, cross_origin
 from qa import PDFProcessor
 from werkzeug.utils import secure_filename
 import uuid  # new import
+from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
+import jwt
+import datetime
+from functools import wraps
+from pymongo import MongoClient
+from bson import ObjectId
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
+app.config['SECRET_KEY'] = 'your-secret-key-here'
+
+mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@cluster0.yneajzv.mongodb.net/Cluster0?retryWrites=true&w=majority&appName=Cluster0'
+client = MongoClient(mongo_uri)
+career_portal = 'hr_tech'  # Your database name
+db = client[career_portal]  # Use the variable directly
+users_collection = db['users']
 
 document_pdf_path = "Eric Ries - The Lean Startup.pdf"  # Path to the document for querying
 groq_api_key = "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"  # Replace with actual API key
@@ -25,6 +40,121 @@ os.makedirs(CV_FOLDER, exist_ok=True)
 app.config["JD_FOLDER"] = JD_FOLDER
 app.config["CV_FOLDER"] = CV_FOLDER
 app.config["ALLOWED_EXTENSIONS"] = {"pdf"}
+
+def generate_token(user_id):
+    return jwt.encode({
+        'user_id': str(user_id),
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            current_user = users_collection.find_one({'_id': ObjectId(data['user_id'])})
+            
+            if not current_user:
+                return jsonify({'message': 'User not found!'}), 401
+                
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired!'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Token is invalid!'}), 401
+        
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# Auth routes
+@app.route("/api/register", methods=["POST"])
+@cross_origin()
+def register():
+    data = request.get_json()
+    name = data.get('name')
+    print(name)
+    email = data.get('email')
+    password = data.get('password')
+    confirm_password = data.get('confirmPassword')
+
+    # Validation
+    if not all([name, email, password, confirm_password]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    if password != confirm_password:
+        return jsonify({'error': 'Passwords do not match'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+    
+    # Check if user exists
+    if users_collection.find_one({'email': email}):
+        return jsonify({'error': 'Email already exists'}), 400
+    
+    # Create new user
+    user_id = users_collection.insert_one({
+        'name': name,
+        'email': email,
+        'password': generate_password_hash(password),
+        'created_at': datetime.datetime.utcnow(),
+        'updated_at': datetime.datetime.utcnow()
+    }).inserted_id
+    
+    # Generate token
+    token = generate_token(user_id)
+    
+    return jsonify({
+        'message': 'User registered successfully',
+        'token': token,
+        'user': {
+            'id': str(user_id),
+            'name': name,
+            'email': email
+        }
+    }), 201
+
+@app.route("/api/login", methods=["POST"])
+@cross_origin()
+def login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    user = users_collection.find_one({'email': email})
+    
+    if not user or not check_password_hash(user['password'], password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    # Generate token
+    token = generate_token(user['_id'])
+    
+    return jsonify({
+        'message': 'Logged in successfully',
+        'token': token,
+        'user': {
+            'id': str(user['_id']),
+            'name': user['name'],
+            'email': user['email']
+        }
+    })
+
+@app.route("/api/me", methods=["GET"])
+@cross_origin()
+@token_required
+def get_current_user(current_user):
+    return jsonify({
+        'id': str(current_user['_id']),
+        'name': current_user['name'],
+        'email': current_user['email']
+    })
+
 
 # Function to check allowed file types
 def allowed_file(filename):

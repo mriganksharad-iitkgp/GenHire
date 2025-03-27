@@ -3,183 +3,160 @@ import { Link, useNavigate } from "react-router-dom";
 import styles from "./Register.module.css";
 
 const Register = () => {
-	const navigate = useNavigate();
-	const [formData, setFormData] = useState({
-		name: "",
-		email: "",
-		password: "",
-		confirmPassword: "",
-	});
-	const [errors, setErrors] = useState({});
-	const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState("");
 
-	const handleChange = (e) => {
-		const { name, value } = e.target;
-		setFormData({
-			...formData,
-			[name]: value,
-		});
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-		// Clear error when field is edited
-		if (errors[name]) {
-			setErrors({
-				...errors,
-				[name]: "",
-			});
-		}
-	};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-	const validateForm = () => {
-		const newErrors = {};
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+		  confirmPassword: formData.confirmPassword
 
-		// Name validation
-		if (!formData.name.trim()) {
-			newErrors.name = "Name is required";
-		}
+        }),
+      });
 
-		// Email validation
-		if (!formData.email.trim()) {
-			newErrors.email = "Email is required";
-		} else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-			newErrors.email = "Email address is invalid";
-		}
+      const data = await response.json();
 
-		// Password validation
-		if (!formData.password) {
-			newErrors.password = "Password is required";
-		} else if (formData.password.length < 6) {
-			newErrors.password = "Password must be at least 6 characters";
-		}
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed. Please try again.");
+      }
 
-		// Confirm password validation
-		if (!formData.confirmPassword) {
-			newErrors.confirmPassword = "Please confirm your password";
-		} else if (formData.password !== formData.confirmPassword) {
-			newErrors.confirmPassword = "Passwords do not match";
-		}
+      // Store token and user data
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-		setErrors(newErrors);
-		return Object.keys(newErrors).length === 0;
-	};
+      // Redirect to dashboard or home page
+      navigate("/dashboard");
+    } catch (error) {
+      setErrors({ submit: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-	const handleSubmit = (e) => {
-		e.preventDefault();
+  return (
+    <div className={styles.registerContainer}>
+      <div className={styles.registerCard}>
+        <div className={styles.logoSection}>
+          <h1>CompanyXYZ Careers</h1>
+          <p>Create your account to get started with your career at CompanyXYZ</p>
+        </div>
 
-		if (validateForm()) {
-			setIsSubmitting(true);
+        <form className={styles.registerForm} onSubmit={handleSubmit} noValidate>
+          <div className={styles.formGroup}>
+            <label htmlFor="name">Full Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className={errors.name ? styles.errorInput : ""}
+              required
+            />
+            {errors.name && <span className={styles.errorMessage}>{errors.name}</span>}
+          </div>
 
-			// Simulate API call with setTimeout
-			setTimeout(() => {
-				// Store user data (in a real app, this would be handled by backend)
-				localStorage.setItem("candidateName", formData.name);
-				localStorage.setItem("candidateEmail", formData.email);
-				localStorage.setItem("candidateLoggedIn", "true");
+          <div className={styles.formGroup}>
+            <label htmlFor="email">Email Address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className={errors.email ? styles.errorInput : ""}
+              required
+            />
+            {errors.email && <span className={styles.errorMessage}>{errors.email}</span>}
+          </div>
 
-				setIsSubmitting(false);
-				navigate("/");
-			}, 1500);
-		}
-	};
+          <div className={styles.formGroup}>
+            <label htmlFor="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className={errors.password ? styles.errorInput : ""}
+              required
+            />
+            {formData.password && (
+              <div className={`${styles.passwordStrength} ${styles[passwordStrength.class]}`}>
+                Strength: {passwordStrength.text}
+              </div>
+            )}
+            {errors.password && <span className={styles.errorMessage}>{errors.password}</span>}
+          </div>
 
-	return (
-		<div className={styles.registerContainer}>
-			<div className={styles.registerCard}>
-				<div className={styles.logoSection}>
-					<h1>CompanyXYZ Careers</h1>
-					<p>
-						Create your account to get started with your career at
-						CompanyXYZ
-					</p>
-				</div>
+          <div className={styles.formGroup}>
+            <label htmlFor="confirmPassword">Confirm Password</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className={errors.confirmPassword ? styles.errorInput : ""}
+              required
+            />
+            {errors.confirmPassword && (
+              <span className={styles.errorMessage}>{errors.confirmPassword}</span>
+            )}
+          </div>
 
-				<form className={styles.registerForm} onSubmit={handleSubmit}>
-					<div className={styles.formGroup}>
-						<label htmlFor="name">Full Name</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							value={formData.name}
-							onChange={handleChange}
-							className={errors.name ? styles.errorInput : ""}
-						/>
-						{errors.name && (
-							<span className={styles.errorMessage}>
-								{errors.name}
-							</span>
-						)}
-					</div>
+          <button
+            type="submit"
+            className={styles.registerButton}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <span className={styles.spinner}></span> Creating Account...
+              </>
+            ) : (
+              "Register"
+            )}
+          </button>
 
-					<div className={styles.formGroup}>
-						<label htmlFor="email">Email Address</label>
-						<input
-							type="email"
-							id="email"
-							name="email"
-							value={formData.email}
-							onChange={handleChange}
-							className={errors.email ? styles.errorInput : ""}
-						/>
-						{errors.email && (
-							<span className={styles.errorMessage}>
-								{errors.email}
-							</span>
-						)}
-					</div>
+          {errors.submit && (
+            <div className={styles.submitError}>{errors.submit}</div>
+          )}
+        </form>
 
-					<div className={styles.formGroup}>
-						<label htmlFor="password">Password</label>
-						<input
-							type="password"
-							id="password"
-							name="password"
-							value={formData.password}
-							onChange={handleChange}
-							className={errors.password ? styles.errorInput : ""}
-						/>
-						{errors.password && (
-							<span className={styles.errorMessage}>
-								{errors.password}
-							</span>
-						)}
-					</div>
-
-					<div className={styles.formGroup}>
-						<label htmlFor="confirmPassword">
-							Confirm Password
-						</label>
-						<input
-							type="password"
-							id="confirmPassword"
-							name="confirmPassword"
-							value={formData.confirmPassword}
-							onChange={handleChange}
-							className={
-								errors.confirmPassword ? styles.errorInput : ""
-							}
-						/>
-						{errors.confirmPassword && (
-							<span className={styles.errorMessage}>
-								{errors.confirmPassword}
-							</span>
-						)}
-					</div>
-
-					<button
-						type="submit"
-						className={styles.registerButton}
-						disabled={isSubmitting}
-					>
-						{isSubmitting ? "Creating Account..." : "Register"}
-					</button>
-				</form>
-
-				<div className={styles.loginLink}>
-					Already have an account? <Link to="/login">Login</Link>
-				</div>
-			</div>
-		</div>
-	);
+        <div className={styles.loginLink}>
+          Already have an account? <Link to="/login">Login here</Link>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Register;
