@@ -222,9 +222,14 @@ Generate a structured sequence of interview questions that build progressively o
 
             # Decide next question (80% contextual follow-up, 20% random)
             if random.random() < 0.8:
-                followup_prompt = f"Based on the interview so far: '{summary}', generate the next best follow-up question."
+                followup_prompt = f"""Based on the interview so far: '{summary}', generate the next best follow-up question that builds on previous answers and digs deeper.
+
+IMPORTANT: Return ONLY the question itself with no explanation, reasoning, or additional text. The question should be clear, concise, and professional."""
                 followup_response = self.llm_engine.complete(followup_prompt)
                 next_question = followup_response if isinstance(followup_response, str) else str(followup_response)
+                # Clean any remaining explanations or numbering that might still be present
+                next_question = re.sub(r'^.*?(Question:|"|\n)', '', next_question, flags=re.DOTALL).strip()
+                next_question = re.sub(r'(\?|\.)"?$.*', r'\1', next_question, flags=re.DOTALL).strip()
             else:
                 next_question = self.question_generator.get_random_non_contextual_question()
 

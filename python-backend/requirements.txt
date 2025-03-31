@@ -1,0 +1,32 @@
+# HR Tech Interview System Requirements
+
+# Core dependencies
+Flask>=2.0.1
+flask-cors>=3.0.10
+PyJWT>=2.1.0
+pymongo>=4.0.1
+python-dotenv>=0.19.0
+Werkzeug>=2.0.1
+
+# ML/NLP libraries
+torch>=2.2.0
+transformers>=4.30.2
+sentence-transformers>=2.2.2
+scikit-learn>=1.2.2
+numpy>=1.24.3
+nltk>=3.8.1
+colorama>=0.4.6
+
+# PDF processing
+pypdf>=3.15.1
+
+# LLM integration
+llama-index-core>=0.10.3
+llama-index-llms-groq>=0.1.3
+
+# Evaluation tools
+deepeval>=0.20.9
+
+# Initialize NLTK data
+# Run after installation:
+# python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('averaged_perceptron_tagger')"
