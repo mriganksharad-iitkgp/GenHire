@@ -165,7 +165,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 
 	// Check authentication and load job data
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 			return;

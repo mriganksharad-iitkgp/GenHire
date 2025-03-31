@@ -31,7 +31,8 @@ const Navbar = () => {
 
 	// Handle logout
 	const handleLogout = () => {
-		localStorage.removeItem("candidateLoggedIn");
+		localStorage.removeItem("companyxyz-token");
+		localStorage.removeItem("companyxyz-user");
 		navigate("/login");
 	};
 

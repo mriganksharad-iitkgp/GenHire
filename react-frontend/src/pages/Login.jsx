@@ -13,35 +13,33 @@ const Login = () => {
 		e.preventDefault();
 		setIsLoading(true);
 		setError("");
-	
+
 		try {
 			const response = await fetch(`http://127.0.0.1:5000/api/login`, {
-				method: 'POST',
+				method: "POST",
 				headers: {
-					'Content-Type': 'application/json',
+					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({ email, password }),
 			});
-	
+
 			const data = await response.json();
-	
+
 			if (!response.ok) {
-				throw new Error(data.error || 'Login failed');
+				throw new Error(data.error || "Login failed");
 			}
-	
+
 			// Store token and user data
-			localStorage.setItem('token', data.token);
-			localStorage.setItem('user', JSON.stringify(data.user));
-			
-			navigate('/');
+			localStorage.setItem("companyxyz-token", data.token);
+			localStorage.setItem("companyxyz-user", JSON.stringify(data.user));
+
+			navigate("/");
 		} catch (error) {
 			setError(error.message);
 		} finally {
 			setIsLoading(false);
 		}
 	};
-
-
 
 	return (
 		<div className={styles.loginContainer}>

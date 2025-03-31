@@ -47,7 +47,9 @@ const ApplicationView = () => {
 				},
 				{
 					id: 4,
-					date: new Date().toISOString().split("T")[0], // Today's date
+					date: new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000)
+						.toISOString()
+						.split("T")[0], // Today's date
 					type: "Live Demo Interview",
 					status: "Scheduled",
 					description:
@@ -55,7 +57,11 @@ const ApplicationView = () => {
 					icon: "fa-video-camera",
 					interviewDetails: {
 						id: 999,
-						date: new Date().toISOString().split("T")[0],
+						date: new Date(
+							new Date().getTime() + 5.5 * 60 * 60 * 1000
+						)
+							.toISOString()
+							.split("T")[0],
 						time:
 							new Date().getHours() +
 							":" +
@@ -285,7 +291,7 @@ const ApplicationView = () => {
 
 	useEffect(() => {
 		// Check authentication
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 			return;

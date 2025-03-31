@@ -105,7 +105,7 @@ const Dashboard = () => {
 
 	// Check authentication when component mounts
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 		}

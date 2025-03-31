@@ -8,6 +8,11 @@ export default function Chat({ interviewId }) {
 	const [isRecording, setIsRecording] = useState(false);
 	const [isSpeaking, setIsSpeaking] = useState(false);
 	const [speakingIndex, setSpeakingIndex] = useState(null);
+	const [sessionId, setSessionId] = useState(null);
+	const [currentQuestion, setCurrentQuestion] = useState("");
+	const [interviewStatus, setInterviewStatus] = useState("starting"); // starting, active, ending, completed
+	const [evaluation, setEvaluation] = useState(null);
+	const [similarityScore, setSimilarityScore] = useState(null);
 
 	const navigate = useNavigate();
 	const targetRef = useRef();
@@ -16,13 +21,14 @@ export default function Chat({ interviewId }) {
 
 	// Handle logout
 	const handleLogout = () => {
-		localStorage.removeItem("candidateLoggedIn");
+		localStorage.removeItem("companyxyz-token");
+		localStorage.removeItem("companyxyz-user");
 		navigate("/login");
 	};
 
 	// Check authentication when component mounts
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 		}
@@ -106,12 +112,74 @@ export default function Chat({ interviewId }) {
 		window.speechSynthesis.speak(utterance);
 	};
 
-	// Send message function
+	// Initialize the interview session
+	useEffect(() => {
+		if (interviewId && !sessionId && interviewStatus === "starting") {
+			// Start a new interview session
+			const token = localStorage.getItem("companyxyz-token");
+			fetch("http://localhost:5000/api/interviews/start", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: token,
+				},
+				body: JSON.stringify({
+					// Using default values, these would come from the database in production
+					cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
+					jd_path: "uploads/jd/JD1.pdf",
+					reference_path: "Eric Ries - The Lean Startup.pdf",
+				}),
+			})
+				.then((response) => response.json())
+				.then((data) => {
+					setSessionId(data.session_id);
+					setSimilarityScore(data.similarity_score);
+					setInterviewStatus("active");
+
+					// Add initial questions as system messages
+					const newChatContent = {};
+					newChatContent[0] = {
+						response: `Welcome to your AI interview session. Your CV has a ${Math.round(
+							data.similarity_score * 100
+						)}% match with the job description. I'll be asking you several questions to assess your fit for this role.`,
+					};
+
+					// Add first question
+					if (
+						data.initial_questions &&
+						data.initial_questions.length > 0
+					) {
+						setCurrentQuestion(data.initial_questions[0]);
+						newChatContent[1] = {
+							response: data.initial_questions[0],
+						};
+					}
+
+					setChatContent(newChatContent);
+				})
+				.catch((error) => {
+					console.error("Error starting interview:", error);
+					setChatContent({
+						0: {
+							response:
+								"⚠️ Error: Could not start the interview session. Please try again later.",
+						},
+					});
+				});
+		}
+	}, [interviewId, sessionId, interviewStatus]);
+
+	// Send message function - modified to work with interview API
 	const onSend = useCallback(
 		(e) => {
 			e.preventDefault();
-			const query = input.trim();
-			if (query === "") {
+			const answer = input.trim();
+			if (
+				answer === "" ||
+				!currentQuestion ||
+				!sessionId ||
+				interviewStatus !== "active"
+			) {
 				setInput("");
 				return;
 			}
@@ -119,8 +187,8 @@ export default function Chat({ interviewId }) {
 			const newChatContent = { ...chatContent };
 			const newIndex = Object.keys(newChatContent).length;
 			newChatContent[newIndex] = {
-				query,
-				response: "Loading...",
+				query: answer,
+				response: "Analyzing your response...",
 			};
 			setChatContent(newChatContent);
 			setInput("");
@@ -129,44 +197,101 @@ export default function Chat({ interviewId }) {
 				targetRef.current.scrollTop = targetRef.current.scrollHeight;
 			}
 
-			let history = {};
-			Object.keys(newChatContent).forEach((idx) => {
-				if (parseInt(idx) === newIndex) return;
-				history[idx] = newChatContent[idx];
-			});
-
-			fetch("http://localhost:5000/api/answer_question", {
+			// Submit the answer to the interview API
+			fetch(`http://localhost:5000/api/interviews/${sessionId}/answer`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					question: query,
-					history,
-					interview_id: interviewId,
+					question: currentQuestion,
+					answer: answer,
 				}),
 			})
 				.then((response) => response.json())
 				.then((data) => {
 					const updatedChatContent = { ...newChatContent };
-					updatedChatContent[newIndex] = {
-						query,
-						response: data.result,
-					};
+
+					// Add evaluation feedback
+					if (data.evaluation && data.evaluation.feedback) {
+						updatedChatContent[newIndex] = {
+							query: answer,
+							evaluation: data.evaluation,
+						};
+						newIndex + 1;
+					}
+
+					// Add next question
+					if (data.next_question) {
+						setCurrentQuestion(data.next_question);
+						updatedChatContent[newIndex + 1] = {
+							response: data.next_question,
+						};
+					}
+
 					setChatContent(updatedChatContent);
 				})
 				.catch((error) => {
+					console.error("Error submitting answer:", error);
 					const updatedChatContent = { ...newChatContent };
 					updatedChatContent[newIndex] = {
-						query,
+						query: answer,
 						response:
-							"⚠️ Error: Could not fetch response. Please try again later.",
+							"⚠️ Error: Could not process your answer. Please try again.",
 					};
 					setChatContent(updatedChatContent);
 				});
 		},
-		[chatContent, input, interviewId]
+		[chatContent, input, currentQuestion, sessionId, interviewStatus]
 	);
+
+	// End the interview
+	const endInterview = () => {
+		if (!sessionId || interviewStatus !== "active") return;
+
+		setInterviewStatus("ending");
+
+		const token = localStorage.getItem("companyxyz-token");
+		fetch(`http://localhost:5000/api/interviews/${sessionId}/end`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: token,
+			},
+		})
+			.then((response) => response.json())
+			.then((data) => {
+				setInterviewStatus("completed");
+				setEvaluation(data.evaluation);
+
+				const newChatContent = { ...chatContent };
+				const newIndex = Object.keys(newChatContent).length;
+				newChatContent[newIndex] = {
+					response:
+						"Thank you for completing the interview. Here's your evaluation:",
+				};
+
+				if (data.evaluation && data.evaluation.qualitative_assessment) {
+					newChatContent[newIndex + 1] = {
+						response: data.evaluation.qualitative_assessment,
+					};
+				}
+
+				setChatContent(newChatContent);
+			})
+			.catch((error) => {
+				console.error("Error ending interview:", error);
+				setInterviewStatus("active"); // Revert to active if error
+
+				const newChatContent = { ...chatContent };
+				const newIndex = Object.keys(newChatContent).length;
+				newChatContent[newIndex] = {
+					response:
+						"⚠️ Error: Could not end the interview. Please try again.",
+				};
+				setChatContent(newChatContent);
+			});
+	};
 
 	// Optionally send the message on Shift+Enter key press
 	useEffect(() => {
@@ -181,24 +306,29 @@ export default function Chat({ interviewId }) {
 		};
 	}, [onSend]);
 
-	// Load interview data based on interviewId
-	useEffect(() => {
-		if (interviewId) {
-			// This would normally be an API call to fetch interview data
-			console.log(`Loading interview ID: ${interviewId}`);
-
-			// For now, just set a message in the chat content
-			setChatContent({
-				0: {
-					response: `Welcome to interview #${interviewId}. This is where the conversation will take place.`,
-				},
-			});
-		}
-	}, [interviewId]);
-
 	return (
 		<div className={Styles["page-container"]}>
 			<div className={Styles["chat-box-container"]}>
+				{/* Header with info */}
+				<div className={Styles["chat-header"]}>
+					<h2>
+						AI Interview Session {sessionId ? `#${sessionId}` : ""}
+					</h2>
+					{similarityScore !== null && (
+						<div className={Styles["similarity-score"]}>
+							CV-JD Match: {Math.round(similarityScore * 100)}%
+						</div>
+					)}
+					{interviewStatus === "active" && (
+						<button
+							className={Styles["end-interview-btn"]}
+							onClick={endInterview}
+						>
+							End Interview
+						</button>
+					)}
+				</div>
+
 				{/* Main chat interface */}
 				<div className={Styles["chat-content"]}>
 					{/* Chat Messages */}
@@ -227,6 +357,43 @@ export default function Chat({ interviewId }) {
 												</div>
 											</div>
 										)}
+										{pair.evaluation && (
+											<div
+												className={`${Styles["message-box"]} ${Styles["evaluation"]}`}
+											>
+												<div
+													className={
+														Styles[
+															"evaluation-content"
+														]
+													}
+												>
+													<div
+														className={
+															Styles["score"]
+														}
+													>
+														Relevance:{" "}
+														{Math.round(
+															pair.evaluation
+																.relevance_score *
+																100
+														)}
+														%
+													</div>
+													<div
+														className={
+															Styles["feedback"]
+														}
+													>
+														{
+															pair.evaluation
+																.feedback
+														}
+													</div>
+												</div>
+											</div>
+										)}
 										{pair.response && (
 											<div
 												className={`${Styles["message-box"]} ${Styles["gpt"]}`}
@@ -252,40 +419,39 @@ export default function Chat({ interviewId }) {
 																<br />
 															</React.Fragment>
 														))}
-													<button
-														onClick={() =>
-															toggleSpeech(
-																idx,
-																pair.response
-															)
-														}
+													<div
 														className={
 															Styles[
-																"speakerButton"
+																"message-actions"
 															]
 														}
-														title={
-															isSpeaking &&
+													>
+														<button
+															className={
+																isSpeaking &&
+																speakingIndex ===
+																	idx
+																	? Styles[
+																			"btn-stop"
+																	  ]
+																	: Styles[
+																			"btn-speak"
+																	  ]
+															}
+															onClick={() =>
+																toggleSpeech(
+																	idx,
+																	pair.response
+																)
+															}
+														>
+															{isSpeaking &&
 															speakingIndex ===
 																idx
-																? "Stop Speech"
-																: "Read Aloud"
-														}
-													>
-														{isSpeaking &&
-														speakingIndex ===
-															idx ? (
-															<i
-																className="fa fa-stop"
-																aria-hidden="true"
-															/>
-														) : (
-															<i
-																className="fa fa-volume-up"
-																aria-hidden="true"
-															/>
-														)}
-													</button>
+																? "Stop"
+																: "Speak"}
+														</button>
+													</div>
 												</div>
 											</div>
 										)}
@@ -293,36 +459,96 @@ export default function Chat({ interviewId }) {
 								);
 							})
 						) : (
-							<div className={Styles["message-box-empty"]}>
-								Your interview session will begin shortly
+							<div className={Styles["loading-chat"]}>
+								Initializing interview session...
 							</div>
 						)}
 					</div>
-				</div>
 
-				{/* Input form */}
-				<form onSubmit={onSend} className={Styles["chat-box-footer"]}>
-					<textarea
-						type="text"
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						placeholder="Type your message...Press Shift+Enter to send"
-					></textarea>
-					<button
-						type="button"
-						onClick={handleVoiceInput}
-						className={isRecording ? Styles.recording : ""}
-						title={
-							isRecording ? "Stop Listening" : "Start Voice Input"
-						}
-					>
-						<i className="fa fa-microphone" aria-hidden="true" />
-					</button>
-					<button type="submit" title="Send Message">
-						<i className="fa fa-paper-plane" aria-hidden="true" />
-					</button>
-				</form>
+					{/* Input area */}
+					<div className={Styles["input-area"]}>
+						<form onSubmit={onSend}>
+							<textarea
+								value={input}
+								onChange={(e) => setInput(e.target.value)}
+								placeholder={
+									interviewStatus === "active"
+										? "Type your answer here..."
+										: interviewStatus === "completed"
+										? "Interview completed"
+										: "Starting interview..."
+								}
+								disabled={interviewStatus !== "active"}
+								className={Styles["chat-input"]}
+							/>
+							<div className={Styles["input-actions"]}>
+								<button
+									type="button"
+									className={Styles["voice-input-button"]}
+									onClick={handleVoiceInput}
+									disabled={interviewStatus !== "active"}
+								>
+									{isRecording ? "Stop" : "Voice"}
+								</button>
+								<button
+									type="submit"
+									className={Styles["send-button"]}
+									disabled={
+										interviewStatus !== "active" ||
+										!input.trim()
+									}
+								>
+									Send
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
 			</div>
+
+			{/* Evaluation results */}
+			{interviewStatus === "completed" && evaluation && (
+				<div className={Styles["evaluation-container"]}>
+					<h3>Interview Evaluation</h3>
+					{evaluation.quantitative && (
+						<div className={Styles["quantitative-metrics"]}>
+							<div className={Styles["metric"]}>
+								<span>Average Score:</span>
+								<span>
+									{Math.round(
+										evaluation.quantitative
+											.average_relevance_score * 100
+									)}
+									%
+								</span>
+							</div>
+							<div className={Styles["metric"]}>
+								<span>Questions Answered:</span>
+								<span>
+									{
+										evaluation.quantitative
+											.number_of_questions
+									}
+								</span>
+							</div>
+						</div>
+					)}
+					<div className={Styles["qualitative-assessment"]}>
+						{evaluation.qualitative_assessment
+							.split("\n")
+							.map((line, index) => (
+								<p key={index}>{line}</p>
+							))}
+					</div>
+
+					<button
+						className={Styles["back-to-dashboard"]}
+						onClick={() => navigate("/dashboard")}
+					>
+						Return to Dashboard
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

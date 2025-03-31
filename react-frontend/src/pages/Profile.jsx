@@ -40,7 +40,9 @@ const Profile = () => {
 					meetingLink: "/interview/201",
 				},
 				{
-					date: new Date().toISOString().split("T")[0], // Today's date
+					date: new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000)
+						.toISOString()
+						.split("T")[0], // Today's date
 					type: "Demo Interview",
 					time:
 						new Date().getHours() +
@@ -84,7 +86,7 @@ const Profile = () => {
 
 	// Check authentication when component mounts
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 		}

@@ -5,7 +5,7 @@ import styles from "./Layout.module.css";
 
 const Layout = ({ children }) => {
 	// Check if user is logged in
-	const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
+	const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
 
 	// Redirect to login if not logged in
 	if (!isLoggedIn) {

@@ -13,6 +13,9 @@ from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
 
+# Import interview system
+from interview_system import session_manager
+
 app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -23,6 +26,7 @@ client = MongoClient(mongo_uri)
 career_portal = 'hrtech'  # Your database name
 db = client[career_portal]  # Use the variable directly
 users_collection = db['users']
+interviews_collection = db['interviews']  # New collection for interviews
 
 document_pdf_path = "Eric Ries - The Lean Startup.pdf"  # Path to the document for querying
 groq_api_key = "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"  # Replace with actual API key
@@ -237,6 +241,115 @@ def answer_question():
     result = processor.query_document(question)
 
     return jsonify({'result': str(result)})
+
+# Interview System API Routes
+@app.route('/api/interviews/start', methods=['POST'])
+@cross_origin()
+@token_required
+def start_interview(current_user):
+    data = request.json
+    
+    # Get file paths (either from request or use defaults for testing)
+    cv_path = data.get('cv_path', "uploads/cv/PeterConnollyResume-2.pdf")
+    jd_path = data.get('jd_path', "uploads/jd/JD1.pdf")
+    reference_path = data.get('reference_path', "Eric Ries - The Lean Startup.pdf")
+    
+    # Create a new interview session
+    session_data = session_manager.create_session(cv_path, jd_path, reference_path)
+    
+    # Store session info in the database
+    interview_id = interviews_collection.insert_one({
+        'user_id': str(current_user['_id']),
+        'session_id': session_data['session_id'],
+        'cv_path': cv_path,
+        'jd_path': jd_path,
+        'reference_path': reference_path,
+        'status': 'active',
+        'created_at': datetime.datetime.utcnow(),
+        'updated_at': datetime.datetime.utcnow()
+    }).inserted_id
+    
+    return jsonify({
+        'interview_id': str(interview_id),
+        'session_id': session_data['session_id'],
+        'initial_questions': session_data['initial_questions'],
+        'similarity_score': session_data['similarity_score']
+    })
+
+@app.route('/api/interviews/<session_id>/question', methods=['GET'])
+@cross_origin()
+def get_interview_question(session_id):
+    # Get session data
+    session_data = session_manager.get_session(session_id)
+    
+    if not session_data:
+        return jsonify({'error': 'Interview session not found'}), 404
+    
+    return jsonify({
+        'current_questions': session_data['current_questions']
+    })
+
+@app.route('/api/interviews/<session_id>/answer', methods=['POST'])
+@cross_origin()
+def submit_answer(session_id):
+    data = request.json
+    question = data.get('question')
+    answer = data.get('answer')
+    
+    if not question or not answer:
+        return jsonify({'error': 'Question and answer are required'}), 400
+    
+    # Process the answer and get the next question
+    result = session_manager.submit_answer(session_id, question, answer)
+    
+    if 'error' in result:
+        return jsonify(result), 404
+    
+    return jsonify(result)
+
+@app.route('/api/interviews/<session_id>/end', methods=['POST'])
+@cross_origin()
+@token_required
+def end_interview(current_user, session_id):
+    # End the interview session and get the final evaluation
+    result = session_manager.end_session(session_id)
+    
+    if 'error' in result:
+        return jsonify(result), 404
+    
+    # Update interview status in the database
+    interviews_collection.update_one(
+        {'session_id': session_id, 'user_id': str(current_user['_id'])},
+        {'$set': {
+            'status': 'completed',
+            'evaluation': result['evaluation'],
+            'updated_at': datetime.datetime.utcnow()
+        }}
+    )
+    
+    return jsonify(result)
+
+@app.route('/api/interviews', methods=['GET'])
+@cross_origin()
+@token_required
+def get_user_interviews(current_user):
+    # Get all interviews for the current user
+    user_interviews = list(interviews_collection.find({'user_id': str(current_user['_id'])}))
+    
+    # Format the interviews for JSON response
+    formatted_interviews = []
+    for interview in user_interviews:
+        formatted_interviews.append({
+            'id': str(interview['_id']),
+            'session_id': interview['session_id'],
+            'status': interview['status'],
+            'created_at': interview['created_at'].isoformat(),
+            'updated_at': interview['updated_at'].isoformat(),
+            'cv_path': interview.get('cv_path'),
+            'jd_path': interview.get('jd_path')
+        })
+    
+    return jsonify(formatted_interviews)
 
 if __name__ == '__main__':
     # app.run(debug=False,host='10.29.8.94')
