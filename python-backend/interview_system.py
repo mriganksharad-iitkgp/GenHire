@@ -205,6 +205,7 @@ class InterviewSessionManager:
         self.active_sessions = {}
         self.llama_api_key = "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"
         self.eval_api_key = "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"
+        self.max_questions = 8  # Maximum number of questions before auto-ending
     
     def create_session(self, cv_path, jd_path, reference_path):
         """Create a new interview session"""
@@ -235,7 +236,9 @@ class InterviewSessionManager:
             "current_questions": initial_questions,
             "cv_path": cv_path,
             "jd_path": jd_path,
-            "reference_path": reference_path
+            "reference_path": reference_path,
+            "questions_asked": 0,  # Track number of questions asked
+            "is_complete": False  # Flag to track if interview is complete
         }
         
         # Calculate similarity score
@@ -267,6 +270,9 @@ class InterviewSessionManager:
         if not session:
             return {"error": "Session not found"}
         
+        if session.get("is_complete", False):
+            return {"error": "Interview is already complete", "should_end": True}
+        
         # Get components from session
         llm_engine = session["llm_engine"]
         document_loader = session["document_loader"]
@@ -295,27 +301,57 @@ class InterviewSessionManager:
         session["interview_data"].append(qa_data)
         session["interview_history"] += f"Q: {question}\nA: {answer}\n"
         
+        # Increment question counter
+        session["questions_asked"] = session.get("questions_asked", 0) + 1
+        
+        # Check if we've reached the maximum number of questions
+        if session["questions_asked"] >= self.max_questions:
+            session["is_complete"] = True
+            evaluation_results = self._generate_final_evaluation(session)
+            return {
+                "next_question": "Thank you for completing all the interview questions. The interview is now finished.",
+                "evaluation": {
+                    "relevance_score": self._calculate_basic_relevance(answer, generated_answer),
+                    "depth": len(answer.split()) / max(1, len(generated_answer.split())),
+                    "feedback": self._generate_quick_feedback(answer, generated_answer)
+                },
+                "interview_complete": True,
+                "final_evaluation": evaluation_results
+            }
+        
         # Summarize the interview so far
         summary_prompt = f"Summarize the following interview transcript concisely: {session['interview_history']}"
         summary = llm_engine.complete(summary_prompt)
         
         # Decide on follow-up question
         if random.random() < 0.8:  # 80% chance of contextual follow-up
-            followup_prompt = f"Based on the interview so far: '{summary}', generate the next best follow-up question that builds on previous answers and digs deeper."
+            followup_prompt = f"""Based on the interview so far: '{summary}', generate the next best follow-up question that builds on previous answers and digs deeper.
+
+IMPORTANT: Return ONLY the question itself with no explanation, reasoning, or additional text. The question should be clear, concise, and professional."""
             next_question = llm_engine.complete(followup_prompt)
+            # Clean any remaining explanations or numbering that might still be present
+            next_question = re.sub(r'^.*?(Question:|"|\n)', '', next_question, flags=re.DOTALL).strip()
+            next_question = re.sub(r'(\?|\.)"?$.*', r'\1', next_question, flags=re.DOTALL).strip()
         else:  # 20% chance of non-contextual question
             next_question = question_generator.get_random_non_contextual_question()
         
         # Update session with new question
         session["current_questions"] = [next_question]
         
+        # Add countdown message as we approach the end
+        remaining_questions = self.max_questions - session["questions_asked"]
+        countdown_message = ""
+        if remaining_questions <= 3:
+            countdown_message = f" ({remaining_questions} question{'s' if remaining_questions != 1 else ''} remaining)"
+        
         return {
-            "next_question": next_question,
+            "next_question": next_question + countdown_message,
             "evaluation": {
                 "relevance_score": self._calculate_basic_relevance(answer, generated_answer),
                 "depth": len(answer.split()) / max(1, len(generated_answer.split())),
                 "feedback": self._generate_quick_feedback(answer, generated_answer)
-            }
+            },
+            "questions_remaining": remaining_questions
         }
     
     def _calculate_basic_relevance(self, user_answer, reference_answer):

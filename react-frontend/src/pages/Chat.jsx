@@ -218,7 +218,32 @@ export default function Chat({ interviewId }) {
 							query: answer,
 							evaluation: data.evaluation,
 						};
-						newIndex + 1;
+					}
+
+					// Check if interview is complete automatically
+					if (data.interview_complete) {
+						setInterviewStatus("completed");
+						setEvaluation(data.final_evaluation);
+
+						// Add final message
+						updatedChatContent[newIndex + 1] = {
+							response: data.next_question,
+						};
+
+						// Add evaluation summary
+						if (
+							data.final_evaluation &&
+							data.final_evaluation.qualitative_assessment
+						) {
+							updatedChatContent[newIndex + 2] = {
+								response:
+									data.final_evaluation
+										.qualitative_assessment,
+							};
+						}
+
+						setChatContent(updatedChatContent);
+						return;
 					}
 
 					// Add next question
@@ -227,6 +252,17 @@ export default function Chat({ interviewId }) {
 						updatedChatContent[newIndex + 1] = {
 							response: data.next_question,
 						};
+					}
+
+					// Display remaining questions indicator if provided
+					if (
+						data.questions_remaining !== undefined &&
+						data.questions_remaining <= 3
+					) {
+						// The remaining questions message is now part of the question itself
+						console.log(
+							`Questions remaining: ${data.questions_remaining}`
+						);
 					}
 
 					setChatContent(updatedChatContent);
