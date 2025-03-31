@@ -13,9 +13,15 @@ const Profile = () => {
 		email: "john.doe@example.com",
 		phone: "+1 (555) 123-4567",
 		location: "New York, USA",
-		title: "Senior Software Engineer",
-		about: "Experienced software engineer with 5+ years of experience in developing web applications using modern technologies.",
-		skills: ["JavaScript", "React", "Node.js", "Python", "Docker"],
+		title: "Senior Business Development Manager",
+		about: "Experienced business development professional with 5+ years of experience in identifying opportunities, building relationships, and growing revenue for organizations.",
+		skills: [
+			"Sales Strategy",
+			"Client Acquisition",
+			"Market Research",
+			"Negotiation",
+			"CRM Systems",
+		],
 	});
 
 	// Sample job applications data
@@ -23,15 +29,32 @@ const Profile = () => {
 		{
 			id: 1,
 			company: "CompanyXYZ",
-			position: "Senior Frontend Developer",
+			position: "Senior Business Development Manager",
 			appliedDate: "2023-08-15",
 			status: "In Progress",
-			interviews: [{ date: "2023-08-25", type: "Technical" }],
+			interviews: [
+				{
+					date: "2025-03-27",
+					type: "Initial Screening",
+					time: "02:30 PM",
+					meetingLink: "/interview/201",
+				},
+				{
+					date: new Date().toISOString().split("T")[0], // Today's date
+					type: "Demo Interview",
+					time:
+						new Date().getHours() +
+						":" +
+						(new Date().getMinutes() < 10 ? "0" : "") +
+						new Date().getMinutes(),
+					meetingLink: "/interview/202",
+				},
+			],
 		},
 		{
 			id: 2,
 			company: "CompanyXYZ",
-			position: "Full-Stack Developer",
+			position: "Business Development Representative",
 			appliedDate: "2023-07-10",
 			status: "Rejected",
 			interviews: [],
@@ -39,31 +62,23 @@ const Profile = () => {
 		{
 			id: 3,
 			company: "CompanyXYZ",
-			position: "React Developer",
+			position: "Strategic Partnerships Manager",
 			appliedDate: "2023-09-01",
 			status: "Shortlisted",
 			interviews: [
-				{ date: "2023-09-15", type: "HR Round" },
-				{ date: "2023-09-20", type: "Technical" },
+				{
+					date: "2023-09-15",
+					type: "HR Round",
+					time: "2:30 PM",
+					meetingLink: "/interview/203",
+				},
+				{
+					date: "2023-09-20",
+					type: "Sales Pitch Presentation",
+					time: "11:00 AM",
+					meetingLink: "/interview/204",
+				},
 			],
-		},
-	]);
-
-	// Sample upcoming interviews data
-	const [upcomingInterviews, setUpcomingInterviews] = useState([
-		{
-			id: 123,
-			position: "Technical Interview - Software Engineer",
-			company: "CompanyXYZ",
-			date: "2023-09-15",
-			time: "10:00 AM",
-		},
-		{
-			id: 456,
-			position: "HR Discussion - React Developer",
-			company: "CompanyXYZ",
-			date: "2023-09-28",
-			time: "2:30 PM",
 		},
 	]);
 
@@ -135,6 +150,60 @@ const Profile = () => {
 		e.preventDefault();
 		alert("Profile updated successfully!");
 	};
+
+	// Add helper function to check if an interview is currently live
+	const isInterviewLive = (interview) => {
+		const interviewDate = new Date(interview.date);
+		let hours = 0;
+		let minutes = 0;
+
+		// Parse time properly handling both "10:00 AM" and "10:00" formats
+		if (interview.time.includes("AM") || interview.time.includes("PM")) {
+			// Handle "10:00 AM" format
+			const timeParts = interview.time
+				.replace(/\s/g, "")
+				.match(/(\d+):(\d+)([APM]+)/i);
+			if (timeParts) {
+				hours = parseInt(timeParts[1]);
+				minutes = parseInt(timeParts[2]);
+				// Adjust hours for PM
+				if (timeParts[3].toUpperCase() === "PM" && hours < 12) {
+					hours += 12;
+				}
+				// Adjust for 12 AM
+				if (timeParts[3].toUpperCase() === "AM" && hours === 12) {
+					hours = 0;
+				}
+			}
+		} else {
+			// Handle "10:00" format
+			const [hoursStr, minutesStr] = interview.time.split(":");
+			hours = parseInt(hoursStr);
+			minutes = parseInt(minutesStr);
+		}
+
+		interviewDate.setHours(hours, minutes, 0, 0);
+
+		const now = new Date();
+		const windowStart = new Date(interviewDate.getTime() - 30 * 60000); // 30 minutes before
+		const windowEnd = new Date(interviewDate.getTime() + 30 * 60000); // 30 minutes after
+
+		return now >= windowStart && now <= windowEnd;
+	};
+
+	// Add helper function to get live interviews for an application
+	const getLiveInterviews = (application) => {
+		return application.interviews.filter((interview) =>
+			isInterviewLive(interview)
+		);
+	};
+
+	// Sort applications to show those with live interviews first
+	const sortedApplications = [...applications].sort((a, b) => {
+		const aLiveInterviews = getLiveInterviews(a).length;
+		const bLiveInterviews = getLiveInterviews(b).length;
+		return bLiveInterviews - aLiveInterviews;
+	});
 
 	return (
 		<div className={styles.profileContainer}>
@@ -409,89 +478,24 @@ const Profile = () => {
 
 						{/* Applications Tab */}
 						{activeTab === "applications" && (
-							<>
-								{/* Upcoming Interviews Section */}
-								<section className={styles.interviewsSection}>
-									<h2>Upcoming Interviews</h2>
-									<div className={styles.interviewsList}>
-										{upcomingInterviews.length > 0 ? (
-											upcomingInterviews.map(
-												(interview) => (
-													<div
-														key={interview.id}
-														className={
-															styles.interviewItem
-														}
-													>
-														<div
-															className={
-																styles.interviewInfo
-															}
-														>
-															<h4>
-																{
-																	interview.position
-																}
-															</h4>
-															<p>
-																{
-																	interview.company
-																}
-															</p>
-														</div>
-														<div
-															className={
-																styles.interviewMeta
-															}
-														>
-															<div
-																className={
-																	styles.interviewDateTime
-																}
-															>
-																<i className="fa fa-calendar"></i>
-																<span>
-																	{new Date(
-																		interview.date
-																	).toLocaleDateString()}
-																	,{" "}
-																	{
-																		interview.time
-																	}
-																</span>
-															</div>
-															<Link
-																to={`/interview/${interview.id}`}
-																className={
-																	styles.interviewButton
-																}
-															>
-																Join
-															</Link>
-														</div>
-													</div>
-												)
-											)
-										) : (
-											<p className={styles.noInterviews}>
-												No upcoming interviews
-												scheduled.
-											</p>
-										)}
-									</div>
-								</section>
-
-								{/* Job Applications Section */}
-								<section className={styles.applicationsSection}>
-									<h2>Job Applications</h2>
-									<div className={styles.applicationsList}>
-										{applications.length > 0 ? (
-											applications.map((app) => (
+							<section className={styles.applicationsSection}>
+								<h2>Job Applications</h2>
+								<div className={styles.applicationsList}>
+									{sortedApplications.length > 0 ? (
+										sortedApplications.map((app) => {
+											const liveInterviews =
+												getLiveInterviews(app);
+											return (
 												<div
 													key={app.id}
-													className={
+													className={`${
 														styles.applicationCard
-													}
+													} ${
+														liveInterviews.length >
+														0
+															? styles.liveInterview
+															: ""
+													}`}
 												>
 													<div
 														className={
@@ -499,22 +503,40 @@ const Profile = () => {
 														}
 													>
 														<h3>{app.position}</h3>
-														<span
-															className={`${
-																styles.statusBadge
-															} ${
-																styles[
-																	app.status
-																		.toLowerCase()
-																		.replace(
-																			" ",
-																			""
-																		)
-																]
-															}`}
+														<div
+															className={
+																styles.headerBadges
+															}
 														>
-															{app.status}
-														</span>
+															{liveInterviews.length >
+																0 && (
+																<span
+																	className={
+																		styles.liveBadge
+																	}
+																>
+																	<i className="fa fa-video-camera"></i>{" "}
+																	Live
+																	Interview
+																</span>
+															)}
+															<span
+																className={`${
+																	styles.statusBadge
+																} ${
+																	styles[
+																		app.status
+																			.toLowerCase()
+																			.replace(
+																				" ",
+																				""
+																			)
+																	]
+																}`}
+															>
+																{app.status}
+															</span>
+														</div>
 													</div>
 													<div
 														className={
@@ -554,32 +576,63 @@ const Profile = () => {
 																	(
 																		interview,
 																		idx
-																	) => (
-																		<li
-																			key={
-																				idx
-																			}
-																		>
-																			<span
+																	) => {
+																		const isLive =
+																			isInterviewLive(
+																				interview
+																			);
+																		return (
+																			<li
+																				key={
+																					idx
+																				}
 																				className={
-																					styles.interviewType
+																					isLive
+																						? styles.liveInterviewItem
+																						: ""
 																				}
 																			>
-																				{
-																					interview.type
-																				}
-																			</span>
-																			<span
-																				className={
-																					styles.interviewDate
-																				}
-																			>
-																				{new Date(
-																					interview.date
-																				).toLocaleDateString()}
-																			</span>
-																		</li>
-																	)
+																				<span
+																					className={
+																						styles.interviewType
+																					}
+																				>
+																					{
+																						interview.type
+																					}
+																				</span>
+																				<span
+																					className={
+																						styles.interviewDateTime
+																					}
+																				>
+																					{new Date(
+																						interview.date
+																					).toLocaleDateString()}{" "}
+																					at{" "}
+																					{
+																						interview.time
+																					}
+																				</span>
+																				{isLive &&
+																					interview.meetingLink && (
+																						<a
+																							href={
+																								interview.meetingLink
+																							}
+																							target="_blank"
+																							rel="noopener noreferrer"
+																							className={
+																								styles.joinButton
+																							}
+																						>
+																							<i className="fa fa-video-camera"></i>{" "}
+																							Join
+																						</a>
+																					)}
+																			</li>
+																		);
+																	}
 																)}
 															</ul>
 														</div>
@@ -601,19 +654,15 @@ const Profile = () => {
 														</Link>
 													</div>
 												</div>
-											))
-										) : (
-											<p
-												className={
-													styles.noApplications
-												}
-											>
-												No job applications yet.
-											</p>
-										)}
-									</div>
-								</section>
-							</>
+											);
+										})
+									) : (
+										<p className={styles.noApplications}>
+											No job applications yet.
+										</p>
+									)}
+								</div>
+							</section>
 						)}
 					</div>
 				</div>

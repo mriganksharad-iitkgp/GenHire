@@ -243,8 +243,10 @@
 	gap: 10px;
 }
 
-.joinButton,
-.practiceButton {
+.joinButton {
+	background-color: #4a90e2;
+	color: white;
+	border: none;
 	padding: 8px 16px;
 	border-radius: 6px;
 	text-decoration: none;
@@ -255,20 +257,36 @@
 	gap: 6px;
 }
 
-.joinButton {
-	background-color: #4a90e2;
-	color: white;
-	border: none;
-}
-
 .joinButton:hover {
 	background-color: #3b73b9;
+}
+
+.joinButtonDisabled {
+	background-color: #f0f0f0;
+	color: #666;
+	border: 1px solid #ddd;
+	padding: 8px 16px;
+	border-radius: 6px;
+	font-size: 14px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: not-allowed;
 }
 
 .practiceButton {
 	background-color: #f0f7ff;
 	color: #4a90e2;
 	border: 1px solid #4a90e2;
+	padding: 8px 16px;
+	border-radius: 6px;
+	text-decoration: none;
+	font-size: 14px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 6px;
 }
 
 .practiceButton:hover {
@@ -420,6 +438,12 @@
 :global(.dark) .agendaList li,
 :global(.dark) .prepList li {
 	color: #bbb;
+}
+
+:global(.dark) .joinButtonDisabled {
+	background-color: #333;
+	color: #bbb;
+	border-color: #444;
 }
 
 @media (max-width: 768px) {

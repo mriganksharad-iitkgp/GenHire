@@ -299,6 +299,12 @@
 	transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.applicationCard.liveInterview {
+	background: #f0f7ff;
+	border: 1px solid #4a90e2;
+	box-shadow: 0 2px 15px rgba(74, 144, 226, 0.15);
+}
+
 .applicationCard:hover {
 	transform: translateY(-3px);
 	box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
@@ -765,4 +771,82 @@
 
 :global(.dark) .tabNavigation {
 	border-bottom-color: #444;
+}
+
+.headerBadges {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.liveBadge {
+	background-color: #4a90e2;
+	color: white;
+	padding: 4px 10px;
+	border-radius: 15px;
+	font-size: 12px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.liveBadge i {
+	font-size: 14px;
+}
+
+.liveInterviewItem {
+	background-color: #f0f7ff;
+	border-radius: 6px;
+	padding: 10px;
+	margin-bottom: 8px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.interviewDateTime {
+	color: #666;
+	font-size: 13px;
+}
+
+.joinButton {
+	background-color: #4a90e2;
+	color: white;
+	border: none;
+	padding: 6px 12px;
+	border-radius: 4px;
+	font-size: 13px;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	transition: background-color 0.2s ease;
+}
+
+.joinButton:hover {
+	background-color: #3b73b9;
+}
+
+/* Dark mode support */
+:global(.dark) .applicationCard.liveInterview {
+	background: rgba(74, 144, 226, 0.1);
+	border-color: #4a90e2;
+	box-shadow: 0 2px 15px rgba(74, 144, 226, 0.1);
+}
+
+:global(.dark) .liveInterviewItem {
+	background-color: rgba(74, 144, 226, 0.1);
+}
+
+:global(.dark) .interviewDateTime {
+	color: #bbb;
+}
+
+:global(.dark) .joinButton {
+	background-color: #4a90e2;
+}
+
+:global(.dark) .joinButton:hover {
+	background-color: #3b73b9;
 }
