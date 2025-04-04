@@ -132,10 +132,9 @@ def login():
     
     if not user or not check_password_hash(user['password'], password):
         return jsonify({'error': 'Invalid credentials'}), 401
-    
     # Generate token
     token = generate_token(user['_id'])
-    
+    print("Logged in")
     return jsonify({
         'message': 'Logged in successfully',
         'token': token,
@@ -144,7 +143,7 @@ def login():
             'name': user['name'],
             'email': user['email']
         }
-    })
+    }), 200
 
 @app.route("/api/me", methods=["GET"])
 @cross_origin()

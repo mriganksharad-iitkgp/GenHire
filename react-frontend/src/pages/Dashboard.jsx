@@ -104,12 +104,6 @@ const Dashboard = () => {
 	]);
 
 	// Check authentication when component mounts
-	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
-		if (!isLoggedIn) {
-			navigate("/login");
-		}
-	}, [navigate]);
 
 	// Filter jobs based on search and filters
 	const filteredJobs = jobOpenings.filter((job) => {

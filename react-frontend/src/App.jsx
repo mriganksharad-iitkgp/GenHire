@@ -38,14 +38,7 @@ function App() {
 						</Layout>
 					}
 				/>
-				<Route
-					path="/interview/:interviewId"
-					element={
-						<Layout>
-							<Interview />
-						</Layout>
-					}
-				/>
+				<Route path="/interview/:interviewId" element={<Interview />} />
 				<Route
 					path="/job/:jobId"
 					element={
