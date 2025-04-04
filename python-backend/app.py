@@ -36,13 +36,18 @@ processor = PDFProcessor(document_pdf_path, groq_api_key)
 UPLOAD_FOLDER = "uploads"
 JD_FOLDER = os.path.join(UPLOAD_FOLDER, "jd")
 CV_FOLDER = os.path.join(UPLOAD_FOLDER, "cv")
+PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
+
+
 
 # Ensure folders exist
 os.makedirs(JD_FOLDER, exist_ok=True)
 os.makedirs(CV_FOLDER, exist_ok=True)
+os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 
 app.config["JD_FOLDER"] = JD_FOLDER
 app.config["CV_FOLDER"] = CV_FOLDER
+app.config["PROCTORING_FOLDER"] = PROCTORING_FOLDER
 app.config["ALLOWED_EXTENSIONS"] = {"pdf"}
 
 def generate_token(user_id):
@@ -349,6 +354,42 @@ def get_user_interviews(current_user):
         })
     
     return jsonify(formatted_interviews)
+
+@app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
+@cross_origin()
+@token_required
+def upload_interview_recording(current_user, session_id):
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+    
+    video_file = request.files['video']
+    
+    # Validate the file is a video
+    if not video_file.filename.lower().endswith(('.webm', '.mp4', '.mov')):
+        return jsonify({'error': 'Invalid video format'}), 400
+    
+    # Create session-specific folder
+    session_folder = os.path.join(app.config["PROCTORING_FOLDER"], session_id)
+    os.makedirs(session_folder, exist_ok=True)
+    
+    # Save the video
+    filename = secure_filename(f"recording_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{video_file.filename}")
+    video_path = os.path.join(session_folder, filename)
+    video_file.save(video_path)
+    
+    # Update interview record in database
+    interviews_collection.update_one(
+        {'session_id': session_id, 'user_id': str(current_user['_id'])},
+        {'$push': {
+            'recordings': {
+                'path': video_path,
+                'timestamp': datetime.datetime.utcnow()
+            }
+        }}
+    )
+    
+    return jsonify({'message': 'Recording saved successfully'}), 200
+
 
 if __name__ == '__main__':
     # app.run(debug=False,host='10.29.8.94')

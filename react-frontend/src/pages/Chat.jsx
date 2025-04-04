@@ -13,7 +13,10 @@ export default function Chat({ interviewId }) {
 	const [interviewStatus, setInterviewStatus] = useState("starting"); // starting, active, ending, completed
 	const [evaluation, setEvaluation] = useState(null);
 	const [similarityScore, setSimilarityScore] = useState(null);
-
+	const [mediaRecorder, setMediaRecorder] = useState(null);
+	const [recordedChunks, setRecordedChunks] = useState([]);
+	const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+	const videoRef = useRef(null);
 	const navigate = useNavigate();
 	const targetRef = useRef();
 	const recognitionRef = useRef(null);
@@ -25,6 +28,102 @@ export default function Chat({ interviewId }) {
 		localStorage.removeItem("companyxyz-user");
 		navigate("/login");
 	};
+
+
+
+	// Add this useEffect hook to initialize the webcam when interview starts
+useEffect(() => {
+	if (interviewStatus === "active" && !isRecordingVideo) {
+	  startWebcamRecording();
+	}
+  
+	return () => {
+	  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+		mediaRecorder.stop();
+	  }
+	};
+  }, [interviewStatus]);
+  
+  // Add these new functions for webcam handling
+  const startWebcamRecording = async () => {
+	try {
+	  const stream = await navigator.mediaDevices.getUserMedia({ 
+		video: true,
+		audio: true 
+	  });
+	  
+	  if (videoRef.current) {
+		videoRef.current.srcObject = stream;
+	  }
+  
+	  const recorder = new MediaRecorder(stream, {
+		mimeType: 'video/webm'
+	  });
+  
+	  recorder.ondataavailable = (e) => {
+		if (e.data.size > 0) {
+		  setRecordedChunks(prev => [...prev, e.data]);
+		}
+	  };
+  
+	  recorder.onstop = async () => {
+		const blob = new Blob(recordedChunks, { type: 'video/webm' });
+		await uploadRecording(blob);
+		setRecordedChunks([]);
+	  };
+  
+	  recorder.start(1000); // Collect data every second
+	  setMediaRecorder(recorder);
+	  setIsRecordingVideo(true);
+	} catch (error) {
+	  console.error("Error accessing webcam:", error);
+	}
+  };
+  
+  const stopWebcamRecording = () => {
+	if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+	  mediaRecorder.stop();
+	  setIsRecordingVideo(false);
+	  if (videoRef.current && videoRef.current.srcObject) {
+		videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+	  }
+	}
+  };
+  
+  const uploadRecording = async (blob) => {
+	if (!sessionId) return;
+  
+	const formData = new FormData();
+	formData.append('video', blob, `interview_${sessionId}_${Date.now()}.webm`);
+	formData.append('sessionId', sessionId);
+  
+	try {
+	  const token = localStorage.getItem("companyxyz-token");
+	  await fetch(`http://localhost:5000/api/interviews/${sessionId}/upload-recording`, {
+		method: 'POST',
+		headers: {
+		  'Authorization': token,
+		},
+		body: formData
+	  });
+	} catch (error) {
+	  console.error("Error uploading recording:", error);
+	}
+  };
+  
+  // Add to your return statement (somewhere in the page container)
+  {videoRef && (
+	<div className={Styles["video-preview"]} style={{ display: 'none' }}>
+	  <video ref={videoRef} autoPlay muted playsInline />
+	</div>
+  )}
+  // Add to your chat header
+  {isRecordingVideo && (
+	<div className={Styles.recordingIndicator}>
+	  <div className={Styles.recordingDot}></div>
+	  Recording
+	</div>
+  )}
 
 	// Check authentication when component mounts
 	useEffect(() => {

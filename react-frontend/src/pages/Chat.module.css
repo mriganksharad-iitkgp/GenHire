@@ -718,3 +718,21 @@
 .back-to-dashboard:hover {
 	background-color: #73d13d;
 }
+.video-preview {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #000;
+    z-index: 1000;
+}
+
+.video-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
