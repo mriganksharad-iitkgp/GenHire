@@ -8,7 +8,7 @@ const Login = () => {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState("");
 	const navigate = useNavigate();
-
+	
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -32,8 +32,8 @@ const Login = () => {
 			// Store token and user data
 			localStorage.setItem('token', data.token);
 			localStorage.setItem('user', JSON.stringify(data.user));
-			
-			navigate('/');
+			console.log("login");
+			navigate('/dashboard');
 		} catch (error) {
 			setError(error.message);
 		} finally {
@@ -108,3 +108,6 @@ const Login = () => {
 };
 
 export default Login;
+
+
+

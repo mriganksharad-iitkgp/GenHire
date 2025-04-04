@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, } from "react-router-dom";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -79,12 +79,6 @@ const Dashboard = () => {
 	]);
 
 	// Check authentication when component mounts
-	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("candidateLoggedIn") === "true";
-		if (!isLoggedIn) {
-			navigate("/login");
-		}
-	}, [navigate]);
 
 	// Filter jobs based on search and filters
 	const filteredJobs = jobOpenings.filter((job) => {
