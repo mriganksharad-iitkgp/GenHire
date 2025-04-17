@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Styles from "./Chat.module.css";
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 export default function Chat({ interviewId }) {
 	const [chatContent, setChatContent] = useState({});
@@ -21,6 +22,7 @@ export default function Chat({ interviewId }) {
 	const targetRef = useRef();
 	const recognitionRef = useRef(null);
 	const currentUtteranceRef = useRef(null);
+	const ffmpeg = new FFmpeg();
 
 	// Handle logout
 	const handleLogout = () => {
@@ -93,8 +95,29 @@ useEffect(() => {
   const uploadRecording = async (blob) => {
 	if (!sessionId) return;
   
+	if (!ffmpeg.loaded) {
+	  await ffmpeg.load();
+	}
+  
+	const inputName = 'input.webm';
+	const outputName = 'output.mp4';
+	const fileData = await fetch(blob).then(res => res.arrayBuffer());
+  
+	ffmpeg.writeFile(inputName, new Uint8Array(fileData));
+  
+	await ffmpeg.exec([
+	  '-i', inputName,
+	  '-vcodec', 'libx264',
+	  '-crf', '28',
+	  '-preset', 'ultrafast',
+	  outputName,
+	]);
+  
+	const data = await ffmpeg.readFile(outputName);
+	const compressedBlob = new Blob([data.buffer], { type: 'video/mp4' });
+  
 	const formData = new FormData();
-	formData.append('video', blob, `interview_${sessionId}_${Date.now()}.webm`);
+	formData.append('video', compressedBlob, `interview_${sessionId}_${Date.now()}.mp4`);
 	formData.append('sessionId', sessionId);
   
 	try {
@@ -104,11 +127,15 @@ useEffect(() => {
 		headers: {
 		  'Authorization': token,
 		},
-		body: formData
+		body: formData,
 	  });
 	} catch (error) {
-	  console.error("Error uploading recording:", error);
+	  console.error("Error uploading MP4 recording:", error);
 	}
+  
+	// Clean up
+	ffmpeg.deleteFile(inputName);
+	ffmpeg.deleteFile(outputName);
   };
   
   // Add to your return statement (somewhere in the page container)
@@ -544,7 +571,7 @@ useEffect(() => {
 														Styles["message"]
 													}
 												>
-													{pair.response
+													{(pair.response|| '')
 														.split("\n")
 														.map((line, index) => (
 															<React.Fragment
