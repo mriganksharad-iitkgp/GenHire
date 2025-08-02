@@ -7,12 +7,13 @@ import uuid  # new import
 from werkzeug.security import generate_password_hash, check_password_hash
 import hashlib
 import jwt as pyjwt 
-import datetime
 from functools import wraps
 from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
-
+import datetime
+import threading
+from security_check import run_security_check
 # Import interview system
 from interview_system import session_manager
 
@@ -21,7 +22,7 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@hrtech.yneajzv.mongodb.net/?retryWrites=true&w=majority&appName=hrtech'
+mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@cluster0.yneajzv.mongodb.net/?retryWrites=true&w=majority&appName=hrtech'
 client = MongoClient(mongo_uri)
 career_portal = 'hrtech'  # Your database name
 db = client[career_portal]  # Use the variable directly
@@ -359,36 +360,35 @@ def get_user_interviews(current_user):
 @cross_origin()
 @token_required
 def upload_interview_recording(current_user, session_id):
+    print("function called ")
+    """Handles the upload of the final interview recording."""
     if 'video' not in request.files:
         return jsonify({'error': 'No video file provided'}), 400
     
     video_file = request.files['video']
-    
-    # Validate the file is a video
     if not video_file.filename.lower().endswith(('.webm', '.mp4', '.mov')):
         return jsonify({'error': 'Invalid video format'}), 400
     
-    # Create session-specific folder
     session_folder = os.path.join(app.config["PROCTORING_FOLDER"], session_id)
     os.makedirs(session_folder, exist_ok=True)
     
-    # Save the video
-    filename = secure_filename(f"recording_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{video_file.filename}")
+    filename = secure_filename(f"recording_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
     video_path = os.path.join(session_folder, filename)
     video_file.save(video_path)
-    
-    # Update interview record in database
+    print("video saved ")
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
-        {'$push': {
-            'recordings': {
-                'path': video_path,
-                'timestamp': datetime.datetime.utcnow()
-            }
-        }}
+        {'$push': {'recordings': {'path': video_path, 'timestamp': datetime.datetime.utcnow()}}}
     )
     
-    return jsonify({'message': 'Recording saved successfully'}), 200
+    print(f"🚀 Starting background analysis for session: {session_id}")
+    analysis_thread = threading.Thread(
+        target=run_security_check,
+        args=(video_path, session_id, interviews_collection)
+    )
+    analysis_thread.start()
+    
+    return jsonify({'message': 'Recording saved successfully. Security analysis has started.'}), 200
 
 
 if __name__ == '__main__':
