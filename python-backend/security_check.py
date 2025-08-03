@@ -1,107 +1,141 @@
 import cv2
 import mediapipe as mp
-import math
-import datetime
+import numpy as np
+from deepface import DeepFace
 
-def analyze_gaze(face_landmarks, frame_shape):
-    h, w, _ = frame_shape
-    LEFT_EYE_INDICES = [33, 133]
-    RIGHT_EYE_INDICES = [362, 263]
-    LEFT_IRIS_INDEX = 473
-    RIGHT_IRIS_INDEX = 468
+# --- Constants for Analysis ---
+# These can be tuned for sensitivity
+HEAD_POSE_THRESHOLD_YAW = 25
+IDENTITY_VERIFY_THRESHOLD = 0.60 # Lower is stricter, higher is more lenient
 
-    right_eye_left_corner = face_landmarks.landmark[RIGHT_EYE_INDICES[0]]
-    right_eye_right_corner = face_landmarks.landmark[RIGHT_EYE_INDICES[1]]
-    right_iris_center = face_landmarks.landmark[RIGHT_IRIS_INDEX]
+# --- Penalties (applied per infraction event, not per frame) ---
+# These values represent how much the score is reduced for each confirmed infraction.
+PENALTY_NO_FACE = 0.5
+PENALTY_MULTIPLE_FACES = 1.0
+PENALTY_HEAD_TURN = 0.25
+PENALTY_IDENTITY_MISMATCH = 5.0
 
-    eye_width_right = math.hypot(
-        (right_eye_left_corner.x - right_eye_right_corner.x) * w,
-        (right_eye_left_corner.y - right_eye_right_corner.y) * h
-    )
-    if eye_width_right == 0:
-        return "Forward"
+# --- Initialize MediaPipe ---
+# This is a global instance to avoid re-initializing on every function call, which is slow.
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    max_num_faces=2,
+    refine_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
-    iris_pos_right = math.hypot(
-        (right_iris_center.x - right_eye_right_corner.x) * w,
-        (right_iris_center.y - right_eye_right_corner.y) * h
-    )
-    gaze_ratio = iris_pos_right / eye_width_right
+def analyze_frame_for_proctoring(current_frame, registered_face_img, current_score, infractions):
+    """
+    Analyzes a single frame for proctoring violations. This is the core logic engine for live analysis.
+    (This function remains unchanged)
+    """
+    h, w, _ = current_frame.shape
+    status_text = "Status: OK"
+    score_deduction = 0
 
-    if gaze_ratio > 0.65:
-        return "Right"
-    elif gaze_ratio < 0.45:
-        return "Left"
+    results = face_mesh.process(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))
+
+    if not results.multi_face_landmarks:
+        status_text = "ALERT: No Face Detected"
+        score_deduction = PENALTY_NO_FACE
+        infractions['no_face'] = infractions.get('no_face', 0) + 1
+    elif len(results.multi_face_landmarks) > 1:
+        status_text = "ALERT: Multiple Faces Detected"
+        score_deduction = PENALTY_MULTIPLE_FACES
+        infractions['multiple_faces'] = infractions.get('multiple_faces', 0) + 1
     else:
-        return "Forward"
+        face_landmarks = results.multi_face_landmarks[0]
+        face_3d = np.array([[0.0, 0.0, 0.0], [-225.0, 170.0, -135.0], [225.0, 170.0, -135.0]], dtype=np.float64)
+        face_2d = np.array([face_landmarks.landmark[1].x * w, face_landmarks.landmark[1].y * h, face_landmarks.landmark[263].x * w, face_landmarks.landmark[263].y * h, face_landmarks.landmark[33].x * w, face_landmarks.landmark[33].y * h], dtype=np.float64).reshape(3, 2)
+        cam_matrix = np.array([[w, 0, w/2], [0, w, h/2], [0, 0, 1]])
+        
+        try:
+            _, rot_vec, _ = cv2.solvePnP(face_3d, face_2d, cam_matrix, np.zeros((4,1)))
+            rot_matrix, _ = cv2.Rodrigues(rot_vec)
+            angles, _, _, _, _, _ = cv2.RQDecomp3x3(rot_matrix)
+            yaw = angles[1]
+            if abs(yaw) > HEAD_POSE_THRESHOLD_YAW:
+                direction = "Right" if yaw > 0 else "Left"
+                status_text = f"ALERT: Head Turned {direction}"
+                score_deduction = PENALTY_HEAD_TURN
+                infractions['head_turn'] = infractions.get('head_turn', 0) + 1
+        except Exception:
+            status_text = "ALERT: Head Pose Unreadable"
+            score_deduction = PENALTY_HEAD_TURN
+            infractions['head_turn'] = infractions.get('head_turn', 0) + 1
 
-def run_security_check(video_path, session_id, interviews_collection):
-    print(f"✅ [Analysis Started] for session: {session_id} on video: {video_path}")
+        if status_text == "Status: OK":
+            try:
+                result = DeepFace.verify(
+                    img1_path=registered_face_img,
+                    img2_path=current_frame,
+                    model_name="VGG-Face",
+                    enforce_detection=False
+                )
+                if not result["verified"] or result["distance"] > IDENTITY_VERIFY_THRESHOLD:
+                    status_text = "CRITICAL: Identity Mismatch"
+                    score_deduction = PENALTY_IDENTITY_MISMATCH
+                    infractions['identity_mismatch'] = infractions.get('identity_mismatch', 0) + 1
+            except Exception:
+                status_text = "ALERT: Face Cannot Be Verified"
+                score_deduction = PENALTY_NO_FACE
+                infractions['unverified_face'] = infractions.get('unverified_face', 0) + 1
 
-    multiple_faces_frames = 0
-    looking_away_frames = 0
-    no_face_frames = 0
-    total_processed_frames = 0
+    updated_score = max(0, current_score - score_deduction)
+    return {
+        "status": status_text,
+        "score": updated_score,
+        "infractions": infractions
+    }
 
-    mp_face_mesh = mp.solutions.face_mesh
-    face_mesh = mp_face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=2,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
+# --- NEW FUNCTION FOR FINAL REPORT ---
+def generate_final_proctoring_report(infractions):
+    """
+    Generates a final summary report based on the total infractions recorded during the session.
+
+    Args:
+        infractions (dict): The final dictionary containing the total count for each infraction type.
+
+    Returns:
+        dict: A dictionary containing the final score, total deductions, and a qualitative summary.
+    """
+    if not infractions:
+        return {
+            "final_score": 100,
+            "summary": "Excellent. No proctoring issues were detected during the session.",
+            "infraction_counts": {}
+        }
+
+    # Calculate total deductions
+    total_deductions = (
+        infractions.get('no_face', 0) * PENALTY_NO_FACE +
+        infractions.get('multiple_faces', 0) * PENALTY_MULTIPLE_FACES +
+        infractions.get('head_turn', 0) * PENALTY_HEAD_TURN +
+        infractions.get('identity_mismatch', 0) * PENALTY_IDENTITY_MISMATCH +
+        infractions.get('unverified_face', 0) * PENALTY_NO_FACE
     )
 
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"❌ Error: Could not open video file {video_path}")
-        return
+    final_score = max(0, 100 - total_deductions)
 
-    while cap.isOpened():
-        success, frame = cap.read()
-        if not success:
-            break
-
-        total_processed_frames += 1
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(frame_rgb)
-
-        if results.multi_face_landmarks:
-            if len(results.multi_face_landmarks) > 1:
-                multiple_faces_frames += 1
-            
-            face_landmarks = results.multi_face_landmarks[0]
-            gaze = analyze_gaze(face_landmarks, frame.shape)
-            if gaze != "Forward":
-                looking_away_frames += 1
-        else:
-            no_face_frames += 1
-
-    cap.release()
-    face_mesh.close()
-
-    if total_processed_frames > 0:
-        score = 100
-        score -= (multiple_faces_frames / total_processed_frames) * 50
-        score -= (looking_away_frames / total_processed_frames) * 25
-        score -= (no_face_frames / total_processed_frames) * 40
-        final_score = max(0, round(score))
+    # Generate a qualitative summary
+    summary_parts = []
+    if infractions.get('identity_mismatch', 0) > 0:
+        summary_parts.append("CRITICAL: A potential identity mismatch was detected.")
+    if infractions.get('multiple_faces', 0) > 0:
+        summary_parts.append("SEVERE: Multiple faces were detected during the session, which is a major violation.")
+    if infractions.get('no_face', 0) > 5: # More than 5 "no face" alerts is significant
+        summary_parts.append("WARNING: The candidate was not visible for a significant portion of the interview.")
+    if infractions.get('head_turn', 0) > 10: # More than 10 head turns could indicate looking away
+        summary_parts.append("NOTE: The candidate frequently turned away from the screen.")
+    
+    if not summary_parts:
+        summary = "Good. The candidate maintained focus with no significant proctoring issues."
     else:
-        final_score = 0
+        summary = " ".join(summary_parts)
 
-    print(f"🏁 [Analysis Finished] for session: {session_id}")
-    print(f"    - Final Proctoring Score: {final_score}/100")
-
-    interviews_collection.update_one(
-        {'session_id': session_id},
-        {'$set': {
-            'proctoring_score': final_score,
-            'proctoring_analysis': {
-                'status': 'Completed',
-                'multiple_faces_frames': multiple_faces_frames,
-                'looking_away_frames': looking_away_frames,
-                'no_face_frames': no_face_frames,
-                'total_processed_frames': total_processed_frames,
-                'analyzed_at': datetime.datetime.utcnow()
-            }
-        }}
-    )
+    return {
+        "final_score": round(final_score, 2),
+        "summary": summary,
+        "infraction_counts": infractions
+    }

@@ -13,11 +13,22 @@ from bson import ObjectId
 from dotenv import load_dotenv
 import datetime
 import threading
-from security_check import run_security_check
+# from security_check import run_security_check
 # Import interview system
 from interview_system import session_manager
 
+
+# Add these imports with your other imports
+import base64
+import cv2
+import numpy as np
+from flask_socketio import SocketIO
+from security_check import analyze_frame_for_proctoring # Use the new function
+
+
+# Replace the old app initialization
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -32,6 +43,9 @@ interviews_collection = db['interviews']  # New collection for interviews
 document_pdf_path = "Eric Ries - The Lean Startup.pdf"  # Path to the document for querying
 groq_api_key = "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"  # Replace with actual API key
 processor = PDFProcessor(document_pdf_path, groq_api_key)
+
+# Add this dictionary after your interviews_collection setup
+live_sessions = {}
 
 # Define directories for storing files
 UPLOAD_FOLDER = "uploads"
@@ -57,6 +71,8 @@ def generate_token(user_id):
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
     }, app.config['SECRET_KEY'], algorithm='HS256')
 
+# Replace your old token_required function with this one
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -66,20 +82,24 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
         
         try:
-            data = pyjwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])  # Use pyjwt here
+            # This is the critical fix:
+            # Check for the "Bearer " prefix and remove it if it exists.
+            if token.startswith('Bearer '):
+                token = token[7:]
+
+            data = pyjwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
             current_user = users_collection.find_one({'_id': ObjectId(data['user_id'])})
             
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401
                 
-        except pyjwt.ExpiredSignatureError:  # And here
+        except pyjwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired!'}), 401
-        except pyjwt.InvalidTokenError:  # And here
+        except pyjwt.InvalidTokenError:
             return jsonify({'message': 'Token is invalid!'}), 401
         
         return f(current_user, *args, **kwargs)
     return decorated
-
 # Auth routes
 @app.route("/api/register", methods=["POST"])
 @cross_origin()
@@ -312,22 +332,24 @@ def submit_answer(session_id):
     
     return jsonify(result)
 
+# Inside your end_interview function
 @app.route('/api/interviews/<session_id>/end', methods=['POST'])
-@cross_origin()
 @token_required
 def end_interview(current_user, session_id):
-    # End the interview session and get the final evaluation
     result = session_manager.end_session(session_id)
-    
     if 'error' in result:
         return jsonify(result), 404
     
-    # Update interview status in the database
+    # --- ADD THIS LINE ---
+    final_score = live_sessions.get(session_id, {}).get('proctoring_score', 'N/A')
+    
+    # --- MODIFY THIS BLOCK ---
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
             'status': 'completed',
             'evaluation': result['evaluation'],
+            'proctoring_score': final_score,  # Add the score here
             'updated_at': datetime.datetime.utcnow()
         }}
     )
@@ -356,41 +378,124 @@ def get_user_interviews(current_user):
     
     return jsonify(formatted_interviews)
 
+
+
+# Add this new route
+@app.route('/api/interviews/<session_id>/register-face', methods=['POST'])
+@token_required
+def register_face(current_user, session_id):
+    data = request.get_json()
+    if 'image' not in data:
+        return jsonify({'error': 'No image data provided'}), 400
+    try:
+        header, encoded = data['image'].split(",", 1)
+        decoded_image = base64.b64decode(encoded)
+        frame = cv2.imdecode(np.frombuffer(decoded_image, np.uint8), cv2.IMREAD_COLOR)
+        
+        # Initialize the session in our live store
+        live_sessions[session_id] = {
+            'registered_face': frame, 'proctoring_score': 100,
+            'infractions': {}, 'sid': None
+        }
+        
+        # Update the interview status in the database
+        interviews_collection.update_one(
+            {'session_id': session_id, 'user_id': str(current_user['_id'])},
+            {'$set': {'status': 'active'}}
+        )
+        
+        print(f"✅ Face registered for session: {session_id}. Interview is now active.")
+        return jsonify({'message': 'Face registered successfully'}), 200
+    except Exception as e:
+        print(f"Error during face registration: {e}")
+        return jsonify({'error': 'Failed to process image'}), 500
+    
+# Add this entire block for WebSocket event handling
+@socketio.on('connect')
+def handle_connect():
+    print(f"🔌 Client connected with sid: {request.sid}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print(f"🔌 Client disconnected with sid: {request.sid}")
+    # Clean up session data to prevent memory leaks
+    for session_id, data in list(live_sessions.items()):
+        if data.get('sid') == request.sid:
+            del live_sessions[session_id]
+            print(f"🧹 Cleaned up live session data for {session_id}")
+            break
+
+@socketio.on('start_proctoring')
+def handle_start_proctoring(data):
+    session_id = data.get('session_id')
+    if session_id and session_id in live_sessions:
+        # Link the client's socket ID to the session
+        live_sessions[session_id]['sid'] = request.sid
+        print(f"▶️ Live proctoring stream started for session: {session_id}")
+    else:
+        print(f"⚠️ Attempted to start proctoring for invalid/unregistered session: {session_id}")
+
+@socketio.on('proctoring_frame')
+def handle_proctoring_frame(data):
+    session_id = data.get('session_id')
+    session_data = live_sessions.get(session_id)
+    if not session_data or 'registered_face' not in session_data: return
+
+    header, encoded = data['image'].split(",", 1)
+    frame = cv2.imdecode(np.frombuffer(base64.b64decode(encoded), np.uint8), cv2.IMREAD_COLOR)
+
+    # Call the analysis function from the other file
+    analysis_result = analyze_frame_for_proctoring(
+        frame, session_data['registered_face'],
+        session_data['proctoring_score'], session_data['infractions']
+    )
+    # Update the session data in memory
+    live_sessions[session_id]['proctoring_score'] = analysis_result['score']
+    live_sessions[session_id]['infractions'] = analysis_result['infractions']
+
+    if analysis_result['status'] != "Status: OK":
+        print(f"🔴 Live Proctoring Alert [Session: {session_id}]: {analysis_result['status']} | Score: {analysis_result['score']:.1f}")
+
+
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
-@cross_origin()
 @token_required
 def upload_interview_recording(current_user, session_id):
-    print("function called ")
-    """Handles the upload of the final interview recording."""
+    """
+    Handles the upload of the final archival interview recording.
+    This is called by the frontend after the interview is completed.
+    """
+    # 1. Check if the 'video' file is part of the request
     if 'video' not in request.files:
         return jsonify({'error': 'No video file provided'}), 400
-    
+
     video_file = request.files['video']
-    if not video_file.filename.lower().endswith(('.webm', '.mp4', '.mov')):
-        return jsonify({'error': 'Invalid video format'}), 400
-    
+
+    # 2. Create a dedicated folder for this session's recordings if it doesn't exist
     session_folder = os.path.join(app.config["PROCTORING_FOLDER"], session_id)
     os.makedirs(session_folder, exist_ok=True)
     
-    filename = secure_filename(f"recording_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+    # 3. Create a secure filename and define the full path to save the video
+    filename = secure_filename(f"recording_archive.mp4")
     video_path = os.path.join(session_folder, filename)
+    
+    # 4. Save the video file to the specified path
     video_file.save(video_path)
-    print("video saved ")
+    
+    # 5. Update the interview document in the database to include the path to this recording
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$push': {'recordings': {'path': video_path, 'timestamp': datetime.datetime.utcnow()}}}
     )
     
-    print(f"🚀 Starting background analysis for session: {session_id}")
-    analysis_thread = threading.Thread(
-        target=run_security_check,
-        args=(video_path, session_id, interviews_collection)
-    )
-    analysis_thread.start()
+    print(f"✅ Final archival recording for session {session_id} saved to: {video_path}")
     
-    return jsonify({'message': 'Recording saved successfully. Security analysis has started.'}), 200
+    # Note: The old background analysis thread is removed from here because
+    # the proctoring analysis is now done live via WebSockets.
+    
+    return jsonify({'message': 'Archival recording saved successfully.'}), 200
 
 
 if __name__ == '__main__':
-    # app.run(debug=False,host='10.29.8.94')
-    app.run(debug=True)
+    print("🚀 Starting Flask server with real-time proctoring capabilities...")
+    # Use socketio.run() to start the web server with WebSocket support
+    socketio.run(app, debug=True, port=5000)
