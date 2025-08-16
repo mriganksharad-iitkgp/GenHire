@@ -1,23 +1,70 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# === Python backend ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.pot
+*.py[cod]
+*.egg
+*.egg-info/
+.eggs/
+instance/
+.env
+.venv/
+venv/
+ENV/
+env/
+pip-wheel-metadata/
+*.pytest_cache/
+*.mypy_cache/
+*.coverage
+.coverage.*
+htmlcov/
+.tox/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.manifest
+*.spec
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
 
-# testing
-/coverage
 
-# production
-/build
+# === Node/React frontend ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
 
-# misc
-.DS_Store
+# Build output
+react-frontend/dist/
+react-frontend/build/
+
+# Local environment files
+react-frontend/.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# === IDE / Editors ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -145,6 +145,26 @@
 	background-color: #3b73b9;
 }
 
+.appliedButton {
+	background-color: #6b7280 !important;
+	color: white !important;
+	cursor: not-allowed !important;
+}
+
+.appliedButton:hover {
+	background-color: #6b7280 !important;
+}
+
+.withdrawButton {
+	background-color: #f59e0b !important;
+	color: white !important;
+	cursor: pointer !important;
+}
+
+.withdrawButton:hover {
+	background-color: #d97706 !important;
+}
+
 .saveButton {
 	background-color: transparent;
 	border: 1px solid #4a90e2;
@@ -270,6 +290,23 @@
 
 .applyNowBtn:hover {
 	background-color: #3b73b9;
+}
+
+.appliedBtn {
+	background-color: #6b7280 !important;
+	cursor: not-allowed !important;
+}
+
+.appliedBtn:hover {
+	background-color: #6b7280 !important;
+}
+
+.withdrawBtn {
+	background-color: #f59e0b !important;
+}
+
+.withdrawBtn:hover {
+	background-color: #d97706 !important;
 }
 
 .updateProfileLink {

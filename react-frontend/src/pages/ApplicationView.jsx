@@ -9,276 +9,6 @@ const ApplicationView = () => {
 	const [application, setApplication] = useState(null);
 	const [currentDate, setCurrentDate] = useState(new Date());
 
-	// Sample application data with timeline and detailed interview information
-	const sampleApplications = {
-		1: {
-			id: 1,
-			position: "Senior Business Development Manager",
-			company: "CompanyXYZ",
-			jobId: 1001,
-			status: "In Progress",
-			appliedDate: "2023-08-15",
-			timeline: [
-				{
-					id: 1,
-					date: "2023-08-15",
-					type: "Application Submitted",
-					status: "Completed",
-					description: "Your application was successfully submitted.",
-					icon: "fa-paper-plane",
-				},
-				{
-					id: 2,
-					date: "2023-08-20",
-					type: "Application Reviewed",
-					status: "Completed",
-					description:
-						"Your application was reviewed by our hiring team.",
-					icon: "fa-check-circle",
-				},
-				{
-					id: 3,
-					date: "2023-08-25",
-					type: "Skills Assessment",
-					status: "Completed",
-					description:
-						"Online business strategy assessment was completed successfully.",
-					icon: "fa-chart-line",
-				},
-				{
-					id: 4,
-					date: new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000)
-						.toISOString()
-						.split("T")[0], // Today's date
-					type: "Live Demo Interview",
-					status: "Scheduled",
-					description:
-						"Test interview scheduled for today to demonstrate the time window feature.",
-					icon: "fa-video-camera",
-					interviewDetails: {
-						id: 999,
-						date: new Date(
-							new Date().getTime() + 5.5 * 60 * 60 * 1000
-						)
-							.toISOString()
-							.split("T")[0],
-						time:
-							new Date().getHours() +
-							":" +
-							(new Date().getMinutes() < 10 ? "0" : "") +
-							new Date().getMinutes(),
-						duration: "1 hour",
-						type: "Demo",
-						interviewers: ["Test Interviewer (Demo Manager)"],
-						location: "Remote (Platform Chat)",
-						meetingLink: "/interview/999",
-						agenda: [
-							"Demonstration of interview time window feature",
-							"Test of join button functionality",
-						],
-						preparation: [
-							"No preparation needed - this is just a demo",
-						],
-					},
-				},
-				{
-					id: 5,
-					date: "2023-09-15",
-					type: "Business Interview",
-					status: "Scheduled",
-					description:
-						"Remote interview with the business development team.",
-					icon: "fa-video-camera",
-					interviewDetails: {
-						id: 101,
-						date: "2023-09-15",
-						time: "10:00 AM",
-						duration: "1 hour",
-						type: "Business Strategy",
-						interviewers: [
-							"Sarah Johnson (Sales Director)",
-							"Michael Chen (Senior Business Manager)",
-						],
-						location: "Remote (Platform Chat)",
-						meetingLink: "/interview/101",
-						agenda: [
-							"Discussion of your previous business development experience",
-							"Questions on sales strategies, client acquisition, and market analysis",
-							"Business case scenario discussion",
-							"Q&A session",
-						],
-						preparation: [
-							"Review your experience with sales strategies and client relationship management",
-							"Be prepared to discuss business growth examples from past roles",
-							"Practice explaining your approach to business development",
-						],
-					},
-				},
-				{
-					id: 6,
-					date: "2023-09-25",
-					type: "Final Interview",
-					status: "Pending",
-					description: "Interview with the CCO and team leads.",
-					icon: "fa-users",
-					interviewDetails: {
-						id: 102,
-						date: "2023-09-25",
-						time: "2:00 PM",
-						duration: "1 hour",
-						type: "Leadership",
-						interviewers: [
-							"Alex Patterson (CCO)",
-							"Emma Rodriguez (Sales Lead)",
-						],
-						location: "Remote (Platform Chat)",
-						meetingLink: "/interview/102",
-						agenda: [
-							"Discussion about career goals and vision",
-							"Cultural fit assessment",
-							"Leadership and collaboration scenarios",
-							"Q&A about the company and role",
-						],
-						preparation: [
-							"Prepare questions about the company's business direction",
-							"Review the company's values and culture",
-							"Be ready to discuss a challenging business deal you closed",
-						],
-					},
-				},
-				{
-					id: 7,
-					date: "2023-10-01",
-					type: "Decision",
-					status: "Pending",
-					description: "Final hiring decision will be made.",
-					icon: "fa-flag-checkered",
-				},
-			],
-		},
-		2: {
-			id: 2,
-			position: "Business Development Representative",
-			company: "CompanyXYZ",
-			jobId: 1002,
-			status: "Rejected",
-			appliedDate: "2023-07-10",
-			timeline: [
-				{
-					id: 1,
-					date: "2023-07-10",
-					type: "Application Submitted",
-					status: "Completed",
-					description: "Your application was successfully submitted.",
-					icon: "fa-paper-plane",
-				},
-				{
-					id: 2,
-					date: "2023-07-15",
-					type: "Application Reviewed",
-					status: "Completed",
-					description:
-						"Your application was reviewed by our hiring team.",
-					icon: "fa-check-circle",
-				},
-				{
-					id: 3,
-					date: "2023-07-30",
-					type: "Rejection",
-					status: "Completed",
-					description:
-						"We've decided to proceed with other candidates whose skills better match our current needs.",
-					icon: "fa-times-circle",
-				},
-			],
-		},
-		3: {
-			id: 3,
-			position: "Strategic Partnerships Manager",
-			company: "CompanyXYZ",
-			jobId: 1003,
-			status: "Shortlisted",
-			appliedDate: "2023-09-01",
-			timeline: [
-				{
-					id: 1,
-					date: "2023-09-01",
-					type: "Application Submitted",
-					status: "Completed",
-					description: "Your application was successfully submitted.",
-					icon: "fa-paper-plane",
-				},
-				{
-					id: 2,
-					date: "2023-09-05",
-					type: "Application Reviewed",
-					status: "Completed",
-					description:
-						"Your application was reviewed by our hiring team.",
-					icon: "fa-check-circle",
-				},
-				{
-					id: 3,
-					date: "2023-09-15",
-					type: "HR Round",
-					status: "Scheduled",
-					description: "Initial discussion with the HR team.",
-					icon: "fa-comments",
-					interviewDetails: {
-						id: 103,
-						date: "2023-09-15",
-						time: "3:00 PM",
-						duration: "30 minutes",
-						type: "HR",
-						interviewers: ["Jessica Kim (HR Manager)"],
-						location: "Platform Chat",
-						meetingLink: "/interview/103",
-						agenda: [
-							"Overview of your background and experience",
-							"Discussion about your interest in the company",
-							"Explanation of the hiring process",
-							"Questions about salary expectations and availability",
-						],
-						preparation: [
-							"Research about company history and values",
-							"Prepare a brief summary of your relevant experience",
-							"Have questions ready about the team and work environment",
-						],
-					},
-				},
-				{
-					id: 4,
-					date: "2023-09-20",
-					type: "Partnership Strategy Round",
-					status: "Scheduled",
-					description:
-						"Interview focused on partnership strategy skills.",
-					icon: "fa-handshake-o",
-					interviewDetails: {
-						id: 104,
-						date: "2023-09-20",
-						time: "11:00 AM",
-						duration: "1 hour",
-						type: "Business Strategy",
-						interviewers: ["David Wilson (Partnerships Lead)"],
-						location: "Remote (Platform Chat)",
-						meetingLink: "/interview/104",
-						agenda: [
-							"Questions about partnership strategies, contract negotiation, and revenue models",
-							"Discussion about your previous partnership projects",
-							"Problem-solving scenarios for partnership challenges",
-							"Partner acquisition strategy discussion",
-						],
-						preparation: [
-							"Review partnership fundamentals and business development strategies",
-							"Be prepared to explain partnership lifecycle management",
-							"Practice explaining how you structure partnership agreements",
-						],
-					},
-				},
-			],
-		},
-	};
 
 	// Update current time every minute to ensure time window logic works correctly
 	useEffect(() => {
@@ -290,25 +20,89 @@ const ApplicationView = () => {
 	}, []);
 
 	useEffect(() => {
-		// Check authentication
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
-		if (!isLoggedIn) {
-			navigate("/login");
-			return;
-		}
-
-		// Simulate API call to fetch application data
-		setIsLoading(true);
-		setTimeout(() => {
-			const app = sampleApplications[applicationId];
-			if (app) {
-				setApplication(app);
-			} else {
-				// If application not found, redirect to profile
-				navigate("/profile");
+			// Check authentication
+			const token = localStorage.getItem("companyxyz-token");
+			if (!token) {
+				navigate("/login");
+				return;
 			}
-			setIsLoading(false);
-		}, 800);
+
+			const fetchApplication = async () => {
+				try {
+					setIsLoading(true);
+					const res = await fetch(
+						`http://localhost:5000/api/applications/${applicationId}`,
+						{
+							headers: {
+								Authorization: `Bearer ${token}`,
+							},
+						}
+					);
+
+					if (!res.ok) {
+						// Unauthorized or not found -> back to profile
+						navigate("/profile");
+						return;
+					}
+
+					const app = await res.json();
+
+					// Build a minimal timeline from real fields
+					const appliedDateISO = app.applied_at || new Date().toISOString();
+					const updatedDateISO = app.updated_at || appliedDateISO;
+
+					const timeline = [
+						{
+							id: 1,
+							date: appliedDateISO,
+							type: "Application Submitted",
+							status: "Completed",
+							description: "Your application was successfully submitted.",
+							icon: "fa-paper-plane",
+						},
+					];
+
+					const status = String(app.status || "pending").toLowerCase();
+					const pushEvent = (id, type, desc, icon, done = true) =>
+						timeline.push({
+							id,
+							date: updatedDateISO,
+							type,
+							status: done ? "Completed" : "Pending",
+							description: desc,
+							icon,
+						});
+
+					if (["reviewed", "shortlisted", "interviewed", "selected", "rejected"].includes(status)) {
+						if (status === "reviewed")
+							pushEvent(2, "Application Reviewed", "Your application was reviewed by our hiring team.", "fa-check-circle");
+						if (status === "shortlisted")
+							pushEvent(3, "Shortlisted", "You've been shortlisted for the next round.", "fa-star");
+						if (status === "interviewed")
+							pushEvent(4, "Interview Completed", "Your interview has been completed.", "fa-video-camera");
+						if (status === "selected")
+							pushEvent(5, "Offer", "Congratulations! You've been selected.", "fa-trophy");
+						if (status === "rejected")
+							pushEvent(6, "Rejection", "We proceeded with other candidates.", "fa-times-circle");
+					}
+
+					setApplication({
+						id: app._id,
+						position: app.job_details?.title || app.job_title || "Applied Position",
+						company: app.job_details?.company || "TechCorp Solutions",
+						jobId: app.job_id,
+						status: status.charAt(0).toUpperCase() + status.slice(1),
+						appliedDate: appliedDateISO,
+						timeline,
+					});
+				} catch (e) {
+					navigate("/profile");
+				} finally {
+					setIsLoading(false);
+				}
+			};
+
+			fetchApplication();
 	}, [applicationId, navigate]);
 
 	// Format date for display
@@ -414,6 +208,20 @@ const ApplicationView = () => {
 			<div className={styles.loadingContainer}>
 				<div className={styles.loader}></div>
 				<p>Loading application details...</p>
+			</div>
+		);
+	}
+
+	if (!application) {
+		return (
+			<div className={styles.loadingContainer}>
+				<p>Application not found.</p>
+				<button
+					className={styles.backButton}
+					onClick={() => navigate("/profile#applications")}
+				>
+					<i className="fa fa-arrow-left"></i> Back to Applications
+				</button>
 			</div>
 		);
 	}

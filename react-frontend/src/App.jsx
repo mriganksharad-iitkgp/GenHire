@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Interview from "./pages/Interview";
 import JobDetails from "./pages/JobDetails";
 import Register from "./pages/Register";
+import RecruiterDashboard from "./pages/RecruiterDashboard";
 import NotFound from "./pages/NotFound";
 import ApplicationView from "./pages/ApplicationView";
 import Layout from "./components/Layout";
@@ -22,6 +23,7 @@ function App() {
 			<Routes>
 				<Route path="/login" element={<Login />} />
 				<Route path="/register" element={<Register />} />
+				<Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
 				<Route
 					path="/"
 					element={

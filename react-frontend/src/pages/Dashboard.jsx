@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Toast from "../components/Toast";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -8,133 +9,242 @@ const Dashboard = () => {
 	const [typeFilter, setTypeFilter] = useState("");
 	const [locationFilter, setLocationFilter] = useState("");
 	const [experienceFilter, setExperienceFilter] = useState("");
+	const [jobOpenings, setJobOpenings] = useState([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+	const [applications, setApplications] = useState([]);
+	
+	// Toast state
+	const [toast, setToast] = useState(null);
 
-	// CompanyXYZ job openings data
-	const [jobOpenings, setJobOpenings] = useState([
-		{
-			id: 1001,
-			title: "Senior Business Development Manager",
-			company: "CompanyXYZ",
-			location: "San Francisco, CA (Remote)",
-			type: "Full-time",
-			experience: "5+ years",
-			postedDate: "2023-09-01",
-			skills: [
-				"Sales Strategy",
-				"Client Acquisition",
-				"Market Research",
-				"Negotiation",
-			],
-			salary: "$120,000 - $150,000",
-			description:
-				"We are looking for an experienced Business Development Manager with expertise in client acquisition to join our growing team at CompanyXYZ...",
-		},
-		{
-			id: 1002,
-			title: "Strategic Partnerships Manager",
-			company: "CompanyXYZ",
-			location: "New York, NY",
-			type: "Full-time",
-			experience: "3+ years",
-			postedDate: "2023-09-05",
-			skills: [
-				"Partnership Development",
-				"Contract Negotiation",
-				"Relationship Management",
-				"Business Strategy",
-			],
-			salary: "$130,000 - $160,000",
-			description:
-				"Join our business team at CompanyXYZ to develop strategic partnerships and drive mutual growth with key stakeholders...",
-		},
-		{
-			id: 1003,
-			title: "Market Research Analyst",
-			company: "CompanyXYZ",
-			location: "Boston, MA (Hybrid)",
-			type: "Full-time",
-			experience: "2+ years",
-			postedDate: "2023-09-10",
-			skills: [
-				"Market Analysis",
-				"Competitive Research",
-				"Data Visualization",
-				"Industry Trends",
-			],
-			salary: "$90,000 - $120,000",
-			description:
-				"Conduct comprehensive market research to identify opportunities and provide strategic insights for our business development team at CompanyXYZ...",
-		},
-		{
-			id: 1004,
-			title: "Business Development Representative Intern",
-			company: "CompanyXYZ",
-			location: "Remote",
-			type: "Internship",
-			experience: "0-1 year",
-			postedDate: "2023-09-12",
-			skills: [
-				"Lead Generation",
-				"CRM Systems",
-				"Sales Prospecting",
-				"Communication",
-			],
-			salary: "$30/hour",
-			description:
-				"Exciting internship opportunity to work with our business development team on client acquisition and relationship building at CompanyXYZ...",
-		},
-		{
-			id: 1005,
-			title: "Account Manager",
-			company: "CompanyXYZ",
-			location: "Seattle, WA",
-			type: "Contract",
-			experience: "3+ years",
-			postedDate: "2023-09-08",
-			skills: [
-				"Account Management",
-				"Client Retention",
-				"Upselling",
-				"Relationship Building",
-			],
-			salary: "$110,000 - $140,000",
-			description:
-				"Help us maintain and grow relationships with existing clients while identifying upselling opportunities at CompanyXYZ...",
-		},
-	]);
+	// Show toast function
+	const showToast = (message, type = 'info') => {
+		setToast({ message, type });
+	};
+
+	// Load jobs from backend
+	useEffect(() => {
+		loadJobs();
+		loadApplications();
+	}, []);
+
+	const loadJobs = async () => {
+		try {
+			const token = localStorage.getItem('companyxyz-token');
+			if (!token) {
+				navigate('/login');
+				return;
+			}
+
+			const response = await fetch('http://localhost:5000/api/jobs', {
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (response.ok) {
+				const jobs = await response.json();
+				setJobOpenings(jobs);
+			} else {
+				setError('Failed to load jobs');
+			}
+		} catch (error) {
+			console.error('Error loading jobs:', error);
+			setError('Failed to load jobs');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
+		if (!isLoggedIn) {
+			navigate("/login");
+			return;
+		}
+		loadJobs();
+		loadApplications();
+	}, [navigate]);
+
+	const loadApplications = async () => {
+		try {
+			const token = localStorage.getItem('companyxyz-token');
+			if (!token) return;
+
+			const response = await fetch('http://localhost:5000/api/applications', {
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (response.ok) {
+				const apps = await response.json();
+				setApplications(apps);
+			}
+		} catch (error) {
+			console.error('Error loading applications:', error);
+		}
+	};
+
+	const applyForJob = async (jobId) => {
+		try {
+			const token = localStorage.getItem('companyxyz-token');
+			const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
+			if (!token) {
+				navigate('/login');
+				return;
+			}
+
+			// Prevent recruiters from applying
+			const role = (user?.user_type || user?.userType || 'candidate').toLowerCase();
+			if (role === 'recruiter') {
+				showToast('Recruiters cannot apply to jobs.', 'error');
+				return;
+			}
+
+			const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					cover_letter: `I am interested in applying for this position and believe my skills align well with the requirements.`
+				})
+			});
+
+			if (response.ok) {
+				showToast('Application submitted successfully!', 'success');
+				loadApplications(); // Reload applications
+			} else {
+				const errorData = await response.json();
+				showToast(errorData.error || 'Failed to submit application', 'error');
+			}
+		} catch (error) {
+			console.error('Error applying for job:', error);
+			showToast('Failed to submit application', 'error');
+		}
+	};
+
+	const hasApplied = (jobId) => {
+		return applications.some(app => app.job_id === jobId.toString());
+	};
+
+	const getApplicationStatus = (jobId) => {
+		const application = applications.find(app => app.job_id === jobId.toString());
+		return application ? application.status : null;
+	};
+
+	const canWithdrawApplication = (jobId) => {
+		const status = getApplicationStatus(jobId);
+		// Allow withdrawal only if status is pending or applied
+		return status && ['pending', 'applied'].includes(status.toLowerCase());
+	};
+
+	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
+
+	const withdrawApplication = async (jobId) => {
+		try {
+			const token = localStorage.getItem('companyxyz-token');
+			if (!token) {
+				navigate('/login');
+				return;
+			}
+
+			// If this is the confirmation step
+			if (pendingWithdrawal === jobId) {
+				const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/withdraw`, {
+					method: 'DELETE',
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.ok) {
+					showToast('Application withdrawn successfully!', 'success');
+					loadApplications(); // Reload applications
+				} else {
+					const errorData = await response.json();
+					showToast(errorData.error || 'Failed to withdraw application', 'error');
+				}
+				setPendingWithdrawal(null);
+			} else {
+				// First click - show warning and set pending
+				setPendingWithdrawal(jobId);
+				showToast('Click "Withdraw Application" again to confirm. This action cannot be undone.', 'warning');
+			}
+		} catch (error) {
+			console.error('Error withdrawing application:', error);
+			showToast('Failed to withdraw application', 'error');
+			setPendingWithdrawal(null);
+		}
+	};
 
 	// Check authentication when component mounts
 
-	// Filter jobs based on search and filters
+	// Helpers for robust filtering
+	const parseMinYears = (expStr) => {
+		if (!expStr) return null;
+		const s = String(expStr).toLowerCase();
+		// Match formats like '5+ years', '3 years', '0-1', '1-2 years'
+		const range = s.match(/(\d+)\s*-\s*(\d+)/);
+		if (range) {
+			return parseInt(range[1], 10);
+		}
+		const single = s.match(/(\d+)\s*\+?/);
+		if (single) {
+			return parseInt(single[1], 10);
+		}
+		return null;
+	};
+
 	const filteredJobs = jobOpenings.filter((job) => {
+		const q = searchQuery.trim().toLowerCase();
+		const title = String(job.title || '').toLowerCase();
+		const desc = String(job.description || '').toLowerCase();
+		const dept = String(job.department || '').toLowerCase();
+		const skills = Array.isArray(job.skills) ? job.skills : [];
+
 		const matchesSearch =
-			searchQuery === "" ||
-			job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			job.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			job.skills.some((skill) =>
-				skill.toLowerCase().includes(searchQuery.toLowerCase())
-			);
+			q === '' ||
+			title.includes(q) ||
+			desc.includes(q) ||
+			dept.includes(q) ||
+			skills.some((skill) => String(skill).toLowerCase().includes(q));
 
-		const matchesType = typeFilter === "" || job.type === typeFilter;
+		const typeSel = typeFilter.trim().toLowerCase();
+		const matchesType =
+			typeSel === '' || String(job.type || '').toLowerCase() === typeSel;
+
+		const locSel = locationFilter.trim().toLowerCase();
 		const matchesLocation =
-			locationFilter === "" || job.location.includes(locationFilter);
-		const matchesExperience =
-			experienceFilter === "" ||
-			job.experience.includes(experienceFilter);
+			locSel === '' || String(job.location || '').toLowerCase().includes(locSel);
 
-		return (
-			matchesSearch && matchesType && matchesLocation && matchesExperience
-		);
+		const expSel = experienceFilter.trim();
+		const minYears = parseMinYears(job.experience);
+		let matchesExperience = true;
+		if (expSel === '0-1') {
+			matchesExperience = minYears === null || minYears <= 1;
+		} else if (expSel === '2+') {
+			matchesExperience = minYears !== null ? minYears >= 2 : true;
+		} else if (expSel === '5+') {
+			matchesExperience = minYears !== null ? minYears >= 5 : true;
+		}
+
+		return matchesSearch && matchesType && matchesLocation && matchesExperience;
 	});
 
 	return (
 		<div className={styles.dashboardContainer}>
 			<div className={styles.content}>
 				<div className={styles.welcomeSection}>
-					<h2>Join Our Team at CompanyXYZ</h2>
+					<h2>Find Your Dream Job at Top Companies</h2>
 					<p>
 						Discover exciting career opportunities and be part of
-						our mission to innovate and transform the industry.
+						innovative teams transforming the industry.
 					</p>
 				</div>
 
@@ -196,7 +306,15 @@ const Dashboard = () => {
 				<div className={styles.jobListings}>
 					<h3>Current Openings ({filteredJobs.length})</h3>
 
-					{filteredJobs.length === 0 ? (
+					{loading ? (
+						<div className={styles.loading}>
+							<p>Loading jobs...</p>
+						</div>
+					) : error ? (
+						<div className={styles.error}>
+							<p>{error}</p>
+						</div>
+					) : filteredJobs.length === 0 ? (
 						<div className={styles.noJobsFound}>
 							<p>
 								No positions match your current filters. Try
@@ -205,13 +323,17 @@ const Dashboard = () => {
 						</div>
 					) : (
 						filteredJobs.map((job) => (
-							<div key={job.id} className={styles.jobCard}>
+							<div key={job._id} className={styles.jobCard}>
 								<div className={styles.jobMain}>
 									<div className={styles.jobTitleSection}>
 										<h4 className={styles.jobTitle}>
 											{job.title}
 										</h4>
 										<div className={styles.companyInfo}>
+											<span className={styles.companyName}>
+												<i className="fa fa-building"></i>{" "}
+												{job.company || 'TechCorp Solutions'}
+											</span>
 											<span
 												className={styles.jobLocation}
 											>
@@ -236,9 +358,7 @@ const Dashboard = () => {
 										<span className={styles.jobDate}>
 											<i className="fa fa-calendar"></i>{" "}
 											Posted:{" "}
-											{new Date(
-												job.postedDate
-											).toLocaleDateString()}
+											{job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
 										</span>
 									</div>
 
@@ -247,7 +367,7 @@ const Dashboard = () => {
 									</div>
 
 									<div className={styles.jobSkills}>
-										{job.skills.map((skill, index) => (
+										{job.skills && job.skills.map((skill, index) => (
 											<span
 												key={index}
 												className={styles.skillTag}
@@ -260,23 +380,48 @@ const Dashboard = () => {
 
 								<div className={styles.jobActions}>
 									<Link
-										to={`/job/${job.id}`}
+										to={`/job/${job._id}`}
 										className={styles.viewButton}
 									>
 										View Details
 									</Link>
-									<Link
-										to={`/job/${job.id}?apply=true`}
-										className={styles.applyButton}
-									>
-										Apply Now
-									</Link>
+									{hasApplied(job._id) ? (
+										canWithdrawApplication(job._id) ? (
+											<button
+												onClick={() => withdrawApplication(job._id)}
+												className={`${styles.applyButton} ${styles.withdrawButton} ${pendingWithdrawal === job._id ? styles.confirmWithdraw : ''}`}
+											>
+												{pendingWithdrawal === job._id ? 'Confirm Withdrawal' : 'Withdraw Application'}
+											</button>
+										) : (
+											<button
+												className={`${styles.applyButton} ${styles.appliedButton}`}
+												disabled
+											>
+												Application Submitted
+											</button>
+										)
+									) : (
+										<button
+											onClick={() => applyForJob(job._id)}
+											className={styles.applyButton}
+										>
+											Apply Now
+										</button>
+									)}
 								</div>
 							</div>
 						))
 					)}
 				</div>
 			</div>
+			{toast && (
+				<Toast
+					message={toast.message}
+					type={toast.type}
+					onClose={() => setToast(null)}
+				/>
+			)}
 		</div>
 	);
 };

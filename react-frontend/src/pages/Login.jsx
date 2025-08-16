@@ -7,6 +7,7 @@ const Login = () => {
 	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState("");
+	const [userType, setUserType] = useState("candidate"); // 'candidate' or 'recruiter'
 	const navigate = useNavigate();
 
 	const handleSubmit = async (e) => {
@@ -20,7 +21,11 @@ const Login = () => {
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ email, password }),
+				body: JSON.stringify({ 
+					email, 
+					password, 
+					userType 
+				}),
 			});
 
 			const data = await response.json();
@@ -29,11 +34,19 @@ const Login = () => {
 				throw new Error(data.error || "Login failed");
 			}
 
-			// Store token and user data
+			// Store token and user data with user type
 			localStorage.setItem("companyxyz-token", data.token);
-			localStorage.setItem("companyxyz-user", JSON.stringify(data.user));
+			localStorage.setItem("companyxyz-user", JSON.stringify({
+				...data.user,
+				userType: userType
+			}));
 
-			navigate("/");
+			// Navigate based on user type
+			if (userType === "recruiter") {
+				navigate("/recruiter-dashboard");
+			} else {
+				navigate("/");
+			}
 		} catch (error) {
 			setError(error.message);
 		} finally {
@@ -45,11 +58,30 @@ const Login = () => {
 		<div className={styles.loginContainer}>
 			<div className={styles.loginCard}>
 				<div className={styles.logoSection}>
-					<h1>CompanyXYZ Careers</h1>
+					<h1>CompanyXYZ Portal</h1>
 					<p>
-						Welcome to our talent portal. Please log in to access
-						your application dashboard.
+						Welcome! Please select your role and log in to access your dashboard.
 					</p>
+				</div>
+
+				{/* User Type Selection Tabs */}
+				<div className={styles.userTypeTabs}>
+					<button
+						type="button"
+						className={`${styles.tabButton} ${userType === "candidate" ? styles.activeTab : ""}`}
+						onClick={() => setUserType("candidate")}
+					>
+						<i className="fa fa-user"></i>
+						Candidate
+					</button>
+					<button
+						type="button"
+						className={`${styles.tabButton} ${userType === "recruiter" ? styles.activeTab : ""}`}
+						onClick={() => setUserType("recruiter")}
+					>
+						<i className="fa fa-briefcase"></i>
+						Recruiter
+					</button>
 				</div>
 
 				<form className={styles.loginForm} onSubmit={handleSubmit}>
@@ -64,7 +96,7 @@ const Login = () => {
 							id="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder="Enter your email"
+							placeholder={`Enter your ${userType} email`}
 							required
 						/>
 					</div>
@@ -90,7 +122,7 @@ const Login = () => {
 						className={styles.loginButton}
 						disabled={isLoading}
 					>
-						{isLoading ? "Logging in..." : "Log In"}
+						{isLoading ? "Logging in..." : `Log In as ${userType === "candidate" ? "Candidate" : "Recruiter"}`}
 					</button>
 				</form>
 

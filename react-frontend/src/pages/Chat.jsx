@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Styles from "./Chat.module.css";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
@@ -38,6 +38,7 @@ export default function Chat({ interviewId }) {
 
     // --- HOOKS ---
     const navigate = useNavigate();
+    const location = useLocation();
 
     // --- LIVE PROCTORING & WEBSOCKETS ---
     const startLiveProctoring = useCallback(() => {
@@ -215,6 +216,7 @@ export default function Chat({ interviewId }) {
                      cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
                      jd_path: "uploads/jd/JD1.pdf",
                      reference_path: "Eric Ries - The Lean Startup.pdf",
+                     application_id: location?.state?.applicationId || null,
                 }),
             })
             .then(res => res.ok ? res.json() : Promise.reject(res.json()))
@@ -225,7 +227,8 @@ export default function Chat({ interviewId }) {
                 setSimilarityScore(data.similarity_score);
                 setCurrentQuestion(data.initial_questions[0]);
                 setInterviewStatus("registering");
-                setChatContent({ 0: { response: "Welcome! To begin, please position your face in the camera frame and click 'Register Face'." } });
+                const prefix = (typeof data.similarity_score === 'number') ? `Your CV matches this role ~${Math.round(data.similarity_score * 100)}%. ` : '';
+                setChatContent({ 0: { response: `${prefix}Welcome! To begin, please position your face in the camera frame and click 'Register Face'.` } });
             })
             .catch(err => {
                 console.error("Error starting interview:", err);
@@ -298,9 +301,13 @@ export default function Chat({ interviewId }) {
         setInput("");
 
         try {
+            const token = localStorage.getItem("companyxyz-token");
             const response = await fetch(`http://localhost:5000/api/interviews/${currentSessionId}/answer`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
                 body: JSON.stringify({ question: currentQuestion, answer: answer }),
             });
             const data = await response.json();
