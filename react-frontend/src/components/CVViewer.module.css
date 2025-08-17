@@ -8,7 +8,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1050;
+  z-index: 10040;
   padding: 20px;
 }
 
@@ -23,6 +23,54 @@
   display: flex;
   flex-direction: column;
 }
+
+/* Dark mode */
+body.dark .modalContent,
+:global(.dark) .modalContent { background-color: var(--dark-surface); color: var(--dark-text); box-shadow: var(--dark-shadow); }
+body.dark .modalHeader,
+:global(.dark) .modalHeader { background-color: var(--dark-surface-2); border-bottom-color: var(--dark-border); }
+body.dark .modalHeader h2,
+:global(.dark) .modalHeader h2 { color: var(--dark-text); }
+body.dark .closeButton:hover,
+:global(.dark) .closeButton:hover { background-color: var(--dark-surface-2); color: var(--dark-text); }
+body.dark .cvContent,
+:global(.dark) .cvContent { color: var(--dark-text); }
+body.dark .section h3,
+:global(.dark) .section h3 { color: var(--dark-text); border-bottom-color: var(--dark-accent-end); }
+body.dark .infoItem,
+:global(.dark) .infoItem { color: var(--dark-muted); }
+body.dark .infoItem strong,
+:global(.dark) .infoItem strong { color: var(--dark-text); }
+body.dark .summary,
+:global(.dark) .summary { color: var(--dark-muted); }
+body.dark .experienceItem,
+:global(.dark) .experienceItem { background-color: var(--dark-surface-2); border-left-color: var(--dark-accent-end); }
+body.dark .experienceHeader h4,
+:global(.dark) .experienceHeader h4 { color: var(--dark-text); }
+body.dark .duration,
+:global(.dark) .duration { color: var(--dark-muted); }
+body.dark .company,
+:global(.dark) .company { color: var(--dark-accent-end); }
+body.dark .responsibilities,
+:global(.dark) .responsibilities { color: var(--dark-muted); }
+body.dark .educationItem,
+:global(.dark) .educationItem { background-color: var(--dark-surface-2); }
+body.dark .educationItem h4,
+:global(.dark) .educationItem h4 { color: var(--dark-text); }
+body.dark .educationItem p,
+:global(.dark) .educationItem p { color: var(--dark-muted); }
+body.dark .skillsContainer .skillTag,
+:global(.dark) .skillsContainer .skillTag { background-color: var(--dark-accent-end); color: white; }
+body.dark .matchScore,
+:global(.dark) .matchScore { background-color: var(--dark-surface-2); }
+body.dark .scoreLabel,
+:global(.dark) .scoreLabel { color: var(--dark-text); }
+body.dark .scoreBar,
+:global(.dark) .scoreBar { background-color: var(--dark-surface-3); }
+body.dark .scoreFill,
+:global(.dark) .scoreFill { background-color: var(--dark-accent-end); }
+body.dark .scoreText,
+:global(.dark) .scoreText { color: white; }
 
 .modalHeader {
   display: flex;

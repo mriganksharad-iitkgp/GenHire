@@ -24,13 +24,157 @@ body {
 }
 
 /* Enhanced Dark mode */
+/* Centralized dark theme tokens + base colors */
+body.dark,
+.dark {
+	/* Bluish slate palette to keep dark mode consistent */
+	--dark-bg: #0b1220;             /* page background */
+	--dark-surface: #0f172a;        /* base surface */
+	--dark-surface-2: #1f2937;      /* elevated surface */
+	--dark-surface-3: #111827;      /* deep surface */
+	--dark-border: #334155;         /* slate border */
+	--dark-text: #e2e8f0;           /* primary text */
+	--dark-muted: #94a3b8;          /* secondary text */
+	--dark-accent-start: #60a5fa;   /* blue accent */
+	--dark-accent-end: #3b82f6;     /* blue accent end */
+	--dark-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+
+/* Set the background specifically on body.dark for maximum specificity */
 body.dark {
-	background-color: #1a1a1a;
-	color: #e0e0e0;
+	/* Enhanced bluish-blackish gradient background for main page only */
+	background: linear-gradient(135deg, #0a0f1c 0%, #0f1729 25%, #1e293b 75%, #334155 100%) !important;
+	color: var(--dark-text);
+}
+
+/* Ensure section headers and dividers have visible borders in dark mode */
+body.dark section,
+.dark section {
+	border-color: var(--dark-border) !important;
+}
+
+body.dark h1,
+body.dark h2,
+body.dark h3,
+.dark h1,
+.dark h2,
+.dark h3 {
+	color: var(--dark-text) !important;
+}
+
+body.dark [class*="section"],
+.dark [class*="section"] {
+	border-bottom: 1px solid var(--dark-border) !important;
+}
+
+/* Add visible borders to timeline elements but hide vertical lines */
+body.dark [class*="timeline"],
+.dark [class*="timeline"] {
+	border-left: none !important;
+}
+
+body.dark [class*="timelineItem"],
+.dark [class*="timelineItem"] {
+	border: 1px solid var(--dark-border) !important;
+	background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* Style timeline connectors in dark mode with a single line */
+body.dark [class*="timelineConnector"],
+body.dark [class*="connector"],
+.dark [class*="timelineConnector"],
+.dark [class*="connector"] {
+    width: 2px !important;
+    background-color: var(--dark-border) !important;
+}
+
+/* Application view specific fixes */
+body.dark .applicationViewContainer .content,
+.dark .applicationViewContainer .content {
+	background: transparent !important;
+	background-color: transparent !important;
+	border: 1px solid var(--dark-border) !important;
+}
+
+body.dark .applicationViewContainer .applicationBody,
+.dark .applicationViewContainer .applicationBody {
+	background: transparent !important;
+	background-color: transparent !important;
+	color: var(--dark-text) !important;
+}
+
+/* Ensure #root also gets the consistent background */
+body.dark #root,
+.dark #root {
+	background: linear-gradient(135deg, #0a0f1c 0%, #0f1729 25%, #1e293b 75%, #334155 100%) !important;
+	min-height: 100vh;
+}
+
+/* Only target main page containers, not all elements */
+body.dark .profileContainer,
+body.dark .dashboardContainer,
+body.dark .applicationViewContainer,
+body.dark .jobDetailsContainer,
+body.dark .registerContainer,
+body.dark .notFoundContainer,
+body.dark .page-container,
+body.dark .layoutContainer,
+body.dark .mainContent,
+body.dark .applicationViewContainer .content,
+body.dark .applicationBody,
+body.dark .timelineSection,
+.dark .profileContainer,
+.dark .dashboardContainer,
+.dark .applicationViewContainer,
+.dark .jobDetailsContainer,
+.dark .registerContainer,
+.dark .notFoundContainer,
+.dark .page-container,
+.dark .layoutContainer,
+.dark .mainContent,
+.dark .applicationViewContainer .content,
+.dark .applicationBody,
+.dark .timelineSection {
+	background: transparent !important;
+	background-image: none !important;
+	background-color: transparent !important;
+}
+
+/* Final override to ensure content areas are transparent but with visible borders */
+body.dark .content,
+.dark .content,
+body.dark .modal,
+.dark .modal,
+body.dark .modalContent,
+.dark .modalContent {
+	background: transparent !important;
+	background-color: transparent !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important; /* Restore subtle shadow */
+	border: 1px solid var(--dark-border) !important; /* Restore border using dark mode variable */
 }
 
 #root {
 	min-height: 100vh;
 	width: 100%;
 	overflow-x: hidden;
+}
+
+/* Ensure all card components have borders and translucent backgrounds in dark mode */
+body.dark .card,
+body.dark .infoCard,
+body.dark .applyCard,
+body.dark .jobCard,
+body.dark .applicationCard,
+body.dark .timelineItem,
+body.dark [class*="Card"],
+.dark .card,
+.dark .infoCard,
+.dark .applyCard,
+.dark .jobCard,
+.dark .applicationCard,
+.dark .timelineItem,
+.dark [class*="Card"] {
+	background-color: rgba(15, 23, 42, 0.6) !important;
+	border: 1px solid var(--dark-border) !important;
+	box-shadow: var(--dark-shadow) !important;
 }

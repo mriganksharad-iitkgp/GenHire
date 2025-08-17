@@ -10,7 +10,17 @@ const RecentActivity = ({ applications }) => (
       </h3>
     </div>
     <ul className={styles.activityList}>
-      {applications.slice(0, 5).map((app) => {
+      {[...applications]
+        .sort((a, b) => {
+          const getTs = (x) => {
+            const t = x?.applied_at || x?.updated_at || x?.created_at || x?.appliedDate || x?.updatedAt || x?.createdAt;
+            const ts = t ? Date.parse(t) : NaN;
+            return Number.isNaN(ts) ? 0 : ts;
+          };
+          return getTs(b) - getTs(a);
+        })
+        .slice(0, 5)
+        .map((app) => {
         const timePart = app.applied_at || app.created_at || app.updated_at || 'ts';
         const userPart = app.student_id || app.email || app.student_name || 'user';
         const key = app._id || `${app.job_id || 'job'}-${userPart}-${timePart}`;

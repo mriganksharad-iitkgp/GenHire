@@ -70,3 +70,21 @@
 .closeButton:hover {
   color: #666;
 }
+
+/* Dark mode */
+body.dark .toast,
+:global(.dark) .toast {
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+  box-shadow: var(--dark-shadow);
+  border-left-color: var(--dark-accent-end);
+}
+
+body.dark .toast span,
+:global(.dark) .toast span { color: var(--dark-text); }
+
+body.dark .closeButton,
+:global(.dark) .closeButton { color: var(--dark-muted); }
+
+body.dark .closeButton:hover,
+:global(.dark) .closeButton:hover { color: var(--dark-text); }

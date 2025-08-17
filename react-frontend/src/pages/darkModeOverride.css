@@ -1,0 +1,78 @@
+/* Critical Dark Mode Overrides */
+
+/* Force application view dark mode */
+body.dark .applicationViewContainer,
+body.dark .applicationViewContainer > *,
+body.dark .content,
+body.dark .applicationBody,
+body.dark .timelineSection,
+body.dark .timelineEvent,
+body.dark .timelineContent,
+body.dark .timeline {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* Hide the vertical timeline line */
+body.dark .timeline,
+.dark .timeline {
+    border-left: none !important;
+}
+
+/* Aggressively hide all timeline connectors and lines */
+body.dark .timelineConnector,
+.dark .timelineConnector,
+body.dark .connector,
+.dark .connector,
+[class*="timelineConnector"],
+[class*="connector"] {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Card style elements need semi-transparent background */
+body.dark .content,
+body.dark .interviewDetails {
+    background-color: rgba(31, 41, 55, 0.7) !important;
+    border: 1px solid var(--dark-border) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Text color corrections */
+body.dark .applicationViewContainer {
+    color: var(--dark-text) !important;
+}
+
+body.dark .applicationViewContainer p,
+body.dark .applicationViewContainer li,
+body.dark .timelineDate,
+body.dark .appliedDate {
+    color: var(--dark-muted) !important;
+}
+
+body.dark .applicationViewContainer h1,
+body.dark .applicationViewContainer h2,
+body.dark .applicationViewContainer h3,
+body.dark .applicationViewContainer h4,
+body.dark .timelineHeader h3 {
+    color: var(--dark-text) !important;
+}
+
+/* Force semi-transparent backgrounds for sections */
+body.dark .applicationHeader {
+    background-color: rgba(31, 41, 55, 0.7) !important;
+    border-bottom: 1px solid var(--dark-border) !important;
+}
+
+/* Let the module CSS render the single ::before vertical line; avoid extra borders here */
+body.dark .timeline,
+.dark .timeline {
+    border-left: none !important;
+}
+
+/* Do not force-hide connectors here; module CSS handles visuals */

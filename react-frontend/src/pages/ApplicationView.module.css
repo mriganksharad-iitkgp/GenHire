@@ -6,6 +6,82 @@
 	min-height: 100vh;
 }
 
+/* Force transparent background in dark mode to show global gradient */
+body.dark .applicationViewContainer,
+:global(.dark) .applicationViewContainer,
+:global(body.dark) .applicationViewContainer {
+	background: transparent !important;
+	background-color: transparent !important;
+	background-image: none !important;
+}
+
+/* Dark mode */
+body.dark .content,
+:global(.dark) .content,
+body.dark .applicationViewContainer .content,
+:global(.dark) .applicationViewContainer .content { 
+	background: transparent !important;
+	background-color: transparent !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+	border: 1px solid var(--dark-border) !important;
+}
+
+body.dark .header,
+:global(.dark) .header { border-bottom-color: var(--dark-border); }
+
+body.dark .backButton,
+:global(.dark) .backButton { color: var(--dark-accent-end); }
+
+body.dark .applicationHeader,
+:global(.dark) .applicationHeader { 
+    background-color: rgba(31, 41, 55, 0.7) !important;
+    border-bottom: 1px solid var(--dark-border) !important;
+    border: 1px solid var(--dark-border) !important;
+}
+
+body.dark .applicationInfo h1,
+:global(.dark) .applicationInfo h1 { color: var(--dark-text); }
+
+body.dark .company,
+:global(.dark) .company { color: var(--dark-text); }
+
+body.dark .appliedDate,
+:global(.dark) .appliedDate { color: var(--dark-muted); }
+
+body.dark .inprogress,
+:global(.dark) .inprogress { background-color: rgba(59,130,246,0.15); color: var(--dark-accent-end); }
+body.dark .shortlisted,
+:global(.dark) .shortlisted { background-color: rgba(16,185,129,0.15); color: #34d399; }
+body.dark .rejected,
+:global(.dark) .rejected { background-color: rgba(239,68,68,0.15); color: #f87171; }
+
+body.dark .viewJobButton,
+:global(.dark) .viewJobButton { background-color: rgba(59,130,246,0.12); color: var(--dark-accent-end); border-color: var(--dark-accent-end); }
+body.dark .viewJobButton:hover,
+:global(.dark) .viewJobButton:hover { background-color: rgba(59,130,246,0.2); }
+
+body.dark .timelineSection,
+:global(.dark) .timelineSection { 
+	background: transparent !important;
+}
+
+body.dark .timelineSection h2,
+:global(.dark) .timelineSection h2 { 
+	color: var(--dark-text); 
+	border-bottom-color: var(--dark-border); 
+}
+
+body.dark .timelineIcon,
+:global(.dark) .timelineIcon { background-color: var(--dark-surface-2); color: var(--dark-muted); }
+body.dark .pending .timelineIcon,
+:global(.dark) .pending .timelineIcon { background-color: var(--dark-surface-2); color: var(--dark-muted); }
+
+body.dark .timelineHeader,
+:global(.dark) .timelineHeader { color: var(--dark-text); }
+
+body.dark .connector,
+:global(.dark) .connector { background-color: var(--dark-border); }
+
 .content {
 	background-color: white;
 	border-radius: 8px;
@@ -127,14 +203,69 @@
 }
 
 .timeline {
+	/* Variables to keep placement consistent */
+	--tl-pad: 20px;           /* existing left padding in container */
+	--tl-icon: 40px;          /* icon size (see .timelineIcon width/height) */
+	--tl-line-w: 3px;         /* line thickness */
+
 	position: relative;
-	padding-left: 10px;
+	padding-left: var(--tl-pad);
+}
+
+body.dark .timeline,
+:global(.dark) .timeline {
+	/* Use ::before for the vertical line; avoid native border to prevent duplicates */
+	border-left: none !important;
+	position: relative !important;
+	padding-left: 20px !important;
+	margin-left: 0 !important;
+}
+
+/* Style timeline connectors in dark mode */
+body.dark .timelineConnector,
+body.dark .connector,
+:global(.dark) .timelineConnector,
+:global(.dark) .connector {
+	background-color: var(--dark-border) !important;
+	width: 2px !important;
+}
+
+/* Single vertical connector using pseudo-element (light + dark) */
+.timeline::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	/* Center line under icons: padding (20px) + half icon (20px) = 40px */
+	left: calc(var(--tl-pad) + (var(--tl-icon) / 2));
+	width: var(--tl-line-w);
+	background: linear-gradient(180deg, rgba(107,114,128,0) 0%, rgba(209,213,219,0.9) 12%, rgba(209,213,219,0.9) 88%, rgba(107,114,128,0) 100%);
+	border-radius: 999px;
+}
+
+body.dark .timeline::before,
+:global(.dark) .timeline::before {
+	/* Bluish vertical beam with subtle glow */
+	background: linear-gradient(180deg,
+		rgba(59,130,246,0) 0%,
+		rgba(59,130,246,0.55) 12%,
+		rgba(59,130,246,0.85) 50%,
+		rgba(59,130,246,0.55) 88%,
+		rgba(59,130,246,0) 100%
+	);
+	box-shadow: 0 0 10px rgba(59,130,246,0.25);
 }
 
 .timelineEvent {
 	display: flex;
 	margin-bottom: 40px;
 	position: relative;
+}
+
+body.dark .timelineEvent,
+:global(.dark) .timelineEvent {
+	background: transparent !important;
+	border-color: var(--dark-border) !important;
 }
 
 .timelineIcon {
@@ -167,19 +298,10 @@
 	color: #777;
 }
 
-.timelineConnector {
-	position: absolute;
-	left: 20px;
-	top: 40px;
-	bottom: -40px;
-	width: 2px;
-	z-index: 1;
-}
-
+/* Hide legacy per-item connector pieces; ::before on .timeline draws a single line */
+.timelineConnector,
 .connector {
-	width: 100%;
-	height: 100%;
-	background-color: #e0e0e0;
+	display: none !important;
 }
 
 .completed .connector {
@@ -189,6 +311,11 @@
 .timelineContent {
 	flex: 1;
 	padding: 0 0 0 10px;
+}
+
+body.dark .timelineContent,
+:global(.dark) .timelineContent {
+	background: transparent !important;
 }
 
 .timelineHeader {
@@ -210,6 +337,11 @@
 	color: #777;
 }
 
+body.dark .timelineDate,
+:global(.dark) .timelineDate {
+	color: var(--dark-muted) !important;
+}
+
 .timelineContent p {
 	margin: 0 0 15px;
 	color: #555;
@@ -222,6 +354,27 @@
 	padding: 20px;
 	margin-top: 15px;
 	border: 1px solid #eaeaea;
+}
+
+body.dark .interviewDetails,
+:global(.dark) .interviewDetails {
+	background-color: rgba(31, 41, 55, 0.7) !important;
+	border: 1px solid var(--dark-border) !important;
+	color: var(--dark-text) !important;
+}
+
+body.dark .interviewDetails p,
+body.dark .interviewDetails li,
+:global(.dark) .interviewDetails p,
+:global(.dark) .interviewDetails li {
+	color: var(--dark-muted) !important;
+}
+
+body.dark .interviewDetails h3,
+body.dark .interviewDetails h4,
+:global(.dark) .interviewDetails h3,
+:global(.dark) .interviewDetails h4 {
+	color: var(--dark-text) !important;
 }
 
 .interviewHeader {
@@ -365,86 +518,34 @@
 	}
 }
 
-/* Dark mode support */
-:global(.dark) .applicationViewContainer {
-	background-color: #1a1a1a;
-}
+/* Dark mode support (tokenized + dual-scope) */
+body.dark .timelineHeader h3,
+:global(.dark) .timelineHeader h3 { color: var(--dark-text); }
 
-:global(.dark) .content {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
+body.dark .timelineDate,
+:global(.dark) .timelineDate { color: var(--dark-muted); }
 
-:global(.dark) .applicationHeader {
-	background-color: #333;
-	border-bottom: 1px solid #444;
-}
+body.dark .timelineContent p,
+:global(.dark) .timelineContent p { color: var(--dark-muted); }
 
-:global(.dark) .applicationInfo h1 {
-	color: #fff;
-}
+body.dark .interviewDetails,
+:global(.dark) .interviewDetails { background-color: var(--dark-surface); border: 1px solid var(--dark-border); }
 
-:global(.dark) .company {
-	color: #ddd;
-}
+body.dark .interviewHeader h4,
+:global(.dark) .interviewHeader h4 { color: var(--dark-text); }
 
-:global(.dark) .appliedDate {
-	color: #bbb;
-}
+body.dark .infoItem strong,
+:global(.dark) .infoItem strong { color: var(--dark-text); }
 
-:global(.dark) .inprogress {
-	background-color: rgba(74, 144, 226, 0.2);
-}
-
-:global(.dark) .shortlisted {
-	background-color: rgba(46, 204, 113, 0.2);
-}
-
-:global(.dark) .rejected {
-	background-color: rgba(231, 76, 60, 0.2);
-}
-
-:global(.dark) .timelineSection h2 {
-	color: #fff;
-	border-bottom: 1px solid #444;
-}
-
-:global(.dark) .timelineHeader h3 {
-	color: #fff;
-}
-
-:global(.dark) .timelineDate {
-	color: #bbb;
-}
-
-:global(.dark) .timelineContent p {
-	color: #bbb;
-}
-
-:global(.dark) .interviewDetails {
-	background-color: #333;
-	border: 1px solid #444;
-}
-
-:global(.dark) .interviewHeader h4 {
-	color: #fff;
-}
-
-:global(.dark) .infoItem strong {
-	color: #fff;
-}
-
+body.dark .interviewersList li,
+body.dark .agendaList li,
+body.dark .prepList li,
 :global(.dark) .interviewersList li,
 :global(.dark) .agendaList li,
-:global(.dark) .prepList li {
-	color: #bbb;
-}
+:global(.dark) .prepList li { color: var(--dark-muted); }
 
-:global(.dark) .joinButtonDisabled {
-	background-color: #333;
-	color: #bbb;
-	border-color: #444;
-}
+body.dark .joinButtonDisabled,
+:global(.dark) .joinButtonDisabled { background-color: var(--dark-surface-2); color: var(--dark-muted); border-color: var(--dark-border); }
 
 @media (max-width: 768px) {
 	.applicationHeader {

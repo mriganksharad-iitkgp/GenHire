@@ -325,98 +325,119 @@
   75% { transform: translateX(4px); }
 }
 
-/* Dark Mode Support */
-:global(.dark) .loginContainer {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+/* Dark Mode Support (tokens + dual scope) */
+:global(.dark) .loginContainer,
+:global(body.dark) .loginContainer {
+  background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 100%);
 }
 
-:global(.dark) .loginCard {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: rgba(148, 163, 184, 0.2);
+:global(.dark) .loginCard,
+:global(body.dark) .loginCard {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: var(--dark-shadow);
 }
 
-:global(.dark) .logoSection h1 {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+:global(.dark) .logoSection h1,
+:global(body.dark) .logoSection h1 {
+  background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-:global(.dark) .logoSection p {
-  color: #cbd5e1;
+:global(.dark) .logoSection p,
+:global(body.dark) .logoSection p {
+  color: var(--dark-muted);
 }
 
-:global(.dark) .userTypeTabs {
-  background: rgba(51, 65, 85, 0.6);
+:global(.dark) .userTypeTabs,
+:global(body.dark) .userTypeTabs {
+  background: var(--dark-surface-2);
 }
 
-:global(.dark) .tabButton {
-  color: #cbd5e1;
+:global(.dark) .tabButton,
+:global(body.dark) .tabButton {
+  color: var(--dark-muted);
 }
 
-:global(.dark) .tabButton:hover {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.1);
+:global(.dark) .tabButton:hover,
+:global(body.dark) .tabButton:hover {
+  color: var(--dark-accent-end);
+  background: var(--dark-surface-3);
 }
 
-:global(.dark) .tabButton.activeTab {
-  background: rgba(30, 41, 59, 0.8);
-  color: #60a5fa;
+:global(.dark) .tabButton.activeTab,
+:global(body.dark) .tabButton.activeTab {
+  background: var(--dark-surface);
+  color: var(--dark-accent-end);
 }
 
-:global(.dark) .inputGroup label {
-  color: #f1f5f9;
+:global(.dark) .inputGroup label,
+:global(body.dark) .inputGroup label {
+  color: var(--dark-text);
 }
 
-:global(.dark) .inputGroup input {
-  background: rgba(30, 41, 59, 0.6);
-  border-color: rgba(148, 163, 184, 0.3);
-  color: #f1f5f9;
+:global(.dark) .inputGroup input,
+:global(body.dark) .inputGroup input {
+  background: var(--dark-surface-2);
+  border-color: var(--dark-border);
+  color: var(--dark-text);
 }
 
-:global(.dark) .inputGroup input::placeholder {
-  color: #94a3b8;
+:global(.dark) .inputGroup input::placeholder,
+:global(body.dark) .inputGroup input::placeholder {
+  color: var(--dark-muted);
 }
 
-:global(.dark) .inputGroup input:focus {
-  border-color: #60a5fa;
-  background: rgba(30, 41, 59, 0.8);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+:global(.dark) .inputGroup input:focus,
+:global(body.dark) .inputGroup input:focus {
+  border-color: var(--dark-accent-end);
+  background: var(--dark-surface);
+  box-shadow: 0 0 0 3px rgba(115, 138, 237, 0.15);
 }
 
-:global(.dark) .inputGroup input:hover:not(:focus) {
-  border-color: #64748b;
+:global(.dark) .inputGroup input:hover:not(:focus),
+:global(body.dark) .inputGroup input:hover:not(:focus) {
+  border-color: var(--dark-border);
 }
 
-:global(.dark) .forgotPassword a {
-  color: #60a5fa;
+:global(.dark) .forgotPassword a,
+:global(body.dark) .forgotPassword a {
+  color: var(--dark-accent-end);
 }
 
-:global(.dark) .forgotPassword a:hover {
-  color: #93c5fd;
+:global(.dark) .forgotPassword a:hover,
+:global(body.dark) .forgotPassword a:hover {
+  color: var(--dark-accent-start);
 }
 
-:global(.dark) .loginButton {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+:global(.dark) .loginButton,
+:global(body.dark) .loginButton {
+  background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
 }
 
-:global(.dark) .registerSection {
-  color: #cbd5e1;
-  border-top-color: rgba(148, 163, 184, 0.2);
+:global(.dark) .registerSection,
+:global(body.dark) .registerSection {
+  color: var(--dark-muted);
+  border-top-color: var(--dark-border);
 }
 
-:global(.dark) .registerSection a {
-  color: #60a5fa;
+:global(.dark) .registerSection a,
+:global(body.dark) .registerSection a {
+  color: var(--dark-accent-end);
 }
 
-:global(.dark) .registerSection a:hover {
-  color: #93c5fd;
+:global(.dark) .registerSection a:hover,
+:global(body.dark) .registerSection a:hover {
+  color: var(--dark-accent-start);
 }
 
-:global(.dark) .errorMessage {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+:global(.dark) .errorMessage,
+:global(body.dark) .errorMessage {
+  background: var(--dark-surface-2);
+  border-color: var(--dark-border);
+  color: var(--dark-text);
 }
 
 /* Responsive Design */
@@ -539,6 +560,11 @@
 :global(.dark) .inputGroup input:focus-visible,
 :global(.dark) .loginButton:focus-visible,
 :global(.dark) .forgotPassword a:focus-visible,
-:global(.dark) .registerSection a:focus-visible {
-  outline-color: #60a5fa;
+:global(.dark) .registerSection a:focus-visible,
+:global(body.dark) .tabButton:focus-visible,
+:global(body.dark) .inputGroup input:focus-visible,
+:global(body.dark) .loginButton:focus-visible,
+:global(body.dark) .forgotPassword a:focus-visible,
+:global(body.dark) .registerSection a:focus-visible {
+  outline-color: var(--dark-accent-end);
 }

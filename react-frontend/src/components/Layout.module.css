@@ -48,18 +48,21 @@
 
 /* Dark mode styles */
 :global(body.dark) .layoutContainer {
-	background-color: #121212;
-	color: #f0f0f0;
+	background: transparent !important;
+	background-color: transparent !important;
+	color: var(--dark-text);
 }
 
 :global(body.dark) .mainContent {
-	background-color: #121212;
+	background: transparent !important;
+	background-color: transparent !important;
 }
 
 :global(body.dark) .loadingContainer {
-	background-color: #121212;
+	background: transparent !important;
+	background-color: transparent !important;
 }
 
 :global(body.dark) .loadingSpinner {
-	color: #738aed;
+	color: var(--dark-accent-end);
 }

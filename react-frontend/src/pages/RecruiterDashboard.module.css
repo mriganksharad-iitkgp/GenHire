@@ -50,6 +50,19 @@
 .dashboardContainer {
   min-height: 100vh;
   background: linear-gradient(135deg, var(--gray-50) 0%, var(--primary-50) 100%);
+body.dark,
+:global(.dark) {
+	--dark-bg: #0b1220;             /* page background */
+	--dark-surface: #0f172a;        /* base surface */
+	--dark-surface-2: #1f2937;      /* elevated surface */
+	--dark-surface-3: #111827;      /* deep surface */
+	--dark-border: #334155;         /* slate border */
+	--dark-text: #e2e8f0;           /* primary text */
+	--dark-muted: #94a3b8;          /* secondary text */
+	--dark-accent-start: #60a5fa;   /* blue accent */
+	--dark-accent-end: #3b82f6;     /* blue accent end */
+	--dark-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
   padding: 0;
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   padding-top: 0; /* Remove extra padding since we're handling navbar spacing in tabNavigation */
@@ -2349,112 +2362,285 @@
 
 /* Enhanced Dark mode styles */
 :global(.dark) .dashboardContainer {
-	background-color: #1a1a1a;
+	/* Force dark background by overriding the light gradient */
+	background: linear-gradient(135deg, #0b1220 0%, #0f172a 50%, #111827 100%) !important;
+	background-image: none !important;
+	color: #e2e8f0;
 }
 
 :global(.dark) .tabNavigation,
+:global(body.dark) .tabNavigation,
 :global(.dark) .welcomeSection,
+:global(body.dark) .welcomeSection,
 :global(.dark) .statCard,
+:global(body.dark) .statCard,
 :global(.dark) .recentActivity,
+:global(body.dark) .recentActivity,
 :global(.dark) .sectionHeader,
+:global(body.dark) .sectionHeader,
 :global(.dark) .jobCard,
+:global(body.dark) .jobCard,
 :global(.dark) .candidateCard,
-:global(.dark) .profileForm {
-	background-color: #2d2d2d;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-	border: 1px solid #404040;
+:global(body.dark) .candidateCard,
+:global(.dark) .profileForm,
+:global(body.dark) .profileForm {
+	background-color: var(--dark-surface);
+	box-shadow: var(--dark-shadow);
+	border: 1px solid var(--dark-border);
 }
 
-:global(.dark) .tabButton {
-	color: #c0c0c0;
+:global(.dark) .tabButton,
+:global(body.dark) .tabButton {
+	color: var(--dark-muted);
 	background-color: transparent;
 }
 
-:global(.dark) .tabButton:hover {
-	background-color: #404040;
-	color: #5fa4ef;
+:global(.dark) .tabButton:hover,
+:global(body.dark) .tabButton:hover {
+	background-color: var(--dark-surface-2);
+	color: var(--dark-accent-end);
 }
 
-:global(.dark) .tabButton.active {
-	background-color: #5fa4ef;
+:global(.dark) .tabButton.active,
+:global(body.dark) .tabButton.active {
+	background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
 	color: #ffffff;
-	box-shadow: 0 2px 12px rgba(95, 164, 239, 0.4);
+	box-shadow: var(--dark-shadow);
+}
+
+/* Improve dark tab bar readability */
+:global(.dark) .tabNavigation,
+:global(body.dark) .tabNavigation {
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%);
+	border-bottom: 1px solid var(--dark-border);
+}
+
+/* Overview hero section dark treatment */
+:global(.dark) .welcomeSection,
+:global(body.dark) .welcomeSection {
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%) !important;
+	border: 1px solid var(--dark-border) !important;
+}
+
+:global(.dark) .welcomeSection::before {
+	background: radial-gradient(closest-side, rgba(59,130,246,0.12), rgba(15,23,42,0)) !important;
 }
 
 :global(.dark) .welcomeSection h2,
+:global(body.dark) .welcomeSection h2,
 :global(.dark) .sectionHeader h2,
+:global(body.dark) .sectionHeader h2,
 :global(.dark) .jobHeader h3,
+:global(body.dark) .jobHeader h3,
 :global(.dark) .candidateDetails h3,
+:global(body.dark) .candidateDetails h3,
 :global(.dark) .statContent h3,
-:global(.dark) .recentActivity h3 {
-	color: #ffffff;
+:global(body.dark) .statContent h3,
+:global(.dark) .recentActivity h3,
+:global(body.dark) .recentActivity h3 {
+	color: var(--dark-text);
 }
 
 :global(.dark) .welcomeSection p,
+:global(body.dark) .welcomeSection p,
 :global(.dark) .jobMeta p,
+:global(body.dark) .jobMeta p,
 :global(.dark) .candidateDetails p,
+:global(body.dark) .candidateDetails p,
 :global(.dark) .candidateMeta p,
+:global(body.dark) .candidateMeta p,
 :global(.dark) .statContent p,
-:global(.dark) .activityContent p {
-	color: #c0c0c0;
+:global(body.dark) .statContent p,
+:global(.dark) .activityContent p,
+:global(body.dark) .activityContent p {
+	color: var(--dark-muted);
 }
 
-:global(.dark) .activityContent small {
-	color: #999;
+:global(.dark) .activityContent small,
+:global(body.dark) .activityContent small {
+	color: var(--dark-muted);
 }
 
-:global(.dark) .formGroup label {
-	color: #ffffff;
+:global(.dark) .formGroup label,
+:global(body.dark) .formGroup label {
+	color: var(--dark-text);
 }
 
 :global(.dark) .formGroup input,
+:global(body.dark) .formGroup input,
 :global(.dark) .formGroup select,
+:global(body.dark) .formGroup select,
 :global(.dark) .formGroup textarea,
-:global(.dark) .filterSelect {
-	background-color: #404040;
-	border-color: #555;
-	color: #ffffff;
+:global(body.dark) .formGroup textarea,
+:global(.dark) .filterSelect,
+:global(body.dark) .filterSelect {
+	background-color: var(--dark-surface-2);
+	border-color: var(--dark-border);
+	color: var(--dark-text);
 }
 
 :global(.dark) .formGroup input:focus,
+:global(body.dark) .formGroup input:focus,
 :global(.dark) .formGroup select:focus,
+:global(body.dark) .formGroup select:focus,
 :global(.dark) .formGroup textarea:focus,
-:global(.dark) .filterSelect:focus {
-	border-color: #5fa4ef;
-	box-shadow: 0 0 0 2px rgba(95, 164, 239, 0.2);
+:global(body.dark) .formGroup textarea:focus,
+:global(.dark) .filterSelect:focus,
+:global(body.dark) .filterSelect:focus {
+	border-color: var(--dark-accent-end);
+	box-shadow: 0 0 0 2px rgba(115, 138, 237, 0.2);
 }
 
-:global(.dark) .activityItem {
-	background-color: #353535;
+:global(.dark) .activityItem,
+:global(body.dark) .activityItem {
+	background-color: var(--dark-surface-2);
 }
 
-:global(.dark) .activityItem:hover {
-	background-color: #404040;
+:global(.dark) .activityItem:hover,
+:global(body.dark) .activityItem:hover {
+	background-color: var(--dark-surface-3);
 }
 
-:global(.dark) .jobProgress {
-	background-color: #353535;
+:global(.dark) .jobProgress,
+:global(body.dark) .jobProgress {
+	background-color: var(--dark-surface-2);
 }
 
-:global(.dark) .progressLabel {
-	color: #c0c0c0;
+:global(.dark) .progressLabel,
+:global(body.dark) .progressLabel {
+	color: var(--dark-muted);
 }
 
 :global(.dark) .scoreLabel {
-	color: #c0c0c0;
+	color: var(--dark-muted);
 }
 
 :global(.dark) .scoreBar {
-	background-color: #404040;
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%);
+}
+
+/* Score text bubble in dark mode */
+:global(.dark) .scoreText,
+body.dark .scoreText {
+	color: var(--dark-text);
+	background: var(--dark-surface-2);
+	border-color: var(--dark-border);
+	box-shadow: var(--dark-shadow);
+}
+
+/* Candidate score panel in dark mode */
+/* Dark mode candidate score block */
+:global(.dark) .candidateScores {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-border) !important;
+}
+
+body.dark .candidateScores {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-border) !important;
 }
 
 :global(.dark) .jobBadge {
-	background-color: #404040;
-	color: #5fa4ef;
+	background-color: var(--dark-surface-2);
+	color: var(--dark-accent-end);
 }
 
 :global(.dark) .formActions {
-	border-top-color: #404040;
+	border-top-color: var(--dark-border);
+}
+
+/* Overview Metrics — dark mode treatment */
+:global(.dark) .metricCard,
+body.dark .metricCard {
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%) !important;
+	border: 1px solid var(--dark-border) !important;
+	box-shadow: var(--dark-shadow) !important;
+}
+
+:global(.dark) .metricCard:hover,
+body.dark .metricCard:hover {
+	transform: translateY(-4px);
+	box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45) !important;
+}
+
+:global(.dark) .metricCard::before,
+body.dark .metricCard::before {
+	background: linear-gradient(90deg, var(--dark-accent-start), var(--dark-accent-end)) !important;
+}
+
+:global(.dark) .metricIcon,
+body.dark .metricIcon {
+	background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end)) !important;
+	color: #ffffff !important;
+	box-shadow: 0 6px 14px rgba(59, 130, 246, 0.35);
+}
+
+:global(.dark) .metricValue,
+body.dark .metricValue {
+	color: var(--dark-text) !important;
+}
+
+:global(.dark) .metricLabel,
+body.dark .metricLabel {
+	color: var(--dark-muted) !important;
+}
+
+/* Candidates tab – remove lingering white panels */
+:global(.dark) .candidatesContent,
+body.dark .candidatesContent {
+	background: transparent !important;
+}
+
+/* Dark treatment for the filter bar container */
+:global(.dark) .candidateFilters,
+body.dark .candidateFilters {
+	background: linear-gradient(135deg, var(--dark-surface-2), var(--dark-surface-3)) !important;
+	border: 1px solid var(--dark-border) !important;
+	border-radius: 14px !important;
+	padding: 14px 16px !important;
+	box-shadow: var(--dark-shadow) !important;
+}
+
+/* Make the count row readable and aligned with dark surface */
+:global(.dark) .candidatesCount,
+body.dark .candidatesCount {
+	color: var(--dark-muted) !important;
+	border-bottom-color: var(--dark-border) !important;
+}
+
+/* Clear filters button in dark mode */
+:global(.dark) .clearFiltersButton,
+body.dark .clearFiltersButton {
+	background: var(--dark-surface-2) !important;
+	color: var(--dark-text) !important;
+	border-color: var(--dark-border) !important;
+}
+
+:global(.dark) .clearFiltersButton:hover,
+body.dark .clearFiltersButton:hover {
+	background: var(--dark-surface-3) !important;
+	border-color: var(--dark-accent-end) !important;
+}
+
+/* Candidate meta lines background in dark */
+:global(.dark) .candidateMeta p,
+body.dark .candidateMeta p {
+	background: var(--dark-surface-2);
+	border-left-color: var(--dark-accent-end);
+}
+
+/* Secondary button in candidate actions for dark */
+:global(.dark) .candidateActions .secondaryButton,
+body.dark .candidateActions .secondaryButton {
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%);
+	color: var(--dark-text);
+	border-color: var(--dark-border);
+}
+
+:global(.dark) .candidateActions .secondaryButton:hover,
+body.dark .candidateActions .secondaryButton:hover {
+	background: linear-gradient(135deg, var(--dark-surface-3) 0%, var(--dark-surface-2) 100%);
+	box-shadow: var(--dark-shadow);
 }
 
 /* Responsive Design */
@@ -2518,50 +2704,50 @@
 
 /* Dark mode styles for Company Profile */
 body.dark .profileForm {
-	background-color: #2a2a2a;
-	color: #e0e0e0;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background-color: var(--dark-surface);
+	color: var(--dark-text);
+	box-shadow: var(--dark-shadow);
 }
 
 body.dark .formGroup label {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 body.dark .formGroup input,
 body.dark .formGroup select,
 body.dark .formGroup textarea {
-	background-color: #333 !important;
-	border: 1px solid #555 !important;
-	color: #e0e0e0 !important;
+	background-color: var(--dark-surface-2) !important;
+	border: 1px solid var(--dark-border) !important;
+	color: var(--dark-text) !important;
 }
 
 body.dark .formGroup input::placeholder,
 body.dark .formGroup textarea::placeholder {
-	color: #999 !important;
+	color: var(--dark-muted) !important;
 }
 
 /* Ensure select options are readable in dark mode */
 body.dark .formGroup select option {
-	background-color: #333 !important;
-	color: #e0e0e0 !important;
+	background-color: var(--dark-surface-2) !important;
+	color: var(--dark-text) !important;
 }
 
 body.dark .formGroup input:focus,
 body.dark .formGroup select:focus,
 body.dark .formGroup textarea:focus {
-	border-color: #4a90e2 !important;
-	box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2) !important;
-	background-color: #3a3a3a !important;
-	color: #e0e0e0 !important;
+	border-color: var(--dark-accent-end) !important;
+	box-shadow: 0 0 0 2px rgba(115, 138, 237, 0.2) !important;
+	background-color: var(--dark-surface-3) !important;
+	color: var(--dark-text) !important;
 }
 
 /* Additional dark mode styles for form elements */
 body.dark .formGroup input[disabled],
 body.dark .formGroup select[disabled],
 body.dark .formGroup textarea[disabled] {
-	background-color: #2a2a2a !important;
-	color: #888 !important;
-	border-color: #444 !important;
+	background-color: var(--dark-surface-2) !important;
+	color: var(--dark-muted) !important;
+	border-color: var(--dark-border) !important;
 }
 
 /* Disabled field styles for light mode */
@@ -2572,88 +2758,183 @@ body.dark .formGroup textarea[disabled] {
 
 /* Disabled field styles for dark mode */
 body.dark .disabledField {
-	background-color: #2a2a2a !important;
-	color: #888 !important;
-	border-color: #444 !important;
+	background-color: var(--dark-surface-2) !important;
+	color: var(--dark-muted) !important;
+	border-color: var(--dark-border) !important;
+}
+
+/* Mirror Company Profile dark styles for parent .dark class as well */
+:global(.dark) .profileForm {
+	background-color: var(--dark-surface);
+	color: var(--dark-text);
+	box-shadow: var(--dark-shadow);
+}
+
+:global(.dark) .profileForm .formGroup label {
+	color: #e2e8f0;
+}
+
+:global(.dark) .profileForm input,
+:global(.dark) .profileForm select,
+:global(.dark) .profileForm textarea {
+	background-color: var(--dark-surface-2) !important;
+	border: 1px solid var(--dark-border) !important;
+	color: var(--dark-text) !important;
+}
+
+:global(.dark) .profileForm input:focus,
+:global(.dark) .profileForm select:focus,
+:global(.dark) .profileForm textarea:focus {
+	border-color: var(--dark-accent-end) !important;
+	box-shadow: 0 0 0 2px rgba(115, 138, 237, 0.2) !important;
+	background-color: var(--dark-surface-3) !important;
+}
+
+/* Disabled states inside profile form */
+:global(.dark) .profileForm input[disabled],
+:global(.dark) .profileForm select[disabled],
+:global(.dark) .profileForm textarea[disabled] {
+	background-color: var(--dark-surface-2) !important;
+	color: var(--dark-muted) !important;
+	border-color: var(--dark-border) !important;
+}
+
+/* Placeholders and options readability */
+:global(.dark) .profileForm input::placeholder,
+:global(.dark) .profileForm textarea::placeholder { color: #94a3b8 !important; }
+:global(.dark) .profileForm select option { background: var(--dark-surface-2); color: var(--dark-text); }
+
+/* Custom dark dropdown arrow for profile selects */
+:global(.dark) .profileForm select {
+	-webkit-appearance: none !important;
+	-moz-appearance: none !important;
+	appearance: none !important;
+	background-repeat: no-repeat !important;
+	background-position: right 12px center !important;
+	background-size: 16px !important;
+	padding-right: 36px !important;
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+/* Dark-styled secondary button only inside the profile form (avoid global change) */
+:global(.dark) .profileForm .secondaryButton,
+body.dark .profileForm .secondaryButton {
+	background: var(--dark-surface-2) !important;
+	color: var(--dark-text) !important;
+	border-color: var(--dark-border) !important;
+	box-shadow: var(--dark-shadow) !important;
+}
+
+:global(.dark) .profileForm .secondaryButton:hover,
+body.dark .profileForm .secondaryButton:hover {
+	background: var(--dark-surface-3) !important;
+	border-color: var(--dark-accent-end) !important;
 }
 
 /* Dark mode for dashboard container */
 body.dark .dashboardContainer {
-	background-color: #1a1a1a;
-	color: #e0e0e0;
+	/* Force dark background by overriding the light gradient */
+	background: linear-gradient(135deg, #0b1220 0%, #0f172a 50%, #111827 100%) !important;
+	background-image: none !important;
+	color: var(--dark-text);
 }
 
 body.dark .loadingContainer {
-	background-color: #1a1a1a;
+	/* Match dashboard dark background (no light gradient bleed) */
+	background: linear-gradient(135deg, #0b1220 0%, #0f172a 50%, #111827 100%) !important;
+	background-image: none !important;
 }
 
 /* Dark mode for tab navigation */
 body.dark .tabNavigation {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%);
+	border-bottom: 1px solid var(--dark-border);
+	box-shadow: var(--dark-shadow);
 }
 
 body.dark .tabButton {
-	color: #ccc;
+	color: var(--dark-muted);
 }
 
 body.dark .tabButton:hover {
-	background-color: #3a3a3a;
-	color: #4a90e2;
+	background-color: var(--dark-surface-2);
+	color: var(--dark-accent-end);
 }
 
 body.dark .tabButton.active {
-	background-color: #4a90e2;
-	color: white;
+	background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
+	color: #ffffff;
 }
 
 /* Dark mode for welcome section */
 body.dark .welcomeSection {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%) !important;
+	border: 1px solid var(--dark-border) !important;
+	box-shadow: var(--dark-shadow);
+}
+
+/* Mirror with gradient when using body.dark */
+body.dark .welcomeSection {
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%) !important;
+	border: 1px solid var(--dark-border) !important;
 }
 
 body.dark .welcomeSection h2 {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 body.dark .welcomeSection p {
-	color: #ccc;
+	color: var(--dark-muted);
 }
+
+/* Tighten overview heading/subtitle readability */
+body.dark .welcomeSection h2 { color: #f8fafc; }
+body.dark .welcomeSection::before { background: radial-gradient(closest-side, rgba(59,130,246,0.12), rgba(15,23,42,0)) !important; }
 
 /* Dark mode for stat cards */
 body.dark .statCard {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background-color: var(--dark-surface);
+	box-shadow: var(--dark-shadow);
 }
 
 /* Dark mode for section headers */
 body.dark .sectionHeader {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background-color: var(--dark-surface);
+	box-shadow: var(--dark-shadow);
 }
 
 body.dark .sectionHeader h2 {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 /* Dark mode for job cards */
 body.dark .jobCard {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-	border-left-color: #4a90e2;
+	background-color: var(--dark-surface);
+	box-shadow: var(--dark-shadow);
+	border-left-color: var(--dark-accent-start);
 }
 
 body.dark .jobCard:hover {
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+	box-shadow: var(--dark-shadow);
 }
 
 body.dark .jobHeader h3 {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 body.dark .jobMeta p {
-	color: #ccc;
+	color: var(--dark-muted);
+}
+
+/* Cover older job header/title selector variant */
+body.dark .jobTitleSection h3 {
+	color: var(--dark-text);
+}
+
+/* Jobs tab container surface */
+:global(.dark) .jobsContent,
+body.dark .jobsContent {
+	background: transparent !important;
 }
 
 body.dark .jobProgress {
@@ -2664,52 +2945,219 @@ body.dark .progressLabel {
 	color: #ccc;
 }
 
+body.dark .progressNumber {
+	color: #93c5fd;
+}
+
+/* Job meta list items and icons */
+body.dark .jobMetaItem {
+	color: var(--dark-muted);
+}
+body.dark .jobMetaItem i {
+	color: var(--dark-accent-end);
+}
+
+/* Action buttons in dark mode */
+/* View (primary) */
+:global(.dark) .viewButton,
+body.dark .viewButton {
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%) !important;
+	color: var(--dark-text) !important;
+	border-color: var(--dark-border) !important;
+}
+:global(.dark) .viewButton:hover,
+body.dark .viewButton:hover {
+	background: linear-gradient(135deg, var(--dark-surface-3) 0%, var(--dark-surface-2) 100%) !important;
+	border-color: var(--dark-accent-end) !important;
+}
+
+/* Edit (warning) */
+:global(.dark) .editButton,
+body.dark .editButton {
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%) !important;
+	color: #fbbf24 !important;
+	border-color: var(--dark-border) !important;
+}
+:global(.dark) .editButton:hover,
+body.dark .editButton:hover {
+	background: linear-gradient(135deg, var(--dark-surface-3) 0%, var(--dark-surface-2) 100%) !important;
+	border-color: var(--dark-accent-end) !important;
+}
+
+/* Delete (danger) */
+:global(.dark) .deleteButton,
+body.dark .deleteButton {
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%) !important;
+	color: #f87171 !important;
+	border-color: var(--dark-border) !important;
+}
+:global(.dark) .deleteButton:hover,
+body.dark .deleteButton:hover {
+	background: linear-gradient(135deg, var(--dark-surface-3) 0%, var(--dark-surface-2) 100%) !important;
+	border-color: #7f1d1d !important;
+}
+
+/* Base action button reset for dark mode to remove light sheen */
+:global(.dark) .actionButton,
+body.dark .actionButton {
+	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 100%) !important;
+	color: #ffffff !important;
+	border-color: var(--dark-border) !important;
+	box-shadow: var(--dark-shadow) !important;
+}
+
+:global(.dark) .actionButton:hover,
+body.dark .actionButton:hover {
+	transform: translateY(-1px);
+	background: linear-gradient(135deg, var(--dark-accent-end) 0%, var(--dark-accent-start) 100%) !important;
+	border-color: var(--dark-accent-end) !important;
+	box-shadow: var(--dark-shadow) !important;
+}
+
+:global(.dark) .actionButton:focus,
+body.dark .actionButton:focus {
+	outline: none;
+	box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25) !important;
+	border-color: #60a5fa !important;
+}
+
+:global(.dark) .actionButton i,
+body.dark .actionButton i {
+	color: #93c5fd !important;
+}
+
 /* Dark mode for candidate cards */
 body.dark .candidateCard {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	background: linear-gradient(135deg, #222426 0%, #1b1d1f 100%) !important;
+	border-color: #3a3f47 !important;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Apply same candidate card overrides when a parent has class 'dark' */
+:global(.dark) .candidateCard {
+	background: linear-gradient(135deg, #222426 0%, #1b1d1f 100%) !important;
+	border-color: #3a3f47 !important;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 body.dark .candidateCard:hover {
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+	box-shadow: var(--dark-shadow);
 }
 
 body.dark .candidateDetails h3 {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 body.dark .candidateDetails p {
-	color: #ccc;
+	color: var(--dark-muted);
 }
 
 body.dark .scoreLabel {
-	color: #ccc;
+	color: var(--dark-muted);
 }
 
 body.dark .scoreBar {
-	background-color: #444;
+	background: linear-gradient(135deg, var(--dark-surface-2) 0%, var(--dark-surface-3) 100%);
 }
 
 body.dark .scoreText {
-	color: #e0e0e0;
+	color: var(--dark-text);
 }
 
 /* Dark mode for filter selects */
 body.dark .filterSelect {
-	background-color: #333;
-	border: 1px solid #555;
-	color: #e0e0e0;
+	background: var(--dark-surface-2) !important;
+	border: 1px solid var(--dark-border) !important;
+	color: var(--dark-text) !important;
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+/* Mirror for global dark class */
+:global(.dark) .filterSelect {
+	background: var(--dark-surface-2) !important;
+	border: 1px solid var(--dark-border) !important;
+	color: var(--dark-text) !important;
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+/* Status select in dark mode (candidates list) */
+:global(.dark) .statusSelect {
+	background: var(--dark-surface-2) !important;
+	color: var(--dark-text);
+	border-color: var(--dark-border);
+	box-shadow: var(--dark-shadow);
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+:global(.dark) .statusSelect:hover {
+	background: var(--dark-surface-3) !important;
+	border-color: var(--dark-accent-end);
+}
+
+:global(.dark) .statusSelect:focus {
+	border-color: var(--dark-accent-end);
+	box-shadow: 0 0 0 3px rgba(115, 138, 237, 0.25);
+}
+
+:global(.dark) .statusSelect option {
+	background: var(--dark-surface-2);
+	color: var(--dark-text);
 }
 
 body.dark .filterSelect:focus {
-	border-color: #4a90e2;
-	box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+	border-color: var(--dark-accent-end);
+	box-shadow: 0 0 0 2px rgba(115, 138, 237, 0.2);
+}
+
+/* Dark mode filter select hover */
+body.dark .filterSelect:hover {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-accent-end) !important;
+}
+
+/* Mirror hover/focus for global dark */
+:global(.dark) .filterSelect:hover {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-accent-end) !important;
+}
+
+:global(.dark) .filterSelect:focus {
+	border-color: var(--dark-accent-end) !important;
+	box-shadow: 0 0 0 2px rgba(115, 138, 237, 0.2) !important;
+}
+
+/* Dark mode for candidate meta panel */
+body.dark .candidateMeta {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-border) !important;
+}
+
+body.dark .candidateMeta p {
+	color: var(--dark-muted) !important;
+}
+
+body.dark .candidateMeta i {
+	color: var(--dark-accent-end) !important;
+}
+
+/* Mirror candidate meta for global dark */
+:global(.dark) .candidateMeta {
+	background: var(--dark-surface-2) !important;
+	border-color: var(--dark-border) !important;
+}
+
+:global(.dark) .candidateMeta p {
+	color: var(--dark-muted) !important;
+}
+
+:global(.dark) .candidateMeta i {
+	color: var(--dark-accent-end) !important;
 }
 
 /* Dark mode for candidates count and other text elements */
 body.dark .candidatesCount {
-	color: #ccc;
-	border-bottom-color: #444;
+	color: var(--dark-muted);
+	border-bottom-color: var(--dark-border);
 }
 
 body.dark .noCandidates {

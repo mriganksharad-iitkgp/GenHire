@@ -10,7 +10,7 @@
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	z-index: 1050;
+	z-index: 10040;
 	padding: 20px;
 }
 
@@ -234,79 +234,58 @@
 	border-color: #999;
 }
 
-/* Dark mode support */
-body.dark .modalContent {
-	background-color: #2a2a2a;
-	color: #e0e0e0;
-}
+/* Dark mode support (body.dark and :global(.dark)) */
+body.dark .modalContent,
+:global(.dark) .modalContent { background-color: var(--dark-surface); color: var(--dark-text); box-shadow: var(--dark-shadow); }
 
-body.dark .modalHeader {
-	background-color: #333;
-	border-bottom-color: #555;
-}
+body.dark .modalHeader,
+:global(.dark) .modalHeader { background-color: var(--dark-surface-2); border-bottom-color: var(--dark-border); }
 
-body.dark .modalHeader h2 {
-	color: #e0e0e0;
-}
+body.dark .modalHeader h2,
+:global(.dark) .modalHeader h2 { color: var(--dark-text); }
 
-body.dark .modalFooter {
-	background-color: #333;
-	border-top-color: #555;
-}
+body.dark .modalFooter,
+:global(.dark) .modalFooter { background-color: var(--dark-surface-2); border-top-color: var(--dark-border); }
 
-body.dark .formGroup label {
-	color: #e0e0e0;
-}
+body.dark .formGroup label,
+:global(.dark) .formGroup label { color: var(--dark-text); }
 
 body.dark .formGroup input,
 body.dark .formGroup select,
-body.dark .formGroup textarea {
-	background-color: #333;
-	border-color: #555;
-	color: #e0e0e0;
-}
+body.dark .formGroup textarea,
+:global(.dark) .formGroup input,
+:global(.dark) .formGroup select,
+:global(.dark) .formGroup textarea { background-color: var(--dark-surface-2); border-color: var(--dark-border); color: var(--dark-text); }
 
 body.dark .formGroup input::placeholder,
-body.dark .formGroup textarea::placeholder {
-	color: #999;
-}
+body.dark .formGroup textarea::placeholder,
+:global(.dark) .formGroup input::placeholder,
+:global(.dark) .formGroup textarea::placeholder { color: var(--dark-muted); }
 
 body.dark .formGroup input:focus,
 body.dark .formGroup select:focus,
-body.dark .formGroup textarea:focus {
-	border-color: #4a90e2;
-	box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-	background-color: #3a3a3a;
-}
+body.dark .formGroup textarea:focus,
+:global(.dark) .formGroup input:focus,
+:global(.dark) .formGroup select:focus,
+:global(.dark) .formGroup textarea:focus { border-color: var(--dark-accent-end); box-shadow: 0 0 0 2px rgba(59,130,246,0.25); background-color: var(--dark-surface); }
 
-body.dark .skillTag {
-	background-color: #2a4d6b;
-	color: #87ceeb;
-}
+body.dark .skillTag,
+:global(.dark) .skillTag { background-color: var(--dark-accent-end); color: white; }
 
-body.dark .removeSkillButton {
-	color: #87ceeb;
-}
+body.dark .removeSkillButton,
+:global(.dark) .removeSkillButton { color: var(--dark-accent-start); }
 
-body.dark .removeSkillButton:hover {
-	background-color: rgba(135, 206, 235, 0.2);
-}
+body.dark .removeSkillButton:hover,
+:global(.dark) .removeSkillButton:hover { background-color: rgba(96,165,250,0.18); }
 
-body.dark .closeButton:hover {
-	background-color: #444;
-	color: #e0e0e0;
-}
+body.dark .closeButton:hover,
+:global(.dark) .closeButton:hover { background-color: var(--dark-surface-3); color: var(--dark-text); }
 
-body.dark .secondaryButton {
-	color: #bbb;
-	border-color: #555;
-}
+body.dark .secondaryButton,
+:global(.dark) .secondaryButton { color: var(--dark-muted); border-color: var(--dark-border); }
 
-body.dark .secondaryButton:hover {
-	background-color: #444;
-	border-color: #666;
-	color: #e0e0e0;
-}
+body.dark .secondaryButton:hover,
+:global(.dark) .secondaryButton:hover { background-color: var(--dark-surface-3); border-color: var(--dark-border); color: var(--dark-text); }
 
 /* Responsive design */
 @media (max-width: 768px) {

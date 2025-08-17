@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import styles from "./ApplicationView.module.css";
+import "./darkModeOverride.css";
+import "./emergency-fixes.css";
 
 const ApplicationView = () => {
 	const { applicationId } = useParams();

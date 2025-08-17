@@ -6,6 +6,15 @@
 	min-height: 100vh;
 }
 
+/* Force transparent background in dark mode to show global gradient */
+body.dark .jobDetailsContainer,
+:global(.dark) .jobDetailsContainer,
+:global(body.dark) .jobDetailsContainer {
+	background: transparent !important;
+	background-color: transparent !important;
+	background-image: none !important;
+}
+
 .header {
 	margin-bottom: 20px;
 }
@@ -444,84 +453,99 @@
 	}
 }
 
-/* Dark mode support */
-:global(.dark) .jobDetailsContainer {
-	background-color: #1a1a1a;
+/* Dark mode support (tokens) */
+body.dark .content,
+:global(.dark) .content,
+body.dark .jobDetailsContainer .content,
+:global(.dark) .jobDetailsContainer .content { 
+	background: transparent !important;
+	background-color: transparent !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+	border: 1px solid var(--dark-border) !important;
 }
 
-:global(.dark) .content {
-	background-color: #2a2a2a;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+body.dark .jobHeader,
+:global(.dark) .jobHeader { 
+    background-color: rgba(31, 41, 55, 0.7) !important;
+    border-bottom: 1px solid var(--dark-border) !important;
+    border: 1px solid var(--dark-border) !important;
 }
 
-:global(.dark) .jobHeader {
-	background-color: #333;
-	border-bottom: 1px solid #444;
-}
+body.dark .jobInfo h1,
+:global(.dark) .jobInfo h1 { color: var(--dark-text); }
 
-:global(.dark) .jobInfo h1 {
-	color: #fff;
-}
+body.dark .company,
+:global(.dark) .company { color: var(--dark-text); }
 
-:global(.dark) .company {
-	color: #ddd;
-}
-
+body.dark .location,
+body.dark .experience,
+body.dark .salary,
+body.dark .postedDate,
 :global(.dark) .location,
 :global(.dark) .experience,
 :global(.dark) .salary,
-:global(.dark) .postedDate {
-	color: #bbb;
-}
+:global(.dark) .postedDate { color: var(--dark-muted); }
 
-:global(.dark) .jobType {
-	background-color: rgba(74, 144, 226, 0.2);
-}
+body.dark .jobType,
+:global(.dark) .jobType { background-color: rgba(59,130,246,0.15); color: var(--dark-accent-end); }
 
-:global(.dark) .section h2 {
-	color: #fff;
-	border-bottom: 1px solid #444;
-}
+body.dark .section h2,
+:global(.dark) .section h2 { color: var(--dark-text); border-bottom: 1px solid var(--dark-border); }
 
+body.dark .section p,
+body.dark .section li,
 :global(.dark) .section p,
-:global(.dark) .section li {
-	color: #bbb;
-}
+:global(.dark) .section li { color: var(--dark-muted); }
 
+body.dark .infoCard,
+body.dark .applyCard,
 :global(.dark) .infoCard,
-:global(.dark) .applyCard {
-	background-color: #333;
+:global(.dark) .applyCard { 
+    background-color: rgba(31, 41, 55, 0.7) !important; 
+    border: 1px solid var(--dark-border) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
 }
 
+body.dark .infoCard h3,
+body.dark .applyCard h3,
+body.dark .companyBox h4,
 :global(.dark) .infoCard h3,
 :global(.dark) .applyCard h3,
-:global(.dark) .companyBox h4 {
-	color: #fff;
-}
+:global(.dark) .companyBox h4 { color: var(--dark-text); }
 
-:global(.dark) .companyBox p {
-	color: #bbb;
-}
+body.dark .companyBox p,
+:global(.dark) .companyBox p { color: var(--dark-muted); }
 
-:global(.dark) .modal {
-	background-color: #2a2a2a;
-}
+body.dark .modal,
+:global(.dark) .modal { background-color: var(--dark-surface); }
 
-:global(.dark) .modalHeader {
-	border-bottom: 1px solid #444;
-}
+body.dark .modalHeader,
+:global(.dark) .modalHeader { border-bottom: 1px solid var(--dark-border); }
 
-:global(.dark) .modalHeader h3 {
-	color: #fff;
-}
+body.dark .modalHeader h3,
+:global(.dark) .modalHeader h3 { color: var(--dark-text); }
 
-:global(.dark) .modalFooter {
-	border-top: 1px solid #444;
-}
+body.dark .modalFooter,
+:global(.dark) .modalFooter { border-top: 1px solid var(--dark-border); }
 
-:global(.dark) .formField {
-	background-color: #333;
-}
+body.dark .formField,
+:global(.dark) .formField { background-color: var(--dark-surface-2); }
+
+/* Tokenize additional elements */
+body.dark .downloadJdBtn,
+:global(.dark) .downloadJdBtn { background-color: rgba(59,130,246,0.12); color: var(--dark-accent-end); border-color: var(--dark-accent-end); }
+body.dark .downloadJdBtn:hover,
+:global(.dark) .downloadJdBtn:hover { background-color: rgba(59,130,246,0.2); }
+
+body.dark .matchScoreBtn,
+:global(.dark) .matchScoreBtn { background-color: rgba(126,87,194,0.12); color: #b39ddb; border-color: #b39ddb; }
+body.dark .matchScoreBtn:hover,
+:global(.dark) .matchScoreBtn:hover { background-color: rgba(126,87,194,0.2); }
+
+body.dark .progressBar,
+:global(.dark) .progressBar { background-color: var(--dark-surface-3, #3a3f4b); }
+body.dark .progressFill,
+:global(.dark) .progressFill { background-color: var(--dark-accent-end); }
 
 /* Responsive styles */
 @media (max-width: 768px) {

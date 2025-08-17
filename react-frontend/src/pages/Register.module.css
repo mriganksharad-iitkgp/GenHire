@@ -274,75 +274,91 @@
   text-decoration: underline;
 }
 
-/* Dark Mode Support */
-:global(.dark) .registerContainer {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+/* Dark Mode Support (tokens + dual scope) */
+:global(.dark) .registerContainer,
+:global(body.dark) .registerContainer {
+  background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 100%);
 }
 
-:global(.dark) .registerCard {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: rgba(148, 163, 184, 0.2);
+:global(.dark) .registerCard,
+:global(body.dark) .registerCard {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: var(--dark-shadow);
 }
 
-:global(.dark) .logoSection h1 {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+:global(.dark) .logoSection h1,
+:global(body.dark) .logoSection h1 {
+  background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-:global(.dark) .logoSection p {
-  color: #cbd5e1;
+:global(.dark) .logoSection p,
+:global(body.dark) .logoSection p {
+  color: var(--dark-muted);
 }
 
-:global(.dark) .formGroup label {
-  color: #f1f5f9;
+:global(.dark) .formGroup label,
+:global(body.dark) .formGroup label {
+  color: var(--dark-text);
 }
 
-:global(.dark) .formGroup input {
-  background: rgba(30, 41, 59, 0.6);
-  border-color: rgba(148, 163, 184, 0.3);
-  color: #f1f5f9;
+:global(.dark) .formGroup input,
+:global(body.dark) .formGroup input {
+  background: var(--dark-surface-2);
+  border-color: var(--dark-border);
+  color: var(--dark-text);
 }
 
-:global(.dark) .formGroup input::placeholder {
-  color: #94a3b8;
+:global(.dark) .formGroup input::placeholder,
+:global(body.dark) .formGroup input::placeholder {
+  color: var(--dark-muted);
 }
 
-:global(.dark) .formGroup input:focus {
-  border-color: #60a5fa;
-  background: rgba(30, 41, 59, 0.8);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+:global(.dark) .formGroup input:focus,
+:global(body.dark) .formGroup input:focus {
+  border-color: var(--dark-accent-end);
+  background: var(--dark-surface);
+  box-shadow: 0 0 0 3px rgba(115, 138, 237, 0.15);
 }
 
-:global(.dark) .formGroup input:hover:not(:focus) {
-  border-color: #64748b;
+:global(.dark) .formGroup input:hover:not(:focus),
+:global(body.dark) .formGroup input:hover:not(:focus) {
+  border-color: var(--dark-border);
 }
 
-:global(.dark) .errorInput {
-  background: rgba(239, 68, 68, 0.1) !important;
+:global(.dark) .errorInput,
+:global(body.dark) .errorInput {
+  background: var(--dark-surface-2) !important;
   border-color: var(--error-color) !important;
 }
 
-:global(.dark) .errorMessage {
-  color: #fca5a5;
+:global(.dark) .errorMessage,
+:global(body.dark) .errorMessage {
+  color: var(--dark-text);
 }
 
-:global(.dark) .registerButton {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+:global(.dark) .registerButton,
+:global(body.dark) .registerButton {
+  background: linear-gradient(135deg, var(--dark-accent-start), var(--dark-accent-end));
 }
 
-:global(.dark) .loginLink {
-  color: #cbd5e1;
-  border-top-color: rgba(148, 163, 184, 0.2);
+:global(.dark) .loginLink,
+:global(body.dark) .loginLink {
+  color: var(--dark-muted);
+  border-top-color: var(--dark-border);
 }
 
-:global(.dark) .loginLink a {
-  color: #60a5fa;
+:global(.dark) .loginLink a,
+:global(body.dark) .loginLink a {
+  color: var(--dark-accent-end);
 }
 
-:global(.dark) .loginLink a:hover {
-  color: #93c5fd;
+:global(.dark) .loginLink a:hover,
+:global(body.dark) .loginLink a:hover {
+  color: var(--dark-accent-start);
 }
 
 /* Responsive Design */

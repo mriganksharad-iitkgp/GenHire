@@ -8,7 +8,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1050;
+  /* Above navbar (9998) and dropdowns (9999) */
+  z-index: 10040;
   padding: 20px;
 }
 
@@ -164,6 +165,75 @@
   opacity: 0.7;
   cursor: not-allowed;
 }
+
+/* Dark mode support (mirrored for both body.dark and global .dark) */
+body.dark .modalContent,
+:global(.dark) .modalContent {
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+  box-shadow: var(--dark-shadow);
+}
+
+body.dark .modalHeader,
+:global(.dark) .modalHeader {
+  background-color: var(--dark-surface-2);
+  border-bottom-color: var(--dark-border);
+}
+
+body.dark .modalHeader h2,
+:global(.dark) .modalHeader h2 { color: var(--dark-text); }
+
+body.dark .jobForm,
+:global(.dark) .jobForm { color: var(--dark-text); }
+
+body.dark .formGroup label,
+:global(.dark) .formGroup label { color: var(--dark-text); }
+
+body.dark .formGroup input,
+body.dark .formGroup select,
+body.dark .formGroup textarea,
+:global(.dark) .formGroup input,
+:global(.dark) .formGroup select,
+:global(.dark) .formGroup textarea {
+  background-color: var(--dark-surface-2);
+  border-color: var(--dark-border);
+  color: var(--dark-text);
+}
+
+body.dark .formGroup input::placeholder,
+body.dark .formGroup textarea::placeholder,
+:global(.dark) .formGroup input::placeholder,
+:global(.dark) .formGroup textarea::placeholder { color: var(--dark-muted); }
+
+body.dark .formGroup input:focus,
+body.dark .formGroup select:focus,
+body.dark .formGroup textarea:focus,
+:global(.dark) .formGroup input:focus,
+:global(.dark) .formGroup select:focus,
+:global(.dark) .formGroup textarea:focus {
+  border-color: var(--dark-accent-end);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  background-color: var(--dark-surface);
+}
+
+body.dark .formActions,
+:global(.dark) .formActions { border-top-color: var(--dark-border); }
+
+body.dark .cancelButton,
+:global(.dark) .cancelButton {
+  color: var(--dark-muted);
+  border-color: var(--dark-border);
+}
+
+body.dark .cancelButton:hover:not(:disabled),
+:global(.dark) .cancelButton:hover:not(:disabled) {
+  background-color: var(--dark-surface-3);
+  border-color: var(--dark-border);
+  color: var(--dark-text);
+}
+
+body.dark .closeButton:hover,
+:global(.dark) .closeButton:hover { background-color: var(--dark-surface-3); color: var(--dark-text); }
 
 /* Responsive */
 @media (max-width: 768px) {

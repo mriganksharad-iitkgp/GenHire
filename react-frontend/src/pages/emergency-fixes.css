@@ -1,0 +1,36 @@
+/**
+ * Timeline fixes for dark mode
+ * This file provides styling for a clean single vertical line in timeline
+ */
+
+/* Reset previous aggressive hiding */
+html body.dark .timelineConnector,
+html .dark .timelineConnector,
+html body.dark .connector,
+html .dark .connector {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Style the timeline with a single clean vertical line */
+html body.dark .timeline,
+html .dark .timeline {
+    position: relative !important;
+    border-left: 2px solid var(--dark-border) !important;
+    margin-left: 20px !important;
+    padding-left: 20px !important;
+}
+
+/* Make connector consistent with timeline */
+html body.dark .connector,
+html .dark .connector {
+    background-color: var(--dark-border) !important;
+    width: 2px !important;
+}
+
+/* Ensure timeline connector position is correct */
+html body.dark .timelineConnector,
+html .dark .timelineConnector {
+    left: 20px !important;
+    width: 2px !important;
+}

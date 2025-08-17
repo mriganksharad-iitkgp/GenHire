@@ -8,6 +8,10 @@
   --error-color: #ef4444;
   --warning-color: #f59e0b;
   
+  /* Gradient background colors */
+  --gray-50: #f9fafb;
+  --primary-50: #eff6ff;
+  
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
@@ -39,12 +43,36 @@
 
 /* Profile Page Container */
 .profileContainer {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--gray-50) 0%, var(--primary-50) 100%);
+  padding: 0;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Content wrapper with max-width */
+.content {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--spacing-lg);
   padding-top: 90px; /* Account for fixed navbar */
-  min-height: 100vh;
-  background: var(--background-secondary);
+  display: flex;
+  gap: var(--spacing-2xl);
+  align-items: flex-start;
+}
+
+/* Dark mode variable remap scoped to the Profile page */
+body.dark .profileContainer,
+:global(.dark) .profileContainer {
+  /* Map design tokens to dark palette */
+  --text-primary: var(--dark-text);
+  --text-secondary: var(--dark-muted);
+  --text-muted: var(--dark-muted);
+  --background-primary: var(--dark-surface);
+  --background-secondary: var(--dark-bg);
+  --background-tertiary: var(--dark-surface-2);
+  --border-color: var(--dark-border);
+  /* Keep primary colors; they look good on dark */
+  color: var(--dark-text);
 }
 
 /* Loading States */
@@ -130,12 +158,6 @@
 }
 
 /* Main Content Layout */
-.content {
-  display: flex;
-  gap: var(--spacing-2xl);
-  align-items: flex-start;
-}
-
 .sidebar {
   width: 320px;
   flex-shrink: 0;
@@ -387,20 +409,33 @@
 
 /* Bio Section */
 .bioSection {
-	background: white;
-	border-radius: 12px;
-	padding: 25px;
-	margin-bottom: 30px;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+:global(.dark) .bioSection,
+:global(body.dark) .bioSection {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 
 .bioSection h2 {
-	margin-top: 0;
-	margin-bottom: 25px;
-	color: #333;
-	font-size: 22px;
-	border-bottom: 1px solid #eee;
-	padding-bottom: 10px;
+  margin-top: 0;
+  margin-bottom: 25px;
+  color: #333;
+  font-size: 22px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+:global(.dark) .bioSection h2,
+:global(body.dark) .bioSection h2 {
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .formRow {
@@ -418,20 +453,34 @@
 }
 
 .formGroup label {
-	display: block;
-	margin-bottom: 8px;
-	font-weight: 500;
-	color: #555;
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+}
+
+:global(.dark) .formGroup label,
+:global(body.dark) .formGroup label {
+  color: var(--text-secondary);
 }
 
 .formGroup input,
 .formGroup textarea {
-	width: 100%;
-	padding: 12px;
-	border: 1px solid #ddd;
-	border-radius: 8px;
-	font-size: 16px;
-	transition: border-color 0.3s;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+:global(.dark) .formGroup input,
+:global(body.dark) .formGroup input,
+:global(.dark) .formGroup textarea,
+:global(body.dark) .formGroup textarea {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .formGroup textarea {
@@ -467,10 +516,17 @@
 
 /* Job Applications Section */
 .applicationsSection {
-	background: white;
-	border-radius: 12px;
-	padding: 25px;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+:global(.dark) .applicationsSection,
+:global(body.dark) .applicationsSection {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 
 /* Application Filters */
@@ -586,12 +642,18 @@
 .miniBarSuccess > div { background: #1e7a3b; }
 
 .applicationsSection h2 {
-	margin-top: 0;
-	margin-bottom: 25px;
-	color: #333;
-	font-size: 22px;
-	border-bottom: 1px solid #eee;
-	padding-bottom: 10px;
+  margin-top: 0;
+  margin-bottom: 25px;
+  color: #333;
+  font-size: 22px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+:global(.dark) .applicationsSection h2,
+:global(body.dark) .applicationsSection h2 {
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .applicationsList {
@@ -601,13 +663,20 @@
 }
 
 .applicationCard {
-	border-radius: 16px;
-	padding: 22px;
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
-	background: #ffffff;
-	border: 1px solid #e9eef5;
-	transition: transform 0.2s ease, box-shadow 0.2s ease, border-color .2s ease;
-	position: relative;
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  border: 1px solid #e9eef5;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color .2s ease;
+  position: relative;
+}
+
+:global(.dark) .applicationCard,
+:global(body.dark) .applicationCard {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 /* top accent line based on status */
 .applicationCard::after { content:""; position:absolute; left:0; top:0; right:0; height:3px; background:#dbe6ff; border-top-left-radius:16px; border-top-right-radius:16px; }
@@ -637,10 +706,15 @@
 }
 
 .applicationHeader h3 {
-	margin: 0;
-	font-size: 20px;
-	color: #1f2d3d;
-	font-weight: 700;
+  margin: 0;
+  font-size: 20px;
+  color: #1f2d3d;
+  font-weight: 700;
+}
+
+:global(.dark) .applicationHeader h3,
+:global(body.dark) .applicationHeader h3 {
+  color: var(--text-primary);
 }
 .jobTitleWrap { display:flex; flex-direction:column; gap:2px; }
 .companySubtle { font-size:12px; color:#6b7a99; }
@@ -687,9 +761,14 @@
 .interviewed { background:#b8f7cc; color:#0b6a35; }
 
 .applicationDetails {
-	margin: 6px 0 16px;
-	padding-top: 10px;
-	border-top: 1px dashed #e7edf6;
+  margin: 6px 0 16px;
+  padding-top: 10px;
+  border-top: 1px dashed #e7edf6;
+}
+
+:global(.dark) .applicationDetails,
+:global(body.dark) .applicationDetails {
+  border-top: 1px dashed var(--border-color);
 }
 
 .metaRow { display:flex; flex-wrap:wrap; gap:10px 16px; }
@@ -701,11 +780,17 @@
 .chip i { color:#6b7a99; }
 
 .interviews h4 {
-	font-size: 16px;
-	margin-bottom: 10px;
-	color: #333;
-	border-top: 1px solid #eee;
-	padding-top: 10px;
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #333;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+:global(.dark) .interviews h4,
+:global(body.dark) .interviews h4 {
+  color: var(--text-primary);
+  border-top: 1px solid var(--border-color);
 }
 
 .interviews ul {
@@ -876,10 +961,16 @@
 }
 
 .interviewItem {
-	padding: 15px;
-	border-radius: 8px;
-	background-color: #f9fafc;
-	transition: transform 0.2s ease;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #f9fafc;
+  transition: transform 0.2s ease;
+}
+
+:global(.dark) .interviewItem,
+:global(body.dark) .interviewItem {
+  background-color: var(--background-tertiary);
+  border: 1px solid var(--border-color);
 }
 
 .interviewItem:hover {
@@ -981,8 +1072,8 @@
   background: var(--background-primary);
   border-color: var(--border-color);
   color: var(--text-secondary);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 :global(.dark) .backButton:hover {
@@ -994,8 +1085,8 @@
 :global(.dark) .profilePicSection {
   background: var(--background-primary);
   border-color: var(--border-color);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 :global(.dark) .profilePic {
@@ -1014,11 +1105,12 @@
   color: var(--background-primary);
 }
 
+/* ensure vendor-prefixed backdrop filter order */
 :global(.dark) .fileUploadBox {
   background: var(--background-primary);
   border-color: var(--border-color);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 :global(.dark) .fileUploadBox h3 {
@@ -1073,11 +1165,12 @@
   color: var(--primary-hover);
 }
 
+/* ensure vendor-prefixed backdrop filter order */
 :global(.dark) .statsCard {
   background: var(--background-primary);
   border-color: var(--border-color);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 :global(.dark) .statsCard h3 {
@@ -1127,8 +1220,8 @@
 :global(.dark) .applicationsSection {
   background: var(--background-primary);
   border-color: var(--border-color);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 :global(.dark) .bioSection h2,
@@ -1168,8 +1261,8 @@
 :global(.dark) .applicationCard {
   background: var(--background-primary);
   border-color: var(--border-color);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 :global(.dark) .applicationCard:hover {
