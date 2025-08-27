@@ -12,13 +12,41 @@ export default function ApplicationsList({
   onClearFilters,
   onViewCV,
   onOpenReport,
+  onGiveInterview, // Add new prop for interview action
 }) {
+  // Debug log to see applications data
+  console.log('ApplicationsList received applications:', applications);
   const filtered = applications.filter((app) => {
     const matchesCompany = companyFilter === "" || app.company.toLowerCase().includes(companyFilter.toLowerCase());
     const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesCompany && matchesStatus;
   });
   const sorted = [...filtered].sort((a, b) => new Date(b.appliedDate) - new Date(a.appliedDate));
+
+  // Helper function to determine which buttons to show based on status
+  const getButtonsForStatus = (status) => {
+    const normalizedStatus = status.toLowerCase();
+    
+    // Always show View CV and Details
+    const baseButtons = ['viewCV', 'details'];
+    
+    switch (normalizedStatus) {
+      case 'pending':
+      case 'reviewed':
+        return baseButtons; // Only View CV + Details
+      
+      case 'shortlisted':
+        return [...baseButtons, 'giveInterview']; // View CV + Details + Give Interview
+      
+      case 'interviewed':
+      case 'selected':
+      case 'rejected':
+        return [...baseButtons, 'report']; // View CV + Details + Report
+      
+      default:
+        return baseButtons; // Fallback to basic buttons
+    }
+  };
 
   return (
     <section className={styles.applicationsSection}>
@@ -120,20 +148,56 @@ export default function ApplicationsList({
                         <div className={`${styles.miniBar} ${styles.miniBarSuccess}`}><div style={{ width: `${app.interviewScore}%` }} /></div>
                       </div>
                     )}
+                    {app.interviewScore !== null && (
+                      <div className={`${styles.scorePill} ${styles.scorePillWarning}`} title="Proctoring Score">
+                        <span className={styles.pillLabel}>Proctoring</span>
+                        <span className={styles.pillValue}>{app.proctoringScore || 85}%</span>
+                        <div className={`${styles.miniBar} ${styles.miniBarWarning}`}><div style={{ width: `${app.proctoringScore || 85}%` }} /></div>
+                      </div>
+                    )}
                   </div>
 
                   <div className={styles.actionsRight}>
+                    {/* Always show View CV button */}
                     <button type="button" className={styles.ghostButton} onClick={onViewCV} aria-label="View your uploaded CV">
                       <i className="fa fa-file-pdf-o"></i> View CV
                     </button>
+                    
+                    {/* Always show Details button */}
                     <Link to={`/application/${app.id}`} className={styles.viewTimelineButton}>
                       <i className="fa fa-info-circle"></i> Details
                     </Link>
-                    {app.interviewScore !== null || app.reportAvailable ? (
-                      <button className={styles.primaryButton} onClick={() => onOpenReport(app)}>
-                        <i className="fa fa-file-text-o"></i> Report
-                      </button>
-                    ) : null}
+                    
+                    {/* Status-based conditional buttons */}
+                    {(() => {
+                      const availableButtons = getButtonsForStatus(app.status);
+                      
+                      return (
+                        <>
+                          {/* Give Interview button for shortlisted candidates */}
+                          {availableButtons.includes('giveInterview') && (
+                            <button 
+                              className={styles.interviewButton} 
+                              onClick={() => onGiveInterview && onGiveInterview(app)}
+                              title="Schedule or take interview"
+                            >
+                              <i className="fa fa-calendar-check-o"></i> Give Interview
+                            </button>
+                          )}
+                          
+                          {/* Report button for interviewed/selected/rejected candidates */}
+                          {availableButtons.includes('report') && (
+                            <button 
+                              className={styles.primaryButton} 
+                              onClick={() => onOpenReport(app)}
+                              title="View interview report"
+                            >
+                              <i className="fa fa-file-text-o"></i> Report
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

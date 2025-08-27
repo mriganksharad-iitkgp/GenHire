@@ -143,6 +143,66 @@ const Dashboard = () => {
 		return status && ['pending', 'applied'].includes(status.toLowerCase());
 	};
 
+	// Function to get the correct button state and text
+	const getJobButtonState = (jobId) => {
+		const hasAppliedToJob = hasApplied(jobId);
+		const canWithdraw = canWithdrawApplication(jobId);
+		const isPendingWithdrawal = pendingWithdrawal === jobId;
+		
+		// State 1: Apply Now (not applied yet)
+		if (!hasAppliedToJob) {
+			return {
+				type: 'apply',
+				text: 'Apply Now',
+				className: styles.applyButton,
+				onClick: () => applyForJob(jobId),
+				disabled: false
+			};
+		}
+		
+		// State 2: Withdraw Application (applied and can withdraw, not pending)
+		if (hasAppliedToJob && canWithdraw && !isPendingWithdrawal) {
+			return {
+				type: 'withdraw',
+				text: 'Withdraw Application',
+				className: `${styles.applyButton} ${styles.withdrawButton}`,
+				onClick: () => withdrawApplication(jobId),
+				disabled: false
+			};
+		}
+		
+		// State 3: Confirm Withdrawal (applied, can withdraw, and pending confirmation)
+		if (hasAppliedToJob && canWithdraw && isPendingWithdrawal) {
+			return {
+				type: 'confirm_withdraw',
+				text: 'Confirm Withdrawal',
+				className: `${styles.applyButton} ${styles.withdrawButton} ${styles.confirmWithdraw}`,
+				onClick: () => withdrawApplication(jobId),
+				disabled: false
+			};
+		}
+		
+		// State 4: Application Submitted (applied but cannot withdraw anymore)
+		if (hasAppliedToJob && !canWithdraw) {
+			return {
+				type: 'submitted',
+				text: 'Application Submitted',
+				className: `${styles.applyButton} ${styles.appliedButton}`,
+				onClick: () => {},
+				disabled: true
+			};
+		}
+		
+		// Fallback to Apply Now
+		return {
+			type: 'apply',
+			text: 'Apply Now',
+			className: styles.applyButton,
+			onClick: () => applyForJob(jobId),
+			disabled: false
+		};
+	};
+
 	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 
 	const withdrawApplication = async (jobId) => {
@@ -153,33 +213,48 @@ const Dashboard = () => {
 				return;
 			}
 
-			// If this is the confirmation step
-			if (pendingWithdrawal === jobId) {
-				const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/withdraw`, {
-					method: 'DELETE',
-					headers: {
-						'Authorization': `Bearer ${token}`,
-						'Content-Type': 'application/json'
-					}
-				});
-
-				if (response.ok) {
-					showToast('Application withdrawn successfully!', 'success');
-					loadApplications(); // Reload applications
-				} else {
-					const errorData = await response.json();
-					showToast(errorData.error || 'Failed to withdraw application', 'error');
-				}
-				setPendingWithdrawal(null);
-			} else {
+			// If this is NOT the confirmation step (first click)
+			if (pendingWithdrawal !== jobId) {
 				// First click - show warning and set pending
 				setPendingWithdrawal(jobId);
-				showToast('Click "Withdraw Application" again to confirm. This action cannot be undone.', 'warning');
+				showToast('Click "Confirm Withdrawal" to proceed. This action cannot be undone.', 'warning');
+				
+				// Auto-clear pending state after 10 seconds
+				setTimeout(() => {
+					setPendingWithdrawal(prev => prev === jobId ? null : prev);
+				}, 10000);
+				return;
 			}
+
+			// This is the confirmation step (second click)
+			const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/withdraw`, {
+				method: 'DELETE',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (response.ok) {
+				showToast('Application withdrawn successfully!', 'success');
+				loadApplications(); // Reload applications
+			} else {
+				const errorData = await response.json();
+				showToast(errorData.error || 'Failed to withdraw application', 'error');
+			}
+			setPendingWithdrawal(null);
 		} catch (error) {
 			console.error('Error withdrawing application:', error);
 			showToast('Failed to withdraw application', 'error');
 			setPendingWithdrawal(null);
+		}
+	};
+
+	// Cancel pending withdrawal
+	const cancelPendingWithdrawal = (jobId) => {
+		if (pendingWithdrawal === jobId) {
+			setPendingWithdrawal(null);
+			showToast('Withdrawal cancelled', 'info');
 		}
 	};
 
@@ -235,6 +310,19 @@ const Dashboard = () => {
 		}
 
 		return matchesSearch && matchesType && matchesLocation && matchesExperience;
+	}).sort((a, b) => {
+		// Sort jobs: unapplied jobs first, then applied jobs
+		const aApplied = hasApplied(a._id);
+		const bApplied = hasApplied(b._id);
+		
+		// If one is applied and other is not, prioritize unapplied
+		if (aApplied && !bApplied) return 1;
+		if (!aApplied && bApplied) return -1;
+		
+		// If both have same application status, sort by creation date (newest first)
+		const aDate = new Date(a.created_at || 0);
+		const bDate = new Date(b.created_at || 0);
+		return bDate - aDate;
 	});
 
 	return (
@@ -322,96 +410,180 @@ const Dashboard = () => {
 							</p>
 						</div>
 					) : (
-						filteredJobs.map((job) => (
-							<div key={job._id} className={styles.jobCard}>
-								<div className={styles.jobMain}>
-									<div className={styles.jobTitleSection}>
-										<h4 className={styles.jobTitle}>
-											{job.title}
-										</h4>
-										<div className={styles.companyInfo}>
-											<span className={styles.companyName}>
-												<i className="fa fa-building"></i>{" "}
-												{job.company || 'TechCorp Solutions'}
-											</span>
-											<span
-												className={styles.jobLocation}
-											>
-												<i className="fa fa-map-marker"></i>{" "}
-												{job.location}
-											</span>
-										</div>
-									</div>
+						<>
+							{(() => {
+								const unappliedJobs = filteredJobs.filter(job => !hasApplied(job._id));
+								const appliedJobs = filteredJobs.filter(job => hasApplied(job._id));
+								
+								return (
+									<>
+										{/* Available Jobs First */}
+										{unappliedJobs.length > 0 && (
+											<div className={styles.jobSection}>
+												<h4 style={{color: '#27ae60', marginBottom: '1rem'}}>
+													<i className="fa fa-circle" style={{marginRight: '8px'}}></i>
+													Available Jobs ({unappliedJobs.length})
+												</h4>
+												{unappliedJobs.map((job) => (
+													<div key={job._id} className={styles.jobCard}>
+														<div className={styles.jobMain}>
+															<div className={styles.jobTitleSection}>
+																<h4 className={styles.jobTitle}>
+																	{job.title}
+																</h4>
+																<div className={styles.companyInfo}>
+																	<span className={styles.companyName}>
+																		<i className="fa fa-building"></i>{" "}
+																		{job.company || 'TechCorp Solutions'}
+																	</span>
+																	<span
+																		className={styles.jobLocation}
+																	>
+																		<i className="fa fa-map-marker"></i>{" "}
+																		{job.location}
+																	</span>
+																</div>
+															</div>
 
-									<div className={styles.jobAttributes}>
-										<span className={styles.jobType}>
-											{job.type}
-										</span>
-										<span className={styles.jobExperience}>
-											<i className="fa fa-briefcase"></i>{" "}
-											{job.experience}
-										</span>
-										<span className={styles.jobSalary}>
-											<i className="fa fa-money"></i>{" "}
-											{job.salary}
-										</span>
-										<span className={styles.jobDate}>
-											<i className="fa fa-calendar"></i>{" "}
-											Posted:{" "}
-											{job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
-										</span>
-									</div>
+															<div className={styles.jobAttributes}>
+																<span className={styles.jobType}>
+																	{job.type}
+																</span>
+																<span className={styles.jobExperience}>
+																	<i className="fa fa-briefcase"></i>{" "}
+																	{job.experience}
+																</span>
+																<span className={styles.jobSalary}>
+																	<i className="fa fa-money"></i>{" "}
+																	{job.salary}
+																</span>
+																<span className={styles.jobDate}>
+																	<i className="fa fa-calendar"></i>{" "}
+																	Posted:{" "}
+																	{job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
+																</span>
+															</div>
 
-									<div className={styles.jobDescription}>
-										<p>{job.description}</p>
-									</div>
+															<div className={styles.jobDescription}>
+																<p>{job.description}</p>
+															</div>
 
-									<div className={styles.jobSkills}>
-										{job.skills && job.skills.map((skill, index) => (
-											<span
-												key={index}
-												className={styles.skillTag}
-											>
-												{skill}
-											</span>
-										))}
-									</div>
-								</div>
+															<div className={styles.jobSkills}>
+																{job.skills && job.skills.map((skill, index) => (
+																	<span
+																		key={index}
+																		className={styles.skillTag}
+																	>
+																		{skill}
+																	</span>
+																))}
+															</div>
+														</div>
 
-								<div className={styles.jobActions}>
-									<Link
-										to={`/job/${job._id}`}
-										className={styles.viewButton}
-									>
-										View Details
-									</Link>
-									{hasApplied(job._id) ? (
-										canWithdrawApplication(job._id) ? (
-											<button
-												onClick={() => withdrawApplication(job._id)}
-												className={`${styles.applyButton} ${styles.withdrawButton} ${pendingWithdrawal === job._id ? styles.confirmWithdraw : ''}`}
-											>
-												{pendingWithdrawal === job._id ? 'Confirm Withdrawal' : 'Withdraw Application'}
-											</button>
-										) : (
-											<button
-												className={`${styles.applyButton} ${styles.appliedButton}`}
-												disabled
-											>
-												Application Submitted
-											</button>
-										)
-									) : (
-										<button
-											onClick={() => applyForJob(job._id)}
-											className={styles.applyButton}
-										>
-											Apply Now
-										</button>
-									)}
-								</div>
-							</div>
-						))
+														<div className={styles.jobActions}>
+															<Link
+																to={`/job/${job._id}`}
+																className={styles.viewButton}
+															>
+																View Details
+															</Link>
+															{(() => {
+																const buttonState = getJobButtonState(job._id);
+																return (
+																	<button
+																		onClick={buttonState.onClick}
+																		className={buttonState.className}
+																		disabled={buttonState.disabled}
+																	>
+																		{buttonState.text}
+																	</button>
+																);
+															})()}
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+										
+										{/* Applied Jobs Section */}
+										{appliedJobs.length > 0 && (
+											<div className={styles.jobSection} style={{marginTop: '2rem'}}>
+												<h4 style={{color: '#3498db', marginBottom: '1rem'}}>
+													<i className="fa fa-check-circle" style={{marginRight: '8px'}}></i>
+													Your Applications ({appliedJobs.length})
+												</h4>
+												{appliedJobs.map((job) => (
+													<div key={job._id} className={`${styles.jobCard} ${styles.appliedJobCard}`}>
+														<div className={styles.jobMain}>
+															<div className={styles.jobTitleSection}>
+																<h4 className={styles.jobTitle}>
+																	{job.title}
+																	<span style={{marginLeft: '10px', fontSize: '0.8em', color: '#3498db', fontWeight: 'normal'}}>
+																		<i className="fa fa-check"></i> Applied
+																	</span>
+																</h4>
+																<div className={styles.companyInfo}>
+																	<span className={styles.companyName}>
+																		<i className="fa fa-building"></i> {job.company || 'TechCorp Solutions'}
+																	</span>
+																	<span className={styles.jobLocation}>
+																		<i className="fa fa-map-marker"></i> {job.location}
+																	</span>
+																	<span style={{marginLeft: '10px', fontWeight: 'bold', color: '#27ae60'}}>
+																		Status: {getApplicationStatus(job._id) || 'Pending'}
+																	</span>
+																</div>
+															</div>
+
+															<div className={styles.jobAttributes}>
+																<span className={styles.jobType}>{job.type}</span>
+																<span className={styles.jobExperience}>
+																	<i className="fa fa-briefcase"></i> {job.experience}
+																</span>
+																<span className={styles.jobSalary}>
+																	<i className="fa fa-money"></i> {job.salary}
+																</span>
+																<span className={styles.jobDate}>
+																	<i className="fa fa-calendar"></i> Posted: {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
+																</span>
+															</div>
+
+															<div className={styles.jobDescription}>
+																<p>{job.description}</p>
+															</div>
+
+															<div className={styles.jobSkills}>
+																{job.skills && job.skills.map((skill, index) => (
+																	<span key={index} className={styles.skillTag}>{skill}</span>
+																))}
+															</div>
+														</div>
+
+														<div className={styles.jobActions}>
+															<Link to={`/job/${job._id}`} className={styles.viewButton}>
+																View Details
+															</Link>
+															{(() => {
+																const buttonState = getJobButtonState(job._id);
+																return (
+																	<button
+																		onClick={buttonState.onClick}
+																		className={buttonState.className}
+																		disabled={buttonState.disabled}
+																	>
+																		{buttonState.text}
+																	</button>
+																);
+															})()}
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+									</>
+								);
+							})()}
+						</>
 					)}
 				</div>
 			</div>

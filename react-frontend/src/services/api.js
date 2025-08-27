@@ -108,3 +108,15 @@ export const getInterviewReport = (applicationId) =>
 // Candidate: application CV view (for recruiter-owned jobs)
 export const viewApplicationCV = async (applicationId) =>
   requestBlob(`/applications/${applicationId}/cv`, { method: "GET" });
+
+// Interview management
+export const startInterview = (applicationId) =>
+  request("/interviews/start", {
+    method: "POST",
+    body: JSON.stringify({
+      application_id: applicationId,
+      cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
+      jd_path: "uploads/jd/JD1.pdf",
+      reference_path: "Eric Ries - The Lean Startup.pdf",
+    }),
+  });

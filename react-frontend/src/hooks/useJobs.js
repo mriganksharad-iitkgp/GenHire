@@ -77,7 +77,7 @@ export default function useJobs(toast) {
         await updateJob(jobId, payload);
         setJobs((prev) =>
           prev.map((j) =>
-            String(j._id) === String(jobId) ? { ...j, ...jobData } : j
+            String(j._id) === String(jobId) ? { ...j, ...payload } : j
           )
         );
         toast?.("Job updated successfully!", "success");

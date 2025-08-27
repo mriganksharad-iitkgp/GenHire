@@ -174,6 +174,7 @@ const RecruiterDashboard = () => {
 		switch (s) {
 			case "active": return "#27ae60";
 			case "draft": return "#f39c12";
+			case "paused": return "#f59e0b";
 			case "closed": return "#e74c3c";
 			case "scheduled": return "#3498db";
 			case "selected": return "#27ae60";
@@ -194,6 +195,7 @@ const RecruiterDashboard = () => {
 			published: 'Published',
 			closed: 'Closed',
 			draft: 'Draft',
+			paused: 'Paused',
 			scheduled: 'Scheduled',
 			pending: 'Pending',
 			reviewed: 'Reviewed',
@@ -269,8 +271,10 @@ const RecruiterDashboard = () => {
 	const handleUpdateApplicationStatus = async (applicationId, newStatus) => {
 		const ok = await updateApplicationStatus(applicationId, newStatus);
 		if (ok) {
-			// refresh jobs to keep counts accurate
+			// refresh both jobs and applications to keep data in sync
 			loadJobs();
+			loadApplications();
+			showToast(`Application status updated to ${newStatus}`, "success");
 		}
 	};
 
@@ -403,7 +407,13 @@ const RecruiterDashboard = () => {
 	};
 
 	const handleJobUpdate = async (updatedJob) => {
-		const id = updatedJob._id || updatedJob.id;
+		// Try multiple sources for the job ID
+		const id = updatedJob._id || updatedJob.id || selectedJob?._id || selectedJob?.id;
+		if (!id) {
+			showToast("Error: Job ID not found", "error");
+			console.error('Job ID missing from:', { updatedJob, selectedJob });
+			return;
+		}
 		const ok = await updateJobPosting(id, updatedJob);
 		if (ok) {
 			showToast(`${updatedJob.title} has been updated successfully!`, "success");
@@ -460,7 +470,7 @@ const RecruiterDashboard = () => {
 			<JobEditModal
 				isOpen={isJobEditModalOpen}
 				onClose={handleCloseJobEdit}
-				job={selectedJob}
+				jobData={selectedJob}
 				onJobUpdate={handleJobUpdate}
 			/>
 

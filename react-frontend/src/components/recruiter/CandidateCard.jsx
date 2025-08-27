@@ -9,6 +9,36 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
     ? Math.round(application.interview_score)
     : null;
 
+  // Define the status progression hierarchy
+  const statusHierarchy = ['pending', 'reviewed', 'shortlisted', 'interviewed', 'selected', 'rejected'];
+  
+  // Get available status options based on current status (one-way progression)
+  const getAvailableStatusOptions = (currentStatus) => {
+    const currentIndex = statusHierarchy.indexOf(currentStatus);
+    
+    // If current status is not found, default to all options
+    if (currentIndex === -1) {
+      return statusHierarchy;
+    }
+    
+    // Allow current status and all subsequent statuses
+    const availableStatuses = statusHierarchy.slice(currentIndex);
+    
+    // Special case: if interviewed, can go to either selected or rejected
+    if (currentStatus === 'interviewed') {
+      return ['interviewed', 'selected', 'rejected'];
+    }
+    
+    // Special case: if selected or rejected, no further progression
+    if (currentStatus === 'selected' || currentStatus === 'rejected') {
+      return [currentStatus];
+    }
+    
+    return availableStatuses;
+  };
+  
+  const availableStatuses = getAvailableStatusOptions(application.status);
+
   return (
     <div className={styles.candidateCard}>
       <div className={styles.candidateInfo}>
@@ -67,13 +97,18 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           className={styles.statusSelect}
           value={application.status}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
+          title={`Current: ${displayStatus(application.status)} - Can only progress forward`}
         >
-          <option value="pending">Pending</option>
-          <option value="reviewed">Reviewed</option>
-          <option value="shortlisted">Shortlisted</option>
-          <option value="interviewed">Interviewed</option>
-          <option value="selected">Selected</option>
-          <option value="rejected">Rejected</option>
+          {availableStatuses.map(status => (
+            <option key={status} value={status}>
+              {status === 'pending' && 'Pending'}
+              {status === 'reviewed' && 'Reviewed'}
+              {status === 'shortlisted' && 'Shortlisted'}
+              {status === 'interviewed' && 'Interviewed'}
+              {status === 'selected' && 'Selected'}
+              {status === 'rejected' && 'Rejected'}
+            </option>
+          ))}
         </select>
         {((typeof application.interview_score === 'number') || application.report_available) && (
           <button className={styles.secondaryButton} onClick={() => viewInterviewReport(application._id)}>

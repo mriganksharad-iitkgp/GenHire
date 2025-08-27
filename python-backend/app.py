@@ -790,14 +790,22 @@ def get_jobs(current_user):
             job['_id'] = str(job['_id'])
         return jsonify(jobs), 200
     else:
-        # Return active and published jobs for candidates (tolerate missing/bad status)
-        jobs = list(db.jobs.find({
+        # For candidates: Show active jobs + jobs they have applied to (regardless of current status)
+        user_id = str(current_user['_id'])
+        
+        # Get job IDs that the user has applied to
+        user_applications = list(applications_collection.find({'student_id': user_id}))
+        applied_job_ids = [app['job_id'] for app in user_applications]
+        
+        # Build query: active jobs OR jobs user has applied to
+        query = {
             '$or': [
-                {'status': {'$in': ['active', 'published']}},
-                {'status': {'$exists': False}},
-                {'status': None}
+                {'status': 'active'},  # Always show active jobs
+                {'_id': {'$in': [ObjectId(job_id) for job_id in applied_job_ids]}}  # Show jobs user applied to
             ]
-        }))
+        }
+        
+        jobs = list(db.jobs.find(query))
         for job in jobs:
             job['_id'] = str(job['_id'])
             # Remove sensitive recruiter info
@@ -819,10 +827,10 @@ def create_job(current_user):
         if field not in data or not data[field]:
             return jsonify({'error': f'{field} is required'}), 400
     
-    # Normalize/validate status
-    raw_status = (data.get('status') or 'active').strip().lower()
-    allowed_statuses = {'active', 'published', 'closed'}
-    status = raw_status if raw_status in allowed_statuses else 'active'
+    # Normalize/validate status with enhanced workflow - default to draft
+    raw_status = (data.get('status') or 'draft').strip().lower()
+    allowed_statuses = {'draft', 'active', 'paused', 'closed'}
+    status = raw_status if raw_status in allowed_statuses else 'draft'
 
     # Helpers to normalize list-like fields possibly sent as strings
     def _to_list(val, sep=','):
@@ -858,6 +866,7 @@ def create_job(current_user):
         'status': status,
         'created_by': str(current_user['_id']),
         'created_at': datetime.datetime.utcnow(),
+        'updated_at': datetime.datetime.utcnow(),
         'deadline': data.get('deadline'),
         'applicants': 0,
         'interviewed': 0,
@@ -879,24 +888,44 @@ def update_job(current_user, job_id):
     if current_user.get('user_type') != 'recruiter':
         return jsonify({'error': 'Unauthorized. Only recruiters can update jobs.'}), 403
     
+    # Validate job_id format
+    if not job_id or job_id == 'undefined' or job_id == 'null':
+        return jsonify({'error': 'Invalid job ID provided'}), 400
+    
+    try:
+        job_object_id = ObjectId(job_id)
+    except Exception as e:
+        return jsonify({'error': f'Invalid job ID format: {job_id}'}), 400
+    
     # Verify job belongs to current recruiter
-    job = db.jobs.find_one({'_id': ObjectId(job_id), 'created_by': str(current_user['_id'])})
+    job = db.jobs.find_one({'_id': job_object_id, 'created_by': str(current_user['_id'])})
     if not job:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({'error': 'Job not found or unauthorized'}), 404
     
     data = request.get_json()
     update_fields = {}
+    
+    # Status progression validation
+    def validate_status_progression(current_status, new_status):
+        status_hierarchy = {'draft': 0, 'active': 1, 'paused': 2, 'closed': 3}
+        current_level = status_hierarchy.get(current_status, 0)
+        new_level = status_hierarchy.get(new_status, 0)
+        return new_level >= current_level
     
     allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline']
     for field in allowed_fields:
         if field in data:
             if field == 'status':
                 raw = str(data[field]).strip().lower()
-                if raw in {'active','published','closed'}:
-                    update_fields[field] = raw
+                allowed_statuses = {'draft', 'active', 'paused', 'closed'}
+                if raw in allowed_statuses:
+                    current_status = job.get('status', 'draft')
+                    if validate_status_progression(current_status, raw):
+                        update_fields[field] = raw
+                    else:
+                        return jsonify({'error': f'Cannot change status from {current_status} to {raw}. Status can only progress forward.'}), 400
                 else:
-                    # Ignore invalid statuses instead of poisoning the document
-                    continue
+                    return jsonify({'error': f'Invalid status: {raw}. Allowed values: {list(allowed_statuses)}'}), 400
             elif field in {'skills'}:
                 # Support comma-separated strings
                 val = data.get(field, [])
@@ -917,7 +946,7 @@ def update_job(current_user, job_id):
     
     if update_fields:
         update_fields['updated_at'] = datetime.datetime.utcnow()
-        db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': update_fields})
+        db.jobs.update_one({'_id': job_object_id}, {'$set': update_fields})
     
     return jsonify({'message': 'Job updated successfully'}), 200
 
@@ -1120,6 +1149,78 @@ def withdraw_application(current_user, job_id):
     
     return jsonify({'message': 'Application withdrawn successfully'}), 200
 
+# Debug endpoint to check interviews data
+# Debug endpoint to create test interview with proctoring score
+@app.route('/api/debug/create-test-interview', methods=['POST'])
+@cross_origin()
+def create_test_interview():
+    """Create a test interview with proctoring score"""
+    # Get the first application to attach interview to
+    application = applications_collection.find_one({})
+    if not application:
+        return jsonify({'error': 'No applications found'})
+    
+    # Create a test interview with proctoring score
+    test_interview = {
+        'session_id': 'test_session_123',
+        'application_id': str(application['_id']),
+        'user_id': application['student_id'],
+        'status': 'completed',
+        'proctoring_score': 85,
+        'final_score': 88,
+        'evaluation': {'summary': 'Test evaluation'},
+        'created_at': datetime.datetime.utcnow(),
+        'updated_at': datetime.datetime.utcnow(),
+        'cv_path': 'test_cv.pdf',
+        'jd_path': 'test_jd.pdf'
+    }
+    
+    result = interviews_collection.insert_one(test_interview)
+    
+    # Also update the application with interview score
+    applications_collection.update_one(
+        {'_id': application['_id']},
+        {'$set': {
+            'interview_score': 88,
+            'status': 'interviewed',
+            'updated_at': datetime.datetime.utcnow()
+        }}
+    )
+    
+    return jsonify({
+        'message': 'Test interview created',
+        'interview_id': str(result.inserted_id),
+        'application_id': str(application['_id']),
+        'proctoring_score': 85
+    })
+
+@app.route('/api/debug/interviews', methods=['GET']))
+@cross_origin()
+def debug_interviews():
+    """Debug endpoint to see what interviews exist"""
+    interviews = list(interviews_collection.find({}))
+    for interview in interviews:
+        interview['_id'] = str(interview['_id'])
+        if isinstance(interview.get('created_at'), datetime.datetime):
+            interview['created_at'] = interview['created_at'].isoformat()
+        if isinstance(interview.get('updated_at'), datetime.datetime):
+            interview['updated_at'] = interview['updated_at'].isoformat()
+    return jsonify({'interviews': interviews, 'count': len(interviews)})
+
+# Debug endpoint to check applications
+@app.route('/api/debug/applications', methods=['GET'])
+@cross_origin()
+def debug_applications():
+    """Debug endpoint to see what applications exist"""
+    applications = list(applications_collection.find({}))
+    for app in applications:
+        app['_id'] = str(app['_id'])
+        if isinstance(app.get('applied_at'), datetime.datetime):
+            app['applied_at'] = app['applied_at'].isoformat()
+        if isinstance(app.get('updated_at'), datetime.datetime):
+            app['updated_at'] = app['updated_at'].isoformat()
+    return jsonify({'applications': applications, 'count': len(applications)})
+
 @app.route('/api/applications', methods=['GET'])
 @cross_origin()
 @token_required
@@ -1156,8 +1257,24 @@ def get_applications(current_user):
                     'department': job.get('department'),
                     'logo': job.get('logo')
                 }
+            # Get proctoring score from most recent completed interview
+            completed_interview = interviews_collection.find_one(
+                {'application_id': app['_id'], 'status': 'completed'},
+                sort=[('updated_at', -1)]
+            )
+            if completed_interview and completed_interview.get('proctoring_score'):
+                proctoring_score = completed_interview.get('proctoring_score')
+                # Handle both numeric and string values, exclude 'N/A'
+                if isinstance(proctoring_score, (int, float)):
+                    app['proctoring_score'] = proctoring_score
+                elif isinstance(proctoring_score, str) and proctoring_score.replace('.', '', 1).isdigit():
+                    app['proctoring_score'] = float(proctoring_score)
+                else:
+                    app['proctoring_score'] = None
+            else:
+                app['proctoring_score'] = None
             # Whether an interview report is available
-            app['report_available'] = interviews_collection.find_one({'application_id': app['_id'], 'status': 'completed'}) is not None
+            app['report_available'] = completed_interview is not None
         
         return jsonify(applications), 200
     elif user_type == 'recruiter':
@@ -1190,8 +1307,24 @@ def get_applications(current_user):
                 }
             # Provide base URL for CV retrieval; the frontend can append '?token=...'
             app['cv_url'] = f"/api/applications/{app['_id']}/cv"
+            # Get proctoring score from most recent completed interview
+            completed_interview = interviews_collection.find_one(
+                {'application_id': app['_id'], 'status': 'completed'},
+                sort=[('updated_at', -1)]
+            )
+            if completed_interview and completed_interview.get('proctoring_score'):
+                proctoring_score = completed_interview.get('proctoring_score')
+                # Handle both numeric and string values, exclude 'N/A'
+                if isinstance(proctoring_score, (int, float)):
+                    app['proctoring_score'] = proctoring_score
+                elif isinstance(proctoring_score, str) and proctoring_score.replace('.', '', 1).isdigit():
+                    app['proctoring_score'] = float(proctoring_score)
+                else:
+                    app['proctoring_score'] = None
+            else:
+                app['proctoring_score'] = None
             # Whether a report is available
-            app['report_available'] = interviews_collection.find_one({'application_id': app['_id'], 'status': 'completed'}) is not None
+            app['report_available'] = completed_interview is not None
         
         return jsonify(applications), 200
     
@@ -1219,9 +1352,9 @@ def get_job_details(current_user, job_id):
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
 
     if user_type != 'recruiter':
-        # For candidates, restrict to available jobs
+        # For candidates, restrict to active jobs only
         status = (job.get('status') or '').strip().lower()
-        if status not in ['active', 'published', ''] and job.get('status') is not None:
+        if status not in ['active', ''] and job.get('status') is not None:
             return jsonify({'error': 'Job not available'}), 403
         # Hide recruiter-only fields
         job.pop('created_by', None)

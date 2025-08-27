@@ -194,6 +194,26 @@ const Profile = () => {
 			setReportScores({ cv, interview });
 			setIsReportOpen(true);
 		};
+		
+		// Handle Give Interview action for shortlisted candidates
+		const handleGiveInterview = async (application) => {
+			try {
+				showToast(`Starting interview session for ${application.position}...`, 'info');
+				
+				// Call the startInterview API with the application ID
+				const { startInterview } = await import('../services/api');
+				const response = await startInterview(application.id);
+				
+				// Navigate to the interview page with the session ID
+				navigate(`/interview/${response.session_id}`, {
+					state: { applicationId: application.id }
+				});
+				
+			} catch (error) {
+				console.error('Error starting interview:', error);
+				showToast('Failed to start interview session. Please try again.', 'error');
+			}
+		};
 
 	return (
 		<div className={styles.profileContainer}>
@@ -309,6 +329,7 @@ const Profile = () => {
 														onClearFilters={() => { setCompanyFilter(""); setStatusFilter(""); }}
 														onViewCV={handleViewCV}
 														onOpenReport={openInterviewReport}
+														onGiveInterview={handleGiveInterview}
 													/>
 												)}
 					</div>

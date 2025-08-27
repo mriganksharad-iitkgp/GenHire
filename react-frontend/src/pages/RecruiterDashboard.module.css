@@ -48,20 +48,86 @@
 
 /* Dashboard Container */
 .dashboardContainer {
+/* Dashboard Container */
+.dashboardContainer {
   min-height: 100vh;
   background: linear-gradient(135deg, var(--gray-50) 0%, var(--primary-50) 100%);
+  padding: 0;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  padding-top: 0; /* Remove extra padding since we're handling navbar spacing in tabNavigation */
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Awesome Dark Mode Dashboard Container */
+body.dark .dashboardContainer,
+:global(.dark) .dashboardContainer {
+  background: radial-gradient(ellipse at top, var(--dark-bg-secondary) 0%, var(--dark-bg) 50%) !important;
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* Animated background particles for dark mode */
+body.dark .dashboardContainer::before,
+:global(.dark) .dashboardContainer::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 20% 20%, var(--dark-accent-glow) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 40% 60%, rgba(102, 126, 234, 0.15) 0%, transparent 50%);
+  opacity: 0.6;
+  animation: particleFloat 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Floating particles animation */
+@keyframes particleFloat {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-20px) rotate(90deg); }
+  50% { transform: translateY(0px) rotate(180deg); }
+  75% { transform: translateY(-15px) rotate(270deg); }
+}
+
+/* Ensure content is above the animated background */
+body.dark .dashboardContainer > *,
+:global(.dark) .dashboardContainer > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Enhanced Dark Mode Variables */
 body.dark,
 :global(.dark) {
-	--dark-bg: #0b1220;             /* page background */
-	--dark-surface: #0f172a;        /* base surface */
-	--dark-surface-2: #1f2937;      /* elevated surface */
-	--dark-surface-3: #111827;      /* deep surface */
-	--dark-border: #334155;         /* slate border */
-	--dark-text: #e2e8f0;           /* primary text */
-	--dark-muted: #94a3b8;          /* secondary text */
-	--dark-accent-start: #60a5fa;   /* blue accent */
-	--dark-accent-end: #3b82f6;     /* blue accent end */
-	--dark-shadow: 0 6px 18px rgba(0,0,0,0.35);
+	--dark-bg: #0a0e17;                    /* deep space background */
+	--dark-bg-secondary: #0f1419;          /* secondary background */
+	--dark-surface: #1a202c;               /* primary surface */
+	--dark-surface-2: #2d3748;             /* elevated surface */
+	--dark-surface-3: #4a5568;             /* highest surface */
+	--dark-surface-glass: rgba(26, 32, 44, 0.8);  /* glass effect */
+	--dark-border: #4a5568;                /* primary border */
+	--dark-border-light: #718096;          /* lighter border */
+	--dark-text: #f7fafc;                  /* primary text */
+	--dark-text-secondary: #e2e8f0;        /* secondary text */
+	--dark-muted: #a0aec0;                 /* muted text */
+	--dark-accent-primary: #667eea;        /* primary accent */
+	--dark-accent-secondary: #764ba2;      /* secondary accent */
+	--dark-accent-glow: rgba(102, 126, 234, 0.3);  /* glow effect */
+	--dark-success: #68d391;               /* success color */
+	--dark-warning: #f6e05e;               /* warning color */
+	--dark-error: #fc8181;                 /* error color */
+	--dark-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--dark-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+	--dark-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+	--dark-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+	--dark-gradient-primary: linear-gradient(135deg, var(--dark-accent-primary) 0%, var(--dark-accent-secondary) 100%);
+	--dark-gradient-surface: linear-gradient(135deg, var(--dark-surface) 0%, var(--dark-surface-2) 100%);
+	--dark-gradient-glass: linear-gradient(135deg, rgba(26, 32, 44, 0.9) 0%, rgba(45, 55, 72, 0.8) 100%);
 }
   padding: 0;
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -106,6 +172,330 @@ body.dark,
 }
 
 /* ===================================
+   AWESOME DARK MODE LOADING STATES
+   =================================== */
+
+/* Dark mode loading container */
+body.dark .loadingContainer,
+:global(.dark) .loadingContainer {
+  background: radial-gradient(ellipse at center, var(--dark-bg-secondary) 0%, var(--dark-bg) 70%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated background for loading */
+body.dark .loadingContainer::before,
+:global(.dark) .loadingContainer::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 30% 30%, var(--dark-accent-glow) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(118, 75, 162, 0.3) 0%, transparent 50%);
+  opacity: 0.4;
+  animation: loadingFloat 15s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes loadingFloat {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-30px) scale(1.1); }
+}
+
+/* Enhanced loading spinner */
+body.dark .loadingSpinner,
+:global(.dark) .loadingSpinner {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-xl), 0 0 40px var(--dark-accent-glow) !important;
+  color: var(--dark-text) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  position: relative;
+  z-index: 1;
+  animation: spinnerFloat 3s ease-in-out infinite;
+}
+
+@keyframes spinnerFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Enhanced spinner animation */
+body.dark .loadingSpinner::before,
+:global(.dark) .loadingSpinner::before {
+  border: 3px solid var(--dark-surface-2) !important;
+  border-top-color: var(--dark-accent-primary) !important;
+  border-right-color: var(--dark-accent-secondary) !important;
+  animation: enhancedSpin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  box-shadow: 0 0 15px var(--dark-accent-glow) !important;
+}
+
+@keyframes enhancedSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+/* Additional loading animations for components */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Shimmer effect for loading cards */
+.loadingShimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.loadingShimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Dark mode shimmer effect */
+body.dark .loadingShimmer::before,
+:global(.dark) .loadingShimmer::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--dark-accent-glow) 50%,
+    transparent 100%
+  ) !important;
+}
+
+/* Pulse animation for interactive elements */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+.pulseAnimation {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Glow animation for accent elements */
+@keyframes glow {
+  0%, 100% { 
+    box-shadow: 0 0 5px var(--dark-accent-glow), 0 0 10px var(--dark-accent-glow);
+  }
+  50% { 
+    box-shadow: 0 0 20px var(--dark-accent-glow), 0 0 30px var(--dark-accent-glow);
+  }
+}
+
+.glowAnimation {
+  animation: glow 3s ease-in-out infinite;
+}
+
+/* Skeleton loading for dark mode */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--gray-200) 25%,
+    var(--gray-100) 50%,
+    var(--gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+}
+
+body.dark .skeleton,
+:global(.dark) .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--dark-surface-2) 25%,
+    var(--dark-surface-3) 50%,
+    var(--dark-surface-2) 75%
+  ) !important;
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonLoading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===================================
+   ADDITIONAL DARK MODE ENHANCEMENTS
+   =================================== */
+
+/* Enhanced section headers for dark mode */
+body.dark .sectionHeader,
+:global(.dark) .sectionHeader {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Section header ambient glow */
+body.dark .sectionHeader::before,
+:global(.dark) .sectionHeader::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--dark-gradient-primary);
+  opacity: 0.05;
+  z-index: -1;
+}
+
+/* Section titles with enhanced styling */
+body.dark .sectionHeader h2,
+body.dark .sectionTitle,
+:global(.dark) .sectionHeader h2,
+:global(.dark) .sectionTitle {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  background: var(--dark-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Create job button enhanced styling */
+body.dark .createJobButton,
+:global(.dark) .createJobButton {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 25px var(--dark-accent-glow) !important;
+  border: 1px solid var(--dark-accent-primary) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark .createJobButton:hover,
+:global(.dark) .createJobButton:hover {
+  transform: translateY(-4px) scale(1.03) !important;
+  box-shadow: var(--dark-shadow-xl), 0 0 40px var(--dark-accent-glow) !important;
+  background: linear-gradient(135deg, var(--dark-accent-secondary) 0%, var(--dark-accent-primary) 100%) !important;
+}
+
+/* Enhanced edit profile button */
+body.dark .editProfileButton,
+:global(.dark) .editProfileButton {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 15px var(--dark-accent-glow) !important;
+  border: 1px solid var(--dark-accent-primary) !important;
+}
+
+body.dark .editProfileButton:hover,
+:global(.dark) .editProfileButton:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 25px var(--dark-accent-glow) !important;
+}
+
+/* Save and cancel button enhancements */
+body.dark .saveButton,
+:global(.dark) .saveButton {
+  background: linear-gradient(135deg, var(--dark-success) 0%, #48bb78 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px rgba(104, 211, 145, 0.4) !important;
+  border: 1px solid var(--dark-success) !important;
+}
+
+body.dark .saveButton:hover,
+:global(.dark) .saveButton:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 30px rgba(104, 211, 145, 0.5) !important;
+}
+
+body.dark .cancelButton,
+:global(.dark) .cancelButton {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+}
+
+body.dark .cancelButton:hover,
+:global(.dark) .cancelButton:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+/* Ensure all text elements have proper contrast */
+body.dark *,
+:global(.dark) * {
+  /* This is a safety net for any missed text elements */
+}
+
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4,
+body.dark h5,
+body.dark h6,
+:global(.dark) h1,
+:global(.dark) h2,
+:global(.dark) h3,
+:global(.dark) h4,
+:global(.dark) h5,
+:global(.dark) h6 {
+  color: var(--dark-text) !important;
+}
+
+body.dark p,
+body.dark span,
+body.dark div,
+:global(.dark) p,
+:global(.dark) span,
+:global(.dark) div {
+  color: var(--dark-text-secondary);
+}
+
+/* Enhanced scrollbar for dark mode */
+body.dark ::-webkit-scrollbar,
+:global(.dark) ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body.dark ::-webkit-scrollbar-track,
+:global(.dark) ::-webkit-scrollbar-track {
+  background: var(--dark-surface-2);
+  border-radius: 4px;
+}
+
+body.dark ::-webkit-scrollbar-thumb,
+:global(.dark) ::-webkit-scrollbar-thumb {
+  background: var(--dark-gradient-primary);
+  border-radius: 4px;
+  box-shadow: 0 0 10px var(--dark-accent-glow);
+}
+
+body.dark ::-webkit-scrollbar-thumb:hover,
+:global(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--dark-accent-secondary) 0%, var(--dark-accent-primary) 100%);
+  box-shadow: 0 0 15px var(--dark-accent-glow);
+}
+
+/* ===================================
    TAB NAVIGATION SYSTEM
    =================================== */
 
@@ -121,7 +511,8 @@ body.dark,
   min-height: 70px;
   display: block !important;
   visibility: visible !important;
-  margin-top: 80px; /* Account for fixed navbar */
+  margin-top: 100px; /* Increased margin to create space below navbar */
+  margin-bottom: var(--spacing-xl); /* Add bottom margin to separate from content */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
@@ -213,14 +604,142 @@ body.dark,
 }
 
 /* ===================================
+   AWESOME DARK MODE TAB NAVIGATION
+   =================================== */
+
+/* Dark mode tab navigation with glass morphism */
+body.dark .tabNavigation,
+:global(.dark) .tabNavigation {
+  background: var(--dark-gradient-glass) !important;
+  border-bottom: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  position: sticky !important; /* Ensure sticky positioning is inherited */
+  top: 80px !important; /* Ensure top positioning is inherited */
+  z-index: 1001 !important; /* Ensure z-index is inherited */
+  margin-top: 100px !important; /* Match the light mode spacing */
+  margin-bottom: var(--spacing-xl) !important; /* Add bottom margin to separate from content */
+}
+
+/* Ambient glow effect for tab navigation */
+body.dark .tabNavigation::before,
+:global(.dark) .tabNavigation::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--dark-gradient-primary);
+  opacity: 0.1;
+  z-index: -1;
+  border-radius: inherit;
+}
+
+/* Dark mode tab buttons */
+body.dark .tabButton,
+:global(.dark) .tabButton {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  color: var(--dark-text-secondary) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tab button hover effect */
+body.dark .tabButton:hover,
+:global(.dark) .tabButton:hover {
+  color: var(--dark-text) !important;
+  background: var(--dark-gradient-primary) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+/* Tab button hover glow animation */
+body.dark .tabButton:hover::before,
+:global(.dark) .tabButton:hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s ease;
+  left: 100%;
+}
+
+/* Active tab button */
+body.dark .tabButton.active,
+:global(.dark) .tabButton.active {
+  color: #ffffff !important;
+  background: var(--dark-gradient-primary) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 20px var(--dark-accent-glow) !important;
+  position: relative;
+}
+
+/* Active tab glow effect */
+body.dark .tabButton.active::before,
+:global(.dark) .tabButton.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+  border-radius: var(--radius-lg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Tab icons with enhanced dark mode effects */
+body.dark .tabButton i,
+:global(.dark) .tabButton i {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+}
+
+body.dark .tabButton:hover i,
+:global(.dark) .tabButton:hover i {
+  transform: scale(1.15) rotate(5deg) !important;
+  filter: drop-shadow(0 4px 8px var(--dark-accent-glow)) !important;
+}
+
+body.dark .tabButton.active i,
+:global(.dark) .tabButton.active i {
+  transform: scale(1.2) !important;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)) !important;
+  color: #ffffff !important;
+  z-index: 2;
+  position: relative;
+}
+
+/* Ensure dark mode tab navigation spacing is always applied */
+body.dark .dashboardContainer .tabNavigation,
+:global(.dark) .dashboardContainer .tabNavigation {
+  margin-top: 100px !important;
+  margin-bottom: var(--spacing-xl) !important;
+  position: sticky !important;
+  top: 80px !important;
+  z-index: 1001 !important;
+}
+
+/* ===================================
    MAIN CONTENT AREA
    =================================== */
 
 .mainContent {
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--spacing-2xl);
-  min-height: calc(100vh - 120px);
+  padding: var(--spacing-lg) var(--spacing-2xl); /* Reduced top padding since tab navigation now has proper spacing */
+  min-height: calc(100vh - 180px); /* Adjusted for new tab navigation height */
 }
 
 /* ===================================
@@ -271,6 +790,85 @@ body.dark,
   position: relative;
   z-index: 1;
   max-width: 600px;
+}
+
+/* ===================================
+   AWESOME DARK MODE OVERVIEW SECTION
+   =================================== */
+
+/* Dark mode welcome section with amazing effects */
+body.dark .welcomeSection,
+:global(.dark) .welcomeSection {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-xl) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient background for welcome section */
+body.dark .welcomeSection::before,
+:global(.dark) .welcomeSection::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, var(--dark-accent-primary), var(--dark-accent-secondary), var(--dark-accent-primary));
+  opacity: 0.1;
+  animation: rotateGradient 20s linear infinite;
+  z-index: 0;
+}
+
+@keyframes rotateGradient {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Floating orbs in welcome section */
+body.dark .welcomeSection::after,
+:global(.dark) .welcomeSection::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 15%;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, var(--dark-accent-glow) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: floatOrb 15s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes floatOrb {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-20px, -15px) scale(1.1); }
+  50% { transform: translate(15px, -25px) scale(0.9); }
+  75% { transform: translate(-10px, 10px) scale(1.05); }
+}
+
+/* Welcome text styling in dark mode */
+body.dark .welcomeSection h2,
+:global(.dark) .welcomeSection h2 {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  background: var(--dark-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 2;
+}
+
+body.dark .welcomeSection p,
+:global(.dark) .welcomeSection p {
+  color: var(--dark-text-secondary) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+  position: relative;
+  z-index: 2;
 }
 
 /* ===================================
@@ -363,6 +961,107 @@ body.dark,
 
 .trendNeutral {
   color: var(--gray-500);
+}
+
+/* ===================================
+   AWESOME DARK MODE METRICS CARDS
+   =================================== */
+
+/* Dark mode metrics cards with glass morphism */
+body.dark .metricCard,
+:global(.dark) .metricCard {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Metric card hover effects */
+body.dark .metricCard:hover,
+:global(.dark) .metricCard:hover {
+  transform: translateY(-8px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-xl), 0 0 30px var(--dark-accent-glow) !important;
+  border-color: var(--dark-accent-primary) !important;
+}
+
+/* Animated border glow for metric cards */
+body.dark .metricCard::before,
+:global(.dark) .metricCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--dark-gradient-primary) !important;
+  box-shadow: 0 0 10px var(--dark-accent-glow);
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.6; transform: scaleX(1); }
+  50% { opacity: 1; transform: scaleX(1.02); }
+}
+
+/* Metric icons with enhanced effects */
+body.dark .metricIcon,
+:global(.dark) .metricIcon {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+}
+
+/* Icon hover animation */
+body.dark .metricCard:hover .metricIcon,
+:global(.dark) .metricCard:hover .metricIcon {
+  transform: scale(1.1) rotate(5deg) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 30px var(--dark-accent-glow) !important;
+}
+
+/* Metric text styling */
+body.dark .metricValue,
+:global(.dark) .metricValue {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  background: var(--dark-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+body.dark .metricLabel,
+:global(.dark) .metricLabel {
+  color: var(--dark-text-secondary) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Metric trend indicators */
+body.dark .metricTrend,
+:global(.dark) .metricTrend {
+  color: var(--dark-text-secondary) !important;
+}
+
+body.dark .trendUp,
+:global(.dark) .trendUp {
+  color: var(--dark-success) !important;
+  text-shadow: 0 0 8px rgba(104, 211, 145, 0.4) !important;
+}
+
+body.dark .trendDown,
+:global(.dark) .trendDown {
+  color: var(--dark-error) !important;
+  text-shadow: 0 0 8px rgba(252, 129, 129, 0.4) !important;
+}
+
+body.dark .trendNeutral,
+:global(.dark) .trendNeutral {
+  color: var(--dark-muted) !important;
 }
 
 /* ===================================
@@ -469,6 +1168,119 @@ body.dark,
 .statusInterviewed {
   background: var(--success-500);
   color: white;
+}
+
+/* ===================================
+   AWESOME DARK MODE RECENT ACTIVITY
+   =================================== */
+
+/* Dark mode recent activity section */
+body.dark .recentActivity,
+:global(.dark) .recentActivity {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Activity section header */
+body.dark .recentActivity .sectionHeader,
+:global(.dark) .recentActivity .sectionHeader {
+  background: transparent !important;
+  border-bottom: 1px solid var(--dark-border) !important;
+  box-shadow: none !important;
+}
+
+body.dark .sectionTitle,
+:global(.dark) .sectionTitle {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark .sectionTitle i,
+:global(.dark) .sectionTitle i {
+  color: var(--dark-accent-primary) !important;
+  filter: drop-shadow(0 0 8px var(--dark-accent-glow)) !important;
+}
+
+/* Activity items with glass effect */
+body.dark .activityItem,
+:global(.dark) .activityItem {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Activity item hover effects */
+body.dark .activityItem:hover,
+:global(.dark) .activityItem:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateX(5px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+/* Activity icons with glow */
+body.dark .activityIcon,
+:global(.dark) .activityIcon {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 15px var(--dark-accent-glow) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body.dark .activityItem:hover .activityIcon,
+:global(.dark) .activityItem:hover .activityIcon {
+  transform: scale(1.1) rotate(10deg) !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+}
+
+/* Activity text styling */
+body.dark .activityText,
+:global(.dark) .activityText {
+  color: var(--dark-text) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .activityTime,
+:global(.dark) .activityTime {
+  color: var(--dark-muted) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Enhanced status badges */
+body.dark .activityStatus,
+:global(.dark) .activityStatus {
+  box-shadow: var(--dark-shadow-sm) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+body.dark .statusPending,
+:global(.dark) .statusPending {
+  background: linear-gradient(135deg, var(--dark-warning) 0%, #f6ad55 100%) !important;
+  color: #1a202c !important;
+  box-shadow: 0 0 15px rgba(246, 224, 94, 0.3) !important;
+}
+
+body.dark .statusShortlisted,
+:global(.dark) .statusShortlisted {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 15px var(--dark-accent-glow) !important;
+}
+
+body.dark .statusInterviewed,
+:global(.dark) .statusInterviewed {
+  background: linear-gradient(135deg, var(--dark-success) 0%, #48bb78 100%) !important;
+  color: #1a202c !important;
+  box-shadow: 0 0 15px rgba(104, 211, 145, 0.3) !important;
 }
 
 /* ===================================
@@ -603,6 +1415,143 @@ body.dark,
   flex-wrap: wrap;
 }
 
+/* ===================================
+   AWESOME DARK MODE JOBS SECTION
+   =================================== */
+
+/* Dark mode job cards with glass morphism */
+body.dark .jobCard,
+:global(.dark) .jobCard {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  border-left: 4px solid var(--dark-accent-primary) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Job card hover effects */
+body.dark .jobCard:hover,
+:global(.dark) .jobCard:hover {
+  transform: translateY(-8px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-xl), 0 0 30px var(--dark-accent-glow) !important;
+  border-left-color: var(--dark-accent-secondary) !important;
+  border-color: var(--dark-accent-primary) !important;
+}
+
+/* Animated gradient border for job cards */
+body.dark .jobCard::before,
+:global(.dark) .jobCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--dark-gradient-primary);
+  box-shadow: 0 0 15px var(--dark-accent-glow);
+  animation: borderPulse 4s ease-in-out infinite;
+}
+
+@keyframes borderPulse {
+  0%, 100% { opacity: 0.6; height: 100%; }
+  50% { opacity: 1; height: 105%; }
+}
+
+/* Job header styling */
+body.dark .jobHeader h3,
+body.dark .jobTitleSection h3,
+:global(.dark) .jobHeader h3,
+:global(.dark) .jobTitleSection h3 {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  background: var(--dark-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Job meta information */
+body.dark .jobMeta p,
+body.dark .jobMetaItem,
+:global(.dark) .jobMeta p,
+:global(.dark) .jobMetaItem {
+  color: var(--dark-text-secondary) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .jobMeta i,
+body.dark .jobMetaItem i,
+:global(.dark) .jobMeta i,
+:global(.dark) .jobMetaItem i {
+  color: var(--dark-accent-primary) !important;
+  filter: drop-shadow(0 0 8px var(--dark-accent-glow)) !important;
+}
+
+/* Job progress section */
+body.dark .jobProgress,
+:global(.dark) .jobProgress {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+body.dark .progressNumber,
+:global(.dark) .progressNumber {
+  color: var(--dark-accent-primary) !important;
+  text-shadow: 0 0 10px var(--dark-accent-glow) !important;
+}
+
+body.dark .progressLabel,
+:global(.dark) .progressLabel {
+  color: var(--dark-muted) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Enhanced status badges for jobs */
+body.dark .statusBadge,
+:global(.dark) .statusBadge {
+  box-shadow: var(--dark-shadow-sm), 0 0 15px currentColor !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Status-specific dark mode colors with glow */
+body.dark .statusBadge.pending,
+:global(.dark) .statusBadge.pending {
+  background: linear-gradient(135deg, var(--dark-warning) 0%, #f6ad55 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 15px rgba(246, 224, 94, 0.4) !important;
+}
+
+body.dark .statusBadge.active,
+:global(.dark) .statusBadge.active {
+  background: linear-gradient(135deg, var(--dark-success) 0%, #48bb78 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 15px rgba(104, 211, 145, 0.4) !important;
+}
+
+body.dark .statusBadge.draft,
+:global(.dark) .statusBadge.draft {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 15px var(--dark-accent-glow) !important;
+}
+
+body.dark .statusBadge.closed,
+:global(.dark) .statusBadge.closed {
+  background: linear-gradient(135deg, var(--dark-error) 0%, #f56565 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 15px rgba(252, 129, 129, 0.4) !important;
+}
+
 .actionButton {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
@@ -645,6 +1594,122 @@ body.dark,
 
 .deleteButton:hover {
   background: var(--error-100);
+}
+
+/* ===================================
+   AWESOME DARK MODE JOB ACTION BUTTONS
+   =================================== */
+
+/* Dark mode action buttons with glass morphism */
+body.dark .actionButton,
+body.dark .viewButton,
+body.dark .editButton,
+body.dark .deleteButton,
+:global(.dark) .actionButton,
+:global(.dark) .viewButton,
+:global(.dark) .editButton,
+:global(.dark) .deleteButton {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  color: var(--dark-text) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/* Button hover effects */
+body.dark .actionButton:hover,
+body.dark .viewButton:hover,
+body.dark .editButton:hover,
+body.dark .deleteButton:hover,
+:global(.dark) .actionButton:hover,
+:global(.dark) .viewButton:hover,
+:global(.dark) .editButton:hover,
+:global(.dark) .deleteButton:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+  border-color: var(--dark-accent-primary) !important;
+}
+
+/* Specific button type styling */
+body.dark .viewButton:hover,
+:global(.dark) .viewButton:hover {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+}
+
+body.dark .editButton:hover,
+:global(.dark) .editButton:hover {
+  background: linear-gradient(135deg, var(--dark-warning) 0%, #f6ad55 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px rgba(246, 224, 94, 0.4) !important;
+}
+
+body.dark .deleteButton:hover,
+:global(.dark) .deleteButton:hover {
+  background: linear-gradient(135deg, var(--dark-error) 0%, #f56565 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px rgba(252, 129, 129, 0.4) !important;
+}
+
+/* Button icon enhancements */
+body.dark .actionButton i,
+body.dark .viewButton i,
+body.dark .editButton i,
+body.dark .deleteButton i,
+:global(.dark) .actionButton i,
+:global(.dark) .viewButton i,
+:global(.dark) .editButton i,
+:global(.dark) .deleteButton i {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+}
+
+body.dark .actionButton:hover i,
+body.dark .viewButton:hover i,
+body.dark .editButton:hover i,
+body.dark .deleteButton:hover i,
+:global(.dark) .actionButton:hover i,
+:global(.dark) .viewButton:hover i,
+:global(.dark) .editButton:hover i,
+:global(.dark) .deleteButton:hover i {
+  transform: scale(1.1) !important;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)) !important;
+}
+
+/* Primary and secondary button enhancements */
+body.dark .primaryButton,
+:global(.dark) .primaryButton {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+  border: 1px solid var(--dark-accent-primary) !important;
+}
+
+body.dark .primaryButton:hover,
+:global(.dark) .primaryButton:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 30px var(--dark-accent-glow) !important;
+}
+
+body.dark .secondaryButton,
+:global(.dark) .secondaryButton {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+}
+
+body.dark .secondaryButton:hover,
+:global(.dark) .secondaryButton:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
 }
 
 /* ===================================
@@ -1051,6 +2116,114 @@ body.dark,
   transform: scale(1.1) rotate(5deg);
 }
 
+/* ===================================
+   AWESOME DARK MODE CANDIDATES SECTION
+   =================================== */
+
+/* Dark mode candidates content */
+body.dark .candidatesContent,
+:global(.dark) .candidatesContent {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Dark mode filter section */
+body.dark .candidateFilters,
+:global(.dark) .candidateFilters {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient glow for filters */
+body.dark .candidateFilters::before,
+:global(.dark) .candidateFilters::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--dark-gradient-primary);
+  opacity: 0.05;
+  z-index: -1;
+}
+
+/* Enhanced filter selects */
+body.dark .filterSelect,
+:global(.dark) .filterSelect {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  color: var(--dark-text) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667eea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+body.dark .filterSelect:hover,
+:global(.dark) .filterSelect:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+body.dark .filterSelect:focus,
+:global(.dark) .filterSelect:focus {
+  border-color: var(--dark-accent-primary) !important;
+  box-shadow: 0 0 0 3px var(--dark-accent-glow) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Filter select options */
+body.dark .filterSelect option,
+:global(.dark) .filterSelect option {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+  border: none !important;
+}
+
+/* Clear filters button */
+body.dark .clearFiltersButton,
+:global(.dark) .clearFiltersButton {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body.dark .clearFiltersButton:hover,
+:global(.dark) .clearFiltersButton:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+/* Candidates count indicator */
+body.dark .candidatesCount,
+:global(.dark) .candidatesCount {
+  color: var(--dark-text-secondary) !important;
+  border-bottom: 1px solid var(--dark-border) !important;
+  background: var(--dark-gradient-surface) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .filterIndicator,
+:global(.dark) .filterIndicator {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px var(--dark-accent-glow) !important;
+}
+
 /* Specific styling for different button types */
 .candidateActions .secondaryButton:nth-child(2) {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
@@ -1070,6 +2243,114 @@ body.dark,
 .candidateActions .secondaryButton:nth-child(3):hover {
   background: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 100%);
   box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
+}
+
+/* ===================================
+   AWESOME DARK MODE CANDIDATE ACTIONS
+   =================================== */
+
+/* Enhanced status select dropdown */
+body.dark .statusSelect,
+:global(.dark) .statusSelect {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667eea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+body.dark .statusSelect:hover,
+:global(.dark) .statusSelect:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+body.dark .statusSelect:focus,
+:global(.dark) .statusSelect:focus {
+  border-color: var(--dark-accent-primary) !important;
+  box-shadow: 0 0 0 3px var(--dark-accent-glow) !important;
+  transform: translateY(-2px) !important;
+}
+
+body.dark .statusSelect option,
+:global(.dark) .statusSelect option {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+  border: none !important;
+}
+
+/* Enhanced candidate action buttons */
+body.dark .candidateActions .secondaryButton,
+:global(.dark) .candidateActions .secondaryButton {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/* Button hover effects with different colors */
+body.dark .candidateActions .secondaryButton:hover,
+:global(.dark) .candidateActions .secondaryButton:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+  border-color: var(--dark-accent-primary) !important;
+}
+
+/* Specific button styling based on functionality */
+body.dark .candidateActions .secondaryButton:nth-child(2):hover,
+:global(.dark) .candidateActions .secondaryButton:nth-child(2):hover {
+  background: linear-gradient(135deg, var(--dark-success) 0%, #48bb78 100%) !important;
+  color: #1a202c !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px rgba(104, 211, 145, 0.4) !important;
+}
+
+body.dark .candidateActions .secondaryButton:nth-child(3):hover,
+:global(.dark) .candidateActions .secondaryButton:nth-child(3):hover {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+}
+
+/* Button icons with enhanced effects */
+body.dark .candidateActions .secondaryButton i,
+:global(.dark) .candidateActions .secondaryButton i {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+}
+
+body.dark .candidateActions .secondaryButton:hover i,
+:global(.dark) .candidateActions .secondaryButton:hover i {
+  transform: scale(1.15) rotate(5deg) !important;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)) !important;
+}
+
+/* Empty state styling */
+body.dark .noCandidates,
+:global(.dark) .noCandidates {
+  color: var(--dark-muted) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .noCandidates i,
+:global(.dark) .noCandidates i {
+  color: var(--dark-border) !important;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3)) !important;
+}
+
+body.dark .noCandidates h3,
+:global(.dark) .noCandidates h3 {
+  color: var(--dark-text-secondary) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* ===================================
@@ -1174,6 +2455,174 @@ body.dark,
   margin-top: var(--spacing-lg);
 }
 
+/* ===================================
+   AWESOME DARK MODE PROFILE FORM
+   =================================== */
+
+/* Dark mode profile form with glass morphism */
+body.dark .profileForm,
+:global(.dark) .profileForm {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient glow for profile form */
+body.dark .profileForm::before,
+:global(.dark) .profileForm::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--dark-gradient-primary);
+  opacity: 0.03;
+  z-index: -1;
+}
+
+/* Form labels styling */
+body.dark .formGroup label,
+:global(.dark) .formGroup label {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  font-weight: 600 !important;
+}
+
+/* Enhanced form inputs */
+body.dark .formGroup input,
+body.dark .formGroup select,
+body.dark .formGroup textarea,
+:global(.dark) .formGroup input,
+:global(.dark) .formGroup select,
+:global(.dark) .formGroup textarea {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  color: var(--dark-text) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+}
+
+/* Input focus effects */
+body.dark .formGroup input:focus,
+body.dark .formGroup select:focus,
+body.dark .formGroup textarea:focus,
+:global(.dark) .formGroup input:focus,
+:global(.dark) .formGroup select:focus,
+:global(.dark) .formGroup textarea:focus {
+  border-color: var(--dark-accent-primary) !important;
+  box-shadow: 0 0 0 3px var(--dark-accent-glow), var(--dark-shadow-md) !important;
+  background: var(--dark-surface-2) !important;
+  transform: translateY(-2px) !important;
+  outline: none !important;
+}
+
+/* Input hover effects */
+body.dark .formGroup input:hover,
+body.dark .formGroup select:hover,
+body.dark .formGroup textarea:hover,
+:global(.dark) .formGroup input:hover,
+:global(.dark) .formGroup select:hover,
+:global(.dark) .formGroup textarea:hover {
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
+/* Placeholder styling */
+body.dark .formGroup input::placeholder,
+body.dark .formGroup textarea::placeholder,
+:global(.dark) .formGroup input::placeholder,
+:global(.dark) .formGroup textarea::placeholder {
+  color: var(--dark-muted) !important;
+  opacity: 0.8 !important;
+}
+
+/* Select dropdown styling */
+body.dark .formGroup select,
+:global(.dark) .formGroup select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667eea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 16px !important;
+  padding-right: 40px !important;
+}
+
+body.dark .formGroup select option,
+:global(.dark) .formGroup select option {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+  border: none !important;
+}
+
+/* Disabled field styling */
+body.dark .formGroup input[disabled],
+body.dark .formGroup select[disabled],
+body.dark .formGroup textarea[disabled],
+body.dark .disabledField,
+:global(.dark) .formGroup input[disabled],
+:global(.dark) .formGroup select[disabled],
+:global(.dark) .formGroup textarea[disabled],
+:global(.dark) .disabledField {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-muted) !important;
+  border-color: var(--dark-border) !important;
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+}
+
+/* Form actions styling */
+body.dark .formActions,
+:global(.dark) .formActions {
+  border-top: 1px solid var(--dark-border) !important;
+  background: var(--dark-gradient-surface) !important;
+  margin: var(--spacing-lg) calc(-1 * var(--spacing-xl)) calc(-1 * var(--spacing-xl)) !important;
+  padding: var(--spacing-lg) var(--spacing-xl) !important;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl) !important;
+}
+
+/* Enhanced primary button for forms */
+body.dark .formActions .primaryButton,
+:global(.dark) .formActions .primaryButton {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 20px var(--dark-accent-glow) !important;
+  border: 1px solid var(--dark-accent-primary) !important;
+}
+
+body.dark .formActions .primaryButton:hover,
+:global(.dark) .formActions .primaryButton:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 30px var(--dark-accent-glow) !important;
+}
+
+/* Enhanced secondary button for forms */
+body.dark .formActions .secondaryButton,
+:global(.dark) .formActions .secondaryButton {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+}
+
+body.dark .formActions .secondaryButton:hover,
+:global(.dark) .formActions .secondaryButton:hover {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-accent-primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--dark-shadow-md) !important;
+}
+
 .saveButton {
   background: var(--success-500);
   color: white;
@@ -1234,6 +2683,157 @@ body.dark,
 }
 
 /* ===================================
+   AWESOME DARK MODE CANDIDATE CARDS
+   =================================== */
+
+/* Dark mode candidate cards with glass morphism */
+body.dark .candidateCard,
+:global(.dark) .candidateCard {
+  background: var(--dark-gradient-glass) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-lg) !important;
+  -webkit-backdrop-filter: blur(15px) !important;
+  backdrop-filter: blur(15px) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Enhanced hover effects for candidate cards */
+body.dark .candidateCard:hover,
+:global(.dark) .candidateCard:hover {
+  transform: translateY(-8px) scale(1.01) !important;
+  box-shadow: var(--dark-shadow-xl), 0 0 40px var(--dark-accent-glow) !important;
+  border-color: var(--dark-accent-primary) !important;
+}
+
+/* Animated gradient accent for candidate cards */
+body.dark .candidateCard::before,
+:global(.dark) .candidateCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--dark-gradient-primary) !important;
+  box-shadow: 0 0 15px var(--dark-accent-glow);
+  animation: candidateGlow 5s ease-in-out infinite;
+  opacity: 0.8;
+}
+
+@keyframes candidateGlow {
+  0%, 100% { opacity: 0.6; transform: scaleX(0.98); }
+  50% { opacity: 1; transform: scaleX(1.02); }
+}
+
+/* Enhanced candidate avatar */
+body.dark .candidateAvatar,
+:global(.dark) .candidateAvatar {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--dark-shadow-md), 0 0 25px var(--dark-accent-glow) !important;
+  border: 3px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body.dark .candidateCard:hover .candidateAvatar,
+:global(.dark) .candidateCard:hover .candidateAvatar {
+  transform: scale(1.1) rotate(5deg) !important;
+  box-shadow: var(--dark-shadow-lg), 0 0 35px var(--dark-accent-glow) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Candidate details styling */
+body.dark .candidateDetails h3,
+:global(.dark) .candidateDetails h3 {
+  color: var(--dark-text) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  background: var(--dark-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+body.dark .candidateDetails p,
+:global(.dark) .candidateDetails p {
+  color: var(--dark-text-secondary) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .candidateDetails i,
+:global(.dark) .candidateDetails i {
+  color: var(--dark-accent-primary) !important;
+  filter: drop-shadow(0 0 8px var(--dark-accent-glow)) !important;
+}
+
+/* Enhanced job badge */
+body.dark .jobBadge,
+:global(.dark) .jobBadge {
+  background: var(--dark-gradient-primary) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--dark-accent-primary) !important;
+  box-shadow: var(--dark-shadow-sm), 0 0 10px var(--dark-accent-glow) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Score section enhancements */
+body.dark .candidateScores,
+:global(.dark) .candidateScores {
+  background: var(--dark-gradient-surface) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+body.dark .scoreLabel,
+:global(.dark) .scoreLabel {
+  color: var(--dark-muted) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .scoreBar,
+:global(.dark) .scoreBar {
+  background: var(--dark-surface-2) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark .scoreFill,
+:global(.dark) .scoreFill {
+  background: var(--dark-gradient-primary) !important;
+  box-shadow: 0 0 10px var(--dark-accent-glow) !important;
+}
+
+body.dark .scoreText,
+:global(.dark) .scoreText {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+  border: 1px solid var(--dark-border) !important;
+  box-shadow: var(--dark-shadow-sm) !important;
+}
+
+/* Candidate meta section */
+body.dark .candidateMeta,
+:global(.dark) .candidateMeta {
+  background: transparent !important;
+}
+
+body.dark .candidateMeta p,
+:global(.dark) .candidateMeta p {
+  background: var(--dark-gradient-surface) !important;
+  color: var(--dark-text-secondary) !important;
+  border-left: 3px solid var(--dark-accent-primary) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.dark .candidateMeta i,
+:global(.dark) .candidateMeta i {
+  color: var(--dark-accent-primary) !important;
+  filter: drop-shadow(0 0 6px var(--dark-accent-glow)) !important;
+}
+
+/* ===================================
    RESPONSIVE DESIGN
    =================================== */
 
@@ -1254,10 +2854,19 @@ body.dark,
 @media (max-width: 768px) {
   .tabNavigation {
     padding: 0 var(--spacing-lg);
+    margin-top: 85px; /* Reduced margin for mobile */
+    margin-bottom: var(--spacing-md); /* Smaller bottom margin for mobile */
+  }
+  
+  /* Ensure dark mode inherits mobile responsive spacing */
+  body.dark .tabNavigation,
+  :global(.dark) .tabNavigation {
+    margin-top: 85px !important;
+    margin-bottom: var(--spacing-md) !important;
   }
   
   .mainContent {
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg); /* Smaller padding for mobile */
   }
   
   .welcomeSection {
@@ -2369,24 +3978,8 @@ body.dark,
 }
 
 :global(.dark) .tabNavigation,
-:global(body.dark) .tabNavigation,
-:global(.dark) .welcomeSection,
-:global(body.dark) .welcomeSection,
-:global(.dark) .statCard,
-:global(body.dark) .statCard,
-:global(.dark) .recentActivity,
-:global(body.dark) .recentActivity,
-:global(.dark) .sectionHeader,
-:global(body.dark) .sectionHeader,
-:global(.dark) .jobCard,
-:global(body.dark) .jobCard,
-:global(.dark) .candidateCard,
-:global(body.dark) .candidateCard,
-:global(.dark) .profileForm,
-:global(body.dark) .profileForm {
-	background-color: var(--dark-surface);
-	box-shadow: var(--dark-shadow);
-	border: 1px solid var(--dark-border);
+:global(body.dark) .tabNavigation {
+	/* Use the enhanced dark mode styles instead - removed conflicting legacy styles */
 }
 
 :global(.dark) .tabButton,
@@ -2408,12 +4001,7 @@ body.dark,
 	box-shadow: var(--dark-shadow);
 }
 
-/* Improve dark tab bar readability */
-:global(.dark) .tabNavigation,
-:global(body.dark) .tabNavigation {
-	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%);
-	border-bottom: 1px solid var(--dark-border);
-}
+/* Legacy tab navigation styles removed - using enhanced dark mode styles instead */
 
 /* Overview hero section dark treatment */
 :global(.dark) .welcomeSection,
@@ -2845,12 +4433,7 @@ body.dark .loadingContainer {
 	background-image: none !important;
 }
 
-/* Dark mode for tab navigation */
-body.dark .tabNavigation {
-	background: linear-gradient(135deg, var(--dark-accent-start) 0%, var(--dark-accent-end) 60%, var(--dark-surface-3) 100%);
-	border-bottom: 1px solid var(--dark-border);
-	box-shadow: var(--dark-shadow);
-}
+/* Legacy dark mode tab navigation styles removed - using enhanced styles */
 
 body.dark .tabButton {
 	color: var(--dark-muted);
@@ -3211,7 +4794,15 @@ body.dark .secondaryButton:hover {
 	/* Responsive tab navigation */
 	.tabNavigation {
 		padding: 0 var(--spacing-lg);
-		margin-top: 70px;
+		margin-top: 80px; /* Adjusted for very small screens */
+		margin-bottom: var(--spacing-sm); /* Minimal bottom margin for very small screens */
+	}
+	
+	/* Ensure dark mode inherits very small screen spacing */
+	body.dark .tabNavigation,
+	:global(.dark) .tabNavigation {
+		margin-top: 80px !important;
+		margin-bottom: var(--spacing-sm) !important;
 	}
 	
 	.tabList {

@@ -99,15 +99,24 @@ export default function InterviewReportModal({ isOpen, onClose, report, cvScore,
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent} style={{ maxWidth: 920 }}>
         <div className={styles.modalHeader}>
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 0 }}>
-            <span style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: 'linear-gradient(135deg,#4a90e2,#357abd)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18
-            }}>📝</span>
-            Interview Report
-          </h2>
-          <button className={styles.closeButton} onClick={onClose}>&times;</button>
+          <div className={styles.headerContent}>
+            <div className={styles.titleSection}>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 0 }}>
+                <span style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'linear-gradient(135deg,#4a90e2,#357abd)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18
+                }}>📝</span>
+                Interview Report
+              </h2>
+              <span className={styles.subtitle}>Detailed interview analysis and evaluation</span>
+            </div>
+            <div className={styles.headerActions}>
+              <button className={styles.closeButton} onClick={onClose}>
+                <i className="fa fa-times"></i>
+              </button>
+            </div>
+          </div>
         </div>
         <div className={styles.modalBody}>
           {/* Score overview */}
