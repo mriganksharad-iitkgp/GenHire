@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
 
-const Navbar = () => {
+const Navbar = ({ userType = 'candidate' }) => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const [darkMode, setDarkMode] = useState(false);
 	const [userMenuOpen, setUserMenuOpen] = useState(false);
+	const [profilePhoto, setProfilePhoto] = useState(null);
+	const [userName, setUserName] = useState("");
+	const [companyName, setCompanyName] = useState("TechCorp Solutions");
 	const userMenuRef = useRef(null);
 
 	// Check dark mode preference on component mount
@@ -15,7 +19,65 @@ const Navbar = () => {
 		if (savedDarkMode) {
 			document.body.classList.add("dark");
 		}
+		
+		// Load user data
+		loadUserData();
 	}, []);
+
+	// Load user data (profile photo and name)
+	const loadUserData = async () => {
+		try {
+			const token = localStorage.getItem("companyxyz-token");
+			if (!token) return;
+			
+			// Load profile data
+			const profileResponse = await fetch("http://localhost:5000/api/profile", {
+				headers: {
+					"Authorization": `Bearer ${token}`,
+					"Content-Type": "application/json"
+				}
+			});
+
+			if (profileResponse.ok) {
+				const profileData = await profileResponse.json();
+				setUserName(profileData.name || "User");
+				
+				// Set company name for recruiters
+				if (userType === 'recruiter' && profileData.company_name) {
+					setCompanyName(profileData.company_name);
+				}
+				
+				// Load profile photo if it exists
+				if (profileData.profile_photo) {
+					loadProfilePhoto();
+				}
+			}
+		} catch (error) {
+			console.error("Error loading user data in navbar:", error);
+		}
+	};
+
+	// Load profile photo
+	const loadProfilePhoto = async () => {
+		try {
+			const token = localStorage.getItem("companyxyz-token");
+			if (!token) return;
+			
+			const response = await fetch("http://localhost:5000/api/view-photo", {
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
+			});
+
+			if (response.ok) {
+				const blob = await response.blob();
+				const photoUrl = URL.createObjectURL(blob);
+				setProfilePhoto(photoUrl);
+			}
+		} catch (error) {
+			console.error("Error loading profile photo in navbar:", error);
+		}
+	};
 
 	// Handle dark mode toggle
 	const toggleDarkMode = () => {
@@ -57,18 +119,37 @@ const Navbar = () => {
 		<header className={styles.navbar}>
 			<div className={styles.navContainer}>
 				<div className={styles.navBrand}>
-					<Link to="/" className={styles.brandLink}>
-						<h1>CompanyXYZ Careers</h1>
+					<Link to={userType === 'recruiter' ? "/recruiter-dashboard" : "/"} className={styles.brandLink}>
+						<h1>{userType === 'recruiter' ? 'CompanyXYZ Recruiter Portal' : 'CompanyXYZ Career Portal'}</h1>
 					</Link>
 				</div>
 
 				<nav className={styles.navLinks}>
-					<Link to="/" className={styles.navLink}>
-						Open Positions
-					</Link>
-					<Link to="/profile#applications" className={styles.navLink}>
-						My Applications
-					</Link>
+					{userType === 'recruiter' ? (
+						<>
+							<Link 
+								to="/recruiter-dashboard" 
+								className={`${styles.navLink} ${location.pathname === '/recruiter-dashboard' ? styles.active : ''}`}
+							>
+								Dashboard
+							</Link>
+						</>
+					) : (
+						<>
+							<Link 
+								to="/" 
+								className={`${styles.navLink} ${location.pathname === '/' ? styles.active : ''}`}
+							>
+								Open Positions
+							</Link>
+							<Link 
+								to="/profile#applications" 
+								className={`${styles.navLink} ${location.pathname === '/profile' ? styles.active : ''}`}
+							>
+								My Applications
+							</Link>
+						</>
+					)}
 				</nav>
 
 				<div className={styles.navActions}>
@@ -91,7 +172,7 @@ const Navbar = () => {
 						>
 							<div className={styles.avatar}>
 								<img
-									src="../android-chrome-192x192.png"
+									src={profilePhoto || "../android-chrome-192x192.png"}
 									alt="User"
 									onError={(e) => {
 										e.target.onerror = null;
@@ -101,8 +182,7 @@ const Navbar = () => {
 								/>
 							</div>
 							<span className={styles.userName}>
-								{localStorage.getItem("candidateName") ||
-									"User"}
+								{userName || "User"}
 							</span>
 							<i
 								className={`fa fa-caret-down ${
@@ -113,20 +193,57 @@ const Navbar = () => {
 
 						{userMenuOpen && (
 							<div className={styles.dropdownMenu}>
-								<Link
-									to="/profile"
-									className={styles.dropdownItem}
-								>
-									<i className="fa fa-user"></i>
-									My Profile
-								</Link>
-								<Link
-									to="/profile#applications"
-									className={styles.dropdownItem}
-								>
-									<i className="fa fa-file-text"></i>
-									My Applications
-								</Link>
+								{userType === 'recruiter' ? (
+									<>
+										<Link
+											to="/recruiter-dashboard"
+											className={styles.dropdownItem}
+											onClick={() => setUserMenuOpen(false)}
+										>
+											<i className="fa fa-dashboard"></i>
+											Dashboard
+										</Link>
+										<Link
+											to="/recruiter-dashboard?tab=profile"
+											className={styles.dropdownItem}
+											onClick={() => setUserMenuOpen(false)}
+										>
+											<i className="fa fa-building"></i>
+											Company Profile
+										</Link>
+									</>
+								) : (
+									<>
+										<Link
+											to="/profile#bio"
+											className={styles.dropdownItem}
+											onClick={() => {
+												setUserMenuOpen(false);
+												// Force navigation even if already on profile page
+												if (window.location.pathname === '/profile') {
+													window.location.hash = '#bio';
+												}
+											}}
+										>
+											<i className="fa fa-user"></i>
+											My Profile
+										</Link>
+										<Link
+											to="/profile#applications"
+											className={styles.dropdownItem}
+											onClick={() => {
+												setUserMenuOpen(false);
+												// Force navigation even if already on profile page
+												if (window.location.pathname === '/profile') {
+													window.location.hash = '#applications';
+												}
+											}}
+										>
+											<i className="fa fa-file-text"></i>
+											My Applications
+										</Link>
+									</>
+								)}
 								<button
 									className={styles.dropdownItem}
 									onClick={handleLogout}

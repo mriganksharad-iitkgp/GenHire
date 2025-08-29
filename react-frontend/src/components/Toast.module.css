@@ -1,0 +1,90 @@
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  /* Ensure toast is above navbar (z-index 9998) and dropdown (9999) */
+  z-index: 10050;
+  transition: all 0.3s ease;
+  border-left: 4px solid #4a90e2;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toast.hidden {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.toast.success {
+  border-left-color: #27ae60;
+  color: #27ae60;
+}
+
+.toast.error {
+  border-left-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.toast.warning {
+  border-left-color: #f39c12;
+  color: #f39c12;
+}
+
+.toast.info {
+  border-left-color: #4a90e2;
+  color: #4a90e2;
+}
+
+.toast i {
+  font-size: 16px;
+}
+
+.toast span {
+  flex: 1;
+  color: #333;
+  font-weight: 500;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 10px;
+  font-size: 12px;
+  transition: color 0.2s ease;
+}
+
+.closeButton:hover {
+  color: #666;
+}
+
+/* Dark mode */
+body.dark .toast,
+:global(.dark) .toast {
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+  box-shadow: var(--dark-shadow);
+  border-left-color: var(--dark-accent-end);
+}
+
+body.dark .toast span,
+:global(.dark) .toast span { color: var(--dark-text); }
+
+body.dark .closeButton,
+:global(.dark) .closeButton { color: var(--dark-muted); }
+
+body.dark .closeButton:hover,
+:global(.dark) .closeButton:hover { color: var(--dark-text); }

@@ -53,26 +53,32 @@
 	background-color: #3b73b9;
 }
 
-/* Dark mode support */
-:global(.dark) .notFoundContainer {
-	background-color: #1a1a1a;
+/* Dark mode support (tokens + dual scope) */
+:global(.dark) .notFoundContainer,
+:global(body.dark) .notFoundContainer {
+	background: transparent !important; /* Use global bluish gradient */
 }
 
-:global(.dark) .content {
-	background-color: #2a2a2a;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+:global(.dark) .content,
+:global(body.dark) .content {
+	background-color: var(--dark-surface);
+	border: 1px solid var(--dark-border);
+	box-shadow: var(--dark-shadow);
 }
 
-:global(.dark) .content h1 {
-	color: #5fa4ef;
+:global(.dark) .content h1,
+:global(body.dark) .content h1 {
+	color: var(--dark-accent-end);
 }
 
-:global(.dark) .content h2 {
-	color: #f0f0f0;
+:global(.dark) .content h2,
+:global(body.dark) .content h2 {
+	color: var(--dark-text);
 }
 
-:global(.dark) .content p {
-	color: #bbb;
+:global(.dark) .content p,
+:global(body.dark) .content p {
+	color: var(--dark-muted);
 }
 
 /* Responsive styles */

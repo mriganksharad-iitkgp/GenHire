@@ -7,10 +7,12 @@ import axios from "axios";
 const Layout = ({ children }) => {
 	const navigate = useNavigate();
 	const [isAuthenticated, setIsAuthenticated] = useState(null);
+	const [userType, setUserType] = useState(null);
 
 	useEffect(() => {
 		const verifyAuth = async () => {
 			const token = localStorage.getItem("companyxyz-token");
+			const userData = localStorage.getItem("companyxyz-user");
 
 			if (!token) {
 				setIsAuthenticated(false);
@@ -23,23 +25,28 @@ const Layout = ({ children }) => {
 					"http://127.0.0.1:5000/api/me",
 					{
 						headers: {
-							Authorization: token,
+							Authorization: `Bearer ${token}`,
 						},
 					}
 				);
 
 				if (response.data) {
 					setIsAuthenticated(true);
+					setUserType(response.data.user_type);
+					
+					// If user is a recruiter trying to access candidate pages, redirect
+					if (response.data.user_type === 'recruiter') {
+						navigate('/recruiter-dashboard');
+						return;
+					}
 				} else {
 					localStorage.removeItem("companyxyz-token");
 					localStorage.removeItem("companyxyz-user");
-					localStorage.removeItem("isAuthenticated");
 					setIsAuthenticated(false);
 				}
 			} catch (error) {
 				localStorage.removeItem("companyxyz-token");
 				localStorage.removeItem("companyxyz-user");
-				localStorage.removeItem("isAuthenticated");
 				setIsAuthenticated(false);
 			}
 		};
@@ -48,16 +55,21 @@ const Layout = ({ children }) => {
 	}, [navigate]);
 
 	if (isAuthenticated === null) {
-		return <div>Loading...</div>; // Or a loading spinner
+		return (
+			<div className={styles.loadingContainer}>
+				<div className={styles.loadingSpinner}>Loading...</div>
+			</div>
+		);
 	}
 
 	if (!isAuthenticated) {
 		return <Navigate to="/login" replace />;
 	}
 
+	// If recruiter tries to access candidate layout, they've already been redirected
 	return (
 		<div className={styles.layoutContainer}>
-			<Navbar />
+			<Navbar userType={userType} />
 			<main className={styles.mainContent}>{children}</main>
 		</div>
 	);

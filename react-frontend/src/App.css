@@ -3,7 +3,7 @@
 	padding: 0;
 	box-sizing: border-box;
 	text-decoration: none;
-	transition: all 0.2s linear;
+	/* Removed global transition to improve scroll performance */
 	/* outline: red solid 1px; */
 }
 
@@ -14,13 +14,212 @@ body {
 		"Helvetica Neue", sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	height: 100vh;
+	min-height: 100vh;
+	width: 100%;
+	overflow-x: hidden;
+	background-color: #ffffff;
+	color: #333333;
+	transition: background-color 0.3s ease, color 0.3s ease;
+	scroll-behavior: smooth;
+}
+
+/* Enhanced Dark mode */
+/* Comprehensive dark theme tokens + modern color palette */
+body.dark,
+.dark {
+	/* Enhanced Dark Mode Variables - Matching RecruiterDashboard.module.css */
+	--dark-bg: #0a0e17;                    /* deep space background */
+	--dark-bg-secondary: #0f1419;          /* secondary background */
+	--dark-surface: #1a202c;               /* primary surface */
+	--dark-surface-2: #2d3748;             /* elevated surface */
+	--dark-surface-3: #4a5568;             /* highest surface */
+	--dark-surface-glass: rgba(26, 32, 44, 0.8);  /* glass effect */
+	--dark-border: #4a5568;                /* primary border */
+	--dark-border-light: #718096;          /* lighter border */
+	--dark-text: #f7fafc;                  /* primary text */
+	--dark-text-secondary: #e2e8f0;        /* secondary text */
+	--dark-muted: #a0aec0;                 /* muted text */
+	--dark-accent-primary: #667eea;        /* primary accent */
+	--dark-accent-secondary: #764ba2;      /* secondary accent */
+	--dark-accent-glow: rgba(102, 126, 234, 0.3);  /* glow effect */
+	--dark-success: #68d391;               /* success color */
+	--dark-warning: #f6e05e;               /* warning color */
+	--dark-error: #fc8181;                 /* error color */
+	--dark-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--dark-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+	--dark-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+	--dark-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+	--dark-gradient-primary: linear-gradient(135deg, var(--dark-accent-primary) 0%, var(--dark-accent-secondary) 100%);
+	--dark-gradient-surface: linear-gradient(135deg, var(--dark-surface) 0%, var(--dark-surface-2) 100%);
+	--dark-gradient-glass: linear-gradient(135deg, rgba(26, 32, 44, 0.9) 0%, rgba(45, 55, 72, 0.8) 100%);
+}
+
+/* Set the background specifically on body.dark for maximum specificity */
+body.dark {
+	/* Enhanced deep space gradient background with ambient glow */
+	background: radial-gradient(ellipse at top, var(--dark-bg-secondary) 0%, var(--dark-bg) 50%), 
+	            linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-surface) 100%) !important;
+	color: var(--dark-text);
+	position: relative;
+}
+
+/* Animated background particles for the entire app */
+body.dark::before {
+	content: '';
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-image: 
+		radial-gradient(circle at 25% 25%, var(--dark-accent-glow) 0%, transparent 50%),
+		radial-gradient(circle at 75% 75%, rgba(118, 75, 162, 0.2) 0%, transparent 50%);
+	opacity: 0.3;
+	animation: globalParticleFloat 25s ease-in-out infinite;
+	pointer-events: none;
+	z-index: -1;
+}
+
+@keyframes globalParticleFloat {
+	0%, 100% { transform: translateY(0px) rotate(0deg); }
+	25% { transform: translateY(-15px) rotate(90deg); }
+	50% { transform: translateY(0px) rotate(180deg); }
+	75% { transform: translateY(-10px) rotate(270deg); }
+}
+
+/* Ensure section headers and dividers have visible borders in dark mode */
+body.dark section,
+.dark section {
+	border-color: var(--dark-border) !important;
+}
+
+body.dark h1,
+body.dark h2,
+body.dark h3,
+.dark h1,
+.dark h2,
+.dark h3 {
+	color: var(--dark-text) !important;
+}
+
+body.dark [class*="section"],
+.dark [class*="section"] {
+	border-bottom: 1px solid var(--dark-border) !important;
+}
+
+/* Add visible borders to timeline elements but hide vertical lines */
+body.dark [class*="timeline"],
+.dark [class*="timeline"] {
+	border-left: none !important;
+}
+
+body.dark [class*="timelineItem"],
+.dark [class*="timelineItem"] {
+	border: 1px solid var(--dark-border) !important;
+	background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* Style timeline connectors in dark mode with a single line */
+body.dark [class*="timelineConnector"],
+body.dark [class*="connector"],
+.dark [class*="timelineConnector"],
+.dark [class*="connector"] {
+    width: 2px !important;
+    background-color: var(--dark-border) !important;
+}
+
+/* Application view specific fixes */
+body.dark .applicationViewContainer .content,
+.dark .applicationViewContainer .content {
+	background: transparent !important;
+	background-color: transparent !important;
+	border: 1px solid var(--dark-border) !important;
+}
+
+body.dark .applicationViewContainer .applicationBody,
+.dark .applicationViewContainer .applicationBody {
+	background: transparent !important;
+	background-color: transparent !important;
+	color: var(--dark-text) !important;
+}
+
+/* Ensure #root also gets the consistent background */
+body.dark #root,
+.dark #root {
+	background: transparent !important;
+	min-height: 100vh;
+	position: relative;
+	z-index: 0;
+}
+
+/* Only target main page containers, not all elements */
+body.dark .profileContainer,
+body.dark .dashboardContainer,
+body.dark .applicationViewContainer,
+body.dark .jobDetailsContainer,
+body.dark .registerContainer,
+body.dark .notFoundContainer,
+body.dark .page-container,
+body.dark .layoutContainer,
+body.dark .mainContent,
+body.dark .applicationViewContainer .content,
+body.dark .applicationBody,
+body.dark .timelineSection,
+.dark .profileContainer,
+.dark .dashboardContainer,
+.dark .applicationViewContainer,
+.dark .jobDetailsContainer,
+.dark .registerContainer,
+.dark .notFoundContainer,
+.dark .page-container,
+.dark .layoutContainer,
+.dark .mainContent,
+.dark .applicationViewContainer .content,
+.dark .applicationBody,
+.dark .timelineSection {
+	background: transparent !important;
+	background-image: none !important;
+	background-color: transparent !important;
+}
+
+/* Final override to ensure content areas are transparent but with visible borders */
+body.dark .content,
+.dark .content,
+body.dark .modal,
+.dark .modal,
+body.dark .modalContent,
+.dark .modalContent {
+	background: transparent !important;
+	background-color: transparent !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important; /* Restore subtle shadow */
+	border: 1px solid var(--dark-border) !important; /* Restore border using dark mode variable */
+}
+
+#root {
+	min-height: 100vh;
 	width: 100%;
 	overflow-x: hidden;
 }
 
-#root {
-	height: 100%;
-	width: 100%;
-	overflow-x: hidden;
+/* Ensure all card components have enhanced glass morphism in dark mode */
+body.dark .card,
+body.dark .infoCard,
+body.dark .applyCard,
+body.dark .jobCard,
+body.dark .applicationCard,
+body.dark .timelineItem,
+body.dark [class*="Card"],
+.dark .card,
+.dark .infoCard,
+.dark .applyCard,
+.dark .jobCard,
+.dark .applicationCard,
+.dark .timelineItem,
+.dark [class*="Card"] {
+	background: var(--dark-gradient-glass) !important;
+	border: 1px solid var(--dark-border) !important;
+	box-shadow: var(--dark-shadow-lg) !important;
+	-webkit-backdrop-filter: blur(15px) !important;
+	backdrop-filter: blur(15px) !important;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
