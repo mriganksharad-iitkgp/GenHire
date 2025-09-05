@@ -33,7 +33,7 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-mongo_uri='mongodb+srv://adityapandeygkp90:CgsSnvo0o1WoRMmQ@cluster0.yneajzv.mongodb.net/?retryWrites=true&w=majority&appName=hrtech'
+mongo_uri='mongodb+srv://nikhilg40151_db_user:NikhilRajG@hrtech.kdo8zml.mongodb.net/?retryWrites=true&w=majority&appName=HrTech'
 client = MongoClient(mongo_uri)
 career_portal = 'hrtech'  # Your database name
 db = client[career_portal]  # Use the variable directly
