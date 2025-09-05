@@ -1,0 +1,712 @@
+/* CV Details Form Modal */
+.cvDetailsModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10040;
+  padding: 20px;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background-color: white;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 1000px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 30px;
+  border-bottom: 1px solid #eee;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px 20px 0 0;
+}
+
+.modalHeader h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.modalHeader h2 i {
+  margin-right: 10px;
+}
+
+.closeButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.cvForm {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.formLayout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar Navigation */
+.sidebar {
+  width: 250px;
+  background: var(--sidebar-bg, #f8f9fa);
+  border-right: 1px solid var(--border-color, #e0e0e0);
+  padding: 15px 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sectionNav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 15px;
+}
+
+.navButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-color, #333);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.navButton:hover {
+  background: var(--hover-bg, #e9ecef);
+  transform: translateX(3px);
+}
+
+.navButton.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+}
+
+.navButton i {
+  width: 18px;
+  text-align: center;
+  font-size: 1rem;
+  display: inline-block;
+}
+
+/* Ensure FontAwesome icons are visible */
+.navButton i:before {
+  font-family: 'FontAwesome', 'Font Awesome 5 Free', 'Font Awesome 5 Pro' !important;
+  font-weight: 900;
+}
+
+/* Content Area */
+.content {
+  flex: 1;
+  padding: 20px 25px;
+  overflow-y: auto;
+  background: var(--content-bg, #ffffff);
+}
+
+.sectionContent {
+  max-width: 800px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+
+.sectionHeader h3 i {
+  margin-right: 10px;
+  color: var(--primary-color, #667eea);
+  font-family: 'FontAwesome', 'Font Awesome 5 Free', 'Font Awesome 5 Pro' !important;
+  font-weight: 900;
+  display: inline-block;
+}
+
+/* Form Elements */
+.itemCard {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s ease;
+}
+
+.itemCard:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.cardHeader h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.formGroup label {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-color, #333);
+  font-size: 0.9rem;
+}
+
+.formGroup input,
+.formGroup textarea,
+.formGroup select {
+  padding: 12px 16px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  background: var(--input-bg, #ffffff);
+  color: var(--text-color, #333);
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus,
+.formGroup select:focus {
+  outline: none;
+  border-color: var(--primary-color, #667eea);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.formGroup textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.formGroup small {
+  margin-top: 6px;
+  color: var(--text-secondary, #666);
+  font-size: 0.85rem;
+}
+
+/* Skills Section */
+.skillsContainer {
+  max-width: 600px;
+}
+
+/* Buttons */
+.addButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.addButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.removeButton {
+  background: #ff4757;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.removeButton:hover {
+  background: #ff3742;
+  transform: scale(1.05);
+}
+
+/* Modal Footer */
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 18px 30px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  background: var(--footer-bg, #f8f9fa);
+  flex-shrink: 0;
+}
+
+.cancelButton {
+  padding: 12px 24px;
+  background: transparent;
+  color: var(--text-secondary, #666);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.cancelButton:hover {
+  background: var(--hover-bg, #f1f3f4);
+  border-color: var(--text-secondary, #666);
+}
+
+.saveButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--success-gradient, linear-gradient(135deg, #2ed573 0%, #7bed9f 100%));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.saveButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 213, 115, 0.3);
+}
+
+.saveButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Dark Mode Support - Matching Job Creation Modal */
+body.dark .cvDetailsModal,
+:global(.dark) .cvDetailsModal {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+body.dark .modalContent,
+:global(.dark) .modalContent {
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+  box-shadow: var(--dark-shadow);
+  border: 1px solid var(--dark-border);
+}
+
+body.dark .modalHeader,
+:global(.dark) .modalHeader {
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+  border-bottom: 1px solid var(--dark-border);
+  color: var(--dark-text);
+}
+
+body.dark .sidebar,
+:global(.dark) .sidebar {
+  background-color: var(--dark-surface-2);
+  border-right: 1px solid var(--dark-border);
+}
+
+body.dark .content,
+:global(.dark) .content {
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+}
+
+body.dark .itemCard,
+:global(.dark) .itemCard {
+  background-color: var(--dark-surface-2);
+  border: 1px solid var(--dark-border);
+  color: var(--dark-text);
+}
+
+body.dark .itemCard:hover,
+:global(.dark) .itemCard:hover {
+  background-color: var(--dark-surface-3);
+  border-color: #667eea;
+}
+
+body.dark .modalFooter,
+:global(.dark) .modalFooter {
+  background-color: var(--dark-surface);
+  border-top: 1px solid var(--dark-border);
+}
+
+body.dark .navButton,
+:global(.dark) .navButton {
+  color: var(--dark-text);
+  background-color: var(--dark-surface-2);
+  border: 1px solid var(--dark-border);
+}
+
+body.dark .navButton:hover,
+:global(.dark) .navButton:hover {
+  background-color: var(--dark-surface-3);
+  color: var(--dark-text);
+  border-color: #667eea;
+}
+
+body.dark .navButton.active,
+:global(.dark) .navButton.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+}
+
+body.dark .formGroup input,
+body.dark .formGroup textarea,
+body.dark .formGroup select,
+:global(.dark) .formGroup input,
+:global(.dark) .formGroup textarea,
+:global(.dark) .formGroup select {
+  background-color: var(--dark-surface-2);
+  border: 1px solid var(--dark-border);
+  color: var(--dark-text);
+}
+
+body.dark .formGroup input::placeholder,
+body.dark .formGroup textarea::placeholder,
+:global(.dark) .formGroup input::placeholder,
+:global(.dark) .formGroup textarea::placeholder {
+  color: var(--dark-text-secondary);
+}
+
+body.dark .formGroup input:focus,
+body.dark .formGroup textarea:focus,
+body.dark .formGroup select:focus,
+:global(.dark) .formGroup input:focus,
+:global(.dark) .formGroup textarea:focus,
+:global(.dark) .formGroup select:focus {
+  border-color: #667eea;
+  background-color: var(--dark-surface-3);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+  color: var(--dark-text);
+}
+
+body.dark .formGroup label,
+:global(.dark) .formGroup label {
+  color: var(--dark-text);
+  font-weight: 600;
+}
+
+body.dark .formGroup small,
+:global(.dark) .formGroup small {
+  color: var(--dark-text-secondary);
+}
+
+body.dark .cardHeader h4,
+:global(.dark) .cardHeader h4 {
+  color: var(--dark-text);
+}
+
+body.dark .sectionHeader h3,
+:global(.dark) .sectionHeader h3 {
+  color: var(--dark-text);
+}
+
+body.dark .sectionHeader,
+:global(.dark) .sectionHeader {
+  border-bottom: 1px solid var(--dark-border);
+}
+
+body.dark .addButton,
+:global(.dark) .addButton {
+  background: #667eea;
+  color: white;
+  border: none;
+}
+
+body.dark .addButton:hover,
+:global(.dark) .addButton:hover {
+  background: #5a67d8;
+}
+
+body.dark .deleteButton,
+:global(.dark) .deleteButton {
+  background: #e53e3e;
+  color: white;
+  border: none;
+}
+
+body.dark .deleteButton:hover,
+:global(.dark) .deleteButton:hover {
+  background: #c53030;
+}
+
+body.dark .primaryButton,
+:global(.dark) .primaryButton {
+  background: #667eea;
+  color: white;
+  border: none;
+}
+
+body.dark .primaryButton:hover,
+:global(.dark) .primaryButton:hover {
+  background: #5a67d8;
+}
+
+body.dark .secondaryButton,
+:global(.dark) .secondaryButton {
+  background-color: var(--dark-surface-2);
+  color: var(--dark-text);
+  border: 1px solid var(--dark-border);
+}
+
+body.dark .secondaryButton:hover,
+:global(.dark) .secondaryButton:hover {
+  background-color: var(--dark-surface-3);
+  border-color: var(--dark-border-light);
+}
+
+body.dark .navButton i,
+:global(.dark) .navButton i {
+  color: var(--dark-text);
+}
+
+body.dark .navButton.active i,
+:global(.dark) .navButton.active i {
+  color: white;
+}
+
+body.dark .sectionHeader h3 i,
+:global(.dark) .sectionHeader h3 i {
+  color: #667eea;
+}
+
+body.dark .cancelButton,
+:global(.dark) .cancelButton {
+  color: var(--dark-text);
+  border: 1px solid var(--dark-border);
+  background: transparent;
+}
+
+body.dark .cancelButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #e0e0e0;
+}
+
+body.dark .detailsComplete {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+body.dark .detailsIncomplete {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .cvDetailsModal {
+    padding: 10px;
+  }
+  
+  .modalContent {
+    width: 100%;
+    max-width: none;
+    max-height: 95vh;
+    border-radius: 16px;
+  }
+  
+  .modalHeader {
+    padding: 20px 20px;
+    border-radius: 16px 16px 0 0;
+  }
+  
+  .modalHeader h2 {
+    font-size: 1.3rem;
+  }
+  
+  .formLayout {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 140px;
+    border-right: none;
+    border-bottom: 1px solid #eee;
+    padding: 8px 0;
+  }
+  
+  .sectionNav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 5px 15px;
+    gap: 6px;
+  }
+  
+  .navButton {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+  
+  .navButton i {
+    width: 14px;
+    font-size: 0.9rem;
+  }
+  
+  .content {
+    padding: 15px 20px;
+  }
+  
+  .formRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .sectionHeader h3 {
+    font-size: 1.2rem;
+  }
+  
+  .modalFooter {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+  
+  .modalFooter button {
+    width: 100%;
+  }
+  
+  .itemCard {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cvDetailsModal {
+    padding: 5px;
+  }
+  
+  .modalContent {
+    max-height: 98vh;
+    border-radius: 12px;
+  }
+  
+  .modalHeader {
+    padding: 16px 18px;
+    border-radius: 12px 12px 0 0;
+  }
+  
+  .modalHeader h2 {
+    font-size: 1.2rem;
+  }
+  
+  .content {
+    padding: 12px 16px;
+  }
+  
+  .sidebar {
+    max-height: 120px;
+    padding: 5px 0;
+  }
+  
+  .sectionNav {
+    padding: 5px 10px;
+    gap: 4px;
+  }
+  
+  .navButton {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+  
+  .modalFooter {
+    padding: 12px 16px;
+  }
+}

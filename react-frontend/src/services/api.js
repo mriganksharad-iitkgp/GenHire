@@ -62,6 +62,14 @@ export const updateCompanyProfile = (payload) =>
     body: JSON.stringify(payload),
   });
 
+// CV Details
+export const getCvDetails = () => request("/cv-details");
+export const updateCvDetails = (payload) =>
+  request("/cv-details", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
 // File uploads (candidate)
 export const uploadCV = (file) => {
   const formData = new FormData();

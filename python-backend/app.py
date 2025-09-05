@@ -607,6 +607,7 @@ def get_profile(current_user):
         'about': current_user.get('about', ''),
         'skills': current_user.get('skills', []),
         'cv_path': current_user.get('cv_path', ''),
+        'cv_details': current_user.get('cv_details', None),
         'profile_photo': current_user.get('profile_photo', ''),
         'user_type': current_user.get('user_type', 'candidate')
     }
@@ -668,6 +669,32 @@ def update_company_profile(current_user):
         )
     
     return jsonify({'message': 'Company profile updated successfully'}), 200
+
+@app.route('/api/cv-details', methods=['GET'])
+@cross_origin()
+@token_required
+def get_cv_details(current_user):
+    """Get CV details for the current user"""
+    cv_details = current_user.get('cv_details', None)
+    return jsonify({'cv_details': cv_details}), 200
+
+@app.route('/api/cv-details', methods=['PUT'])
+@cross_origin()
+@token_required
+def update_cv_details(current_user):
+    """Update CV details for the current user"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No CV details provided'}), 400
+    
+    # Update CV details
+    users_collection.update_one(
+        {'_id': current_user['_id']},
+        {'$set': {'cv_details': data}}
+    )
+    
+    return jsonify({'message': 'CV details updated successfully'}), 200
 
 @app.route('/api/upload-cv', methods=['POST'])
 @cross_origin()
@@ -1194,7 +1221,7 @@ def create_test_interview():
         'proctoring_score': 85
     })
 
-@app.route('/api/debug/interviews', methods=['GET']))
+@app.route('/api/debug/interviews', methods=['GET'])
 @cross_origin()
 def debug_interviews():
     """Debug endpoint to see what interviews exist"""
