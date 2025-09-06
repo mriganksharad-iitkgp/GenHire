@@ -952,46 +952,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               </button>
               
               <button
-                type="button"
-                className={styles.draftButton}
-                onClick={() => {
-                  // Save as draft logic
-                  const draftJob = {
-                    ...jobData,
-                    status: 'Draft',
-                    savedAt: new Date().toISOString()
-                  };
-                  localStorage.setItem('jobDraft', JSON.stringify(draftJob));
-                  alert('Draft saved successfully!');
-                }}
-                disabled={isSubmitting || !jobData.title}
-                title="Save current progress as draft"
-              >
-                <i className="fa fa-save"></i> Save Draft
-              </button>
-              
-              <button
-                type="button"
-                className={styles.previewButton}
-                onClick={() => {
-                  // Simple preview alert - in real app, would show preview modal
-                  const preview = `
-Job Title: ${jobData.title || 'Not specified'}
-Department: ${jobData.department || 'Not specified'}
-Location: ${jobData.location || 'Not specified'}
-Experience: ${jobData.experience || 'Not specified'}
-Salary: ${jobData.salary || 'Not specified'}
-Skills: ${jobData.skills.join(', ') || 'None specified'}
-Description: ${jobData.description ? jobData.description.substring(0, 100) + '...' : 'Not specified'}`;
-                  alert('Job Preview:' + preview);
-                }}
-                disabled={!jobData.title}
-                title="Preview job posting"
-              >
-                <i className="fa fa-eye"></i> Preview
-              </button>
-              
-              <button
                 type="submit"
                 className={styles.submitButton}
                 disabled={isSubmitting || !jobData.title || !jobData.department || !jobData.location || jobData.skills.length === 0}
@@ -1002,7 +962,7 @@ Description: ${jobData.description ? jobData.description.substring(0, 100) + '..
                   </>
                 ) : (
                   <>
-                    <i className="fa fa-rocket"></i> Create & Publish Job
+                    <i className="fa fa-rocket"></i> Create Job
                   </>
                 )}
               </button>
