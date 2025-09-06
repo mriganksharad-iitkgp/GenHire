@@ -119,7 +119,7 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           className={styles.secondaryButton}
           onClick={() => {
             const token = localStorage.getItem('companyxyz-token');
-            const base = application.cv_url?.startsWith('http') ? application.cv_url : `http://localhost:5000${application.cv_url || ''}`;
+            const base = application.cv_url?.startsWith('http') ? application.cv_url : `${process.env.REACT_APP_API_URL}${application.cv_url || ''}`;
             const url = token ? `${base}?token=${encodeURIComponent(token)}` : base;
             window.open(url, '_blank', 'noopener');
           }}

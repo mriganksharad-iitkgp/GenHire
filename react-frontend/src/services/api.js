@@ -4,7 +4,7 @@
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
 
 function authHeaders() {
-  const token = localStorage.getItem("companyxyz-token");
+  const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
   return {
     Authorization: `Bearer ${token}`,
   };
@@ -58,6 +58,14 @@ export const updateProfile = (payload) =>
   });
 export const updateCompanyProfile = (payload) =>
   request("/company-profile", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+// CV Details
+export const getCvDetails = () => request("/cv-details");
+export const updateCvDetails = (payload) =>
+  request("/cv-details", {
     method: "PUT",
     body: JSON.stringify(payload),
   });

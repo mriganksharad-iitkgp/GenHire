@@ -407,6 +407,114 @@ body.dark .profileContainer,
 	transform: none;
 }
 
+/* CV Sections */
+.cvSection {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--background-primary);
+  transition: all 0.3s ease;
+}
+
+.cvSection:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+.cvSection h4 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.cvSection h4 i {
+  color: var(--primary-color);
+  font-size: 1.125rem;
+}
+
+.sectionDescription {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.cvDetailsStatus {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.detailsComplete {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.detailsComplete i {
+  font-size: 1rem;
+}
+
+.detailsIncomplete {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning-color);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.detailsIncomplete i {
+  font-size: 1rem;
+}
+
+.detailsButton {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: linear-gradient(135deg, var(--primary-color) 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.detailsButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+}
+
+.detailsButton:active {
+  transform: translateY(0);
+}
+
+.detailsButton i {
+  font-size: 1rem;
+}
+
 /* Bio Section */
 .bioSection {
   background: white;
@@ -1190,6 +1298,42 @@ body.dark .profileContainer,
 
 :global(.dark) .fileInfo a {
   color: var(--primary-color);
+}
+
+:global(.dark) .fileInfo a:hover {
+  color: var(--primary-hover);
+}
+
+/* Dark mode styles for CV sections */
+:global(.dark) .cvSection {
+  background: var(--background-primary);
+  border-color: var(--border-color);
+}
+
+:global(.dark) .cvSection:hover {
+  border-color: var(--primary-color);
+}
+
+:global(.dark) .cvSection h4 {
+  color: var(--text-primary);
+}
+
+:global(.dark) .cvSection h4 i {
+  color: var(--primary-color);
+}
+
+:global(.dark) .sectionDescription {
+  color: var(--text-secondary);
+}
+
+:global(.dark) .detailsComplete {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+:global(.dark) .detailsIncomplete {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 :global(.dark) .fileInfo a:hover {

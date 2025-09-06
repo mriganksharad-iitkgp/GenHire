@@ -83,7 +83,7 @@ const JobDetails = () => {
 			}
 			setIsLoading(true);
 			try {
-				const res = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+				const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 					},
@@ -124,9 +124,10 @@ const JobDetails = () => {
 
 				// Check if user has already applied to this job
 				try {
-					const appsRes = await fetch('http://localhost:5000/api/applications', {
+					const res = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
 						headers: { Authorization: `Bearer ${token}` }
 					});
+					const appsRes = res;
 					if (appsRes.ok) {
 						const apps = await appsRes.json();
 						const found = (apps || []).find(a => String(a.job_id) === String(jobId) || String(a.job_details?._id) === String(jobId));
@@ -228,7 +229,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 			return;
 		}
 		try {
-			const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+			const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -265,7 +266,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		// If this is the confirmation step
 		if (pendingWithdrawal) {
 			try {
-				const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/withdraw`, {
+				const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 					method: 'DELETE',
 					headers: {
 						'Authorization': `Bearer ${token}`,
@@ -308,7 +309,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				return;
 			}
 
-			const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
 				method: 'PUT',
 				headers: {
 					'Authorization': `Bearer ${token}`,

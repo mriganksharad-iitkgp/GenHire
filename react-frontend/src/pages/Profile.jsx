@@ -81,7 +81,7 @@ const Profile = () => {
 	}, []);
 
 	// Hooks for profile and applications
-	const { bio, setBio, profilePhotoUrl, cvPath, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto } = useCandidateProfile(showToast);
+	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
 	const { applications, loading: loadingApps, openReport, companies } = useCandidateApplications(showToast);
 
 	// Handle tab change
@@ -119,10 +119,23 @@ const Profile = () => {
 		};
 
 	// Handle profile data update
-		const handleProfileUpdate = async (e) => {
+	const handleProfileUpdate = async (e) => {
 		e.preventDefault();
-			const ok = await save();
-			if (!ok) return;
+		const ok = await save();
+		if (!ok) return;
+	};
+
+	// Handle CV details save
+	const handleSaveCvDetails = async (formData) => {
+		try {
+			const success = await saveCvDetails(formData);
+			if (success) {
+				showToast('CV details saved successfully!', 'success');
+			}
+		} catch (error) {
+			console.error('Error saving CV details:', error);
+			showToast('Failed to save CV details. Please try again.', 'error');
+		}
 	};
 
 	// Add helper function to check if an interview is currently live
@@ -217,23 +230,23 @@ const Profile = () => {
 
 	return (
 		<div className={styles.profileContainer}>
-					<div className={styles.content}>
-						<SidebarProfile
-							photoUrl={profilePhotoUrl}
-							isUploadingPhoto={uploadingPhoto}
-							onPhotoSelected={(e) => {
-								const file = e.target.files?.[0];
-								if (file) handlePhotoUpload(file);
-							}}
-							cvFileName={cvFile ? cvFile.name : undefined}
-							cvPath={cvPath}
-							onViewCV={handleViewCV}
-							onCvFileChange={(e) => setCvFile(e.target.files?.[0] || null)}
-							onUploadCv={handleCVUpload}
-							uploadingCV={uploadingCV}
-						>
-
-						{/* Application Statistics Card */}
+		<div className={styles.content}>
+			<SidebarProfile
+				photoUrl={profilePhotoUrl}
+				isUploadingPhoto={uploadingPhoto}
+				onPhotoSelected={(e) => {
+					const file = e.target.files?.[0];
+					if (file) handlePhotoUpload(file);
+				}}
+				cvFileName={cvFile ? cvFile.name : undefined}
+				cvPath={cvPath}
+				onViewCV={handleViewCV}
+				onCvFileChange={(e) => setCvFile(e.target.files?.[0] || null)}
+				onUploadCv={handleCVUpload}
+				uploadingCV={uploadingCV}
+				cvDetails={cvDetails}
+				onSaveCvDetails={handleSaveCvDetails}
+			>						{/* Application Statistics Card */}
 						<div className={styles.statsCard}>
 						<h3>Application Status</h3>
 						<div className={styles.statsContainer}>

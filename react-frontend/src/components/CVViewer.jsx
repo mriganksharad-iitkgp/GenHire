@@ -27,7 +27,7 @@ const CVViewer = ({ isOpen, onClose, candidate }) => {
     // If application-shaped data with _id present, use the secure backend route
   if (candidate && candidate._id) {
       // Frontend runs on port 3000; backend on 5000
-      return `http://localhost:5000/api/applications/${candidate._id}/cv`;
+      return `${process.env.REACT_APP_API_URL}/api/applications/${candidate._id}/cv`;
     }
   return candidate?.cvUrl || candidate?.student_profile?.cv_path || '#';
   }, [candidate]);

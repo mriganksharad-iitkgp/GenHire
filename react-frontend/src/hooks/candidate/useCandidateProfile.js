@@ -5,6 +5,7 @@ import {
   uploadCV,
   uploadPhoto,
   viewPhoto,
+  updateCvDetails,
 } from "../../services/api";
 
 export default function useCandidateProfile(toast) {
@@ -19,6 +20,7 @@ export default function useCandidateProfile(toast) {
   });
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(null);
   const [cvPath, setCvPath] = useState(null);
+  const [cvDetails, setCvDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadingCV, setUploadingCV] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -37,6 +39,7 @@ export default function useCandidateProfile(toast) {
         skills: profile.skills || [],
       });
       if (profile.cv_path) setCvPath(profile.cv_path);
+      if (profile.cv_details) setCvDetails(profile.cv_details);
       if (profile.profile_photo) {
         try {
           const blob = await viewPhoto();
@@ -107,11 +110,29 @@ export default function useCandidateProfile(toast) {
     [toast]
   );
 
+  const saveCvDetails = useCallback(
+    async (cvDetailsData) => {
+      try {
+        await updateCvDetails(cvDetailsData);
+        setCvDetails(cvDetailsData);
+        toast?.("CV details saved successfully!", "success");
+        return true;
+      } catch (e) {
+        console.error("Failed to save CV details:", e);
+        toast?.("Failed to save CV details", "error");
+        return false;
+      }
+    },
+    [toast]
+  );
+
   return {
     bio,
     setBio,
     profilePhotoUrl,
     cvPath,
+    cvDetails,
+    setCvDetails,
     loading,
     uploadingCV,
     uploadingPhoto,
@@ -119,5 +140,6 @@ export default function useCandidateProfile(toast) {
     save,
     uploadCvFile,
     uploadProfilePhoto,
+    saveCvDetails,
   };
 }

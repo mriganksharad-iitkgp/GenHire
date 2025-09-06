@@ -26,7 +26,7 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/register`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -45,9 +45,9 @@ const Register = () => {
       }
 
       // Store token and user data with user type (consistent with Login)
-      localStorage.setItem("companyxyz-token", data.token);
+      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
       localStorage.setItem(
-        "companyxyz-user",
+        process.env.REACT_APP_USER_KEY,
         JSON.stringify({ ...data.user, userType })
       );
 
