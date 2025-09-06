@@ -33,7 +33,7 @@ const ApplicationView = () => {
 				try {
 					setIsLoading(true);
 					const res = await fetch(
-						`http://localhost:5000/api/applications/${applicationId}`,
+						`${process.env.REACT_APP_API_URL}/api/applications/${applicationId}`,
 						{
 							headers: {
 								Authorization: `Bearer ${token}`,

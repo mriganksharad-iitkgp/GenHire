@@ -31,7 +31,7 @@ const Navbar = ({ userType = 'candidate' }) => {
 			if (!token) return;
 			
 			// Load profile data
-			const profileResponse = await fetch("http://localhost:5000/api/profile", {
+			const profileResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/profile`, {
 				headers: {
 					"Authorization": `Bearer ${token}`,
 					"Content-Type": "application/json"
@@ -63,7 +63,7 @@ const Navbar = ({ userType = 'candidate' }) => {
 			const token = localStorage.getItem("companyxyz-token");
 			if (!token) return;
 			
-			const response = await fetch("http://localhost:5000/api/view-photo", {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/view-photo`, {
 				headers: {
 					"Authorization": `Bearer ${token}`
 				}

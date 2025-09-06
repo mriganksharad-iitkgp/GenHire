@@ -46,7 +46,7 @@ export default function Chat({ interviewId }) {
         if (!currentSessionId || (socketRef.current && socketRef.current.connected)) return;
 
         console.log(`Attempting to connect to WebSocket for session: ${currentSessionId}`);
-        const socket = io('http://localhost:5000');
+        const socket = io(`${process.env.REACT_APP_API_URL}`);
         socketRef.current = socket;
 
         socket.on('connect', () => {
@@ -99,7 +99,7 @@ export default function Chat({ interviewId }) {
 
         try {
             const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`http://localhost:5000/api/interviews/${currentSessionId}/register-face`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/register-face`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ image: imageData }),
@@ -138,7 +138,7 @@ export default function Chat({ interviewId }) {
             const formData = new FormData();
             formData.append('video', new Blob([data.buffer], { type: 'video/mp4' }), `interview_${currentSessionId}.mp4`);
             const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`http://localhost:5000/api/interviews/${currentSessionId}/upload-recording`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData,
@@ -209,7 +209,7 @@ export default function Chat({ interviewId }) {
 
         if (interviewId && interviewStatus === "starting") {
             const token = localStorage.getItem("companyxyz-token");
-            fetch("http://localhost:5000/api/interviews/start", {
+            fetch(`${process.env.REACT_APP_API_URL}/api/interviews/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -268,7 +268,7 @@ export default function Chat({ interviewId }) {
             await stopAndUploadRecording();
             
             const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`http://localhost:5000/api/interviews/${currentSessionId}/end`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             });
@@ -302,7 +302,7 @@ export default function Chat({ interviewId }) {
 
         try {
             const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`http://localhost:5000/api/interviews/${currentSessionId}/answer`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`, {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json",

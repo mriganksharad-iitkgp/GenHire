@@ -4,7 +4,7 @@
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
 
 function authHeaders() {
-  const token = localStorage.getItem("companyxyz-token");
+  const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
   return {
     Authorization: `Bearer ${token}`,
   };

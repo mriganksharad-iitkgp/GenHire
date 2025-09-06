@@ -16,7 +16,7 @@ const Login = () => {
 		setError("");
 
 		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/login`, {
+			const response = await fetch(`${process.env.REACT_APP_API_BASE}/login`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -35,8 +35,8 @@ const Login = () => {
 			}
 
 			// Store token and user data with user type
-			localStorage.setItem("companyxyz-token", data.token);
-			localStorage.setItem("companyxyz-user", JSON.stringify({
+			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
 				...data.user,
 				userType: userType
 			}));

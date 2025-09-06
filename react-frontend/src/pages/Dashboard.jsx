@@ -36,7 +36,7 @@ const Dashboard = () => {
 				return;
 			}
 
-			const response = await fetch('http://localhost:5000/api/jobs', {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
 				headers: {
 					'Authorization': `Bearer ${token}`,
 					'Content-Type': 'application/json'
@@ -72,7 +72,7 @@ const Dashboard = () => {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) return;
 
-			const response = await fetch('http://localhost:5000/api/applications', {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
 				headers: {
 					'Authorization': `Bearer ${token}`,
 					'Content-Type': 'application/json'
@@ -104,7 +104,7 @@ const Dashboard = () => {
 				return;
 			}
 
-			const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -227,7 +227,7 @@ const Dashboard = () => {
 			}
 
 			// This is the confirmation step (second click)
-			const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/withdraw`, {
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 				method: 'DELETE',
 				headers: {
 					'Authorization': `Bearer ${token}`,
