@@ -226,16 +226,12 @@ const RecruiterDashboard = () => {
 		}
 
 		if (selectedStatus) {
-			// Map backend status to display status
-			const statusMap = {
-				'pending': 'Pending Interview',
-				'reviewed': 'Pending Interview',
-				'shortlisted': 'Pending Interview',
-				'interviewed': 'Interviewed',
-				'selected': 'Selected',
-				'rejected': 'Rejected'
-			};
-			filtered = filtered.filter(app => statusMap[String(app.status || '').toLowerCase()] === selectedStatus);
+			// Direct status matching with proper case handling
+			const normalizedSelectedStatus = selectedStatus.toLowerCase();
+			filtered = filtered.filter(app => {
+				const appStatus = String(app.status || '').toLowerCase();
+				return appStatus === normalizedSelectedStatus;
+			});
 		}
 
 		return filtered;

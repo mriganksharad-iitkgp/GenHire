@@ -263,6 +263,19 @@ const Profile = () => {
 									{
 										applications.filter(
 											(app) =>
+												app.status === "Pending"
+										).length
+									}
+								</span>
+								<span className={styles.statLabel}>
+									Pending
+								</span>
+							</div>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{
+										applications.filter(
+											(app) =>
 												app.status === "Shortlisted"
 										).length
 									}
@@ -275,13 +288,24 @@ const Profile = () => {
 								<span className={styles.statNumber}>
 									{
 										applications.filter(
-											(app) =>
-												app.status === "In Progress"
+											(app) => app.status === "Interviewed"
 										).length
 									}
 								</span>
 								<span className={styles.statLabel}>
-									In Progress
+									Interviewed
+								</span>
+							</div>
+							<div className={styles.statItem}>
+								<span className={styles.statNumber}>
+									{
+										applications.filter(
+											(app) => app.status === "Selected"
+										).length
+									}
+								</span>
+								<span className={styles.statLabel}>
+									Selected
 								</span>
 							</div>
 							<div className={styles.statItem}>

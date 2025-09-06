@@ -8,7 +8,7 @@ const CandidatesFilters = ({ jobPostings, selectedPosition, selectedStatus, onPo
       value={selectedPosition}
       onChange={(e) => onPositionChange(e.target.value)}
     >
-      <option value="">All Positions</option>
+      <option value="">All Job Roles</option>
       {jobPostings.map((job, idx) => (
         <option key={job._id || job.id || `jobopt-${idx}`} value={job.title}>{job.title}</option>
       ))}
@@ -19,7 +19,9 @@ const CandidatesFilters = ({ jobPostings, selectedPosition, selectedStatus, onPo
       onChange={(e) => onStatusChange(e.target.value)}
     >
       <option value="">All Statuses</option>
-      <option value="Pending Interview">Pending Interview</option>
+      <option value="Pending">Pending</option>
+      <option value="Reviewed">Reviewed</option>
+      <option value="Shortlisted">Shortlisted</option>
       <option value="Interviewed">Interviewed</option>
       <option value="Selected">Selected</option>
       <option value="Rejected">Rejected</option>

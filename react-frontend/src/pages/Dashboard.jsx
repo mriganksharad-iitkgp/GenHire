@@ -9,6 +9,9 @@ const Dashboard = () => {
 	const [typeFilter, setTypeFilter] = useState("");
 	const [locationFilter, setLocationFilter] = useState("");
 	const [experienceFilter, setExperienceFilter] = useState("");
+	const [jobRoleFilter, setJobRoleFilter] = useState("");
+	const [companyFilter, setCompanyFilter] = useState("");
+	const [skillsFilter, setSkillsFilter] = useState("");
 	const [jobOpenings, setJobOpenings] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
@@ -276,6 +279,15 @@ const Dashboard = () => {
 		return null;
 	};
 
+	// Get unique job roles for the filter dropdown
+	const uniqueJobRoles = [...new Set(jobOpenings.map(job => job.title).filter(Boolean))].sort();
+	
+	// Get unique companies for the filter dropdown
+	const uniqueCompanies = [...new Set(jobOpenings.map(job => job.company || 'TechCorp Solutions').filter(Boolean))].sort();
+	
+	// Get unique skills for the filter dropdown
+	const uniqueSkills = [...new Set(jobOpenings.flatMap(job => Array.isArray(job.skills) ? job.skills : []).filter(Boolean))].sort();
+
 	const filteredJobs = jobOpenings.filter((job) => {
 		const q = searchQuery.trim().toLowerCase();
 		const title = String(job.title || '').toLowerCase();
@@ -309,7 +321,16 @@ const Dashboard = () => {
 			matchesExperience = minYears !== null ? minYears >= 5 : true;
 		}
 
-		return matchesSearch && matchesType && matchesLocation && matchesExperience;
+		const roleSel = jobRoleFilter.trim();
+		const matchesJobRole = roleSel === '' || String(job.title || '') === roleSel;
+
+		const companySel = companyFilter.trim();
+		const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
+
+		const skillSel = skillsFilter.trim();
+		const matchesSkill = skillSel === '' || (Array.isArray(job.skills) && job.skills.includes(skillSel));
+
+		return matchesSearch && matchesType && matchesLocation && matchesExperience && matchesJobRole && matchesCompany && matchesSkill;
 	}).sort((a, b) => {
 		// Sort jobs: unapplied jobs first, then applied jobs
 		const aApplied = hasApplied(a._id);
@@ -387,6 +408,45 @@ const Dashboard = () => {
 							<option value="0-1">Entry Level (0-1 year)</option>
 							<option value="2+">Mid Level (2+ years)</option>
 							<option value="5+">Senior Level (5+ years)</option>
+						</select>
+
+						<select
+							value={jobRoleFilter}
+							onChange={(e) => setJobRoleFilter(e.target.value)}
+							className={styles.filterSelect}
+						>
+							<option value="">All Job Roles</option>
+							{uniqueJobRoles.map((role, index) => (
+								<option key={index} value={role}>
+									{role}
+								</option>
+							))}
+						</select>
+
+						<select
+							value={companyFilter}
+							onChange={(e) => setCompanyFilter(e.target.value)}
+							className={styles.filterSelect}
+						>
+							<option value="">All Companies</option>
+							{uniqueCompanies.map((company, index) => (
+								<option key={index} value={company}>
+									{company}
+								</option>
+							))}
+						</select>
+
+						<select
+							value={skillsFilter}
+							onChange={(e) => setSkillsFilter(e.target.value)}
+							className={styles.filterSelect}
+						>
+							<option value="">All Skills</option>
+							{uniqueSkills.map((skill, index) => (
+								<option key={index} value={skill}>
+									{skill}
+								</option>
+							))}
 						</select>
 					</div>
 				</div>

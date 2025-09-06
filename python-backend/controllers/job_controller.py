@@ -20,10 +20,10 @@ class JobController:
             user_applications = list(self.applications_collection.find({'student_id': user_id}))
             applied_job_ids = [app['job_id'] for app in user_applications]
             
-            # Build query: active jobs OR jobs user has applied to
+            # Build query: active jobs (not created by system) OR jobs user has applied to
             query = {
                 '$or': [
-                    {'status': 'active'},  # Always show active jobs
+                    {'status': 'active', 'created_by': {'$ne': 'system'}},  # Show active jobs not created by system
                     {'_id': {'$in': [ObjectId(job_id) for job_id in applied_job_ids]}}  # Show jobs user applied to
                 ]
             }
@@ -42,6 +42,12 @@ class JobController:
         for field in required_fields:
             if field not in job_data or not job_data[field]:
                 return {'error': f'{field} is required'}, 400
+        
+        # Check for unique job title
+        job_title = job_data['title'].strip()
+        existing_job = self.jobs_collection.find_one({'title': job_title, 'created_by': recruiter_id})
+        if existing_job:
+            return {'error': f'A job with the title "{job_title}" already exists. Please use a unique job title.'}, 400
         
         # Normalize/validate status with enhanced workflow - default to draft
         raw_status = (job_data.get('status') or 'draft').strip().lower()

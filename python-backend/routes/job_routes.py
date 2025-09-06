@@ -85,78 +85,18 @@ def get_job_applications(current_user, job_id):
     result, status_code = job_controller.get_job_applications(job_id, recruiter_id)
     return jsonify(result), status_code
 
-# Seed data endpoints
-@job_bp.route('/seed-jobs', methods=['POST'])
+# Remove hardcoded sample jobs from database
+@job_bp.route('/remove-sample-jobs', methods=['DELETE'])
 @cross_origin()
-def seed_jobs():
-    """Seed some test jobs for testing"""
-    sample_jobs = [
-        {
-            'title': 'Senior Business Development Manager',
-            'department': 'Sales',
-            'location': 'San Francisco, CA (Remote)',
-            'type': 'Full-time',
-            'experience': '5+ years',
-            'salary': '$120,000 - $150,000',
-            'description': 'We are looking for an experienced Business Development Manager with expertise in client acquisition to join our growing team.',
-            'skills': ['Sales Strategy', 'Client Acquisition', 'Market Research', 'Negotiation'],
-            'status': 'active',
-            'created_by': 'system',
-            'created_at': datetime.datetime.utcnow(),
-            'applicants': 0,
-            'interviewed': 0,
-            'selected': 0,
-            'rejected': 0,
-            'pending': 0
-        },
-        {
-            'title': 'Strategic Partnerships Manager',
-            'department': 'Business Development',
-            'location': 'New York, NY',
-            'type': 'Full-time',
-            'experience': '3+ years',
-            'salary': '$110,000 - $140,000',
-            'description': 'Join our business team to develop strategic partnerships and drive mutual growth with key stakeholders.',
-            'skills': ['Partnership Development', 'Contract Negotiation', 'Relationship Management'],
-            'status': 'active',
-            'created_by': 'system',
-            'created_at': datetime.datetime.utcnow(),
-            'applicants': 0,
-            'interviewed': 0,
-            'selected': 0,
-            'rejected': 0,
-            'pending': 0
-        },
-        {
-            'title': 'Market Research Analyst',
-            'department': 'Marketing',
-            'location': 'Boston, MA (Hybrid)',
-            'type': 'Full-time',
-            'experience': '2+ years',
-            'salary': '$90,000 - $120,000',
-            'description': 'Conduct comprehensive market research to identify opportunities and provide strategic insights for our business development team.',
-            'skills': ['Market Analysis', 'Data Visualization', 'Industry Trends'],
-            'status': 'active',
-            'created_by': 'system',
-            'created_at': datetime.datetime.utcnow(),
-            'applicants': 0,
-            'interviewed': 0,
-            'selected': 0,
-            'rejected': 0,
-            'pending': 0
-        }
-    ]
-    
-    # Insert jobs into database
+def remove_sample_jobs():
+    """Remove hardcoded sample jobs created by 'system'"""
     collections = db_config.get_collections()
     jobs_collection = collections['jobs']
     
-    for job_data in sample_jobs:
-        existing_job = jobs_collection.find_one({'title': job_data['title']})
-        if not existing_job:
-            jobs_collection.insert_one(job_data)
+    # Remove jobs created by 'system'
+    result = jobs_collection.delete_many({'created_by': 'system'})
     
-    return jsonify({'message': f'Seeded {len(sample_jobs)} jobs successfully'}), 200
+    return jsonify({'message': f'Removed {result.deleted_count} sample jobs'}), 200
 
 @job_bp.route('/test-jobs', methods=['GET'])
 @cross_origin()
