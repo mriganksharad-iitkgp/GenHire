@@ -137,16 +137,19 @@ def end_interview(current_user, session_id):
         'evaluation': {'summary': 'Evaluation not computed in this build.'}
     }
     
-    # --- ADD THIS LINE ---
-    final_score = live_sessions.get(session_id, {}).get('proctoring_score', 'N/A')
-    
-    # --- MODIFY THIS BLOCK ---
+    # Get final proctoring data from the live session
+    session_data = live_sessions.get(session_id, {})
+    final_score = session_data.get('proctoring_score', 'N/A')
+    manual_infractions = session_data.get('manual_infractions', [])
+
+    # Update the database record with final data
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
             'status': 'completed',
             'evaluation': result['evaluation'],
-            'proctoring_score': final_score,  # Add the score here
+            'proctoring_score': final_score,
+            'manual_infractions': manual_infractions, # Log manual infractions
             'updated_at': datetime.datetime.utcnow()
         }}
     )
@@ -218,8 +221,11 @@ def register_face(current_user, session_id):
         
         # Initialize the session in our live store, including the manual_infractions list
         live_sessions[session_id] = {
-            'registered_face': frame, 'proctoring_score': 100,
-            'infractions': {}, 'sid': None
+            'registered_face': frame, 
+            'proctoring_score': 100,
+            'infractions': {}, 
+            'sid': None,
+            'manual_infractions': []  # Initialize list for tab/window switch violations
         }
         
         # Update the interview status in the database
@@ -320,6 +326,29 @@ def handle_proctoring_frame(data):
     if analysis_result['status'] != "Status: OK":
         print(f"🔴 Live Proctoring Alert [Session: {session_id}]: {analysis_result['status']} | Score: {analysis_result['score']:.1f}")
 
+# New handler for tab/window switching violations
+@socketio.on('proctoring_violation')
+def handle_proctoring_violation(data):
+    session_id = data.get('session_id')
+    violation_type = data.get('type')
+    session_data = live_sessions.get(session_id)
+    if not session_data:
+        print(f"⚠️ Received proctoring violation for unknown session: {session_id}")
+        return
+
+    # Log the infraction
+    timestamp = datetime.datetime.utcnow().isoformat()
+    infraction = {'type': violation_type, 'timestamp': timestamp}
+    
+    if 'manual_infractions' not in session_data:
+        session_data['manual_infractions'] = []
+    
+    session_data['manual_infractions'].append(infraction)
+    
+    # Optionally, deduct from the proctoring score for each violation
+    session_data['proctoring_score'] = max(0, session_data.get('proctoring_score', 100) - 5) # Deduct 5 points
+    
+    print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
 
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
 @token_required
