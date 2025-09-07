@@ -137,16 +137,16 @@ def end_interview(current_user, session_id):
         'evaluation': {'summary': 'Evaluation not computed in this build.'}
     }
     
-    # Get proctoring score from live sessions
+    # --- ADD THIS LINE ---
     final_score = live_sessions.get(session_id, {}).get('proctoring_score', 'N/A')
     
-    # Update interview document with completion details
+    # --- MODIFY THIS BLOCK ---
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
             'status': 'completed',
-            'evaluation': result.get('evaluation'),
-            'proctoring_score': final_score,
+            'evaluation': result['evaluation'],
+            'proctoring_score': final_score,  # Add the score here
             'updated_at': datetime.datetime.utcnow()
         }}
     )
@@ -216,9 +216,9 @@ def register_face(current_user, session_id):
         header, encoded = data['image'].split(",", 1)
         decoded_image = base64.b64decode(encoded)
         
-        # Initialize the session in our live store
+        # Initialize the session in our live store, including the manual_infractions list
         live_sessions[session_id] = {
-            'registered_face': 'face_data', 'proctoring_score': 100,
+            'registered_face': frame, 'proctoring_score': 100,
             'infractions': {}, 'sid': None
         }
         
@@ -320,15 +320,44 @@ def handle_proctoring_frame(data):
     if analysis_result['status'] != "Status: OK":
         print(f"🔴 Live Proctoring Alert [Session: {session_id}]: {analysis_result['status']} | Score: {analysis_result['score']:.1f}")
 
-# ===== COMMENTED OUT - MOVED TO MODULAR STRUCTURE =====
-# All file management, job management, profile management routes
-# have been moved to their respective blueprint modules:
-# - File routes: routes/file_routes.py
-# - Job routes: routes/job_routes.py  
-# - Profile routes: routes/profile_routes.py
-# - Application routes: routes/application_routes.py
-# - Auth routes: routes/auth_routes.py
 
-# Main application entry point
+@app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
+@token_required
+def upload_interview_recording(current_user, session_id):
+    """
+    Handles the upload of the final archival interview recording.
+    This is called by the frontend after the interview is completed.
+    """
+    # 1. Check if the 'video' file is part of the request
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+
+    video_file = request.files['video']
+
+    # 2. Create a dedicated folder for this session's recordings if it doesn't exist
+    session_folder = os.path.join(app.config["PROCTORING_FOLDER"], session_id)
+    os.makedirs(session_folder, exist_ok=True)
+    
+    # 3. Create a secure filename and define the full path to save the video
+    filename = secure_filename(f"recording_archive.mp4")
+    video_path = os.path.join(session_folder, filename)
+    
+    # 4. Save the video file to the specified path
+    video_file.save(video_path)
+    
+    # 5. Update the interview document in the database to include the path to this recording
+    interviews_collection.update_one(
+        {'session_id': session_id, 'user_id': str(current_user['_id'])},
+        {'$push': {'recordings': {'path': video_path, 'timestamp': datetime.datetime.utcnow()}}}
+    )
+    
+    print(f"✅ Final archival recording for session {session_id} saved to: {video_path}")
+    
+    # Note: The old background analysis thread is removed from here because
+    # the proctoring analysis is now done live via WebSockets.
+    
+    return jsonify({'message': 'Archival recording saved successfully.'}), 200
+
+
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
