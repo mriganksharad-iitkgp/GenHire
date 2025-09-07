@@ -83,8 +83,6 @@ export default function Chat({ interviewId }) {
     const startLiveProctoring = useCallback(() => {
         const currentSessionId = sessionIdRef.current;
         if (!currentSessionId || (socketRef.current && socketRef.current.connected)) return;
-
-        console.log(`Attempting to connect to WebSocket for session: ${currentSessionId}`);
         const socket = io('http://localhost:5000');
         socketRef.current = socket;
         socket.on('connect', () => {
@@ -248,9 +246,9 @@ export default function Chat({ interviewId }) {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                     cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
-                     jd_path: "uploads/jd/JD1.pdf",
-                     reference_path: "Eric Ries - The Lean Startup.pdf",
+                    cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
+                    jd_path: "uploads/jd/JD1.pdf",
+                    reference_path: "Eric Ries - The Lean Startup.pdf",
                 }),
             })
             .then(res => res.ok ? res.json() : Promise.reject(res.json()))
@@ -260,7 +258,6 @@ export default function Chat({ interviewId }) {
                 setSimilarityScore(data.similarity_score);
                 setCurrentQuestion(data.initial_questions[0]);
                 setInterviewStatus("registering");
-                setChatContent({ 0: { response: "Welcome! To begin, please position your face in the camera frame and click 'Register Face'." } });
             })
             .catch(err => {
                 console.error("Error starting interview:", err);
