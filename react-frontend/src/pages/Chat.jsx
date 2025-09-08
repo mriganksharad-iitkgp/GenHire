@@ -23,7 +23,9 @@ export default function Chat({ interviewId }) {
     // New state for proctoring alerts
     const [proctoringAlert, setProctoringAlert] = useState({ active: false, message: '' });
     const [warningCount, setWarningCount] = useState(0);
-
+    // Add these new states
+    const [gazeDirection, setGazeDirection] = useState('Face Not Detected');
+    const [gazeTimes, setGazeTimes] = useState({ Left: 0, Center: 0, Right: 0 });
 
     // --- REFS ---
     const videoRef = useRef(null);
@@ -79,7 +81,7 @@ export default function Chat({ interviewId }) {
     }, [interviewStatus, proctoringAlert.active, warningCount]);
 
 
-    // --- LIVE PROCTORING & WEBSOCKETS (No changes needed here) ---
+    // --- LIVE PROCTORING & WEBSOCKETS (Modified) ---
     const startLiveProctoring = useCallback(() => {
         const currentSessionId = sessionIdRef.current;
         if (!currentSessionId || (socketRef.current && socketRef.current.connected)) return;
@@ -88,6 +90,19 @@ export default function Chat({ interviewId }) {
         socket.on('connect', () => {
             console.log('✅ WebSocket connected.');
             socket.emit('start_proctoring', { session_id: currentSessionId });
+            
+            // Add this new listener for real-time gaze data
+            socket.on('gaze_data', (data) => {
+                setGazeDirection(data.gaze_direction);
+                setGazeTimes(data.gaze_times);
+                if (data.is_cheating_alert) {
+                    const newWarningCount = warningCount + 1;
+                    setWarningCount(newWarningCount);
+                    setProctoringAlert({ active: true, message: `Suspicious gaze detected! This is warning #${newWarningCount}.` });
+                    socket.emit('proctoring_violation', { session_id: sessionIdRef.current, type: 'gaze_violation' });
+                }
+            });
+
             proctoringIntervalRef.current = setInterval(() => {
                 if (videoRef.current && videoRef.current.srcObject && videoRef.current.readyState === 4) {
                     const canvas = document.createElement('canvas');
@@ -400,7 +415,7 @@ export default function Chat({ interviewId }) {
     }, [stopLiveProctoring]);
 
 
-    // --- RENDER LOGIC ---
+    // --- RENDER LOGIC (Modified) ---
     if (interviewStatus === "starting") {
         return (
             <div className={Styles.loadingContainer}>
@@ -443,6 +458,11 @@ export default function Chat({ interviewId }) {
             {/* The small video preview for the active interview state */}
             <div className={Styles["video-preview"]}>
                 <video ref={videoRef} autoPlay muted playsInline />
+                <div className={Styles["video-overlay-text"]}>
+                    <p>👁️ Gaze: {gazeDirection}</p>
+                    <p>Time Left: {gazeTimes.Left.toFixed(1)}s</p>
+                    <p>Time Right: {gazeTimes.Right.toFixed(1)}s</p>
+                </div>
             </div>
 
             <div className={Styles["chat-box-container"]}>
@@ -486,13 +506,13 @@ export default function Chat({ interviewId }) {
                                                         <React.Fragment key={index}>{line}<br /></React.Fragment>
                                                     ))}
                                                      <div className={Styles["message-actions"]}>
-                                                        <button
-                                                            className={isSpeaking && speakingIndex === idx ? Styles["btn-stop"] : Styles["btn-speak"]}
-                                                            onClick={() => toggleSpeech(idx, pair.response)}
-                                                        >
-                                                            {isSpeaking && speakingIndex === idx ? "Stop" : "Speak"}
-                                                        </button>
-                                                    </div>
+                                                         <button
+                                                             className={isSpeaking && speakingIndex === idx ? Styles["btn-stop"] : Styles["btn-speak"]}
+                                                             onClick={() => toggleSpeech(idx, pair.response)}
+                                                         >
+                                                             {isSpeaking && speakingIndex === idx ? "Stop" : "Speak"}
+                                                         </button>
+                                                     </div>
                                                 </div>
                                             </div>
                                         )}

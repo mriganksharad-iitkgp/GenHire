@@ -858,7 +858,7 @@
 	background-color: #73d13d;
 }
 .video-preview {
-    position: fixed;
+    position: relative;
     bottom: 20px;
     right: 20px;
     width: 200px;
@@ -876,6 +876,19 @@
     object-fit: cover;
 }
 
+.video-overlay-text {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    z-index: 10;
+    text-align: left; /* Align text to the left */
+    line-height: 1.5; /* Add space between lines */
+}
 
 /* --- Full-screen Loading and Registration Styles --- */
 
