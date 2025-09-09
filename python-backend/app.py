@@ -219,6 +219,8 @@ def get_user_interviews(current_user):
     
     return jsonify(formatted_interviews)
 
+# ... other imports
+
 @app.route('/api/interviews/<session_id>/register-face', methods=['POST'])
 @token_required
 def register_face(current_user, session_id):
@@ -231,7 +233,7 @@ def register_face(current_user, session_id):
         
         # Initialize the session in our live store, including the manual_infractions list
         live_sessions[session_id] = {
-            'registered_face': frame, 
+            'registered_face': decoded_image, # Corrected: Use decoded_image instead of frame
             'proctoring_score': 100,
             'infractions': {}, 
             'sid': None,
@@ -249,38 +251,6 @@ def register_face(current_user, session_id):
     except Exception as e:
         print(f"Error during face registration: {e}")
         return jsonify({'error': 'Failed to process image'}), 500
-
-@app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
-@token_required
-def upload_interview_recording(current_user, session_id):
-    """
-    Handles the upload of the final archival interview recording.
-    """
-    if 'video' not in request.files:
-        return jsonify({'error': 'No video file provided'}), 400
-
-    video_file = request.files['video']
-
-    # Create a dedicated folder for this session's recordings if it doesn't exist
-    session_folder = os.path.join(app.config["PROCTORING_FOLDER"], session_id)
-    os.makedirs(session_folder, exist_ok=True)
-    
-    # Create a secure filename and define the full path to save the video
-    filename = secure_filename(f"recording_archive.mp4")
-    video_path = os.path.join(session_folder, filename)
-    
-    # Save the video file to the specified path
-    video_file.save(video_path)
-    
-    # Update the interview document in the database to include the path to this recording
-    interviews_collection.update_one(
-        {'session_id': session_id, 'user_id': str(current_user['_id'])},
-        {'$push': {'recordings': {'path': video_path, 'timestamp': datetime.datetime.utcnow()}}}
-    )
-    
-    print(f"✅ Final archival recording for session {session_id} saved to: {video_path}")
-    
-    return jsonify({'message': 'Archival recording saved successfully.'}), 200
 
 # Add this entire block for WebSocket event handling
 @socketio.on('connect')
