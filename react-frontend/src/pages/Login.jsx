@@ -30,6 +30,8 @@ const Login = () => {
 
 			const data = await response.json();
 
+			console.log('Login response:', data); // Debug log
+
 			if (!response.ok) {
 				throw new Error(data.error || "Login failed");
 			}
@@ -41,10 +43,15 @@ const Login = () => {
 				userType: userType
 			}));
 
+			console.log('Token stored:', data.token); // Debug log
+			console.log('User data stored:', data.user); // Debug log
+
 			// Navigate based on user type
 			if (userType === "recruiter") {
+				console.log('Navigating to recruiter dashboard'); // Debug log
 				navigate("/recruiter-dashboard");
 			} else {
+				console.log('Navigating to candidate dashboard'); // Debug log
 				navigate("/");
 			}
 		} catch (error) {
