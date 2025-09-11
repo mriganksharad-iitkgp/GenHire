@@ -4,6 +4,7 @@ import Styles from "./Chat.module.css";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 import io from 'socket.io-client';
+import Avatar from "../components/Avatar"; // Import the new Avatar component
 
 export default function Chat({ interviewId }) {
     // --- STATE MANAGEMENT ---
@@ -11,7 +12,7 @@ export default function Chat({ interviewId }) {
     const [input, setInput] = useState("");
     const [isRecording, setIsRecording] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [speakingIndex, setSpeakingIndex] = useState(null);
+    // const [speakingIndex, setSpeakingIndex] = useState(null); // No longer needed
     const [sessionId, setSessionId] = useState(null);
     const [currentQuestion, setCurrentQuestion] = useState("");
     const [interviewStatus, setInterviewStatus] = useState("starting"); // starting, registering, active, ending, completed
@@ -29,7 +30,7 @@ export default function Chat({ interviewId }) {
 
     // --- REFS ---
     const videoRef = useRef(null);
-    const targetRef = useRef();
+    // const targetRef = useRef(); // No longer needed for auto-scrolling chat
     const recognitionRef = useRef(null);
     const currentUtteranceRef = useRef(null);
     const ffmpegRef = useRef(new FFmpeg());
@@ -121,15 +122,13 @@ export default function Chat({ interviewId }) {
         });
     }, []);
 
-    const stopLiveProctoring = useCallback(() => {
-        if (proctoringIntervalRef.current) {
-            clearInterval(proctoringIntervalRef.current);
-            proctoringIntervalRef.current = null;
-        }
-        if (socketRef.current && socketRef.current.connected) {
-            socketRef.current.disconnect();
-        }
-    }, []);
+const stopLiveProctoring = useCallback(() => {
+    // Only stop sending frames. Don't disconnect yet.
+    if (proctoringIntervalRef.current) {
+        clearInterval(proctoringIntervalRef.current);
+        proctoringIntervalRef.current = null;
+    }
+}, []);
 
     // --- FACE REGISTRATION ---
     const handleFaceRegistration = useCallback(async () => {
@@ -193,7 +192,7 @@ export default function Chat({ interviewId }) {
             await ffmpeg.exec(['-i', 'input.webm', '-c', 'copy', 'output.mp4']);
             const data = await ffmpeg.readFile('output.mp4');
             const formData = new FormData();
-            formData.append('video', new Blob([data.buffer], { type: 'video/mp4' }), `interview_${currentSessionId}.mp4`);
+            formData.append('recording', new Blob([data.buffer], { type: 'video/mp4' }), `interview_${currentSessionId}.mp4`);
             const token = localStorage.getItem("companyxyz-token");
             const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`, {
                 method: 'POST',
@@ -300,41 +299,57 @@ export default function Chat({ interviewId }) {
     }, [interviewStatus, isRecordingVideo, startWebcamAndArchivalRecording, similarityScore, currentQuestion]);
 
     const endInterview = useCallback(async () => {
-        const currentSessionId = sessionIdRef.current;
-        if (!currentSessionId || interviewStatus !== "active" || uploadStatus === 'uploading') return;
-        setInterviewStatus("ending");
-        stopLiveProctoring();
-        try {
-            await stopAndUploadRecording();
-            const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to end interview');
-            setInterviewStatus("completed");
-            setEvaluation(data.evaluation);
-            setChatContent(prev => ({ ...prev, [Object.keys(prev).length]: { response: "Interview ended. Finalizing your report..." } }));
-        } catch (error) {
-            console.error("Failed to end interview:", error);
-            setInterviewStatus("active");
+    const currentSessionId = sessionIdRef.current;
+    if (!currentSessionId || interviewStatus !== "active" || uploadStatus === 'uploading') return;
+
+    setInterviewStatus("ending");
+    stopLiveProctoring(); // Now this only stops sending frames
+
+    try {
+        // 1. First, complete all async operations
+        await stopAndUploadRecording();
+
+        // 2. Then, notify the backend that the interview is over
+        const token = localStorage.getItem("companyxyz-token");
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to end interview');
+
+        setInterviewStatus("completed");
+        setEvaluation(data.evaluation);
+        setChatContent(prev => ({ ...prev, [Object.keys(prev).length]: { response: "Interview ended. Finalizing your report..." } }));
+
+    } catch (error) {
+        console.error("Failed to end interview:", error);
+        setInterviewStatus("active"); // Revert status on failure
+    } finally {
+        // 3. Finally, disconnect the socket as the very last step
+        if (socketRef.current && socketRef.current.connected) {
+            console.log("All tasks complete. Disconnecting socket now.");
+            socketRef.current.disconnect();
         }
-    }, [interviewStatus, uploadStatus, stopAndUploadRecording, stopLiveProctoring]);
+    }
+}, [interviewStatus, uploadStatus, stopAndUploadRecording, stopLiveProctoring]);
     
-    const onSend = useCallback(async (e) => {
-        e.preventDefault();
+    const onSend = useCallback(async (userAnswer) => { // Modified to accept answer directly
         const currentSessionId = sessionIdRef.current;
-        const answer = input.trim();
+        const answer = userAnswer.trim();
         if (answer === "" || !currentQuestion || !currentSessionId || interviewStatus !== "active") {
-            setInput("");
             return;
         }
-        const newChatContent = { ...chatContent };
-        const newIndex = Object.keys(newChatContent).length;
-        newChatContent[newIndex] = { query: answer, response: "Analyzing..." };
-        setChatContent(newChatContent);
-        setInput("");
+        
+        console.log(`%cUser Answer: ${answer}`, 'color: #007bff; font-weight: bold;');
+
+        // We don't need to display the user's query in the new UI
+        // const newChatContent = { ...chatContent };
+        // const newIndex = Object.keys(newChatContent).length;
+        // newChatContent[newIndex] = { query: answer, response: "Analyzing..." };
+        // setChatContent(newChatContent);
+        setInput(""); // Clear the transcript
         try {
             const token = localStorage.getItem("companyxyz-token");
             const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`, {
@@ -347,62 +362,93 @@ export default function Chat({ interviewId }) {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Failed to submit answer");
-            const updatedChatContent = { ...newChatContent };
-            if (data.evaluation && data.evaluation.feedback) {
-                updatedChatContent[newIndex] = { query: answer, evaluation: data.evaluation };
-            }
+            
             if (data.interview_complete) {
                 await endInterview();
             } else {
                 setCurrentQuestion(data.next_question);
-                updatedChatContent[newIndex + 1] = { response: data.next_question };
+                speakResponse(data.next_question); // Automatically speak the next question
             }
-            setChatContent(updatedChatContent);
+            // We don't need to update chatContent anymore
+            // setChatContent(updatedChatContent);
         } catch (error) {
             console.error("Error in onSend:", error);
-            setChatContent(prev => ({ ...prev, [Object.keys(prev).length]: { response: `⚠️ Error: ${error.message}` } }));
+            speakResponse(`An error occurred: ${error.message}`); // Speak the error
         }
-    }, [chatContent, input, currentQuestion, interviewStatus, endInterview]);
+    }, [currentQuestion, interviewStatus, endInterview]);
 
-    // --- SPEECH RECOGNITION & SYNTHESIS (No changes needed here) ---
+    // --- SPEECH RECOGNITION & SYNTHESIS (Modified) ---
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = false;
-            recognitionRef.current.interimResults = false;
+            recognitionRef.current.continuous = false; // Important for auto-stop
+            recognitionRef.current.interimResults = true; // Show live transcript
             recognitionRef.current.lang = "en-US";
-            recognitionRef.current.onresult = (event) => setInput(event.results[0][0].transcript);
+            
+            recognitionRef.current.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = 0; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        setInput(event.results[i][0].transcript); // Update live transcript
+                    }
+                }
+                if (finalTranscript) {
+                    setInput(finalTranscript);
+                    onSend(finalTranscript); // Automatically send final transcript
+                }
+            };
+
             recognitionRef.current.onerror = (event) => console.error("Speech recognition error", event);
             recognitionRef.current.onend = () => setIsRecording(false);
         }
-    }, []);
+    }, [onSend]);
 
     const handleVoiceInput = () => {
-        if (isRecording) {
-            recognitionRef.current.stop();
-        } else {
+        if (isRecording || isSpeaking) return; // Prevent recording while AI is speaking
+        if (recognitionRef.current) {
+            setInput(""); // Clear previous transcript
             recognitionRef.current.start();
             setIsRecording(true);
         }
     };
 
-    const toggleSpeech = (idx, text) => {
-        if (!window.speechSynthesis) return;
-        if (isSpeaking && speakingIndex === idx) {
-            window.speechSynthesis.cancel();
-            setIsSpeaking(false); setSpeakingIndex(null);
-            return;
-        }
+    const speakResponse = (text) => {
+        if (!window.speechSynthesis || !text) return;
+
+        console.log(`%cAI Question: ${text}`, 'color: #28a745; font-weight: bold;');
+
         if (isSpeaking) {
             window.speechSynthesis.cancel();
         }
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.onstart = () => { setIsSpeaking(true); setSpeakingIndex(idx); };
-        utterance.onend = () => { setIsSpeaking(false); setSpeakingIndex(null); };
-        utterance.onerror = () => { setIsSpeaking(false); setSpeakingIndex(null); };
+        currentUtteranceRef.current = utterance;
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => {
+            setIsSpeaking(false);
+            currentUtteranceRef.current = null;
+        };
+        utterance.onerror = () => {
+            setIsSpeaking(false);
+            currentUtteranceRef.current = null;
+        };
         window.speechSynthesis.speak(utterance);
     };
+
+    // Automatically speak the first question
+    useEffect(() => {
+        if (interviewStatus === "active" && currentQuestion && !isSpeaking && !currentUtteranceRef.current) {
+             // A small delay to ensure the UI transition is smooth
+            setTimeout(() => {
+                const initialMessage = `Your CV has a ${Math.round(similarityScore * 100)}% match. Let's begin. ${currentQuestion}`;
+                speakResponse(initialMessage);
+            }, 1000);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [interviewStatus]);
+
 
     // --- Component Cleanup ---
     useEffect(() => {
@@ -443,7 +489,7 @@ export default function Chat({ interviewId }) {
     }
 
     return (
-        <div className={Styles["page-container"]}>
+        <div className={Styles["page-container-fullscreen"]}>
             {/* Proctoring Warning Modal */}
             {proctoringAlert.active && (
                 <div className={Styles.modalOverlay}>
@@ -460,113 +506,58 @@ export default function Chat({ interviewId }) {
                 <video ref={videoRef} autoPlay muted playsInline />
                 <div className={Styles["video-overlay-text"]}>
                     <p>👁️ Gaze: {gazeDirection}</p>
-                    <p>Time Left: {gazeTimes.Left.toFixed(1)}s</p>
-                    <p>Time Right: {gazeTimes.Right.toFixed(1)}s</p>
                 </div>
             </div>
 
-            <div className={Styles["chat-box-container"]}>
-                <div className={Styles["chat-header"]}>
-                    <h2>AI Interview Session {sessionId ? `#${sessionId.substring(0, 8)}` : ""}</h2>
-                    {isRecordingVideo && <div className={Styles.recordingIndicator}><div className={Styles.recordingDot}></div>Live Proctoring Active</div>}
-                    {interviewStatus === "active" && (
-                        <button className={Styles["end-interview-btn"]} onClick={endInterview} disabled={uploadStatus === 'uploading'}>
-                            {uploadStatus === 'uploading' ? 'Saving...' : 'End Interview'}
-                        </button>
-                    )}
-                </div>
-                <div className={Styles["chat-content"]}>
-                    <div className={Styles["messages-list"]} ref={targetRef}>
-                        {Object.keys(chatContent).length > 0 ? (
-                            Object.keys(chatContent).map((idx) => {
-                                const pair = chatContent[idx];
-                                return (
-                                    <React.Fragment key={idx}>
-                                        {pair.query && (
-                                            <div className={`${Styles["message-box"]} ${Styles["user"]}`}>
-                                                <img src={"/android-chrome-192x192.png"} alt="User Avatar" />
-                                                <div className={Styles["message"]}>{pair.query}</div>
-                                            </div>
-                                        )}
-                                        {pair.evaluation && (
-                                            <div className={`${Styles["message-box"]} ${Styles["evaluation"]}`}>
-                                                <div className={Styles["evaluation-content"]}>
-                                                    <div className={Styles["score"]}>
-                                                        Relevance: {Math.round(pair.evaluation.relevance_score * 100)}%
-                                                    </div>
-                                                    <div className={Styles["feedback"]}>{pair.evaluation.feedback}</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {pair.response && (
-                                            <div className={`${Styles["message-box"]} ${Styles["gpt"]}`}>
-                                                <img src={"/android-chrome-512x512.png"} alt="AI Avatar" />
-                                                <div className={Styles["message"]}>
-                                                    {(pair.response || '').split("\n").map((line, index) => (
-                                                        <React.Fragment key={index}>{line}<br /></React.Fragment>
-                                                    ))}
-                                                     <div className={Styles["message-actions"]}>
-                                                         <button
-                                                             className={isSpeaking && speakingIndex === idx ? Styles["btn-stop"] : Styles["btn-speak"]}
-                                                             onClick={() => toggleSpeech(idx, pair.response)}
-                                                         >
-                                                             {isSpeaking && speakingIndex === idx ? "Stop" : "Speak"}
-                                                         </button>
-                                                     </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })
-                        ) : (
-                            <div className={Styles["loading-chat"]}>Waiting for first question...</div>
-                        )}
-                    </div>
-                </div>
-                <div className={Styles["input-area"]}>
-                    <form onSubmit={onSend}>
-                        <textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder={interviewStatus === "active" ? "Type your answer here..." : "Interview has ended."}
-                            disabled={interviewStatus !== "active"}
-                            className={Styles["chat-input"]}
-                        />
-                        <div className={Styles["input-actions"]}>
-                            <button type="button" className={Styles["voice-input-button"]} onClick={handleVoiceInput} disabled={interviewStatus !== "active" || isRecording}>
-                                {isRecording ? "Listening..." : "Voice"}
-                            </button>
-                            <button type="submit" className={Styles["send-button"]} disabled={interviewStatus !== "active" || !input.trim()}>
-                                Send
-                            </button>
-                        </div>
-                    </form>
-                </div>
+            {/* Main Avatar View */}
+            <div className={Styles["avatar-container"]}>
+                <Avatar />
             </div>
-            {interviewStatus === "completed" && evaluation && (
-                <div className={Styles["evaluation-container"]}>
-                    <h3>Interview Evaluation</h3>
-                    {evaluation.quantitative && (
-                        <div className={Styles["quantitative-metrics"]}>
-                            <div className={Styles["metric"]}>
-                                <span>Average Score:</span>
-                                <span>{Math.round(evaluation.quantitative.average_relevance_score * 100)}%</span>
-                            </div>
-                            <div className={Styles["metric"]}>
-                                <span>Questions Answered:</span>
-                                <span>{evaluation.quantitative.number_of_questions}</span>
-                            </div>
-                        </div>
-                    )}
-                    <div className={Styles["qualitative-assessment"]}>
-                        {(evaluation.qualitative_assessment || '').split("\n").map((line, index) => (
-                            <p key={index}>{line}</p>
-                        ))}
-                    </div>
-                    <button className={Styles["back-to-dashboard"]} onClick={() => navigate("/dashboard")}>
-                        Return to Dashboard
+
+            {/* Controls and Transcript */}
+            <div className={Styles["controls-container"]}>
+                <p className={Styles["transcript-display"]}>
+                    {isRecording ? input || "Listening..." : isSpeaking ? "AI is speaking..." : "Press the button to speak"}
+                </p>
+                <button
+                    className={`${Styles["mic-button"]} ${isRecording ? Styles["mic-recording"] : ''} ${isSpeaking ? Styles["mic-disabled"] : ''}`}
+                    onClick={handleVoiceInput}
+                    disabled={isSpeaking || isRecording}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14q.825 0 1.413-.588T14 12V6q0-.825-.588-1.413T12 4q-.825 0-1.413.588T10 6v6q0 .825.588 1.413T12 14Zm-1 7v-3.075q-2.6-.35-4.3-2.325T5 11H7q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.25-1.7 4.225T13 17.925V21h-2Z"/></svg>
+                </button>
+                {interviewStatus === "active" && (
+                    <button className={Styles["end-interview-btn-bottom"]} onClick={endInterview} disabled={uploadStatus === 'uploading'}>
+                        {uploadStatus === 'uploading' ? 'Saving...' : 'End Interview'}
                     </button>
+                )}
+            </div>
+
+            {interviewStatus === "completed" && evaluation && (
+                <div className={Styles["evaluation-overlay"]}>
+                    <div className={Styles["evaluation-container"]}>
+                        <h3>Interview Evaluation</h3>
+                        {evaluation.quantitative && (
+                            <div className={Styles["quantitative-metrics"]}>
+                                <div className={Styles["metric"]}>
+                                    <span>Average Score:</span>
+                                    <span>{Math.round(evaluation.quantitative.average_relevance_score * 100)}%</span>
+                                </div>
+                                <div className={Styles["metric"]}>
+                                    <span>Questions Answered:</span>
+                                    <span>{evaluation.quantitative.number_of_questions}</span>
+                                </div>
+                            </div>
+                        )}
+                        <div className={Styles["qualitative-assessment"]}>
+                            {(evaluation.qualitative_assessment || '').split("\n").map((line, index) => (
+                                <p key={index}>{line}</p>
+                            ))}
+                        </div>
+                        <button className={Styles["back-to-dashboard"]} onClick={() => navigate("/dashboard")}>
+                            Return to Dashboard
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

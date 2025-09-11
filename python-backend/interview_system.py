@@ -12,21 +12,51 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# Llama Index & Groq imports
-from llama_index.core.node_parser import SentenceWindowNodeParser
+# Llama Index & Groq imports (only what's necessary)
 from llama_index.llms.groq import Groq
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core import SimpleDirectoryReader
 
-# Deepeval imports
-from deepeval.models.base_model import DeepEvalBaseLLM
-from deepeval import evaluate
-from deepeval.test_case import LLMTestCase
-from deepeval.metrics import AnswerRelevancyMetric
-
+# Suppress specific warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# ----------------- Text Extraction Functions -----------------
+# ----------------- Text Extraction & Processing Functions -----------------
+
+def segregate_resume_text(text):
+    """
+    Segregates resume text into sections using rule-based keyword matching.
+    """
+    section_keywords = {
+        'experience': ['professional experience', 'work experience', 'experience', 'employment history', 'career'],
+        'education': ['education', 'academic background', 'academic qualifications'],
+        'skills': ['skills', 'technical skills', 'proficiencies', 'expertise'],
+        'projects': ['projects', 'personal projects', 'portfolio']
+    }
+
+    lines = text.lower().split('\n')
+    resume_sections = {}
+    current_section = 'header'  # Start with a default header section
+    resume_sections[current_section] = ""
+
+    for line in lines:
+        if not line.strip():
+            continue
+
+        found_section = False
+        for section, keywords in section_keywords.items():
+            for keyword in keywords:
+                if keyword in line:
+                    current_section = section
+                    if current_section not in resume_sections:
+                        resume_sections[current_section] = ""
+                    found_section = True
+                    break
+            if found_section:
+                break
+
+        resume_sections[current_section] += line + "\n"
+
+    return resume_sections
 
 def extract_text_from_pdf(file_path):
     reader = PdfReader(file_path)
@@ -54,27 +84,20 @@ def get_embeddings(text, model, tokenizer, device):
     return embeddings
 
 def compute_cosine_similarity(cv_pdf, jd_pdf):
-    """
-    Computes cosine similarity between a CV and JD document.
-    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_name = "bert-base-uncased"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModel.from_pretrained(model_name).to(device)
-    
     cv_text = extract_text_from_pdf(cv_pdf)
     jd_text = extract_text_from_pdf(jd_pdf)
-    
     cv_features = preprocess_text(cv_text)
     jd_features = preprocess_text(jd_text)
-    
     cv_embedding = get_embeddings(cv_features, model, tokenizer, device)
     jd_embedding = get_embeddings(jd_features, model, tokenizer, device)
-    
     similarity_score = cosine_similarity(cv_embedding, jd_embedding)[0][0]
     return similarity_score
 
-# ----------------- Refactored Classes -----------------
+# ----------------- Core Interview Classes -----------------
 
 class LLMEngine:
     def __init__(self, model_name, api_key):
@@ -85,10 +108,6 @@ class LLMEngine:
         return response.text if hasattr(response, 'text') else str(response)
 
 class DocumentLoader:
-    """
-    Loads the candidate CV and JD using provided file paths.
-    For the reference document(s), it uses a directory path.
-    """
     def __init__(self, cv_path, jd_path, reference_path):
         self.cv_text = extract_text_from_pdf(cv_path)
         self.jd_text = extract_text_from_pdf(jd_path)
@@ -101,343 +120,151 @@ class InterviewQuestionGenerator:
     def __init__(self, llm, documents):
         self.llm = llm
         self.documents = documents
-        # Initialize a sentence transformer model for embeddings
         self.sentence_transformer = SentenceTransformer("all-MiniLM-L6-v2")
 
-    def get_random_non_contextual_question(self):
-        questions = [
-            "Can you discuss a recent project where you overcame significant challenges?",
-            "What are your core strengths and weaknesses in a professional setting?",
-            "How do you stay updated with industry trends and best practices?",
-            "Tell me about a time when you had to learn a new technology quickly.",
-            "How do you approach working in a team with diverse perspectives?",
-            "What's your process for solving complex problems?",
-            "How do you handle feedback and criticism?",
-            "What motivates you professionally?",
-            "Describe a situation where you had to adapt to changing requirements.",
-            "How do you prioritize tasks when facing multiple deadlines?"
-        ]
-        return random.choice(questions)
-
     def retrieve_relevant_context_with_window(self, question, cv_text, reference_material, window_size=5):
-        context_windows = []
-        cv_sentences = cv_text.split('.')
-        reference_sentences = "\n".join([doc.text for doc in reference_material]).split('.')
-        all_sentences = cv_sentences + reference_sentences
+        all_text = cv_text + "\n" + "\n".join([doc.text for doc in reference_material])
+        sentences = all_text.split('.')
+        if len(sentences) < window_size:
+            return ' '.join(sentences)
+        query_words = set(question.lower().split())
+        best_chunk = ""
+        max_overlap = 0
+        for i in range(len(sentences) - window_size + 1):
+            chunk = ' '.join(sentences[i:i+window_size])
+            overlap = len(query_words.intersection(chunk.lower().split()))
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_chunk = chunk
+        return best_chunk if best_chunk else ' '.join(sentences[:window_size])
 
-        # Create windows of text using SentenceWindowNodeParser
-        node_parser = SentenceWindowNodeParser.from_defaults(window_size=window_size)
-        for i in range(0, len(all_sentences), window_size):
-            context_windows.append(' '.join(all_sentences[i:i+window_size]))
+    def generate_questions_from_section(self, section_name, section_text, num_questions=2):
+        """Generates targeted questions from a specific resume section."""
+        prompt = f"""You are an expert technical interviewer. Based on the following "{section_name}" section from a candidate's resume, generate {num_questions} insightful interview questions that probe their skills and experience in this area.
 
-        query_prompt = f"Given the following question: '{question}', which windows of text are most relevant?"
-        relevant_context = self.llm.complete(query_prompt)
-        return relevant_context
+Resume Section Content:
+---
+{section_text}
+---
 
-    def query_with_sentence_window(self, query_text, sentence_window_size=5, similarity_top_k=6, rerank_top_n=2):
-        # Generate question embeddings using the sentence transformer
-        query_embedding = self.sentence_transformer.encode(query_text)
-        
-        # Create text chunks from documents with window_size
-        document_chunks = []
-        for doc in self.documents:
-            sentences = doc.text.split('.')
-            for i in range(0, len(sentences), sentence_window_size):
-                chunk = ' '.join(sentences[i:i+sentence_window_size])
-                if len(chunk) > 20:  # Avoid too small chunks
-                    document_chunks.append(chunk)
-        
-        # Generate embeddings for all document chunks
-        document_embeddings = self.sentence_transformer.encode(document_chunks)
-        
-        # Calculate cosine similarities
-        similarities = cosine_similarity([query_embedding], document_embeddings)[0]
-        
-        # Get the most similar chunks
-        top_indices = np.argsort(similarities)[-similarity_top_k:]
-        top_chunks = [document_chunks[i] for i in top_indices]
-        
-        # Generate a response based on the top chunks
-        context = "\n".join(top_chunks) 
-        response_prompt = f"""Based on the following context, answer this question: {query_text}
-        
-Context:
-{context}
-
-Answer:"""
-        response = self.llm.complete(response_prompt)
-        
-        # Return response as a list for API compatibility
-        return response.split("\n") if isinstance(response, str) else [str(response)]
-
-    def generate_initial_questions(self, cv_text, jd_text):
-        """Generate initial interview questions based on CV and JD"""
-        query_text = f"""You are conducting an in-depth interview based on the following documents:
-
-Candidate's CV:
-{cv_text}
-
-Job Description:
-{jd_text}
-
-Generate 5 structured interview questions that assess the candidate's experience, problem-solving ability, and alignment with the role. Return ONLY the questions as a numbered list.
+Return ONLY the questions as a numbered list.
 """
-        response = self.llm.complete(query_text)
-        
-        # Parse questions into a list
+        response = self.llm.complete(prompt)
         questions = []
-        lines = response.split('\n')
-        for line in lines:
-            line = line.strip()
-            # Skip empty lines and lines without question content
-            if not line or not any(c.isalpha() for c in line):
-                continue
-            # Clean up numbering and formatting
-            cleaned_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
-            if cleaned_line:
-                questions.append(cleaned_line)
-        
+        for line in response.split('\n'):
+            if re.match(r'^\s*\d+[\.\)]', line.strip()):
+                question_text = re.sub(r'^\s*\d+[\.\)]\s*', '', line).strip()
+                if question_text:
+                    questions.append(question_text)
         return questions
 
 class InterviewSessionManager:
-    """Manages interview sessions through API interactions"""
+    """Manages interview sessions with targeted questions and dynamic follow-ups."""
     def __init__(self):
         self.active_sessions = {}
-        self.llama_api_key = "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"
-        self.eval_api_key = "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"
-        self.max_questions = 8  # Maximum number of questions before auto-ending
-    
+        # It's better to get the API key from environment variables in a real app
+        self.llama_api_key = os.getenv("GROQ_API_KEY", "YOUR_FALLBACK_GROQ_API_KEY")
+        self.max_questions = 8
+        os.environ["GROQ_API_KEY"] = self.llama_api_key
+
     def create_session(self, cv_path, jd_path, reference_path):
-        """Create a new interview session"""
         session_id = str(random.randint(10000, 99999))
-        
-        # Initialize LLM engine
-        llm_engine = LLMEngine(model_name="llama-3.3-70b-versatile", api_key=self.llama_api_key)
-        
-        # Load documents
+        llm_engine = LLMEngine(model_name="llama3-70b-8192", api_key=self.llama_api_key)
         document_loader = DocumentLoader(cv_path=cv_path, jd_path=jd_path, reference_path=reference_path)
+        resume_sections = segregate_resume_text(document_loader.cv_text)
         
-        # Initialize question generator
         question_generator = InterviewQuestionGenerator(llm=llm_engine, documents=document_loader.documents)
         
-        # Generate initial questions
-        initial_questions = question_generator.generate_initial_questions(
-            document_loader.cv_text, 
-            document_loader.jd_text
-        )
-        
-        # Create session data
+        initial_questions = []
+        if 'experience' in resume_sections and resume_sections['experience'].strip():
+            initial_questions = question_generator.generate_questions_from_section(
+                'Work Experience', resume_sections['experience'], num_questions=3
+            )
+        else:
+            # Fallback for resumes without a clear 'experience' section
+            prompt = f"Generate 3 general technical interview questions based on this job description: {document_loader.jd_text}"
+            response = llm_engine.complete(prompt)
+            initial_questions = [line.strip() for line in response.split('\n') if line.strip()]
+
         self.active_sessions[session_id] = {
             "llm_engine": llm_engine,
             "document_loader": document_loader,
             "question_generator": question_generator,
+            "resume_sections": resume_sections,
             "interview_data": [],
             "interview_history": "",
             "current_questions": initial_questions,
-            "cv_path": cv_path,
-            "jd_path": jd_path,
-            "reference_path": reference_path,
-            "questions_asked": 0,  # Track number of questions asked
-            "is_complete": False  # Flag to track if interview is complete
+            "questions_asked": 0,
+            "is_complete": False
         }
-        
-        # Calculate similarity score
         similarity = compute_cosine_similarity(cv_path, jd_path)
-        
-        return {
-            "session_id": session_id,
-            "initial_questions": initial_questions,
-            "similarity_score": float(similarity)
-        }
-    
-    def get_session(self, session_id):
-        """Get session data by ID"""
-        session = self.active_sessions.get(session_id)
-        if not session:
-            return None
-        
-        return {
-            "session_id": session_id,
-            "current_questions": session["current_questions"],
-            "interview_data_count": len(session["interview_data"]),
-            "cv_path": session["cv_path"],
-            "jd_path": session["jd_path"]
-        }
-    
-    def submit_answer(self, session_id, question, answer):
-        """Process a candidate's answer and generate follow-up questions"""
-        session = self.active_sessions.get(session_id)
-        if not session:
-            return {"error": "Session not found"}
-        
-        if session.get("is_complete", False):
-            return {"error": "Interview is already complete", "should_end": True}
-        
-        # Get components from session
-        llm_engine = session["llm_engine"]
-        document_loader = session["document_loader"]
-        question_generator = session["question_generator"]
-        
-        # Retrieve context for evaluation
-        relevant_context = question_generator.retrieve_relevant_context_with_window(
-            question, 
-            document_loader.cv_text, 
-            document_loader.documents
-        )
-        
-        # Generate reference answer
-        answer_prompt = f"Using the following context:\n{relevant_context}\nProvide a detailed and thoughtful answer for the following question:\n{question}"
-        generated_answer = llm_engine.complete(answer_prompt)
-        
-        # Save Q&A data
-        qa_data = {
-            'question': question,
-            'user_answer': answer,
-            'generated_answer': generated_answer,
-            'relevant_context': relevant_context,
-            'timestamp': str(np.datetime64('now'))
-        }
-        
-        session["interview_data"].append(qa_data)
-        session["interview_history"] += f"Q: {question}\nA: {answer}\n"
-        
-        # Increment question counter
-        session["questions_asked"] = session.get("questions_asked", 0) + 1
-        
-        # Check if we've reached the maximum number of questions
-        if session["questions_asked"] >= self.max_questions:
-            session["is_complete"] = True
-            evaluation_results = self._generate_final_evaluation(session)
-            return {
-                "next_question": "Thank you for completing all the interview questions. The interview is now finished.",
-                "evaluation": {
-                    "relevance_score": self._calculate_basic_relevance(answer, generated_answer),
-                    "depth": len(answer.split()) / max(1, len(generated_answer.split())),
-                    "feedback": self._generate_quick_feedback(answer, generated_answer)
-                },
-                "interview_complete": True,
-                "final_evaluation": evaluation_results
-            }
-        
-        # Summarize the interview so far
-        summary_prompt = f"Summarize the following interview transcript concisely: {session['interview_history']}"
-        summary = llm_engine.complete(summary_prompt)
-        
-        # Decide on follow-up question
-        if random.random() < 0.8:  # 80% chance of contextual follow-up
-            followup_prompt = f"""Based on the interview so far: '{summary}', generate the next best follow-up question that builds on previous answers and digs deeper.
+        return {"session_id": session_id, "initial_questions": initial_questions, "similarity_score": float(similarity)}
 
-IMPORTANT: Return ONLY the question itself with no explanation, reasoning, or additional text. The question should be clear, concise, and professional."""
-            next_question = llm_engine.complete(followup_prompt)
-            # Clean any remaining explanations or numbering that might still be present
-            next_question = re.sub(r'^.*?(Question:|"|\n)', '', next_question, flags=re.DOTALL).strip()
-            next_question = re.sub(r'(\?|\.)"?$.*', r'\1', next_question, flags=re.DOTALL).strip()
-        else:  # 20% chance of non-contextual question
-            next_question = question_generator.get_random_non_contextual_question()
-        
-        # Update session with new question
-        session["current_questions"] = [next_question]
-        
-        # Add countdown message as we approach the end
-        remaining_questions = self.max_questions - session["questions_asked"]
-        countdown_message = ""
-        if remaining_questions <= 3:
-            countdown_message = f" ({remaining_questions} question{'s' if remaining_questions != 1 else ''} remaining)"
-        
-        return {
-            "next_question": next_question + countdown_message,
-            "evaluation": {
-                "relevance_score": self._calculate_basic_relevance(answer, generated_answer),
-                "depth": len(answer.split()) / max(1, len(generated_answer.split())),
-                "feedback": self._generate_quick_feedback(answer, generated_answer)
-            },
-            "questions_remaining": remaining_questions
-        }
-    
     def _calculate_basic_relevance(self, user_answer, reference_answer):
-        """Calculate basic relevance score between user answer and reference answer"""
-        # Use sentence transformer for semantic similarity
         model = SentenceTransformer("all-MiniLM-L6-v2")
         user_embedding = model.encode([user_answer])
         ref_embedding = model.encode([reference_answer])
-        
-        # Calculate cosine similarity
         similarity = cosine_similarity(user_embedding, ref_embedding)[0][0]
         return float(similarity)
-    
-    def _generate_quick_feedback(self, user_answer, reference_answer):
-        """Generate quick feedback on user's answer"""
-        prompt = f"""Compare the candidate's answer with the reference answer and provide brief feedback:
-        
-Candidate Answer: {user_answer}
-Reference Answer: {reference_answer}
 
-Provide a one-sentence assessment of the candidate's answer in terms of relevance and completeness:"""
-        
-        feedback_llm = LLMEngine(model_name="llama-3.3-70b-versatile", api_key=self.llama_api_key)
-        feedback = feedback_llm.complete(prompt)
+    def _generate_quick_feedback(self, llm_engine, question, answer):
+        prompt = f"""You are an expert interview coach. The question was "{question}" and the candidate answered "{answer}". Provide one sentence of constructive feedback."""
+        feedback = llm_engine.complete(prompt)
         return feedback
 
-    def end_session(self, session_id):
-        """End interview session and generate final evaluation"""
+    def submit_answer(self, session_id, question, answer):
         session = self.active_sessions.get(session_id)
-        if not session:
-            return {"error": "Session not found"}
-        
-        # Generate overall evaluation
-        evaluation_results = self._generate_final_evaluation(session)
-        
-        # Clean up session (optionally keep for history)
-        # del self.active_sessions[session_id]
-        
-        return {
-            "session_id": session_id,
-            "evaluation": evaluation_results,
-            "interview_data_count": len(session["interview_data"])
+        if not session or session.get("is_complete"):
+            return {"error": "Session not found or is complete."}
+
+        llm_engine = session["llm_engine"]
+        document_loader = session["document_loader"]
+
+        retrieval_context = session["question_generator"].retrieve_relevant_context_with_window(
+            question, document_loader.cv_text, document_loader.documents
+        )
+        expected_output = llm_engine.complete(f"Context: {retrieval_context}\nQuestion: {question}\nAnswer:")
+
+        relevance_score = self._calculate_basic_relevance(answer, expected_output)
+        qualitative_feedback = self._generate_quick_feedback(llm_engine, question, answer)
+
+        session["interview_history"] += f"Q: {question}\nA: {answer}\n"
+        session["questions_asked"] += 1
+
+        turn_output = {
+            "input": question, "actual_output": answer, "expected_output": expected_output,
+            "retrieval_context": retrieval_context,
+            "evaluation": {
+                "metric": "Cosine Similarity",
+                "relevance_score": relevance_score,
+                "feedback": qualitative_feedback
+            }
         }
-    
+
+        if session["questions_asked"] >= self.max_questions:
+            session["is_complete"] = True
+            turn_output["interview_complete"] = True
+            turn_output["final_evaluation"] = self._generate_final_evaluation(session)
+            return turn_output
+
+        summary_prompt = f"Summarize this interview transcript concisely: {session['interview_history']}"
+        summary = llm_engine.complete(summary_prompt)
+        followup_prompt = f"Based on the interview summary: '{summary}', generate the next best follow-up question. Return ONLY the question."
+        next_question = llm_engine.complete(followup_prompt).strip()
+
+        session["current_questions"] = [next_question]
+        turn_output["next_question"] = next_question
+        return turn_output
+
     def _generate_final_evaluation(self, session):
-        """Generate final evaluation of the interview"""
-        interview_data = session["interview_data"]
-        if not interview_data:
-            return {"error": "No interview data available"}
-        
-        # Basic evaluation
-        total_answers = len(interview_data)
-        total_score = 0
-        answer_scores = []
-        
-        for qa in interview_data:
-            relevance = self._calculate_basic_relevance(qa['user_answer'], qa['generated_answer'])
-            total_score += relevance
-            answer_scores.append(relevance)
-        
-        avg_score = total_score / total_answers if total_answers > 0 else 0
-        
-        # Full evaluation with LLM
-        prompt = f"""You are an expert HR interviewer. Review this interview and provide an assessment:
-
-Interview Transcript:
-{session["interview_history"]}
-
-Provide a structured evaluation with:
-1. Overall impression (1-2 sentences)
-2. Key strengths demonstrated (bullet points)
-3. Areas for improvement (bullet points)
-4. Fit for role (good/moderate/needs work)
-"""
-        
-        feedback_llm = LLMEngine(model_name="llama-3.3-70b-versatile", api_key=self.llama_api_key)
-        qualitative_assessment = feedback_llm.complete(prompt)
-        
-        return {
-            "quantitative": {
-                "average_relevance_score": float(avg_score),
-                "number_of_questions": total_answers,
-                "question_scores": answer_scores
-            },
-            "qualitative_assessment": qualitative_assessment
-        }
+        prompt = f"""You are an expert HR interviewer. Review this interview transcript and provide a structured evaluation:
+        Transcript:\n{session["interview_history"]}
+        Provide:
+        1. Overall impression
+        2. Key strengths
+        3. Areas for improvement
+        4. Role fit"""
+        return session["llm_engine"].complete(prompt)
 
 # Singleton instance of the session manager
-session_manager = InterviewSessionManager() 
+session_manager = InterviewSessionManager()

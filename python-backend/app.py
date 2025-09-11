@@ -29,7 +29,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-flask-secret-key')
 
 # Initialize extensions
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 cors = setup_cors(app)
 
 # Initialize database
@@ -63,8 +63,11 @@ PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
 
 # Ensure folders exist
 os.makedirs(PROCTORING_FOLDER, exist_ok=True)
+RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
+os.makedirs(RECORDING_FOLDER, exist_ok=True)
 
 app.config["PROCTORING_FOLDER"] = PROCTORING_FOLDER
+app.config["RECORDING_FOLDER"] = RECORDING_FOLDER
 
 # Import middleware for interview routes
 from middleware.auth_middleware import token_required
@@ -180,6 +183,33 @@ def end_interview(current_user, session_id):
             pass
     
     return jsonify(result)
+
+# Add this new route
+@app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
+@token_required
+def upload_recording(current_user, session_id):
+    if 'recording' not in request.files:
+        return jsonify({'error': 'No recording file part'}), 400
+    
+    file = request.files['recording']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file:
+        filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
+        filepath = os.path.join(app.config['RECORDING_FOLDER'], filename)
+        file.save(filepath)
+
+        # Update the interview record with the path to the recording
+        interviews_collection.update_one(
+            {'session_id': session_id, 'user_id': str(current_user['_id'])},
+            {'$set': {'recording_path': filepath}}
+        )
+        
+        return jsonify({'message': 'Recording uploaded successfully', 'path': filepath}), 200
+
+    return jsonify({'error': 'File upload failed'}), 500
+
 
 @app.route('/api/interviews', methods=['GET'])
 @token_required
