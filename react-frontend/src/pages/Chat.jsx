@@ -114,7 +114,7 @@ export default function Chat({ interviewId }) {
                     const imageData = canvas.toDataURL('image/jpeg', 0.5);
                     socket.emit('proctoring_frame', { session_id: currentSessionId, image: imageData });
                 }
-            }, 2000);
+            }, 200);
         });
         socket.on('disconnect', () => {
             console.log('❌ WebSocket disconnected.');
@@ -281,11 +281,23 @@ const stopLiveProctoring = useCallback(() => {
     }, [interviewId, interviewStatus, navigate]);
 
     useEffect(() => {
+        const setupWebcam = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                }
+            } catch (err) {
+                console.error("Webcam access error:", err);
+                alert("Could not access the camera. Please check your browser permissions and ensure your camera is not in use by another application. Redirecting to the dashboard.");
+                navigate("/profile#applications");
+            }
+        };
+
         if (interviewStatus === 'registering' && (!videoRef.current || !videoRef.current.srcObject)) {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => { if (videoRef.current) videoRef.current.srcObject = stream; })
-                .catch(err => console.error("Webcam error:", err));
+            setupWebcam();
         }
+
         if (interviewStatus === "active" && !isRecordingVideo) {
             if (videoRef.current && videoRef.current.srcObject) {
                 videoRef.current.srcObject.getTracks().forEach(track => track.stop());
@@ -296,7 +308,7 @@ const stopLiveProctoring = useCallback(() => {
                 1: { response: currentQuestion }
             });
         }
-    }, [interviewStatus, isRecordingVideo, startWebcamAndArchivalRecording, similarityScore, currentQuestion]);
+    }, [interviewStatus, isRecordingVideo, startWebcamAndArchivalRecording, similarityScore, currentQuestion, navigate]);
 
     const endInterview = useCallback(async () => {
     const currentSessionId = sessionIdRef.current;
@@ -504,10 +516,14 @@ const stopLiveProctoring = useCallback(() => {
             {/* The small video preview for the active interview state */}
             <div className={Styles["video-preview"]}>
                 <video ref={videoRef} autoPlay muted playsInline />
-                <div className={Styles["video-overlay-text"]}>
-                    <p>👁️ Gaze: {gazeDirection}</p>
-                </div>
             </div>
+
+            {/* Gaze Direction Warning */}
+            {(gazeDirection === 'Left' || gazeDirection === 'Right') && (
+                <div className={Styles["gaze-warning"]}>
+                    Please look at the center of the screen
+                </div>
+            )}
 
             {/* Main Avatar View */}
             <div className={Styles["avatar-container"]}>
@@ -554,7 +570,7 @@ const stopLiveProctoring = useCallback(() => {
                                 <p key={index}>{line}</p>
                             ))}
                         </div>
-                        <button className={Styles["back-to-dashboard"]} onClick={() => navigate("/dashboard")}>
+                        <button className={Styles["back-to-dashboard"]} onClick={() => navigate("/profile#applications")}>
                             Return to Dashboard
                         </button>
                     </div>

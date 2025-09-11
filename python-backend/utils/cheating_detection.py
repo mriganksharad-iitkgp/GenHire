@@ -11,10 +11,12 @@ class SimpleCheatingDetector:
         self.suspicious_start_time = None
         self.is_suspicious = False
         self.alert_triggered = False
+        self.total_suspicious_time = 0
 
     def check_gaze(self, gaze_ratio):
         if gaze_ratio is None:
             if self.is_suspicious:
+                self.total_suspicious_time += time.time() - self.suspicious_start_time
                 self.is_suspicious = False
                 self.suspicious_start_time = None
                 self.alert_triggered = False
@@ -32,6 +34,7 @@ class SimpleCheatingDetector:
                     return True
         else:
             if self.is_suspicious:
+                self.total_suspicious_time += time.time() - self.suspicious_start_time
                 print("Gaze returned to normal.")
                 self.is_suspicious = False
                 self.suspicious_start_time = None

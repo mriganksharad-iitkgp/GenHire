@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 import torch
+import time
 
 # Import configuration
 from config.database import db_config
@@ -123,7 +124,8 @@ def start_interview(current_user):
         'status': 'active',
         'created_at': datetime.datetime.utcnow(),
         'updated_at': datetime.datetime.utcnow(),
-        'similarity_score': session_details['similarity_score']
+        'similarity_score': session_details['similarity_score'],
+        'start_time': time.time()  # Add start time
     }).inserted_id
     
     return jsonify({
@@ -181,6 +183,21 @@ def end_interview(current_user, session_id):
     # Get the final gaze data from the in-memory detector
     detector = proctoring_detectors.get(session_id)
     gaze_times = detector.gaze_tracker.get_times() if detector else None
+    suspicious_activity_time = detector.detector.total_suspicious_time if detector else 0
+
+    # Calculate total interview duration
+    interview_duration = 0
+    session_doc = interviews_collection.find_one({'session_id': session_id, 'user_id': str(current_user['_id'])})
+    if session_doc and 'created_at' in session_doc:
+        start_time = session_doc['created_at']
+        end_time = datetime.datetime.utcnow()
+        interview_duration = (end_time - start_time).total_seconds()
+
+    # --- NEW: Log the final times to the backend console ---
+    print(f"--- Interview {session_id} Ended ---")
+    print(f"Total Interview Duration: {round(interview_duration, 2)} seconds")
+    print(f"Total Suspicious Gaze Time: {round(suspicious_activity_time, 2)} seconds")
+    print(f"------------------------------------")
 
     # Update the database record with final data
     interviews_collection.update_one(
@@ -196,7 +213,6 @@ def end_interview(current_user, session_id):
     )
     
     # Also update the related application with interview_score if linked
-    session_doc = interviews_collection.find_one({'session_id': session_id, 'user_id': str(current_user['_id'])})
     if session_doc and session_doc.get('application_id'):
         try:
             # Use the quantitative score for the application
@@ -212,6 +228,7 @@ def end_interview(current_user, session_id):
         except Exception:
             pass
     
+    # --- MODIFIED: Return only status and evaluation ---
     return jsonify({
         'status': 'interview_ended',
         'evaluation': final_evaluation
