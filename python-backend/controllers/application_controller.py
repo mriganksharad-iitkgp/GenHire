@@ -15,6 +15,22 @@ class ApplicationController:
         if not job:
             return {'error': 'Job not found'}, 404
         
+        # Check if CV details are completed (mandatory requirement)
+        cv_details = user_profile.get('cv_details')
+        if not cv_details:
+            return {
+                'error': 'CV details are required before applying for jobs. Please complete your CV details first.',
+                'redirect': '/profile/cv-details'
+            }, 400
+        
+        # Validate required CV sections
+        validation_errors = self._validate_cv_completion(cv_details)
+        if validation_errors:
+            return {
+                'error': 'Please complete the following required CV sections before applying:\n' + '\n'.join(validation_errors),
+                'redirect': '/profile/cv-details'
+            }, 400
+        
         # Check if already applied
         existing_application = self.applications_collection.find_one({
             'job_id': job_id,
@@ -330,3 +346,41 @@ class ApplicationController:
             'evaluation': report.get('evaluation')
         }
         return payload, 200
+    
+    def _validate_cv_completion(self, cv_details):
+        """Validate that required CV sections are completed"""
+        errors = []
+        
+        # Education validation
+        education = cv_details.get('education', [])
+        has_valid_education = any(
+            edu.get('degree', '').strip() and 
+            edu.get('institution', '').strip() and 
+            edu.get('year', '').strip()
+            for edu in education
+        )
+        if not has_valid_education:
+            errors.append('- At least one complete education entry is required')
+        
+        # Skills validation
+        skills = cv_details.get('skills', {})
+        technical_skills = skills.get('technical', [])
+        if not technical_skills or len(technical_skills) == 0:
+            errors.append('- Technical Skills are required')
+        
+        # Projects validation
+        projects = cv_details.get('projects', [])
+        has_valid_project = any(
+            project.get('title', '').strip() and 
+            project.get('description', '').strip()
+            for project in projects
+        )
+        if not has_valid_project:
+            errors.append('- At least one complete project entry is required')
+        
+        # Salary Expectations validation
+        salary_expectations = cv_details.get('salaryExpectations', {})
+        if not salary_expectations.get('expectedSalary'):
+            errors.append('- Expected Salary is required')
+        
+        return errors

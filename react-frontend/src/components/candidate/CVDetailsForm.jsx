@@ -1,8 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import styles from './CVDetailsForm.module.css';
+import Toast from '../Toast';
 
 const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
+  const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
+    salaryExpectations: {
+      currentSalary: '',
+      expectedSalary: '',
+      currency: 'USD',
+      negotiable: false,
+      salaryType: 'annual' // annual, monthly, hourly
+    },
+    positionsHeld: [
+      {
+        title: '',
+        organization: '',
+        duration: '',
+        responsibilities: '',
+        achievements: '',
+        teamSize: '',
+        reportingTo: '',
+        location: ''
+      }
+    ],
     education: [
       {
         degree: '',
@@ -159,35 +180,81 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
       internships: { company: '', position: '', duration: '', description: '', location: '' },
       coursework: { course: '', institution: '', duration: '', certification: '' },
       languages: { language: '', proficiency: '', certification: '' },
-      extracurricular: { activity: '', role: '', duration: '', description: '' }
+      extracurricular: { activity: '', role: '', duration: '', description: '' },
+      positionsHeld: { title: '', organization: '', duration: '', responsibilities: '', achievements: '', teamSize: '', reportingTo: '', location: '' }
     };
     return templates[section] || {};
   };
 
+  const validateRequiredFields = () => {
+    const errors = [];
+    
+    // Education validation
+    const hasValidEducation = formData.education.some(edu => 
+      edu.degree.trim() && edu.institution.trim() && edu.year.trim()
+    );
+    if (!hasValidEducation) errors.push('At least one complete education entry is required');
+    
+    // Skills validation
+    if (formData.skills.technical.length === 0) errors.push('Technical Skills are required');
+    
+    // Projects validation
+    const hasValidProject = formData.projects.some(project => 
+      project.title.trim() && project.description.trim()
+    );
+    if (!hasValidProject) errors.push('At least one complete project entry is required');
+    
+    // Salary Expectations validation
+    if (!formData.salaryExpectations.expectedSalary) errors.push('Expected Salary is required');
+    
+    return errors;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    const validationErrors = validateRequiredFields();
+    if (validationErrors.length > 0) {
+      setToast({
+        message: 'Please complete the following required fields: ' + validationErrors.join(', '),
+        type: 'error'
+      });
+      return;
+    }
+    
     setIsSaving(true);
     try {
       await onSave(formData);
+      setToast({
+        message: 'CV details saved successfully!',
+        type: 'success'
+      });
     } catch (error) {
       console.error('Error saving CV details:', error);
+      setToast({
+        message: 'Error saving CV details. Please try again.',
+        type: 'error'
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
   const sections = [
-    { key: 'education', label: 'Education', icon: 'fa-graduation-cap' },
-    { key: 'experience', label: 'Work Experience', icon: 'fa-building' },
-    { key: 'skills', label: 'Skills', icon: 'fa-cogs' },
-    { key: 'projects', label: 'Projects', icon: 'fa-code' },
-    { key: 'achievements', label: 'Achievements', icon: 'fa-trophy' },
-    { key: 'competitions', label: 'Competitions', icon: 'fa-medal' },
-    { key: 'certifications', label: 'Certifications', icon: 'fa-certificate' },
-    { key: 'internships', label: 'Internships', icon: 'fa-briefcase' },
-    { key: 'languages', label: 'Languages', icon: 'fa-globe' },
-    { key: 'coursework', label: 'Coursework', icon: 'fa-book' },
-    { key: 'extracurricular', label: 'Extra Curricular', icon: 'fa-users' }
+    { key: 'education', label: 'Education', icon: 'fa-graduation-cap', required: true },
+    { key: 'experience', label: 'Work Experience', icon: 'fa-building', required: false },
+    { key: 'positionsHeld', label: 'Positions Held', icon: 'fa-user', required: false },
+    { key: 'skills', label: 'Skills', icon: 'fa-cogs', required: true },
+    { key: 'projects', label: 'Projects', icon: 'fa-code', required: true },
+    { key: 'salaryExpectations', label: 'Salary Expectations', icon: 'fa-money', required: true },
+    { key: 'achievements', label: 'Achievements', icon: 'fa-trophy', required: false },
+    { key: 'competitions', label: 'Competitions', icon: 'fa-star', required: false },
+    { key: 'certifications', label: 'Certifications', icon: 'fa-certificate', required: false },
+    { key: 'internships', label: 'Internships', icon: 'fa-briefcase', required: false },
+    { key: 'languages', label: 'Languages', icon: 'fa-globe', required: false },
+    { key: 'coursework', label: 'Coursework', icon: 'fa-book', required: false },
+    { key: 'extracurricular', label: 'Extra Curricular', icon: 'fa-users', required: false }
   ];
 
   const renderEducationSection = () => (
@@ -262,10 +329,13 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
           <div className={styles.formGroup}>
             <label>Grade/CGPA</label>
             <input
-              type="text"
+              type="number"
+              step="0.01"
+              min="0"
+              max="10"
               value={edu.grade}
               onChange={(e) => updateItem('education', index, 'grade', e.target.value)}
-              placeholder="e.g., 8.5 CGPA"
+              placeholder="e.g., 8.5"
             />
           </div>
         </div>
@@ -342,12 +412,13 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
               />
             </div>
             <div className={styles.formGroup}>
-              <label>Duration</label>
+              <label>Duration (months)</label>
               <input
-                type="text"
+                type="number"
+                min="1"
                 value={project.duration}
                 onChange={(e) => updateItem('projects', index, 'duration', e.target.value)}
-                placeholder="e.g., 3 months"
+                placeholder="e.g., 3"
               />
             </div>
           </div>
@@ -863,6 +934,211 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
     </div>
   );
 
+
+
+  const renderSalaryExpectationsSection = () => (
+    <div className={styles.sectionContent}>
+      <div className={styles.sectionHeader}>
+        <h3><i className="fa fa-money-bill-wave"></i> Salary Expectations</h3>
+      </div>
+      <div className={styles.itemCard}>
+        <div className={styles.formRow}>
+          <div className={styles.formGroup}>
+            <label>Current Salary</label>
+            <input
+              type="number"
+              value={formData.salaryExpectations.currentSalary}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                salaryExpectations: { ...prev.salaryExpectations, currentSalary: e.target.value }
+              }))}
+              placeholder="Enter current salary (if applicable)"
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Expected Salary *</label>
+            <input
+              type="number"
+              value={formData.salaryExpectations.expectedSalary}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                salaryExpectations: { ...prev.salaryExpectations, expectedSalary: e.target.value }
+              }))}
+              placeholder="Enter expected salary"
+              required
+            />
+          </div>
+        </div>
+        <div className={styles.formRow}>
+          <div className={styles.formGroup}>
+            <label>Currency *</label>
+            <select
+              value={formData.salaryExpectations.currency}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                salaryExpectations: { ...prev.salaryExpectations, currency: e.target.value }
+              }))}
+              className={styles.selectInput}
+              required
+            >
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="INR">INR (₹)</option>
+              <option value="CAD">CAD (C$)</option>
+              <option value="AUD">AUD (A$)</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label>Salary Type *</label>
+            <select
+              value={formData.salaryExpectations.salaryType}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                salaryExpectations: { ...prev.salaryExpectations, salaryType: e.target.value }
+              }))}
+              className={styles.selectInput}
+              required
+            >
+              <option value="annual">Annual</option>
+              <option value="monthly">Monthly</option>
+              <option value="hourly">Hourly</option>
+            </select>
+          </div>
+        </div>
+        <div className={styles.formGroup}>
+          <label>
+            <input
+              type="checkbox"
+              checked={formData.salaryExpectations.negotiable}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                salaryExpectations: { ...prev.salaryExpectations, negotiable: e.target.checked }
+              }))}
+            />
+            Salary is negotiable
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPositionsHeldSection = () => (
+    <div className={styles.sectionContent}>
+      <div className={styles.sectionHeader}>
+        <h3><i className="fa fa-crown"></i> Positions Held</h3>
+        <button 
+          type="button" 
+          onClick={() => addNewItem('positionsHeld')}
+          className={styles.addButton}
+        >
+          <i className="fa fa-plus"></i> Add Position
+        </button>
+      </div>
+      {formData.positionsHeld.map((position, index) => (
+        <div key={index} className={styles.itemCard}>
+          <div className={styles.cardHeader}>
+            <h4>Position {index + 1}</h4>
+            {formData.positionsHeld.length > 1 && (
+              <button 
+                type="button"
+                onClick={() => removeItem('positionsHeld', index)}
+                className={styles.removeButton}
+              >
+                <i className="fa fa-trash"></i>
+              </button>
+            )}
+          </div>
+          <div className={styles.formRow}>
+            <div className={styles.formGroup}>
+              <label>Position Title *</label>
+              <input
+                type="text"
+                value={position.title}
+                onChange={(e) => updateItem('positionsHeld', index, 'title', e.target.value)}
+                placeholder="e.g., Team Lead, Project Manager, President"
+                required
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Organization *</label>
+              <input
+                type="text"
+                value={position.organization}
+                onChange={(e) => updateItem('positionsHeld', index, 'organization', e.target.value)}
+                placeholder="e.g., Student Council, Tech Club, Company"
+                required
+              />
+            </div>
+          </div>
+          <div className={styles.formRow}>
+            <div className={styles.formGroup}>
+              <label>Duration (months) *</label>
+              <input
+                type="number"
+                min="1"
+                value={position.duration}
+                onChange={(e) => updateItem('positionsHeld', index, 'duration', e.target.value)}
+                placeholder="e.g., 12"
+                required
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Location</label>
+              <input
+                type="text"
+                value={position.location}
+                onChange={(e) => updateItem('positionsHeld', index, 'location', e.target.value)}
+                placeholder="e.g., New York, NY"
+              />
+            </div>
+          </div>
+          <div className={styles.formRow}>
+            <div className={styles.formGroup}>
+              <label>Team Size</label>
+              <input
+                type="number"
+                min="1"
+                value={position.teamSize}
+                onChange={(e) => updateItem('positionsHeld', index, 'teamSize', e.target.value)}
+                placeholder="e.g., 10"
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Reporting To</label>
+              <input
+                type="text"
+                value={position.reportingTo}
+                onChange={(e) => updateItem('positionsHeld', index, 'reportingTo', e.target.value)}
+                placeholder="e.g., Director, CEO, Faculty Advisor"
+              />
+            </div>
+          </div>
+          <div className={styles.formGroup}>
+            <label>Key Responsibilities *</label>
+            <textarea
+              value={position.responsibilities}
+              onChange={(e) => updateItem('positionsHeld', index, 'responsibilities', e.target.value)}
+              placeholder="Describe your key responsibilities and duties in this position..."
+              rows="3"
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Key Achievements</label>
+            <textarea
+              value={position.achievements}
+              onChange={(e) => updateItem('positionsHeld', index, 'achievements', e.target.value)}
+              placeholder="Highlight your major achievements and impact in this role..."
+              rows="3"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+
   const renderLanguagesSection = () => (
     <div className={styles.sectionContent}>
       <div className={styles.sectionHeader}>
@@ -937,10 +1213,14 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
         return renderEducationSection();
       case 'experience':
         return renderExperienceSection('experience', 'Work Experience', 'fa-building');
+      case 'positionsHeld':
+        return renderPositionsHeldSection();
       case 'skills':
         return renderSkillsSection();
       case 'projects':
         return renderProjectsSection();
+      case 'salaryExpectations':
+        return renderSalaryExpectationsSection();
       case 'achievements':
         return renderAchievementsSection();
       case 'competitions':
@@ -978,11 +1258,12 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
                   <button
                     key={section.key}
                     type="button"
-                    className={`${styles.navButton} ${activeSection === section.key ? styles.active : ''}`}
+                    className={`${styles.navButton} ${activeSection === section.key ? styles.active : ''} ${section.required ? styles.required : ''}`}
                     onClick={() => setActiveSection(section.key)}
                   >
                     <i className={`fa ${section.icon}`}></i>
                     <span>{section.label}</span>
+                    {section.required && <span className={styles.requiredMark}>*</span>}
                   </button>
                 ))}
               </nav>
@@ -1012,6 +1293,14 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
             </button>
           </div>
         </form>
+        
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
     </div>
   );
