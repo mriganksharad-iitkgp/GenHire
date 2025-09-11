@@ -21,6 +21,7 @@ from routes.job_routes import job_bp
 from routes.application_routes import application_bp
 from routes.file_routes import file_bp
 from utils.cheating_detection import ProctoringGazeDetector
+from utils.interview_system import InterviewSessionManager
 # Load environment variables
 load_dotenv()
 
@@ -51,6 +52,10 @@ app.register_blueprint(file_bp)
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}
 
+# Initialize interview system with API key
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+interview_manager = InterviewSessionManager(groq_api_key=GROQ_API_KEY)
+
 # === INTERVIEW SYSTEM (REMAINS IN APP.PY) ===
 # All interview-related routes and Socket.IO handlers remain here
 
@@ -79,36 +84,41 @@ def start_interview(current_user):
     data = request.json or {}
     
     # Get file paths (either from request or use defaults for testing)
-    cv_path = data.get('cv_path', "uploads/cv/PeterConnollyResume-2.pdf")
-    jd_path = data.get('jd_path', "uploads/jd/JD1.pdf")
-    reference_path = data.get('reference_path', "Eric Ries - The Lean Startup.pdf")
-    application_id = data.get('application_id')  # optional: link interview to application
+    cv_path = data.get('cv_path', "uploads/cv/Data Science_resume_juanjosecarin.pdf")
+    jd_path = data.get('jd_path', "uploads/jd/Data_Scientist_Job_Description.pdf")
+    # Add both reference books
+    reference_paths = [
+        "Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
+        "Machine Learning For Absolute Beginners.pdf"
+    ]
+    application_id = data.get('application_id')
     
-    # Create a new interview session
-    session_data = {
-        'session_id': str(uuid.uuid4()),
-        'status': 'active',
-        'current_question': 'Tell me about yourself'
-    }
+    # Create interview session using new system with multiple references
+    session_details = interview_manager.create_session(
+        cv_path=cv_path,
+        jd_path=jd_path,
+        reference_path=reference_paths  # Pass list of reference paths
+    )
     
-    # Store session info in the database
+    # Store session info in database
     interview_id = interviews_collection.insert_one({
         'user_id': str(current_user['_id']),
-        'session_id': session_data['session_id'],
+        'session_id': session_details['session_id'],
         'cv_path': cv_path,
         'jd_path': jd_path,
-        'reference_path': reference_path,
+        'reference_paths': reference_paths,  # Store multiple references
         'application_id': application_id,
         'status': 'active',
         'created_at': datetime.datetime.utcnow(),
-        'updated_at': datetime.datetime.utcnow()
+        'updated_at': datetime.datetime.utcnow(),
+        'similarity_score': session_details['similarity_score']
     }).inserted_id
     
     return jsonify({
         'interview_id': str(interview_id),
-        'session_id': session_data['session_id'],
-        'initial_questions': ['Tell me about yourself', 'Why are you interested in this role?'],
-        'similarity_score': 0.855
+        'session_id': session_details['session_id'],
+        'initial_questions': session_details['initial_questions'],
+        'similarity_score': session_details['similarity_score']
     })
 
 @app.route('/api/interviews/<session_id>/question', methods=['GET'])
@@ -127,11 +137,22 @@ def submit_answer(current_user, session_id):
     if not question or not answer:
         return jsonify({'error': 'Question and answer are required'}), 400
     
-    result = {
-        'status': 'answer_received',
-        'next_question': 'Tell me about a time you overcame a challenge',
-        'feedback': 'Good answer!'
-    }
+    # Submit answer using new system
+    result = interview_manager.submit_answer(session_id, question, answer)
+    
+    if 'error' in result:
+        return jsonify(result), 400
+    
+    # Update interview record if complete
+    if result.get('interview_complete'):
+        interviews_collection.update_one(
+            {'session_id': session_id},
+            {'$set': {
+                'status': 'completed',
+                'final_evaluation': result.get('final_evaluation'),
+                'updated_at': datetime.datetime.utcnow()
+            }}
+        )
     
     return jsonify(result)
 
