@@ -260,9 +260,12 @@ const stopLiveProctoring = useCallback(() => {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
-                    jd_path: "uploads/jd/JD1.pdf",
-                    reference_path: "Eric Ries - The Lean Startup.pdf",
+                    cv_path: "uploads/cv/Data Science_resume_juanjosecarin.pdf",
+                    jd_path: "uploads/jd/Data_Scientist_Job_Description.pdf",
+                    reference_path: [
+                        "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
+                        "uploads/reference/Machine Learning For Absolute Beginners.pdf"
+                    ],
                 }),
             })
             .then(res => res.ok ? res.json() : Promise.reject(res.json()))
@@ -364,13 +367,12 @@ const stopLiveProctoring = useCallback(() => {
             if (!response.ok) throw new Error(data.error || "Failed to submit answer");
             
             if (data.interview_complete) {
+                // The /end endpoint now handles the final evaluation logic
                 await endInterview();
             } else {
                 setCurrentQuestion(data.next_question);
                 speakResponse(data.next_question); // Automatically speak the next question
             }
-            // We don't need to update chatContent anymore
-            // setChatContent(updatedChatContent);
         } catch (error) {
             console.error("Error in onSend:", error);
             speakResponse(`An error occurred: ${error.message}`); // Speak the error

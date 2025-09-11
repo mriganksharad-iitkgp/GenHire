@@ -9,6 +9,8 @@ import base64
 from bson import ObjectId
 import cv2
 import numpy as np
+from transformers import AutoTokenizer, AutoModel
+import torch
 
 # Import configuration
 from config.database import db_config
@@ -52,9 +54,20 @@ app.register_blueprint(file_bp)
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}
 
-# Initialize interview system with API key
+# --- OPTIMIZATION: Load Similarity Model Once at Startup ---
+print("Loading similarity model...")
+similarity_model_name = "bert-base-uncased"
+similarity_tokenizer = AutoTokenizer.from_pretrained(similarity_model_name)
+similarity_model = AutoModel.from_pretrained(similarity_model_name)
+print("✅ Similarity model loaded.")
+
+# Initialize interview system with API key and the pre-loaded model
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-interview_manager = InterviewSessionManager(groq_api_key=GROQ_API_KEY)
+interview_manager = InterviewSessionManager(
+    groq_api_key=GROQ_API_KEY,
+    similarity_model=similarity_model,
+    similarity_tokenizer=similarity_tokenizer
+)
 
 # === INTERVIEW SYSTEM (REMAINS IN APP.PY) ===
 # All interview-related routes and Socket.IO handlers remain here
@@ -86,10 +99,10 @@ def start_interview(current_user):
     # Get file paths (either from request or use defaults for testing)
     cv_path = data.get('cv_path', "uploads/cv/Data Science_resume_juanjosecarin.pdf")
     jd_path = data.get('jd_path', "uploads/jd/Data_Scientist_Job_Description.pdf")
-    # Add both reference books
+    # Add reference books with correct paths
     reference_paths = [
-        "Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
-        "Machine Learning For Absolute Beginners.pdf"
+        "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
+        "uploads/reference/Machine Learning For Absolute Beginners.pdf"
     ]
     application_id = data.get('application_id')
     
@@ -143,29 +156,24 @@ def submit_answer(current_user, session_id):
     if 'error' in result:
         return jsonify(result), 400
     
-    # Update interview record if complete
-    if result.get('interview_complete'):
-        interviews_collection.update_one(
-            {'session_id': session_id},
-            {'$set': {
-                'status': 'completed',
-                'final_evaluation': result.get('final_evaluation'),
-                'updated_at': datetime.datetime.utcnow()
-            }}
-        )
+    # The new system handles completion and evaluation differently.
+    # We don't update the DB here, but in the /end route.
     
     return jsonify(result)
 
 @app.route('/api/interviews/<session_id>/end', methods=['POST'])
 @token_required
 def end_interview(current_user, session_id):
-    result = {
-        'status': 'interview_ended',
-        'final_score': 85.5,
-        'summary': 'Interview completed successfully',
-        'evaluation': {'summary': 'Evaluation not computed in this build.'}
-    }
-    
+    # Get the final evaluation from the session manager if it exists
+    session = interview_manager.sessions.get(session_id)
+    if session and session.get('is_complete'):
+        final_evaluation = session.get('evaluation')
+    elif session:
+        # If ended prematurely, generate evaluation now
+        final_evaluation = interview_manager._generate_final_evaluation(session)
+    else:
+        final_evaluation = {'summary': 'Evaluation could not be computed as session was not found.'}
+
     # Get final proctoring data from the live session
     session_data = live_sessions.get(session_id, {})
     final_score = session_data.get('proctoring_score', 'N/A')
@@ -180,10 +188,10 @@ def end_interview(current_user, session_id):
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
             'status': 'completed',
-            'evaluation': result['evaluation'],
+            'evaluation': final_evaluation,
             'proctoring_score': final_score,
             'manual_infractions': manual_infractions,
-            'gaze_metrics': gaze_times, # Add this line to log gaze data
+            'gaze_metrics': gaze_times,
             'updated_at': datetime.datetime.utcnow()
         }}
     )
@@ -192,10 +200,12 @@ def end_interview(current_user, session_id):
     session_doc = interviews_collection.find_one({'session_id': session_id, 'user_id': str(current_user['_id'])})
     if session_doc and session_doc.get('application_id'):
         try:
+            # Use the quantitative score for the application
+            numeric_score = final_evaluation.get('quantitative', {}).get('average_relevance_score', 0) * 100
             applications_collection.update_one(
                 {'_id': ObjectId(session_doc['application_id'])},
                 {'$set': {
-                    'interview_score': result.get('final_score'),
+                    'interview_score': numeric_score,
                     'status': 'interviewed',
                     'updated_at': datetime.datetime.utcnow()
                 }}
@@ -203,7 +213,10 @@ def end_interview(current_user, session_id):
         except Exception:
             pass
     
-    return jsonify(result)
+    return jsonify({
+        'status': 'interview_ended',
+        'evaluation': final_evaluation
+    })
 
 # Add this new route
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
@@ -378,7 +391,7 @@ def handle_proctoring_violation(data):
     # Optionally, deduct from the proctoring score for each violation
     session_data['proctoring_score'] = max(0, session_data.get('proctoring_score', 100) - 5) # Deduct 5 points
     
-    print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
+    # print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
