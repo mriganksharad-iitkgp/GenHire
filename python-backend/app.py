@@ -96,21 +96,20 @@ from middleware.auth_middleware import token_required
 def start_interview(current_user):
     data = request.json or {}
     
-    # Get file paths (either from request or use defaults for testing)
-    cv_path = data.get('cv_path', "uploads/cv/Data Science_resume_juanjosecarin.pdf")
-    jd_path = data.get('jd_path', "uploads/jd/Data_Scientist_Job_Description.pdf")
-    # Add reference books with correct paths
-    reference_paths = [
-        "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
-        "uploads/reference/Machine Learning For Absolute Beginners.pdf"
-    ]
+    # Get file paths from the request
+    cv_path = data.get('cv_path')
+    jd_path = data.get('jd_path')
+    reference_paths = data.get('reference_paths') # <-- FIX IS HERE
     application_id = data.get('application_id')
-    
-    # Create interview session using new system with multiple references
+
+    if not all([cv_path, jd_path, reference_paths]):
+        return jsonify({'error': 'cv_path, jd_path, and reference_paths are required'}), 400
+
+    # Create interview session using the correct keyword
     session_details = interview_manager.create_session(
         cv_path=cv_path,
         jd_path=jd_path,
-        reference_path=reference_paths  # Pass list of reference paths
+        reference_paths=reference_paths # <-- FIX IS HERE
     )
     
     # Store session info in database
@@ -119,7 +118,7 @@ def start_interview(current_user):
         'session_id': session_details['session_id'],
         'cv_path': cv_path,
         'jd_path': jd_path,
-        'reference_paths': reference_paths,  # Store multiple references
+        'reference_paths': reference_paths,
         'application_id': application_id,
         'status': 'active',
         'created_at': datetime.datetime.utcnow(),

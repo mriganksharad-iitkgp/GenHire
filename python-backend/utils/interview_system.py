@@ -113,15 +113,15 @@ class LLMEngine:
 
 class DocumentLoader:
     """Loads and holds text from CV, JD, and reference documents."""
-    def __init__(self, cv_path, jd_path, reference_path):
+    def __init__(self, cv_path, jd_path, reference_paths): # <-- FIX IS HERE
         self.cv_text = extract_text_from_pdf(cv_path)
         self.jd_text = extract_text_from_pdf(jd_path)
         # Handle single or multiple reference paths
-        paths = [reference_path] if isinstance(reference_path, str) else reference_path
+        paths = [reference_paths] if isinstance(reference_paths, str) else reference_paths
         self.documents = SimpleDirectoryReader(input_files=paths).load_data()
         self.cv_path = cv_path
         self.jd_path = jd_path
-        self.reference_path = reference_path
+        self.reference_paths = reference_paths
 
 class InterviewQuestionGenerator:
     """Generates technical questions based on resume content and reference material."""
@@ -195,10 +195,10 @@ class InterviewSessionManager:
         self.similarity_tokenizer = similarity_tokenizer
         os.environ["GROQ_API_KEY"] = groq_api_key
 
-    def create_session(self, cv_path, jd_path, reference_path):
+    def create_session(self, cv_path, jd_path, reference_paths): # <-- FIX IS HERE
         session_id = str(uuid.uuid4())
         llm_engine = LLMEngine(model_name="llama-3.1-70b-versatile", api_key=self.groq_api_key)
-        document_loader = DocumentLoader(cv_path=cv_path, jd_path=jd_path, reference_path=reference_path)
+        document_loader = DocumentLoader(cv_path=cv_path, jd_path=jd_path, reference_paths=reference_paths) # <-- FIX IS HERE
         resume_sections = segregate_resume_text(document_loader.cv_text)
         question_generator = InterviewQuestionGenerator(llm=llm_engine, documents=document_loader.documents)
         

@@ -123,8 +123,10 @@ export const startInterview = (applicationId) =>
     method: "POST",
     body: JSON.stringify({
       application_id: applicationId,
-      cv_path: "uploads/cv/PeterConnollyResume-2.pdf",
-      jd_path: "uploads/jd/JD1.pdf",
-      reference_path: "Eric Ries - The Lean Startup.pdf",
+      cv_path: "uploads/cv/Data Science_resume_juanjosecarin.pdf",
+      jd_path: "uploads/jd/Data_Scientist_Job_Description.pdf",
+      reference_paths: ["uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf"
+        , "uploads/reference/Machine Learning For Absolute Beginners.pdf"
+      ],
     }),
   });
