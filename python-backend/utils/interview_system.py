@@ -113,7 +113,7 @@ class LLMEngine:
 
 class DocumentLoader:
     """Loads and holds text from CV, JD, and reference documents."""
-    def __init__(self, cv_path, jd_path, reference_paths): # <-- FIX IS HERE
+    def __init__(self, cv_path, jd_path, reference_paths):
         self.cv_text = extract_text_from_pdf(cv_path)
         self.jd_text = extract_text_from_pdf(jd_path)
         # Handle single or multiple reference paths
@@ -194,15 +194,19 @@ class InterviewSessionManager:
         self.similarity_model = similarity_model
         self.similarity_tokenizer = similarity_tokenizer
         os.environ["GROQ_API_KEY"] = groq_api_key
+        # --- PERFORMANCE FIX: Load model once ---
+        print("Loading relevance model...")
+        self.relevance_model = SentenceTransformer("all-MiniLM-L6-v2")
+        print("✅ Relevance model loaded.")
 
-    def create_session(self, cv_path, jd_path, reference_paths): # <-- FIX IS HERE
+    def create_session(self, cv_path, jd_path, reference_paths):
         session_id = str(uuid.uuid4())
-        llm_engine = LLMEngine(model_name="llama-3.1-70b-versatile", api_key=self.groq_api_key)
-        document_loader = DocumentLoader(cv_path=cv_path, jd_path=jd_path, reference_paths=reference_paths) # <-- FIX IS HERE
+        # --- MODEL FIX: Use a supported model ---
+        llm_engine = LLMEngine(model_name="llama-3.3-70b-versatile", api_key=self.groq_api_key)
+        document_loader = DocumentLoader(cv_path=cv_path, jd_path=jd_path, reference_paths=reference_paths)
         resume_sections = segregate_resume_text(document_loader.cv_text)
         question_generator = InterviewQuestionGenerator(llm=llm_engine, documents=document_loader.documents)
         
-        # --- OPTIMIZED QUESTION GENERATION ---
         sections_to_probe = ['experience', 'skills']
         initial_questions = question_generator.generate_initial_questions(resume_sections, sections_to_probe, total_questions=4)
         
@@ -215,14 +219,14 @@ class InterviewSessionManager:
             "current_questions": initial_questions, "questions_asked": 0,
             "is_complete": False, "interview_data": []
         }
-        # --- OPTIMIZED SIMILARITY CALCULATION ---
+        
         similarity = compute_cosine_similarity(cv_path, jd_path, self.similarity_model, self.similarity_tokenizer)
         return {"session_id": session_id, "initial_questions": initial_questions, "similarity_score": similarity}
 
     def _calculate_relevance(self, user_answer, reference_answer):
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        user_embedding = model.encode([user_answer])
-        ref_embedding = model.encode([reference_answer])
+        # --- PERFORMANCE FIX: Use pre-loaded model ---
+        user_embedding = self.relevance_model.encode([user_answer])
+        ref_embedding = self.relevance_model.encode([reference_answer])
         return float(cosine_similarity(user_embedding, ref_embedding)[0][0])
 
     def submit_answer(self, session_id, question, answer):
