@@ -11,7 +11,11 @@ from ..config.settings import InterviewConfig, LLMConfig
 from ..llm.factory import LLMFactory
 from ..document.loader import DocumentLoader
 from ..evaluation.scorer import EvaluationScorer
-from .question_generator import QuestionGenerator, ConversationContext, QuestionMetadata
+from .prompt_based_question_generator import (
+    PromptBasedQuestionGenerator as QuestionGenerator,
+    ConversationContext,
+    QuestionMetadata,
+)
 
 
 @dataclass
@@ -296,10 +300,11 @@ class InterviewSessionManager:
         if session.questions_asked >= self.config.max_questions:
             return False
 
-        if session.questions_asked < self.config.min_questions:
+        # Always continue if we haven't asked at least 8 questions (increased from min_questions)
+        if session.questions_asked < 8:
             return True
 
-        # Check conversation quality
+        # Check conversation quality only after 8+ questions
         if len(session.interview_data) >= 2:
             recent_scores = [
                 item["evaluation"]["overall_score"]
@@ -307,20 +312,21 @@ class InterviewSessionManager:
             ]
             avg_recent_score = sum(recent_scores) / len(recent_scores)
 
-            # If conversation is going very poorly, end early
-            if avg_recent_score < 0.3:
+            # If conversation is going very poorly, end early (but only after 8 questions)
+            if avg_recent_score < 0.3 and session.questions_asked >= 10:
                 return False
 
             # If conversation is excellent and we've covered enough topics, can end
+            # But require at least 10 questions and 5 topics
             if (
                 avg_recent_score > 0.8
-                and len(session.conversation_context.topics_covered) >= 3
-                and session.questions_asked >= self.config.min_questions
+                and len(session.conversation_context.topics_covered) >= 5
+                and session.questions_asked >= 10
             ):
                 return False
 
-        # Check topic coverage
-        if len(session.conversation_context.topics_covered) >= 5:
+        # Check topic coverage - require more topics before ending
+        if len(session.conversation_context.topics_covered) >= 8:
             return False
 
         return True

@@ -14,6 +14,7 @@ import time
 # Import configuration
 from config.database import db_config
 from middleware.cors_middleware import setup_cors
+from flask_cors import CORS
 
 # Import route blueprints
 from routes.auth_routes import auth_bp
@@ -32,7 +33,7 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-cors = setup_cors(app)
+CORS(app, origins=["http://localhost:3000"])  # Allow your React app
 
 # Initialize database
 db = db_config.connect()
@@ -126,7 +127,7 @@ def start_interview(current_user):
             "reference_paths": reference_paths,
             "application_id": application_id,
             "status": "active",
-            'similarity_score': 0.8, #hardcoded for now
+            "similarity_score": 0.8,  # hardcoded for now
             "created_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow(),
             "start_time": time.time(),  # Add start time
@@ -164,16 +165,49 @@ def submit_answer(current_user, session_id):
     if not question or not answer:
         return jsonify({"error": "Question and answer are required"}), 400
 
-    # Submit answer using new system
-    result = interview_manager.submit_answer(session_id, question, answer)
+    try:
+        # Submit answer using new system
+        result = interview_manager.submit_answer(session_id, question, answer)
+        print(f"response after submitting the answer: {result}")
 
-    if "error" in result:
-        return jsonify(result), 400
+        if "error" in result:
+            return jsonify(result), 400
 
-    # The new system handles completion and evaluation differently.
-    # We don't update the DB here, but in the /end route.
+        # Deep JSON serialization function to handle all types
+        def make_json_serializable(obj):
+            """Recursively convert an object to be JSON serializable."""
+            from enum import Enum
+            import datetime
 
-    return jsonify(result)
+            if isinstance(obj, dict):
+                return {
+                    key: make_json_serializable(value) for key, value in obj.items()
+                }
+            elif isinstance(obj, list):
+                return [make_json_serializable(item) for item in obj]
+            elif isinstance(obj, Enum):
+                return obj.value
+            elif hasattr(obj, "isoformat"):  # datetime objects
+                return obj.isoformat()
+            elif hasattr(obj, "__dict__"):  # custom objects with __dict__
+                return make_json_serializable(obj.__dict__)
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            else:
+                # Convert other types to string as fallback
+                return str(obj)
+
+        # Apply deep serialization to the result
+        serializable_result = make_json_serializable(result)
+
+        return jsonify(serializable_result)
+
+    except Exception as e:
+        print(f"Error in submit_answer: {str(e)}")
+        import traceback
+
+        print(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
 @app.route("/api/interviews/<session_id>/end", methods=["POST"])

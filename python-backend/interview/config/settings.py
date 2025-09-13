@@ -33,13 +33,13 @@ class QuestionType(Enum):
 class InterviewConfig:
     """Configuration for interview sessions."""
 
-    max_questions: int = 8
-    min_questions: int = 4
+    max_questions: int = 20
+    min_questions: int = 8
     question_timeout_seconds: int = 300
     similarity_threshold: float = 0.7
     default_llm_provider: LLMProvider = LLMProvider.GEMINI
     # default_model: str = "llama-3.3-70b-versatile"
-    default_model: str = "gemini-2.5-flash"
+    default_model: str = "gemini-2.5-flash-lite"
     embedding_model: str = "all-MiniLM-L6-v2"
 
 
@@ -48,7 +48,7 @@ class LLMConfig:
     """Configuration for LLM providers."""
 
     provider: LLMProvider = LLMProvider.GEMINI
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-2.5-flash-lite"
     api_key: str = os.getenv("GOOGLE_API_KEY", "")
     temperature: float = 0.7
     max_tokens: Optional[int] = None

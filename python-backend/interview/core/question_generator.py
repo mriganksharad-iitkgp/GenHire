@@ -42,6 +42,13 @@ class ConversationContext:
     follow_up_count: int
     needs_topic_change: bool
     conversation_energy: str  # engaging, declining, neutral
+    has_been_greeted: bool = False  # Track if initial greeting was given
+    previous_answers: List[str] = None  # Store previous answers for context
+    question_count: int = 0  # Track total questions asked
+
+    def __post_init__(self):
+        if self.previous_answers is None:
+            self.previous_answers = []
 
 
 @dataclass
@@ -57,21 +64,37 @@ class QuestionMetadata:
 
 
 class QuestionGenerator:
-    """Advanced question generator for natural interview conversations."""
+    """
+    Advanced question generator for natural interview conversations with academic focus.
+
+    This class generates fundamental, technical questions that test theoretical knowledge
+    and academic understanding rather than situational scenarios. It provides:
+
+    - Warm interview greetings and initialization
+    - Interactive responses to candidate answers
+    - Academic-focused question generation
+    - Natural conversation flow management
+    - Progressive difficulty based on performance
+    """
 
     def __init__(self, llm: BaseLLM):
         self.llm = llm
         self.conversation_context = None
         self.available_topics = []  # Dynamic topics from CV/JD
+        self.cv_content = ""  # Store CV content for reference
+        self.resume_sections = {}  # Store resume sections
 
     def initialize_conversation(
         self, resume_sections: Dict[str, str], job_description: str = ""
     ) -> ConversationContext:
         """Initialize conversation context based on resume and job description."""
+        # Store CV content for reference in questions
+        self.resume_sections = resume_sections
+        self.cv_content = " ".join(resume_sections.values())
+
         # Extract dynamic topics from CV and JD
-        cv_content = " ".join(resume_sections.values())
         self.available_topics = self._extract_dynamic_topics(
-            cv_content, job_description
+            self.cv_content, job_description
         )
 
         # Assess initial skill level from resume
@@ -93,7 +116,196 @@ class QuestionGenerator:
             follow_up_count=0,
             needs_topic_change=False,
             conversation_energy="neutral",
+            has_been_greeted=False,
+            question_count=0,
         )
+
+    def generate_interview_greeting(
+        self,
+        candidate_name: Optional[str] = None,
+        context: Optional[ConversationContext] = None,
+    ) -> str:
+        """Generate a warm, professional greeting to start the interview."""
+
+        # Get some CV context for the greeting
+        cv_reference = ""
+        if context and self.cv_content:
+            cv_reference = f"I've had a chance to review your resume and I can see you have experience with {context.current_topic}."
+
+        greeting_prompts = [
+            f"Generate a warm, natural greeting to start a technical interview conversation. Make it sound like a real human interviewer speaking:",
+            f"",
+            f"The candidate's name is: {candidate_name or 'the candidate'}",
+            f"CV context: {cv_reference}",
+            f"First topic area from their CV: {context.current_topic if context else 'technical background'}",
+            f"",
+            f"The greeting should:",
+            f"- Sound completely natural and conversational (like a real person speaking)",
+            f"- Welcome them warmly and make them feel comfortable",
+            f"- Mention that you've reviewed their resume",
+            f"- Set a collaborative, discussion-like tone",
+            f"- Let them know the questions will be based on their CV/experience",
+            f"- End naturally by transitioning to the first topic from their background",
+            f"",
+            f"Make it sound like a real interviewer having a natural conversation, not robotic or scripted:",
+        ]
+
+        prompt = "\n".join(greeting_prompts)
+
+        try:
+            response = self.llm.complete(prompt)
+            greeting = (
+                response.text.strip() if response and hasattr(response, "text") else ""
+            )
+
+            if not greeting:
+                # Fallback greeting
+                name_part = f"Hi {candidate_name}! " if candidate_name else "Hello! "
+                cv_part = "I've had a chance to review your resume and "
+                topic_part = (
+                    f"I'd like to start by discussing your experience with {context.current_topic}"
+                    if context
+                    else "I'd like to discuss your technical background"
+                )
+                greeting = f"{name_part}{cv_part}{topic_part}. The questions will be based on what you've mentioned in your CV, so feel free to draw from your actual experience. Ready to begin?"
+
+            return greeting
+
+        except Exception as e:
+            print(f"Error generating greeting: {e}")
+            # Fallback greeting
+            name_part = f"Hi {candidate_name}! " if candidate_name else "Hello! "
+            return f"{name_part}Welcome to the technical interview. I've reviewed your resume and I'll be asking questions based on your experience and background. Feel free to ask for clarification if needed. Let's get started!"
+
+    def generate_answer_response(
+        self,
+        candidate_answer: str,
+        context: ConversationContext,
+        evaluation: Optional[Dict] = None,
+    ) -> str:
+        """Generate an interactive response to the candidate's answer before asking the next question."""
+
+        try:
+            # Determine the type of response based on answer quality
+            if evaluation:
+                overall_score = evaluation.get("overall_score", 0.5)
+                accuracy = evaluation.get("technical_accuracy", 0.5)
+                completeness = evaluation.get("completeness", 0.5)
+            else:
+                overall_score = 0.5
+                accuracy = 0.5
+                completeness = 0.5
+
+            # Create response based on performance
+            if overall_score >= 0.8:
+                response_type = "excellent"
+            elif overall_score >= 0.6:
+                response_type = "good"
+            elif overall_score >= 0.4:
+                response_type = "partial"
+            else:
+                response_type = "needs_improvement"
+
+            prompt = f"""
+You are a professional interviewer having a natural conversation with a candidate about {context.current_topic}.
+
+The candidate just answered your question. Generate a natural, human-like response that an experienced interviewer would give.
+
+Candidate's Answer: {candidate_answer}
+
+Answer Quality: {response_type} (score: {overall_score:.2f})
+
+Your response should:
+- Sound completely natural and conversational
+- Acknowledge what they said in a human way
+- Show you were listening and engaged
+- Be encouraging and professional
+- Set up naturally for the next question
+- Sound like a real person having a conversation
+
+{self._get_response_guidelines(response_type)}
+
+Generate a natural interviewer response (like a real person would say):
+"""
+
+            response = self.llm.complete(prompt)
+            interviewer_response = (
+                response.text.strip() if response and hasattr(response, "text") else ""
+            )
+
+            if not interviewer_response:
+                # Fallback responses based on performance
+                fallback_responses = {
+                    "excellent": "That's a really solid explanation! I can see you have good understanding of this area.",
+                    "good": "Good, you've covered the key points well. That makes sense.",
+                    "partial": "I see what you're getting at. That's a good starting point.",
+                    "needs_improvement": "Okay, I understand your perspective. Let me ask you about this in a different way.",
+                }
+                interviewer_response = fallback_responses.get(
+                    response_type, "I see, thank you for explaining that."
+                )
+
+            return interviewer_response
+
+        except Exception as e:
+            print(f"Error generating answer response: {e}")
+            return "I see, thank you for that explanation."
+
+    def _get_response_guidelines(self, response_type: str) -> str:
+        """Get guidelines for different types of responses."""
+        guidelines = {
+            "excellent": """
+- Sound genuinely impressed and encouraging
+- Use natural phrases like "That's really good", "I can see you know this well"
+- Be specific about what they did well
+- Show genuine interest in their answer
+""",
+            "good": """
+- Acknowledge their solid understanding
+- Use affirming language like "That's right", "Good point", "Exactly"
+- Sound satisfied with their response
+- Be naturally encouraging
+""",
+            "partial": """
+- Acknowledge what they got right positively
+- Sound understanding and supportive
+- Use phrases like "I see what you mean", "That's a good start"
+- Avoid any negative language
+""",
+            "needs_improvement": """
+- Stay completely supportive and encouraging
+- Never sound disappointed or critical
+- Use phrases like "Let me try asking this differently", "How about we approach it this way"
+- Make it sound like you're helping them succeed
+""",
+        }
+        return guidelines.get(response_type, "Be professional, natural and supportive.")
+
+    def get_next_question_with_response(
+        self,
+        context: ConversationContext,
+        last_answer: Optional[str] = None,
+        answer_evaluation: Optional[Dict] = None,
+    ) -> Tuple[str, str, QuestionMetadata]:
+        """
+        Generate both an interactive response to the previous answer and the next question.
+        Returns: (interviewer_response, next_question, metadata)
+        """
+
+        interviewer_response = ""
+
+        # Generate response to previous answer if provided
+        if last_answer:
+            interviewer_response = self.generate_answer_response(
+                last_answer, context, answer_evaluation
+            )
+
+        # Get the next question
+        next_question, metadata = self.get_next_question(
+            context, last_answer, answer_evaluation
+        )
+
+        return interviewer_response, next_question, metadata
 
     def get_next_question(
         self,
@@ -105,6 +317,16 @@ class QuestionGenerator:
         Generate the next question based on conversation flow and context.
         This is the main method that decides question strategy.
         """
+        # Store previous answer for conversation memory
+        if last_answer:
+            context.previous_answers.append(last_answer)
+            # Keep only last 3 answers for context
+            if len(context.previous_answers) > 3:
+                context.previous_answers = context.previous_answers[-3:]
+
+        # Increment question count
+        context.question_count += 1
+
         # Update context based on last answer
         if last_answer and answer_evaluation:
             context = self._update_conversation_context(
@@ -131,42 +353,125 @@ class QuestionGenerator:
     def _determine_question_intent(
         self, context: ConversationContext
     ) -> QuestionIntent:
-        """Determine what kind of question to ask next based on conversation state."""
+        """
+        Determine what kind of question to ask next based on conversation state.
+        Handles multiple simultaneous intents with proper prioritization.
+        """
 
-        # If just started, explore new topic
-        if not context.topics_covered:
-            return QuestionIntent.EXPLORE_NEW_TOPIC
+        # Collect all applicable intents with their priority scores
+        intent_scores = {}
 
-        # If we've been on same topic too long, transition
-        if context.follow_up_count >= 3:
-            return QuestionIntent.TRANSITION_TOPIC
+        # PRIORITY 1: Critical conversation flow issues (highest priority)
+        # Only explore new topic if we haven't covered any OR current topic is truly exhausted
+        if not context.topics_covered and context.question_count == 1:
+            intent_scores[QuestionIntent.EXPLORE_NEW_TOPIC] = (
+                100  # Must start somewhere (first question only)
+            )
 
-        # If answer quality is declining, clarify or transition
+        if context.follow_up_count >= 4:  # Stuck too long on one topic
+            intent_scores[QuestionIntent.TRANSITION_TOPIC] = 95
+
+        # PRIORITY 2: Poor answer quality - needs immediate attention
         if len(context.answer_quality_trend) >= 2:
             recent_avg = sum(context.answer_quality_trend[-2:]) / 2
-            if recent_avg < 0.6:
-                return (
-                    QuestionIntent.CLARIFY_UNDERSTANDING
-                    if context.follow_up_count < 2
-                    else QuestionIntent.TRANSITION_TOPIC
-                )
+            if recent_avg < 0.4:  # Very poor performance
+                if context.follow_up_count < 2:
+                    intent_scores[QuestionIntent.CLARIFY_UNDERSTANDING] = 90
+                else:
+                    intent_scores[QuestionIntent.TRANSITION_TOPIC] = 85
 
-        # If answer quality is high and we're not too deep, probe deeper
+        # PRIORITY 3: Explicit topic change flag
+        if context.needs_topic_change:
+            intent_scores[QuestionIntent.TRANSITION_TOPIC] = 80
+
+        # PRIORITY 4: Quality-based decisions (good performance)
         if len(context.answer_quality_trend) >= 1:
             last_score = context.answer_quality_trend[-1]
+
+            # High quality answers - probe deeper (but respect other priorities)
             if last_score > 0.7 and context.depth_level != ConversationDepth.EXPERT:
-                return QuestionIntent.PROBE_DEEPER
+                intent_scores[QuestionIntent.PROBE_DEEPER] = 70
 
-        # If we need topic change flag is set
-        if context.needs_topic_change:
-            return QuestionIntent.TRANSITION_TOPIC
+            # Moderate quality - might need clarification
+            elif 0.5 <= last_score <= 0.7 and context.follow_up_count < 3:
+                intent_scores[QuestionIntent.CLARIFY_UNDERSTANDING] = 60
 
-        # If candidate shows expertise, assess experience
+        # PRIORITY 5: Skill-level based decisions
         if context.candidate_skill_level in ["advanced", "expert"]:
-            return QuestionIntent.ASSESS_EXPERIENCE
+            # Expert candidates should get experience questions, but not if we need to change topics
+            if QuestionIntent.TRANSITION_TOPIC not in intent_scores:
+                intent_scores[QuestionIntent.ASSESS_EXPERIENCE] = 65
 
-        # Default to exploring deeper
-        return QuestionIntent.PROBE_DEEPER
+        # PRIORITY 6: Moderate follow-up scenarios
+        if 2 <= context.follow_up_count <= 3:
+            intent_scores[QuestionIntent.TRANSITION_TOPIC] = 50
+
+        # PRIORITY 7: Default probing (lowest priority)
+        if not intent_scores:  # No other intent determined
+            intent_scores[QuestionIntent.PROBE_DEEPER] = 30
+
+        # CONFLICT RESOLUTION: Handle specific combinations
+        selected_intent = self._resolve_intent_conflicts(intent_scores, context)
+
+        return selected_intent
+
+    def _resolve_intent_conflicts(
+        self, intent_scores: Dict[QuestionIntent, int], context: ConversationContext
+    ) -> QuestionIntent:
+        """
+        Resolve conflicts when multiple intents have similar priorities.
+        Apply business logic for specific combinations.
+        """
+
+        # If no intents, default to exploring
+        if not intent_scores:
+            return QuestionIntent.PROBE_DEEPER
+
+        # Special case: Expert + Topic Change
+        if (
+            QuestionIntent.TRANSITION_TOPIC in intent_scores
+            and context.candidate_skill_level == "expert"
+            and intent_scores.get(QuestionIntent.ASSESS_EXPERIENCE, 0) > 0
+        ):
+
+            # If we've been on topic for a while, prioritize transition
+            if context.follow_up_count >= 3:
+                return QuestionIntent.TRANSITION_TOPIC
+            # Otherwise, get one experience question before transitioning
+            else:
+                return QuestionIntent.ASSESS_EXPERIENCE
+
+        # Special case: Clarification vs Transition (poor performance)
+        if (
+            QuestionIntent.CLARIFY_UNDERSTANDING in intent_scores
+            and QuestionIntent.TRANSITION_TOPIC in intent_scores
+        ):
+
+            # If we've tried clarification before, transition
+            if context.follow_up_count >= 2:
+                return QuestionIntent.TRANSITION_TOPIC
+            # Otherwise, give one more chance to clarify
+            else:
+                return QuestionIntent.CLARIFY_UNDERSTANDING
+
+        # Special case: Probe Deeper vs Assess Experience (high performers)
+        if (
+            QuestionIntent.PROBE_DEEPER in intent_scores
+            and QuestionIntent.ASSESS_EXPERIENCE in intent_scores
+            and context.candidate_skill_level in ["advanced", "expert"]
+        ):
+
+            # Alternate between probing and experience based on depth
+            if context.depth_level in [
+                ConversationDepth.SURFACE,
+                ConversationDepth.MODERATE,
+            ]:
+                return QuestionIntent.PROBE_DEEPER
+            else:
+                return QuestionIntent.ASSESS_EXPERIENCE
+
+        # Default: Return highest scoring intent
+        return max(intent_scores.items(), key=lambda x: x[1])[0]
 
     def _generate_new_topic_question(
         self, context: ConversationContext
@@ -189,29 +494,100 @@ class QuestionGenerator:
 
         topic = unexplored_topics[0]
 
-        # Adjust question based on skill level
-        if context.candidate_skill_level in ["beginner", "intermediate"]:
-            prompt = f"""
-            Generate an opening question about {topic} that is appropriate for someone with 
-            {context.candidate_skill_level} level experience. The question should:
-            - Be welcoming and not intimidating
-            - Test fundamental understanding
-            - Allow for different levels of depth in answers
-            - Be conversational and natural
-            
-            Generate ONE clear, engaging question about {topic}:
-            """
+        # Adjust question based on conversation stage and context
+        cv_reference = self._get_cv_context_for_topic(topic)
+
+        # Check if this is first question or continuation of conversation
+        is_first_question = context.question_count <= 1 and not context.has_been_greeted
+
+        if is_first_question:
+            # This is the very first question - include greeting
+            context.has_been_greeted = True
+
+            if context.candidate_skill_level in ["beginner", "intermediate"]:
+                prompt = f"""
+                You are starting an interview conversation. Generate a warm greeting followed by a natural first question about {topic}.
+                
+                CV Context: {cv_reference}
+                
+                Create a natural response that:
+                - Starts with a warm, professional greeting
+                - References their CV/resume experience with {topic}
+                - Makes them feel comfortable by showing it's based on their background
+                - Asks about basic concepts they should know from their experience
+                - Flows naturally as the opening of an interview
+                
+                Example approach:
+                "Hi! Thanks for coming in today. I've had a chance to review your resume and I can see you have experience with {topic}. Since you've worked with this, could you tell me..."
+                
+                Generate a natural greeting and opening question:
+                """
+            else:
+                prompt = f"""
+                You are starting an interview conversation. Generate a warm greeting followed by a natural first question about {topic}.
+                
+                CV Context: {cv_reference}
+                
+                Create a natural response that:
+                - Starts with a warm, professional greeting
+                - References their CV/resume experience with {topic}
+                - Makes them comfortable by showing it's based on their background
+                - Asks about concepts they claim to know from their CV
+                - Flows naturally as the opening of an interview
+                
+                Example approach:
+                "Hello! Welcome, and thank you for taking the time to meet with me today. Looking at your background, I can see you have {topic} experience. Given your work in this area, I'd like to understand..."
+                
+                Generate a natural greeting and opening question:
+                """
         else:
-            prompt = f"""
-            Generate an opening question about {topic} for an experienced professional.
-            The question should:
-            - Test deeper understanding and practical application
-            - Be challenging but fair
-            - Allow demonstration of real-world experience
-            - Be conversational and professional
-            
-            Generate ONE thoughtful question about {topic}:
-            """
+            # This is a continuation - transition to new topic naturally
+            previous_topic = (
+                context.current_topic
+                if context.topics_covered
+                else "your previous answer"
+            )
+
+            if context.candidate_skill_level in ["beginner", "intermediate"]:
+                prompt = f"""
+                You are continuing an interview conversation. The candidate has been discussing {previous_topic}. 
+                Now transition naturally to {topic} based on their CV.
+                
+                CV Context: {cv_reference}
+                Previous conversation context: They just finished discussing {previous_topic}
+                
+                Create a natural transition that:
+                - Acknowledges the previous discussion
+                - Smoothly introduces {topic} from their CV/resume
+                - Shows continuity in the conversation
+                - Asks about basic concepts they should know from their experience
+                - Flows naturally from the previous topic
+                
+                Example approach:
+                "That's helpful, thank you. Now I'd like to shift to another area from your resume - {topic}. I see you have experience with this as well, so could you tell me..."
+                
+                Generate a natural topic transition and question:
+                """
+            else:
+                prompt = f"""
+                You are continuing an interview conversation. The candidate has been discussing {previous_topic}. 
+                Now transition naturally to {topic} based on their CV.
+                
+                CV Context: {cv_reference}
+                Previous conversation context: They just finished discussing {previous_topic}
+                
+                Create a natural transition that:
+                - Acknowledges the previous discussion  
+                - Smoothly introduces {topic} from their CV/resume
+                - Shows continuity in the conversation
+                - Asks about concepts they claim to know from their CV
+                - Flows naturally from the previous topic
+                
+                Example approach:
+                "Thanks for that explanation. Looking at another part of your background, I notice you've worked with {topic}. Given your experience in this area, I'd like to understand..."
+                
+                Generate a natural topic transition and question:
+                """
 
         question = self._generate_question_from_prompt(prompt)
 
@@ -232,6 +608,30 @@ class QuestionGenerator:
 
         return question, metadata
 
+    def _get_cv_context_for_topic(self, topic: str) -> str:
+        """Get relevant CV context for a specific topic."""
+        if not self.cv_content:
+            return f"The candidate mentioned {topic} in their background"
+
+        # Look for the topic in CV content
+        cv_lower = self.cv_content.lower()
+        topic_lower = topic.lower()
+
+        # Find sentences containing the topic
+        sentences = self.cv_content.split(".")
+        relevant_sentences = [s.strip() for s in sentences if topic_lower in s.lower()]
+
+        if relevant_sentences:
+            # Return first relevant sentence, truncated if too long
+            context = (
+                relevant_sentences[0][:100] + "..."
+                if len(relevant_sentences[0]) > 100
+                else relevant_sentences[0]
+            )
+            return f"From CV: {context}"
+        else:
+            return f"The candidate has {topic} in their background"
+
     def _generate_follow_up_question(
         self, context: ConversationContext, last_answer: str
     ) -> Tuple[str, QuestionMetadata]:
@@ -241,20 +641,27 @@ class QuestionGenerator:
         next_depth = self._get_next_depth_level(context.depth_level)
 
         prompt = f"""
-        Based on this answer about {context.current_topic}, generate a follow-up question 
-        that digs deeper into the concept. Current depth level: {context.depth_level.value}.
-        Target depth: {next_depth.value}.
+        You are an interviewer having a natural conversation. The candidate just answered about {context.current_topic} from their CV experience. 
+        Generate a natural follow-up response that shows you were listening and want to dig deeper.
         
+        Current Topic: {context.current_topic}
         Previous Answer: {last_answer}
+        Conversation History: {len(context.previous_answers)} previous exchanges
         
-        The follow-up should:
-        - Build naturally on what they just said
-        - Go deeper into technical details or practical applications
-        - Test {next_depth.value} level understanding
-        - Feel like a natural conversation progression
-        - Not repeat what was already covered
+        Create a natural response that:
+        - Shows you heard and understood their specific answer
+        - References details from what they just said
+        - Asks for more specific details naturally about their actual experience
+        - Sounds like a real person having a conversation
+        - Builds on the conversation flow so far
+        - Avoids generic phrases - be specific to their answer
         
-        Generate ONE insightful follow-up question:
+        Example approaches:
+        "That's really interesting - you mentioned [specific detail from their answer]. In that situation, how did you..."
+        "I can see that worked well for you. When you were implementing that, what challenges did you face with..."
+        "That makes a lot of sense. You said [reference to their answer] - I'm curious about the technical details of..."
+        
+        Generate a natural, conversational follow-up that references their specific answer:
         """
 
         question = self._generate_question_from_prompt(prompt)
@@ -280,16 +687,24 @@ class QuestionGenerator:
         """Generate a question to clarify understanding when the previous answer was unclear."""
 
         prompt = f"""
-        The candidate's previous answer about {context.current_topic} was unclear or incomplete.
-        Generate a clarifying question that:
-        - Helps them elaborate on unclear points
-        - Is supportive and encouraging, not confrontational
-        - Guides them toward a better explanation
-        - Feels natural and helpful
+        You are an interviewer having a natural conversation. The candidate's answer about {context.current_topic} (from their CV) needs some clarification.
+        Generate a supportive, natural response that helps them clarify.
         
         Previous Answer: {last_answer}
         
-        Generate ONE supportive clarification question:
+        Create a natural response that:
+        - Sounds understanding and supportive (not critical)
+        - Shows you want to help them explain better
+        - References their CV experience to make them comfortable
+        - Asks for clarification in a friendly way
+        - Sounds like a real person helping them succeed
+        
+        Example approaches:
+        "I can see you have experience with this from your background. Could you help me understand..."
+        "That's interesting. Since this is something you've worked with, could you clarify..."
+        "I want to make sure I understand your experience with this correctly. When you say..."
+        
+        Generate a natural, supportive clarification request:
         """
 
         question = self._generate_question_from_prompt(prompt)
@@ -311,20 +726,29 @@ class QuestionGenerator:
         """Generate a question to assess real-world experience."""
 
         prompt = f"""
-        Generate a question that assesses practical experience with {context.current_topic}.
-        The question should:
-        - Ask about real-world scenarios and challenges
-        - Test practical application of knowledge
-        - Allow discussion of specific experiences
-        - Be conversational and engaging
+        You are an interviewer having a natural conversation with a candidate about their {context.current_topic} experience from their CV.
         
-        Generate ONE experience-focused question about {context.current_topic}:
+        Generate a conversational response that asks about their real-world experience.
+        
+        Create a natural response that:
+        - References specific experience from their CV with {context.current_topic}
+        - Sounds like a real interviewer interested in their background
+        - Asks about practical, hands-on experience naturally
+        - Makes them comfortable by showing it's based on their resume
+        - Flows naturally in conversation
+        
+        Example approaches:
+        "I noticed you have {context.current_topic} experience on your resume. Tell me about how you actually used this in your work..."
+        "Your background shows you've worked with {context.current_topic}. Walk me through a specific example of..."
+        "Looking at your experience with {context.current_topic}, I'm curious about..."
+        
+        Generate a natural, conversational question about their practical experience:
         """
 
         question = self._generate_question_from_prompt(prompt)
 
         metadata = QuestionMetadata(
-            question_type=QuestionType.EXPERIENCE,
+            question_type=QuestionType.TECHNICAL,
             intent=QuestionIntent.ASSESS_EXPERIENCE,
             difficulty_level="advanced",
             expected_depth=ConversationDepth.MODERATE,
@@ -352,15 +776,46 @@ class QuestionGenerator:
 
         next_topic = unexplored_topics[0]
 
+        # Create varied transition approaches to avoid repetition
+        transition_styles = [
+            "acknowledgment_shift",
+            "natural_pivot",
+            "topic_bridge",
+            "simple_transition",
+        ]
+
+        # Choose style based on question count to ensure variety
+        style = transition_styles[context.question_count % len(transition_styles)]
+
         prompt = f"""
-        Create a smooth transition from discussing {context.current_topic} to {next_topic}.
-        The question should:
-        - Acknowledge what we've discussed about {context.current_topic}
-        - Naturally bridge to {next_topic}
-        - Feel conversational and professional
-        - Not be abrupt or jarring
+        You are an interviewer having a natural conversation. You want to smoothly transition from discussing {context.current_topic} to {next_topic}.
         
-        Generate ONE smooth transition question to {next_topic}:
+        Current conversation context:
+        - Just finished discussing {context.current_topic}
+        - Moving to {next_topic} (also from their background)
+        - This is question #{context.question_count + 1} in the conversation
+        - Use transition style: {style}
+        
+        Create a natural transition using the "{style}" approach:
+        
+        For "acknowledgment_shift": Thank them for the previous answer, then shift focus
+        For "natural_pivot": Connect the topics naturally if possible
+        For "topic_bridge": Find a connection between topics
+        For "simple_transition": Direct but smooth topic change
+        
+        The transition should:
+        - Sound conversational and natural
+        - Acknowledge they've covered {context.current_topic} 
+        - Introduce {next_topic} without repeating "resume/CV" phrases
+        - Flow smoothly in the ongoing conversation
+        - Include a question about {next_topic}
+        
+        Example approaches for {style}:
+        - "That gives me good insight into your {context.current_topic} work. Let's talk about {next_topic} now - tell me about..."
+        - "Perfect, thank you. Shifting gears a bit to {next_topic} - how would you..."
+        - "Great explanation. Now I'm curious about {next_topic} from your background..."
+        
+        Generate a natural transition with question about {next_topic}:
         """
 
         question = self._generate_question_from_prompt(prompt)
@@ -389,18 +844,23 @@ class QuestionGenerator:
         """Generate a question to verify understanding of a concept."""
 
         prompt = f"""
-        Based on their answer about {context.current_topic}, generate a verification question 
-        that tests if they truly understand the concept or just memorized it.
+        You are an interviewer having a natural conversation. Based on their answer about {context.current_topic} (from their CV), generate a natural follow-up to verify their understanding.
         
         Previous Answer: {last_answer}
         
-        The verification question should:
-        - Test deeper understanding, not just recall
-        - Ask for examples or applications
-        - Be respectful and professional
-        - Probe for genuine comprehension
+        Create a natural response that:
+        - Shows you're interested in verifying their knowledge
+        - References their CV experience with {context.current_topic}
+        - Sounds like a real interviewer naturally probing
+        - Makes them comfortable by relating to their background
+        - Flows naturally in conversation
         
-        Generate ONE verification question:
+        Example approaches:
+        "That's interesting. Since you've worked with this, can you give me a specific example of..."
+        "I see. Given your experience with this, help me understand..."
+        "That makes sense. In your work with {context.current_topic}, how exactly..."
+        
+        Generate a natural verification question:
         """
 
         question = self._generate_question_from_prompt(prompt)
@@ -419,33 +879,41 @@ class QuestionGenerator:
     def _generate_behavioral_question(
         self, context: ConversationContext
     ) -> Tuple[str, QuestionMetadata]:
-        """Generate a behavioral question when technical topics are exhausted."""
+        """Generate a fundamental technical question when specific topics are exhausted."""
 
-        behavioral_areas = [
-            "problem-solving approach",
-            "team collaboration",
-            "handling pressure",
-            "learning new technologies",
-            "dealing with difficult technical challenges",
+        fundamental_areas = [
+            "algorithm complexity analysis",
+            "data structure selection and trade-offs",
+            "memory management concepts",
+            "concurrency and synchronization",
+            "software design principles",
+            "performance optimization techniques",
         ]
 
-        area = behavioral_areas[len(context.topics_covered) % len(behavioral_areas)]
+        area = fundamental_areas[len(context.topics_covered) % len(fundamental_areas)]
 
         prompt = f"""
-        Generate a behavioral interview question about {area}.
-        The question should:
-        - Start with "Tell me about a time when..." or "How do you handle..."
-        - Be relevant to a technical role
-        - Allow for storytelling and specific examples
-        - Be professional and engaging
+        You are an interviewer having a natural conversation. You want to explore {area} as a fundamental technical concept.
         
-        Generate ONE behavioral question about {area}:
+        Create a conversational question that:
+        - Introduces {area} naturally in conversation
+        - Tests fundamental understanding
+        - Sounds like a real interviewer asking
+        - Is approachable and not intimidating
+        - Flows naturally in the interview
+        
+        Example approaches:
+        "Let's talk about {area} for a moment. This is a fundamental concept in technical work..."
+        "I'd like to explore {area} with you. From your perspective..."
+        "Moving to some fundamentals, let's discuss {area}..."
+        
+        Generate a natural, conversational question about {area}:
         """
 
         question = self._generate_question_from_prompt(prompt)
 
         metadata = QuestionMetadata(
-            question_type=QuestionType.BEHAVIORAL,
+            question_type=QuestionType.TECHNICAL,
             intent=QuestionIntent.ASSESS_EXPERIENCE,
             difficulty_level="intermediate",
             expected_depth=ConversationDepth.MODERATE,
