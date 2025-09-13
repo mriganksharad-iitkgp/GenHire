@@ -339,8 +339,8 @@ export default function Chat({ interviewId }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          cv_path: "uploads/cv/Data Science_resume_juanjosecarin.pdf",
-          jd_path: "uploads/jd/Data_Scientist_Job_Description.pdf",
+          cv_path: "uploads/cv/software_engineering_cv.pdf",
+          jd_path: "uploads/jd/software_engineering_job_description.pdf",
           reference_paths: [
             "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
           ],
