@@ -369,6 +369,120 @@ def find_sample_files():
     return cv_files, jd_files
 
 
+def get_file_paths_interactively():
+    """Get CV and JD file paths from user input."""
+    print("\n📁 File Path Configuration")
+    print("=" * 50)
+
+    # Get CV path
+    while True:
+        cv_input = input(
+            "📄 Enter CV file path (or press Enter to auto-find): "
+        ).strip()
+
+        if not cv_input:
+            # Try to auto-find CV files
+            print("🔍 Looking for CV files...")
+            cv_files, _ = find_sample_files()
+            if cv_files:
+                print("Found CV files:")
+                for i, file in enumerate(cv_files, 1):
+                    print(f"  {i}. {file}")
+
+                while True:
+                    try:
+                        choice = input(
+                            f"Choose CV file (1-{len(cv_files)}) or enter custom path: "
+                        ).strip()
+                        if choice.isdigit() and 1 <= int(choice) <= len(cv_files):
+                            cv_path = str(cv_files[int(choice) - 1])
+                            break
+                        elif choice and Path(choice).exists():
+                            cv_path = choice
+                            break
+                        elif choice:
+                            print(f"❌ File not found: {choice}")
+                        else:
+                            print("⚠️ Please make a selection.")
+                    except ValueError:
+                        if choice and Path(choice).exists():
+                            cv_path = choice
+                            break
+                        print("❌ Invalid selection.")
+                break
+            else:
+                print("❌ No CV files found in uploads/cv/")
+                cv_input = input("📄 Please enter CV file path manually: ").strip()
+                if cv_input and Path(cv_input).exists():
+                    cv_path = cv_input
+                    break
+                else:
+                    print("❌ Invalid file path. Please try again.")
+        else:
+            if Path(cv_input).exists():
+                cv_path = cv_input
+                break
+            else:
+                print(f"❌ File not found: {cv_input}")
+
+    # Get JD path
+    while True:
+        jd_input = input(
+            "📋 Enter Job Description file path (or press Enter to auto-find): "
+        ).strip()
+
+        if not jd_input:
+            # Try to auto-find JD files
+            print("🔍 Looking for JD files...")
+            _, jd_files = find_sample_files()
+            if jd_files:
+                print("Found JD files:")
+                for i, file in enumerate(jd_files, 1):
+                    print(f"  {i}. {file}")
+
+                while True:
+                    try:
+                        choice = input(
+                            f"Choose JD file (1-{len(jd_files)}) or enter custom path: "
+                        ).strip()
+                        if choice.isdigit() and 1 <= int(choice) <= len(jd_files):
+                            jd_path = str(jd_files[int(choice) - 1])
+                            break
+                        elif choice and Path(choice).exists():
+                            jd_path = choice
+                            break
+                        elif choice:
+                            print(f"❌ File not found: {choice}")
+                        else:
+                            print("⚠️ Please make a selection.")
+                    except ValueError:
+                        if choice and Path(choice).exists():
+                            jd_path = choice
+                            break
+                        print("❌ Invalid selection.")
+                break
+            else:
+                print("❌ No JD files found in uploads/jd/")
+                jd_input = input("📋 Please enter JD file path manually: ").strip()
+                if jd_input and Path(jd_input).exists():
+                    jd_path = jd_input
+                    break
+                else:
+                    print("❌ Invalid file path. Please try again.")
+        else:
+            if Path(jd_input).exists():
+                jd_path = jd_input
+                break
+            else:
+                print(f"❌ File not found: {jd_input}")
+
+    print(f"\n✅ Selected files:")
+    print(f"   📄 CV: {cv_path}")
+    print(f"   📋 JD: {jd_path}")
+
+    return cv_path, jd_path
+
+
 def main():
     """Main function to run the interactive interview test."""
     parser = argparse.ArgumentParser(
@@ -393,23 +507,33 @@ Examples:
 
     args = parser.parse_args()
 
-    # Find files if not provided
+    # Get file paths - prioritize command line args, then interactive input
     cv_path = args.cv
     jd_path = args.jd
 
     if not cv_path or not jd_path:
-        print("🔍 Looking for sample files...")
-        cv_files, jd_files = find_sample_files()
+        if args.demo:
+            # For demo mode, try to find files automatically first
+            print("🔍 Demo mode: Looking for sample files...")
+            cv_files, jd_files = find_sample_files()
 
-        if not cv_path and cv_files:
-            cv_path = str(cv_files[0])
-            print(f"📄 Using CV: {cv_path}")
+            if not cv_path and cv_files:
+                cv_path = str(cv_files[0])
+                print(f"📄 Using CV: {cv_path}")
 
-        if not jd_path and jd_files:
-            jd_path = str(jd_files[0])
-            print(f"📋 Using JD: {jd_path}")
+            if not jd_path and jd_files:
+                jd_path = str(jd_files[0])
+                print(f"📋 Using JD: {jd_path}")
 
-    # Validate files
+            # If still missing files in demo mode, use interactive input
+            if not cv_path or not jd_path:
+                print("❌ Could not auto-find sample files for demo mode.")
+                cv_path, jd_path = get_file_paths_interactively()
+        else:
+            # Interactive mode - always ask for file paths if not provided
+            cv_path, jd_path = get_file_paths_interactively()
+
+    # Final validation
     if not cv_path or not Path(cv_path).exists():
         print("❌ CV file not found. Please provide a valid CV file path.")
         return 1
