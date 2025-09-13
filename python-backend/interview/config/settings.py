@@ -37,9 +37,9 @@ class InterviewConfig:
     min_questions: int = 8
     question_timeout_seconds: int = 300
     similarity_threshold: float = 0.7
-    default_llm_provider: LLMProvider = LLMProvider.GEMINI
+    default_llm_provider: LLMProvider = LLMProvider.OPENAI
     # default_model: str = "llama-3.3-70b-versatile"
-    default_model: str = "gemini-2.5-flash-lite"
+    default_model: str = "gpt-4o-mini"
     embedding_model: str = "all-MiniLM-L6-v2"
 
 
@@ -47,9 +47,9 @@ class InterviewConfig:
 class LLMConfig:
     """Configuration for LLM providers."""
 
-    provider: LLMProvider = LLMProvider.GEMINI
-    model_name: str = "gemini-2.5-flash-lite"
-    api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    provider: LLMProvider = LLMProvider.OPENAI
+    model_name: str = "gpt-4o-mini"
+    api_key: str = os.getenv("OPENAI_API_KEY", "")
     temperature: float = 0.7
     max_tokens: Optional[int] = None
     timeout_seconds: int = 30
