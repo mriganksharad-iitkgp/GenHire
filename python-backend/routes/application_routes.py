@@ -130,6 +130,17 @@ def get_interview_report(current_user, application_id):
     result, status_code = application_controller.get_interview_report(application_id, user_id, user_type)
     return jsonify(result), status_code
 
+@application_bp.route('/applications/<application_id>/recalculate-score', methods=['POST'])
+@cross_origin()
+@token_required
+def recalculate_cv_score(current_user, application_id):
+    """Recalculate CV score for an existing application"""
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    user_id = str(current_user['_id'])
+    
+    result, status_code = application_controller.recalculate_cv_score(application_id, user_id, user_type)
+    return jsonify(result), status_code
+
 # Debug endpoints
 @application_bp.route('/debug/applications', methods=['GET'])
 @cross_origin()

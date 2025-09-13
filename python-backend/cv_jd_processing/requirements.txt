@@ -4,3 +4,4 @@ google-generativeai
 langchain-google-genai
 fastapi
 uvicorn
+pydantic

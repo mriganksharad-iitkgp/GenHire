@@ -13,6 +13,7 @@ class Application:
     job_title: str
     recruiter_id: str
     cv_score: Optional[float] = 85.0
+    cv_score_breakdown: Optional[Dict[str, Any]] = None
     interview_score: Optional[float] = None
     proctoring_score: Optional[float] = None
     student_profile: Optional[Dict[str, Any]] = None
@@ -40,6 +41,7 @@ class Application:
             'job_title': self.job_title,
             'recruiter_id': self.recruiter_id,
             'cv_score': self.cv_score,
+            'cv_score_breakdown': self.cv_score_breakdown,
             'interview_score': self.interview_score,
             'proctoring_score': self.proctoring_score,
             'student_profile': self.student_profile,
@@ -61,6 +63,7 @@ class Application:
             job_title=data.get('job_title', ''),
             recruiter_id=data.get('recruiter_id', ''),
             cv_score=data.get('cv_score', 85.0),
+            cv_score_breakdown=data.get('cv_score_breakdown'),
             interview_score=data.get('interview_score'),
             proctoring_score=data.get('proctoring_score'),
             student_profile=data.get('student_profile', {}),

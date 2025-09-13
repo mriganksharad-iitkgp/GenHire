@@ -1,5 +1,9 @@
 import datetime
 from bson import ObjectId
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from services.cv_scoring_service import CVScoringService
 
 class ApplicationController:
     def __init__(self, db_collections):
@@ -7,6 +11,13 @@ class ApplicationController:
         self.jobs_collection = db_collections['jobs']
         self.users_collection = db_collections['users']
         self.interviews_collection = db_collections['interviews']
+        
+        # Initialize CV scoring service
+        try:
+            self.cv_scoring_service = CVScoringService()
+        except Exception as e:
+            print(f"Warning: CV scoring service initialization failed: {e}")
+            self.cv_scoring_service = None
         
     def apply_for_job(self, job_id, user_id, application_data, user_profile):
         """Submit job application"""
@@ -39,6 +50,21 @@ class ApplicationController:
         if existing_application:
             return {'error': 'You have already applied for this job'}, 400
         
+        # Calculate actual CV score using AI
+        cv_score = 75.0  # fallback score
+        cv_score_breakdown = None
+        
+        if self.cv_scoring_service and cv_details:
+            try:
+                print("Calculating CV-JD matching score...")
+                scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
+                cv_score = scoring_result.get('total_score', 75.0)
+                cv_score_breakdown = scoring_result.get('score_breakdown')
+                print(f"CV score calculated: {cv_score}")
+            except Exception as e:
+                print(f"Error calculating CV score: {e}")
+                cv_score = 75.0
+        
         application_doc = {
             'job_id': job_id,
             'student_id': user_id,
@@ -50,8 +76,9 @@ class ApplicationController:
             'updated_at': datetime.datetime.utcnow(),
             'job_title': job.get('title', ''),
             'recruiter_id': job.get('created_by', ''),
-            # Optional scoring placeholders; populated by AI services when available
-            'cv_score': 85.0,
+            # AI-calculated CV score
+            'cv_score': cv_score,
+            'cv_score_breakdown': cv_score_breakdown,
             'interview_score': None,
             'student_profile': {
                 'bio': user_profile.get('bio', ''),
@@ -384,3 +411,73 @@ class ApplicationController:
             errors.append('- Expected Salary is required')
         
         return errors
+    
+    def recalculate_cv_score(self, application_id, user_id, user_type):
+        """Recalculate CV score for an existing application"""
+        try:
+            # Find application
+            application = self.applications_collection.find_one({'_id': ObjectId(application_id)})
+            if not application:
+                return {'error': 'Application not found'}, 404
+            
+            # Authorization check
+            if user_type == 'recruiter':
+                job = self.jobs_collection.find_one({'_id': ObjectId(application['job_id'])})
+                if not job or job.get('created_by') != user_id:
+                    return {'error': 'Unauthorized'}, 403
+            elif user_type in ['candidate', 'student']:
+                if application.get('student_id') != user_id:
+                    return {'error': 'Unauthorized'}, 403
+            else:
+                return {'error': 'Unauthorized'}, 403
+            
+            # Get student profile and CV details
+            student = self.users_collection.find_one({'_id': ObjectId(application['student_id'])})
+            if not student:
+                return {'error': 'Student profile not found'}, 404
+            
+            cv_details = student.get('cv_details')
+            if not cv_details:
+                return {'error': 'CV details not found for this student'}, 400
+            
+            # Get job details
+            job = self.jobs_collection.find_one({'_id': ObjectId(application['job_id'])})
+            if not job:
+                return {'error': 'Job not found'}, 404
+            
+            # Calculate new CV score
+            if not self.cv_scoring_service:
+                return {'error': 'CV scoring service not available'}, 503
+            
+            try:
+                print(f"Recalculating CV score for application {application_id}...")
+                scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
+                new_cv_score = scoring_result.get('total_score', 75.0)
+                new_cv_score_breakdown = scoring_result.get('score_breakdown')
+                
+                # Update application with new score
+                self.applications_collection.update_one(
+                    {'_id': ObjectId(application_id)},
+                    {
+                        '$set': {
+                            'cv_score': new_cv_score,
+                            'cv_score_breakdown': new_cv_score_breakdown,
+                            'updated_at': datetime.datetime.utcnow()
+                        }
+                    }
+                )
+                
+                print(f"CV score updated: {new_cv_score}")
+                
+                return {
+                    'message': 'CV score recalculated successfully',
+                    'cv_score': new_cv_score,
+                    'cv_score_breakdown': new_cv_score_breakdown
+                }, 200
+                
+            except Exception as e:
+                print(f"Error recalculating CV score: {e}")
+                return {'error': f'Failed to recalculate CV score: {str(e)}'}, 500
+                
+        except Exception as e:
+            return {'error': f'Internal error: {str(e)}'}, 500
