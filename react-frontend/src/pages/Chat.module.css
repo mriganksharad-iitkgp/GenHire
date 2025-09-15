@@ -1174,68 +1174,68 @@
 }
 
 .chat-input {
-    width: 100%;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 1rem;
-    resize: none;
-    min-height: 60px;
-    margin-bottom: 10px;
-    background-color: #fff;
+	width: 100%;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	padding: 12px;
+	font-size: 1rem;
+	resize: none;
+	min-height: 60px;
+	margin-bottom: 10px;
+	background-color: #fff;
 }
 
 .input-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
 }
 
 .voice-input-button,
 .send-button {
-    padding: 8px 15px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    border: none;
-    transition: background-color 0.2s;
+	padding: 8px 15px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 500;
+	border: none;
+	transition: background-color 0.2s;
 }
 
 .voice-input-button {
-    background-color: #f0f2f5;
-    color: #333;
+	background-color: #f0f2f5;
+	color: #333;
 }
 
 .send-button {
-    background-color: #1890ff;
-    color: white;
+	background-color: #1890ff;
+	color: white;
 }
 
 .evaluation-container {
-    width: 100%;
-    max-width: 800px;
-    margin: 20px auto;
-    background-color: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	width: 100%;
+	max-width: 800px;
+	margin: 20px auto;
+	background-color: white;
+	border-radius: 10px;
+	padding: 20px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .message-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 5px;
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 5px;
 }
 
 .btn-speak,
 .btn-stop {
-    background: none;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 2px 8px;
-    border-radius: 4px;
+	background: none;
+	border: none;
+	color: #666;
+	cursor: pointer;
+	font-size: 0.8rem;
+	padding: 2px 8px;
+	border-radius: 4px;
 }
 
 /* --- NEW FULLSCREEN AVATAR STYLES --- */
@@ -1314,25 +1314,25 @@
 }
 
 .mic-recording {
-  background-color: #f44336; /* Red */
-  animation: pulse 1.5s infinite;
+    background-color: #ff4444;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 68, 68, 0);
+    }
 }
 
 .mic-disabled {
   background-color: #9E9E9E; /* Grey */
   cursor: not-allowed;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 20px rgba(244, 67, 54, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
-  }
 }
 
 .end-interview-btn-bottom {

@@ -7,6 +7,7 @@ import JobDetailsModal from "../components/JobDetailsModal";
 import JobEditModal from "../components/JobEditModal";
 import CVViewer from "../components/CVViewer";
 import InterviewReportModal from "../components/InterviewReportModal";
+import ProctoringResultModal from "../components/ProctoringResultModal"; // Import the new modal
 import { Tabs, SectionHeader, OverviewMetrics, JobsGrid, CandidatesFilters, CandidatesList, ProfileForm, RecentActivity } from "../components/recruiter";
 import styles from "./RecruiterDashboard.module.css";
 import useAuth from "../hooks/useAuth";
@@ -35,6 +36,7 @@ const RecruiterDashboard = () => {
 	const [isJobDetailsModalOpen, setIsJobDetailsModalOpen] = useState(false);
 	const [isJobEditModalOpen, setIsJobEditModalOpen] = useState(false);
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	const [isProctoringModalOpen, setIsProctoringModalOpen] = useState(false); // State for the new modal
 	const [reportData, setReportData] = useState(null);
 	const [reportScores, setReportScores] = useState({ cv: null, interview: null });
 	const [selectedPosition, setSelectedPosition] = useState("");
@@ -247,7 +249,12 @@ const RecruiterDashboard = () => {
 		setReportScores({ cv, interview });
 		setIsReportOpen(true);
 	};
-
+	const viewProctoringReport = async (applicationId) => {
+		const report = await fetchInterviewReport(applicationId);
+		if (!report) return;
+		setReportData(report);
+		setIsProctoringModalOpen(true);
+	};
 	// Handle filter changes
 	const handlePositionFilter = (e) => {
 		setSelectedPosition(e.target.value);
@@ -485,7 +492,12 @@ const RecruiterDashboard = () => {
 				cvScore={reportScores.cv}
 				interviewScore={reportScores.interview}
 			/>
-
+			{/* Proctoring Result Modal */}
+			<ProctoringResultModal
+				isOpen={isProctoringModalOpen}
+				onClose={() => setIsProctoringModalOpen(false)}
+				report={reportData}
+			/>
 			{/* Navigation Tabs */}
 			<Tabs activeTab={activeTab} onChange={handleTabChange} />
 
@@ -550,6 +562,7 @@ const RecruiterDashboard = () => {
 								displayStatus={displayStatus}
 								updateApplicationStatus={handleUpdateApplicationStatus}
 								viewInterviewReport={viewInterviewReport}
+								viewProctoringReport={viewProctoringReport}
 							/>
 						</div>
 					)}

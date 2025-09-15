@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 
-const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport }) => {
+const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const cvScorePct = (typeof application.cv_score === 'number')
     ? Math.round(application.cv_score)
     : (typeof application.similarity_score === 'number' ? Math.round(application.similarity_score * 100) : null);
@@ -111,9 +111,14 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           ))}
         </select>
         {((typeof application.interview_score === 'number') || application.report_available) && (
-          <button className={styles.secondaryButton} onClick={() => viewInterviewReport(application._id)}>
-            <i className="fa fa-file-text-o"></i> View Interview Report
-          </button>
+          <>
+            <button className={styles.secondaryButton} onClick={() => viewInterviewReport(application._id)}>
+              <i className="fa fa-file-text-o"></i> View Interview Report
+            </button>
+            <button className={styles.secondaryButton} onClick={() => viewProctoringReport(application._id)}>
+                <i className="fa fa-eye"></i> See Proctoring Result
+            </button>
+          </>
         )}
         <button
           className={styles.secondaryButton}

@@ -394,36 +394,55 @@ const stopLiveProctoring = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = false; // Important for auto-stop
-            recognitionRef.current.interimResults = true; // Show live transcript
+            recognitionRef.current.continuous = true; // Change to true for continuous recording
+            recognitionRef.current.interimResults = true;
             recognitionRef.current.lang = "en-US";
             
             recognitionRef.current.onresult = (event) => {
+                let interimTranscript = '';
                 let finalTranscript = '';
+                
                 for (let i = 0; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
                         finalTranscript += event.results[i][0].transcript;
                     } else {
-                        setInput(event.results[i][0].transcript); // Update live transcript
+                        interimTranscript += event.results[i][0].transcript;
                     }
                 }
-                if (finalTranscript) {
-                    setInput(finalTranscript);
-                    onSend(finalTranscript); // Automatically send final transcript
-                }
+                
+                // Update input with both final and interim results
+                setInput(finalTranscript + interimTranscript);
             };
 
             recognitionRef.current.onerror = (event) => console.error("Speech recognition error", event);
-            recognitionRef.current.onend = () => setIsRecording(false);
+            recognitionRef.current.onend = () => {
+                // Restart recognition if it ends and we're still supposed to be recording
+                if (isRecording) {
+                    recognitionRef.current.start();
+                }
+            };
         }
-    }, [onSend]);
+    }, []);
 
     const handleVoiceInput = () => {
-        if (isRecording || isSpeaking) return; // Prevent recording while AI is speaking
+        if (isSpeaking) return; // Prevent recording while AI is speaking
+
         if (recognitionRef.current) {
-            setInput(""); // Clear previous transcript
-            recognitionRef.current.start();
-            setIsRecording(true);
+            if (isRecording) {
+                // Stop recording if already recording
+                recognitionRef.current.stop();
+                setIsRecording(false);
+                // Send the final transcript
+                if (input.trim()) {
+                    onSend(input.trim());
+                }
+                setInput(""); // Clear the transcript
+            } else {
+                // Start recording
+                setInput(""); // Clear previous transcript
+                recognitionRef.current.start();
+                setIsRecording(true);
+            }
         }
     };
 
@@ -536,11 +555,16 @@ const stopLiveProctoring = useCallback(() => {
                     {isRecording ? input || "Listening..." : isSpeaking ? "AI is speaking..." : "Press the button to speak"}
                 </p>
                 <button
-                    className={`${Styles["mic-button"]} ${isRecording ? Styles["mic-recording"] : ''} ${isSpeaking ? Styles["mic-disabled"] : ''}`}
+                    className={`${Styles["mic-button"]} 
+                        ${isRecording ? Styles["mic-recording"] : ''} 
+                        ${isSpeaking ? Styles["mic-disabled"] : ''}`}
                     onClick={handleVoiceInput}
-                    disabled={isSpeaking || isRecording}
+                    disabled={isSpeaking}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14q.825 0 1.413-.588T14 12V6q0-.825-.588-1.413T12 4q-.825 0-1.413.588T10 6v6q0 .825.588 1.413T12 14Zm-1 7v-3.075q-2.6-.35-4.3-2.325T5 11H7q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.25-1.7 4.225T13 17.925V21h-2Z"/></svg>
+                    {isRecording ? "Stop" : "Start"} {/* Add text to indicate current state */}
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14q.825 0 1.413-.588T14 12V6q0-.825-.588-1.413T12 4q-.825 0-1.413.588T10 6v6q0 .825.588 1.413T12 14Zm-1 7v-3.075q-2.6-.35-4.3-2.325T5 11H7q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.25-1.7 4.225T13 17.925V21h-2Z"/>
+                    </svg>
                 </button>
                 {interviewStatus === "active" && (
                     <button className={Styles["end-interview-btn-bottom"]} onClick={endInterview} disabled={uploadStatus === 'uploading'}>

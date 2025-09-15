@@ -2,7 +2,7 @@ import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 import CandidateCard from './CandidateCard';
 
-const CandidatesList = ({ applications, totalCount, selectedPosition, selectedStatus, onClear, displayStatus, updateApplicationStatus, viewInterviewReport }) => (
+const CandidatesList = ({ applications, totalCount, selectedPosition, selectedStatus, onClear, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => (
   <div className={styles.candidatesTable}>
     <div className={styles.candidatesCount}>
       Showing {applications.length} of {totalCount} applications
