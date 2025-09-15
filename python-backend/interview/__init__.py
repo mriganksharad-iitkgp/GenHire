@@ -15,10 +15,9 @@ from .api import (
     create_openai_interview,
 )
 from .core.session_manager import InterviewSessionManager
-from .core.question_generator import QuestionGenerator
+from .core.prompt_based_question_generator import PromptBasedQuestionGenerator
 from .llm.factory import LLMFactory
 from .document.processor import DocumentProcessor
-from .evaluation.scorer import EvaluationScorer
 from .config.settings import InterviewConfig, LLMConfig, LLMProvider, QuestionType
 
 __version__ = "1.0.0"
@@ -29,10 +28,9 @@ __all__ = [
     "create_openai_interview",
     # Core components
     "InterviewSessionManager",
-    "QuestionGenerator",
+    "PromptBasedQuestionGenerator",
     "LLMFactory",
     "DocumentProcessor",
-    "EvaluationScorer",
     # Configuration
     "InterviewConfig",
     "LLMConfig",
