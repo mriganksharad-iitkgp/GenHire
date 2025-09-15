@@ -1,4 +1,4 @@
-﻿absl-py==2.3.1
+absl-py==2.3.1
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.15
 aiosignal==1.4.0
@@ -194,8 +194,8 @@ llama-index
 deepeval
 groq
 llama-index-llms-groq
-litellm
-flask
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
+google-generativeai
+langchain-google-genai
+llama-parse
+fastapi
+uvicorn

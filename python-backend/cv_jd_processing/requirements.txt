@@ -1,0 +1,7 @@
+llama-parse
+python-dotenv
+google-generativeai
+langchain-google-genai
+fastapi
+uvicorn
+pydantic

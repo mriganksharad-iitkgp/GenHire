@@ -550,6 +550,69 @@ body.dark .navButton.active i,
   color: white;
 }
 
+/* Required Section Styling */
+.navButton.required {
+  position: relative;
+}
+
+.requiredMark {
+  color: #ff4757;
+  font-weight: bold;
+  margin-left: 4px;
+  font-size: 1.1rem;
+}
+
+.navButton.active .requiredMark {
+  color: #ffcccb;
+}
+
+/* Form validation styles */
+.formGroup input:invalid,
+.formGroup textarea:invalid,
+.formGroup select:invalid {
+  border-color: #ff4757;
+}
+
+.formGroup input:invalid:focus,
+.formGroup textarea:invalid:focus,
+.formGroup select:invalid:focus {
+  box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.1);
+}
+
+/* Checkbox styling for salary negotiable */
+.formGroup input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+  accent-color: var(--primary-color, #667eea);
+}
+
+.formGroup label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+/* Select input specific styling */
+.selectInput {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+/* Dark mode for required sections */
+body.dark .requiredMark,
+:global(.dark) .requiredMark {
+  color: #ff6b7a;
+}
+
+body.dark .navButton.active .requiredMark,
+:global(.dark) .navButton.active .requiredMark {
+  color: #ffcccb;
+}
+
 body.dark .sectionHeader h3 i,
 :global(.dark) .sectionHeader h3 i {
   color: #667eea;
