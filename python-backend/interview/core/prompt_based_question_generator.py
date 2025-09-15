@@ -9,6 +9,20 @@ from dataclasses import dataclass
 from enum import Enum
 from ..llm.base import BaseLLM
 from ..config.settings import QuestionType
+from ..prompts import (
+    CV_KEYWORDS_EXTRACTION_PROMPT,
+    SKILL_LEVEL_ASSESSMENT_PROMPT,
+    GREETING_PROMPT,
+    FALLBACK_GREETING,
+    STRUCTURE_EXPLANATION_PROMPT,
+    FALLBACK_STRUCTURE_EXPLANATION,
+    TECHNICAL_QUESTION_PROMPT,
+    FALLBACK_TECHNICAL_QUESTION,
+    PERFORMANCE_GUIDANCE,
+    PREVIOUS_ANSWER_CONTEXT,
+    CLOSING_PROMPT,
+    FALLBACK_CLOSING,
+)
 
 
 class InterviewPhase(Enum):
@@ -160,7 +174,7 @@ class PromptBasedQuestionGenerator:
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
             if (
                 context.question_count >= 20
-            ):  # After 20 technical questions, go to closing (increased from 15)
+            ):  # After 20 technical questions, go to closing
                 context.interview_phase = InterviewPhase.CLOSING
                 question = self._generate_closing(context)
             else:
@@ -191,16 +205,21 @@ class PromptBasedQuestionGenerator:
 
     def _generate_greeting(self, context: ConversationContext) -> str:
         """Generate brief greeting using the prompt template."""
-        prompt = f"""You are Alex Rivera, Senior Hiring Manager at TechNova. Give a warm, natural greeting for the {context.job_title} technical interview. 
+        cv_keywords = (
+            ", ".join(context.cv_keywords[:2])
+            if context.cv_keywords
+            else "their technical background"
+        )
+        primary_technology = (
+            context.cv_keywords[0] if context.cv_keywords else "technology"
+        )
 
-Be conversational and friendly. Mention you've reviewed their CV and are excited to discuss their experience with {", ".join(context.cv_keywords[:2]) if context.cv_keywords else "their technical background"}.
-
-Keep it brief but engaging (15-20 seconds max). Output only your spoken dialogue.
-
-Example tone:
-"Hi {context.candidate_name}! I'm Alex Rivera from TechNova. I've been looking over your CV and I'm really excited to discuss your experience with {context.cv_keywords[0] if context.cv_keywords else 'technology'}. Ready to dive in?"
-
-Generate a warm, personalized greeting:"""
+        prompt = GREETING_PROMPT.format(
+            job_title=context.job_title,
+            cv_keywords=cv_keywords,
+            candidate_name=context.candidate_name,
+            primary_technology=primary_technology,
+        )
 
         try:
             response = self.llm.complete(prompt)
@@ -215,21 +234,12 @@ Generate a warm, personalized greeting:"""
     def _generate_structure_explanation(self, context: ConversationContext) -> str:
         """Generate brief structure explanation using the prompt template."""
         cv_keywords_str = (
-            ", ".join(context.cv_keywords[:3])
+            ", ".join(context.cv_keywords)
             if context.cv_keywords
             else "your technical background"
         )
 
-        prompt = f"""As Alex Rivera, briefly and conversationally explain the interview format. Mention you'll have a technical discussion about their experience with {cv_keywords_str}. 
-
-Make it sound like a friendly conversation, not a formal test. Be encouraging and set a positive tone.
-
-Keep it very brief - just a quick overview before jumping into the technical discussion.
-
-Example tone:
-"Perfect! So today we'll have a friendly technical chat about your experience with {cv_keywords_str}. I'm curious to hear about the projects you've worked on and dive into some of the technical details. Sound good?"
-
-Generate a brief, encouraging structure explanation:"""
+        prompt = STRUCTURE_EXPLANATION_PROMPT.format(cv_keywords=cv_keywords_str)
 
         try:
             response = self.llm.complete(prompt)
@@ -261,7 +271,7 @@ Generate a brief, encouraging structure explanation:"""
         follow_up_strategy = ""
 
         if last_answer and answer_evaluation:
-            score = answer_evaluation.get("overall_score", 0.5)
+            score = answer_evaluation.get("relevance_score", 0.5)
 
             # Extract key concepts mentioned by candidate
             mentioned_concepts = self._extract_concepts_from_answer(last_answer)
@@ -284,13 +294,13 @@ Generate a brief, encouraging structure explanation:"""
 
             # Analyze the candidate's answer to provide contextual response
             if score < 0.3:
-                performance_guidance = "The candidate struggled with this concept. Acknowledge their effort positively, then ask a simpler foundational question to help build their confidence."
+                performance_guidance = PERFORMANCE_GUIDANCE["struggled"]
             elif score < 0.6:
-                performance_guidance = "The candidate shows partial understanding. Acknowledge what they got right, then ask a follow-up question that builds on their response to deepen their knowledge."
+                performance_guidance = PERFORMANCE_GUIDANCE["partial"]
             elif score < 0.8:
-                performance_guidance = "The candidate demonstrated good understanding. Give positive acknowledgment of their explanation, then ask a slightly more advanced question to test deeper knowledge."
+                performance_guidance = PERFORMANCE_GUIDANCE["good"]
             else:
-                performance_guidance = "The candidate showed excellent understanding. Acknowledge their strong answer enthusiastically, then ask a challenging question or explore a different but related area."
+                performance_guidance = PERFORMANCE_GUIDANCE["excellent"]
 
             # Extract key concepts from their answer for follow-up
             concepts_mentioned = (
@@ -298,50 +308,33 @@ Generate a brief, encouraging structure explanation:"""
                 if mentioned_concepts
                 else "the topics discussed"
             )
-            previous_context = f"""
-Previous answer context: The candidate just explained: "{last_answer[:200]}..."
-Key concepts they mentioned: {concepts_mentioned}
-Score: {score:.2f}/1.0
-Performance guidance: {performance_guidance}
-"""
+            previous_context = PREVIOUS_ANSWER_CONTEXT.format(
+                last_answer_preview=last_answer[:200],
+                concepts_mentioned=concepts_mentioned,
+                score=score,
+                performance_guidance=performance_guidance,
+            )
 
         # Determine question type based on context
-        if context.question_count <= 3:
+        if context.question_count <= 8:
             question_type = "foundational"
-        elif context.question_count <= 6:
+        elif context.question_count <= 10:
             question_type = "practical application"
         else:
             question_type = "advanced/scenario-based"
 
-        prompt = f"""You are Alex Rivera, an experienced technical interviewer. You're having a natural conversation with a candidate about their technical background.
-
-CANDIDATE'S CV TECHNOLOGIES: {cv_keywords_str}
-CURRENT FOCUS TOPIC: {context.current_topic}
-QUESTION TYPE NEEDED: {question_type}
-TOPICS ALREADY COVERED: {context.topics_covered}
-
-{previous_context}
-
-INSTRUCTIONS:
-1. FIRST: Create a natural acknowledgment of their previous answer based on what they actually said
-2. THEN: Ask a {question_type} question about {context.current_topic}
-3. Make the acknowledgment specific to their response content, not generic
-4. Reference specific concepts they mentioned when possible
-5. Keep it conversational and encouraging
-6. Follow the performance guidance: {performance_guidance if 'performance_guidance' in locals() else 'Ask an appropriate follow-up question'}
-
-QUESTION TYPES BY STAGE:
-- Foundational (Questions 1-8): Basic concepts, definitions, "how does X work?"
-- Practical Application (Questions 9-10): "How have you used X?", "What challenges did you face?"
-- Advanced/Scenario (Questions 11+): Complex scenarios, trade-offs, best practices
-
-EXAMPLES OF NATURAL, CONTEXTUAL ACKNOWLEDGMENTS:
-- "I like how you mentioned [specific concept from their answer]. Now, building on that..."
-- "That's a solid approach with [technology they mentioned]. Tell me about..."
-- "Good point about [specific detail]. In your experience, how do you handle..."
-- "Interesting that you've worked with [tool/framework]. When you're using that..."
-
-Generate a natural, conversational response with contextual acknowledgment:"""
+        prompt = TECHNICAL_QUESTION_PROMPT.format(
+            cv_keywords=cv_keywords_str,
+            current_topic=context.current_topic,
+            question_type=question_type,
+            topics_covered=context.topics_covered,
+            previous_context=previous_context,
+            performance_guidance=(
+                performance_guidance
+                if "performance_guidance" in locals()
+                else "Ask an appropriate follow-up question"
+            ),
+        )
 
         try:
             response = self.llm.complete(prompt)
@@ -378,9 +371,9 @@ Generate a natural, conversational response with contextual acknowledgment:"""
             context.cv_keywords[0] if context.cv_keywords else "technical knowledge"
         )
 
-        prompt = f"""close warmly: "Thank you, {context.candidate_name}, for sharing your expertise—your {positive_aspect} knowledge was impressive." Outline next steps: "We'll review and follow up within 3 business days via email." End positively.
-
-Generate the closing:"""
+        prompt = CLOSING_PROMPT.format(
+            candidate_name=context.candidate_name, positive_aspect=positive_aspect
+        )
 
         try:
             response = self.llm.complete(prompt)
@@ -536,46 +529,37 @@ Generate the closing:"""
         return base_question
 
     def _extract_cv_keywords(self, cv_content: str) -> List[str]:
-        """Extract technical keywords from CV content."""
-        # Common technical keywords to look for
-        tech_keywords = [
-            "python",
-            "javascript",
-            "java",
-            "react",
-            "nodejs",
-            "mongodb",
-            "sql",
-            "mysql",
-            "postgresql",
-            "html",
-            "css",
-            "django",
-            "flask",
-            "express",
-            "angular",
-            "vue",
-            "typescript",
-            "docker",
-            "kubernetes",
-            "aws",
-            "azure",
-            "git",
-            "machine learning",
-            "data science",
-            "api",
-            "rest",
-            "graphql",
-        ]
+        """Extract technical keywords from CV content using LLM."""
+        if not cv_content.strip():
+            return ["General Programming"]
 
-        found_keywords = []
-        cv_lower = cv_content.lower()
+        prompt = CV_KEYWORDS_EXTRACTION_PROMPT.format(cv_content=cv_content)
 
-        for keyword in tech_keywords:
-            if keyword in cv_lower:
-                found_keywords.append(keyword.title())
+        try:
+            response = self.llm.complete(prompt)
+            if response and hasattr(response, "text"):
+                keywords_text = response.text.strip()
+                # Parse the comma-separated response
+                keywords = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
+                # Clean and format keywords
+                formatted_keywords = []
+                for keyword in keywords[:12]:  # Limit to 12 keywords
+                    cleaned = keyword.strip().strip('"').strip("'")
+                    if cleaned and len(cleaned) > 1:
+                        formatted_keywords.append(cleaned)
 
-        return found_keywords[:5]  # Return top 5 keywords
+                return (
+                    formatted_keywords
+                    if formatted_keywords
+                    else self._fallback_extract_cv_keywords(cv_content)
+                )
+            else:
+                return "fallback keywords"
+                # return self._fallback_extract_cv_keywords(cv_content)
+
+        except Exception as e:
+            print(f"Error extracting CV keywords with LLM: {e}")
+            return self._fallback_extract_cv_keywords(cv_content)
 
     def _extract_job_title(self, job_description: str) -> str:
         """Extract job title from job description."""
@@ -612,37 +596,259 @@ Generate the closing:"""
         return "candidate"
 
     def _assess_initial_skill_level(self, resume_sections: Dict[str, str]) -> str:
-        """Assess initial skill level from resume."""
-        cv_text = " ".join(resume_sections.values()).lower()
+        """Assess initial skill level from resume using LLM analysis."""
+        cv_text = " ".join(resume_sections.values())
 
-        # Count experience indicators
-        experience_indicators = [
-            "years",
-            "senior",
-            "lead",
-            "architect",
-            "expert",
-            "advanced",
-        ]
-        skill_indicators = ["proficient", "experienced", "skilled", "familiar"]
-
-        exp_count = sum(
-            1 for indicator in experience_indicators if indicator in cv_text
-        )
-        skill_count = sum(1 for indicator in skill_indicators if indicator in cv_text)
-
-        if exp_count >= 3:
-            return "advanced"
-        elif exp_count >= 1 or skill_count >= 2:
-            return "intermediate"
-        else:
+        if not cv_text.strip():
             return "beginner"
+
+        prompt = SKILL_LEVEL_ASSESSMENT_PROMPT.format(cv_content=cv_text)
+
+        try:
+            response = self.llm.complete(prompt)
+            if response and hasattr(response, "text"):
+                skill_level = response.text.strip().lower()
+                # Validate and return appropriate skill level
+                if "advanced" in skill_level:
+                    return "advanced"
+                elif "intermediate" in skill_level:
+                    return "intermediate"
+                elif "beginner" in skill_level:
+                    return "beginner"
+                else:
+                    # If LLM response is unclear, fall back to keyword analysis
+                    return self._fallback_assess_skill_level(cv_text)
+            else:
+                return self._fallback_assess_skill_level(cv_text)
+
+        except Exception as e:
+            print(f"Error assessing skill level with LLM: {e}")
+            return self._fallback_assess_skill_level(cv_text)
 
     # Fallback methods
 
     def _fallback_greeting(self, context: ConversationContext) -> str:
         tech_mention = f" with {context.cv_keywords[0]}" if context.cv_keywords else ""
-        return f"Hi {context.candidate_name}! I'm Alex Rivera from TechNova. I've been reviewing your CV and I'm excited to discuss your experience{tech_mention}. Ready to get started?"
+        return FALLBACK_GREETING.format(
+            candidate_name=context.candidate_name, tech_mention=tech_mention
+        )
+
+    def _fallback_extract_cv_keywords(self, cv_content: str) -> List[str]:
+        """Fallback method for CV keyword extraction when LLM fails."""
+        # Comprehensive technical keywords covering all major domains
+        tech_keywords = [
+            # Programming Languages
+            "python",
+            "javascript",
+            "java",
+            "c++",
+            "c#",
+            "go",
+            "rust",
+            "swift",
+            "kotlin",
+            "typescript",
+            "php",
+            "ruby",
+            "scala",
+            "r",
+            "matlab",
+            "perl",
+            # Web Technologies
+            "react",
+            "angular",
+            "vue",
+            "nodejs",
+            "django",
+            "flask",
+            "spring",
+            "express",
+            "html",
+            "css",
+            "bootstrap",
+            "tailwind",
+            "sass",
+            "webpack",
+            "next.js",
+            "nuxt",
+            # Mobile Development
+            "react native",
+            "flutter",
+            "ionic",
+            "xamarin",
+            "android",
+            "ios",
+            "swift ui",
+            # Databases & Storage
+            "sql",
+            "mysql",
+            "postgresql",
+            "mongodb",
+            "redis",
+            "elasticsearch",
+            "cassandra",
+            "oracle",
+            "sqlite",
+            "dynamodb",
+            "firebase",
+            # Cloud & Infrastructure
+            "aws",
+            "azure",
+            "gcp",
+            "docker",
+            "kubernetes",
+            "terraform",
+            "ansible",
+            "jenkins",
+            "gitlab ci",
+            "github actions",
+            "heroku",
+            "digital ocean",
+            # Data Science & ML
+            "machine learning",
+            "data science",
+            "tensorflow",
+            "pytorch",
+            "pandas",
+            "numpy",
+            "scikit-learn",
+            "jupyter",
+            "tableau",
+            "power bi",
+            "spark",
+            "hadoop",
+            # DevOps & Tools
+            "git",
+            "linux",
+            "bash",
+            "powershell",
+            "nginx",
+            "apache",
+            "microservices",
+            "ci/cd",
+            "monitoring",
+            "logging",
+            "prometheus",
+            "grafana",
+            # Testing & QA
+            "unit testing",
+            "selenium",
+            "jest",
+            "pytest",
+            "cypress",
+            "postman",
+            # API & Protocols
+            "rest",
+            "graphql",
+            "grpc",
+            "websockets",
+            "api",
+            "json",
+            "xml",
+            # Security
+            "cybersecurity",
+            "oauth",
+            "jwt",
+            "encryption",
+            "penetration testing",
+            # Emerging Tech
+            "blockchain",
+            "iot",
+            "ar/vr",
+            "computer vision",
+            "nlp",
+            "chatbot",
+        ]
+
+        found_keywords = []
+        cv_lower = cv_content.lower()
+
+        for keyword in tech_keywords:
+            if keyword in cv_lower:
+                # Capitalize properly
+                if keyword in [
+                    "iot",
+                    "ar/vr",
+                    "nlp",
+                    "jwt",
+                    "api",
+                    "html",
+                    "css",
+                    "sql",
+                ]:
+                    found_keywords.append(keyword.upper())
+                elif "/" in keyword:
+                    found_keywords.append(keyword.upper())
+                else:
+                    found_keywords.append(keyword.title())
+
+        return found_keywords[:12] if found_keywords else ["General Programming"]
+
+    def _fallback_assess_skill_level(self, cv_text: str) -> str:
+        """Fallback method for skill level assessment when LLM fails."""
+        cv_lower = cv_text.lower()
+
+        # Enhanced experience indicators
+        advanced_indicators = [
+            "senior",
+            "lead",
+            "architect",
+            "principal",
+            "director",
+            "manager",
+            "team lead",
+            "tech lead",
+            "staff engineer",
+            "expert",
+            "specialist",
+        ]
+
+        intermediate_indicators = [
+            "mid",
+            "intermediate",
+            "experienced",
+            "developer ii",
+            "engineer ii",
+            "associate",
+            "skilled",
+            "proficient",
+            "3 years",
+            "4 years",
+            "5 years",
+        ]
+
+        beginner_indicators = [
+            "junior",
+            "entry",
+            "trainee",
+            "intern",
+            "graduate",
+            "fresher",
+            "1 year",
+            "2 years",
+            "recent graduate",
+        ]
+
+        # Count indicators
+        advanced_count = sum(
+            1 for indicator in advanced_indicators if indicator in cv_lower
+        )
+        intermediate_count = sum(
+            1 for indicator in intermediate_indicators if indicator in cv_lower
+        )
+        beginner_count = sum(
+            1 for indicator in beginner_indicators if indicator in cv_lower
+        )
+
+        # Assess based on counts
+        if advanced_count >= 2:
+            return "advanced"
+        elif intermediate_count >= 2 or advanced_count >= 1:
+            return "intermediate"
+        elif beginner_count >= 1:
+            return "beginner"
+        else:
+            return "intermediate"  # Default to intermediate if unclear
 
     def _fallback_structure_explanation(self, context: ConversationContext) -> str:
         cv_keywords_str = (
@@ -650,10 +856,15 @@ Generate the closing:"""
             if context.cv_keywords
             else "your technical background"
         )
-        return f"Great! So today we'll have a technical conversation about your experience with {cv_keywords_str}. I'm looking forward to hearing about your projects and diving into some technical details!"
+        return FALLBACK_STRUCTURE_EXPLANATION.format(cv_keywords=cv_keywords_str)
 
     def _fallback_technical_question(self, context: ConversationContext) -> str:
-        return f"Tell me about your experience with {context.current_topic} - how have you used it in your projects, and what challenges have you encountered?"
+        return FALLBACK_TECHNICAL_QUESTION.format(current_topic=context.current_topic)
 
     def _fallback_closing(self, context: ConversationContext) -> str:
-        return f"Thank you {context.candidate_name} for such an engaging technical discussion! Your insights about {context.cv_keywords[0] if context.cv_keywords else 'technology'} were really impressive. We'll review everything and follow up within 3 business days with next steps."
+        primary_technology = (
+            context.cv_keywords[0] if context.cv_keywords else "technology"
+        )
+        return FALLBACK_CLOSING.format(
+            candidate_name=context.candidate_name, primary_technology=primary_technology
+        )

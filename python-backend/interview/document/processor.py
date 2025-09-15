@@ -142,6 +142,7 @@ class DocumentProcessor:
                 "employment history",
                 "career",
                 "work history",
+                "internships",
             ],
             "education": [
                 "education",

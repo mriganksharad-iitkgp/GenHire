@@ -1,16 +1,25 @@
 """
-Main interview session manager with natural conversation flow.
+Maimport uuid
+from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import dataclass, asdict
+
+from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
+from ..config.settings import InterviewConfig, LLMConfig
+from ..llm.factory import LLMFactory
+from ..document.loader import DocumentLoaderview session manager with natural conversation flow.
 """
 
 import re
 import uuid
+import sys
+import os
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 
+from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
 from ..config.settings import InterviewConfig, LLMConfig
 from ..llm.factory import LLMFactory
 from ..document.loader import DocumentLoader
-from ..evaluation.scorer import EvaluationScorer
 from .prompt_based_question_generator import (
     PromptBasedQuestionGenerator as QuestionGenerator,
     ConversationContext,
@@ -52,7 +61,9 @@ class InterviewSessionManager:
 
         # Initialize components
         self.question_generator = QuestionGenerator(self.llm)
-        self.evaluation_scorer = EvaluationScorer(self.llm, config.embedding_model)
+
+        # Initialize evaluation system if available
+        self.evaluation_system = EvaluationSystem()
 
     def create_session(
         self, cv_path: str, jd_path: str, reference_paths: List[str]
@@ -123,22 +134,25 @@ class InterviewSessionManager:
             return {"error": "Interview is already complete"}
 
         try:
-            # Load document context for evaluation
-            document_loader = DocumentLoader(
-                session.cv_path, session.jd_path, session.reference_paths
-            )
+            # Evaluate the answer using rubrics-eval system
+            if self.evaluation_system:
+                try:
+                    # evaluate_single_answer returns (score, details)
+                    score, details = self.evaluation_system.evaluate_single_answer(
+                        question=question, student_answer=answer
+                    )
 
-            # Generate expected answer for comparison
-            context = self._get_relevant_context(question, document_loader)
-            expected_answer = self._generate_expected_answer(question, context)
-
-            # Evaluate the answer
-            evaluation = self.evaluation_scorer.evaluate_answer(
-                question=question,
-                user_answer=answer,
-                expected_answer=expected_answer,
-                context=context,
-            )
+                    # Convert single score to expected format
+                    evaluation = self._convert_single_score_to_standard_format(
+                        score, question, answer
+                    )
+                except Exception as e:
+                    print(f"Rubrics evaluation failed: {e}")
+                    # Fallback to basic evaluation
+                    evaluation = self._fallback_evaluation(question, answer)
+            else:
+                # Fallback to basic evaluation
+                evaluation = self._fallback_evaluation(question, answer)
 
             # Record the interaction
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
@@ -148,7 +162,7 @@ class InterviewSessionManager:
                 {
                     "question": question,
                     "answer": answer,
-                    "evaluation": asdict(evaluation),
+                    "evaluation": evaluation,  # evaluation is already a dict
                     "question_metadata": (
                         asdict(session.current_question_metadata)
                         if session.current_question_metadata
@@ -162,7 +176,7 @@ class InterviewSessionManager:
             next_question, next_metadata = self.question_generator.get_next_question(
                 session.conversation_context,
                 last_answer=answer,
-                answer_evaluation=asdict(evaluation),
+                answer_evaluation=evaluation,  # evaluation is already a dict
             )
 
             # Update session with next question
@@ -178,7 +192,7 @@ class InterviewSessionManager:
 
                 return {
                     "interview_complete": True,
-                    "current_evaluation": asdict(evaluation),
+                    "current_evaluation": evaluation,  # evaluation is already a dict
                     "final_evaluation": final_evaluation,
                     "conversation_summary": self._generate_conversation_summary(
                         session
@@ -187,7 +201,7 @@ class InterviewSessionManager:
             else:
                 return {
                     "interview_complete": False,
-                    "current_evaluation": asdict(evaluation),
+                    "current_evaluation": evaluation,  # evaluation is already a dict
                     "next_question": next_question,
                     "question_metadata": asdict(next_metadata),
                     "conversation_context": {
@@ -374,28 +388,6 @@ class InterviewSessionManager:
         """Get session by ID."""
         return self.sessions.get(session_id)
 
-    def _get_relevant_context(
-        self, question: str, document_loader: DocumentLoader
-    ) -> str:
-        """Get relevant context for a question."""
-        # Simplified context retrieval - just return combined document text
-        return (
-            document_loader.cv_text[:500]
-            + "\n"  # First 500 chars of CV
-            + document_loader.jd_text[:500]  # First 500 chars of JD
-        )
-
-    def _generate_expected_answer(self, question: str, context: str) -> str:
-        """Generate expected answer for comparison."""
-        # Simplified expected answer generation
-        prompt = f"Answer this interview question based on the context:\n\nContext: {context}\n\nQuestion: {question}\n\nAnswer:"
-
-        try:
-            response = self.llm.complete(prompt)
-            return response.text
-        except Exception as e:
-            return f"Standard answer for: {question}"
-
     def _generate_final_evaluation(self, session: InterviewSession) -> Dict[str, Any]:
         """Generate comprehensive final evaluation."""
         if not session.interview_data:
@@ -460,3 +452,95 @@ class InterviewSessionManager:
         from datetime import datetime
 
         return datetime.now().isoformat()
+
+    def _convert_single_score_to_standard_format(
+        self, score: float, question: str, answer: str
+    ) -> Dict[str, Any]:
+        """Convert single rubrics-eval score to the standard evaluation format."""
+
+        # Rubrics evaluation returns scores from 0-100, we need to normalize to 0-1
+        if score > 1.0:  # Assuming it's in 0-100 range
+            normalized_score = max(0.0, min(1.0, score / 100.0))
+        else:  # Already in 0-1 range
+            normalized_score = max(0.0, min(1.0, score))
+
+        # Generate basic reasoning based on score
+        if normalized_score >= 0.8:
+            quality = "excellent"
+        elif normalized_score >= 0.6:
+            quality = "good"
+        elif normalized_score >= 0.4:
+            quality = "satisfactory"
+        elif normalized_score >= 0.2:
+            quality = "needs improvement"
+        else:
+            quality = "poor"
+
+        reasoning = f"Answer evaluated using rubrics-based system. Overall quality: {quality} (score: {normalized_score:.2f})"
+
+        return {
+            "relevance_score": normalized_score,
+            "technical_accuracy_score": normalized_score,
+            "communication_score": normalized_score,
+            "overall_score": normalized_score,
+            "reasoning": reasoning,
+            "evaluation_method": "rubrics-eval",
+        }
+
+    def _fallback_evaluation(self, question: str, answer: str) -> Dict[str, Any]:
+        """Provide a basic fallback evaluation when rubrics-eval is not available."""
+
+        # Basic scoring based on answer length and content
+        answer_length = len(answer.strip())
+
+        if answer_length == 0:
+            score = 0.0
+            reasoning = "No answer provided."
+        elif answer_length < 10:
+            score = 0.2
+            reasoning = "Answer too brief to demonstrate understanding."
+        elif answer_length < 50:
+            score = 0.4
+            reasoning = "Answer provides minimal detail."
+        elif answer_length < 150:
+            score = 0.6
+            reasoning = "Answer provides adequate detail."
+        else:
+            score = 0.8
+            reasoning = "Answer provides comprehensive detail."
+
+        # Simple keyword matching for technical relevance
+        question_lower = question.lower()
+        answer_lower = answer.lower()
+
+        # Extract potential technical terms from question
+        technical_keywords = []
+        for word in question_lower.split():
+            if len(word) > 3 and word not in [
+                "what",
+                "how",
+                "why",
+                "when",
+                "where",
+                "which",
+                "explain",
+                "describe",
+            ]:
+                technical_keywords.append(word)
+
+        # Check if answer mentions relevant terms
+        relevance_boost = 0
+        for keyword in technical_keywords[:5]:  # Check top 5 keywords
+            if keyword in answer_lower:
+                relevance_boost += 0.1
+
+        final_score = min(1.0, score + relevance_boost)
+
+        return {
+            "relevance_score": final_score,
+            "technical_accuracy_score": final_score,
+            "communication_score": score,  # Based on length/structure
+            "overall_score": final_score,
+            "reasoning": f"{reasoning} Relevance check: {relevance_boost:.1f} boost applied.",
+            "evaluation_method": "fallback",
+        }

@@ -18,7 +18,8 @@ from interview.core.prompt_based_question_generator import (
     ConversationContext,
     InterviewPhase,
 )
-from interview.config.settings import LLMConfig, LLMProvider
+from interview.core.session_manager import InterviewSessionManager
+from interview.config.settings import LLMConfig, LLMProvider, InterviewConfig
 from interview.llm.factory import LLMFactory
 from interview.document.loader import DocumentLoader
 
@@ -38,6 +39,77 @@ def get_candidate_response():
     print("\n👤 Your Response:")
     response = input(">> ")
     return response.strip()
+
+
+def display_answer_evaluation(evaluation_result):
+    """Display the evaluation result for the candidate's answer."""
+    if not evaluation_result:
+        return
+
+    print("\n" + "📊" + " " * 3 + "Answer Evaluation" + " " * 3 + "📊")
+    print("-" * 40)
+
+    # Overall score with color coding
+    overall_score = evaluation_result.get("overall_score", 0.0)
+    score_percentage = int(overall_score * 100)
+
+    # Color coding based on score
+    if overall_score >= 0.8:
+        score_emoji = "🌟"
+        score_label = "Excellent"
+    elif overall_score >= 0.6:
+        score_emoji = "✅"
+        score_label = "Good"
+    elif overall_score >= 0.4:
+        score_emoji = "⚡"
+        score_label = "Satisfactory"
+    elif overall_score >= 0.2:
+        score_emoji = "📈"
+        score_label = "Needs Improvement"
+    else:
+        score_emoji = "🔍"
+        score_label = "Poor"
+
+    print(f"{score_emoji} Overall Score: {score_percentage}% ({score_label})")
+
+    # Detailed scores if available
+    if "relevance_score" in evaluation_result:
+        rel_score = int(evaluation_result["relevance_score"] * 100)
+        print(f"   🎯 Relevance: {rel_score}%")
+
+    if "technical_accuracy_score" in evaluation_result:
+        tech_score = int(evaluation_result["technical_accuracy_score"] * 100)
+        print(f"   🔧 Technical Accuracy: {tech_score}%")
+
+    if "communication_score" in evaluation_result:
+        comm_score = int(evaluation_result["communication_score"] * 100)
+        print(f"   💬 Communication: {comm_score}%")
+
+    # Show evaluation method
+    eval_method = evaluation_result.get("evaluation_method", "standard")
+    if eval_method == "rubrics-eval":
+        print(f"   🎓 Evaluated using: Advanced Rubrics System")
+    elif eval_method == "fallback":
+        print(f"   ⚠️  Evaluated using: Backup System")
+    elif eval_method == "short-answer":
+        print(f"   💭 Evaluated using: Short Answer Assessment")
+    else:
+        print(f"   📝 Evaluated using: Standard System")
+
+    # Show reasoning if available
+    reasoning = evaluation_result.get("reasoning", "")
+    if reasoning and len(reasoning) > 20:  # Only show if meaningful
+        print(f"\n💡 Feedback: {reasoning}")
+
+    # Show score breakdown if available (from rubrics system)
+    if "score_breakdown" in evaluation_result:
+        breakdown = evaluation_result["score_breakdown"]
+        print(f"\n📋 Score Breakdown:")
+        for category, score in breakdown.items():
+            if isinstance(score, (int, float)):
+                print(f"   • {category.replace('_', ' ').title()}: {int(score * 100)}%")
+
+    print("-" * 40)
 
 
 def interactive_interview():
@@ -77,6 +149,10 @@ def interactive_interview():
         llm = LLMFactory.create(llm_config)
         qg = PromptBasedQuestionGenerator(llm)
 
+        # Initialize session manager for answer evaluation
+        interview_config = InterviewConfig(min_questions=5, max_questions=15)
+        session_manager = InterviewSessionManager(interview_config, llm_config)
+
         # Load and process documents
         document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
         validation = document_loader.validate_documents()
@@ -88,40 +164,68 @@ def interactive_interview():
         resume_sections = document_loader.get_cv_sections()
         job_description = document_loader.get_jd_text()
 
-        # Initialize conversation
+        # Initialize both systems
         context = qg.initialize_conversation(resume_sections, job_description)
+
+        # Create a session with session manager for evaluation
+        session_result = session_manager.create_session(
+            cv_path, jd_path, reference_paths
+        )
+        if "error" in session_result:
+            print(f"❌ Failed to create evaluation session: {session_result['error']}")
+            return
+
+        session_id = session_result["session_id"]
+        print(f"✅ Evaluation session created: {session_id[:8]}...")
 
         print(f"\n📋 Interview Setup Complete:")
         print(f"   Candidate: {context.candidate_name}")
         print(f"   Position: {context.job_title}")
-        print(f"   Your CV Keywords: {', '.join(context.cv_keywords[:5])}")
+        print(f"   Your CV Keywords: {', '.join(context.cv_keywords)}")
         print(f"   Assessed Skill Level: {context.candidate_skill_level}")
+
+        # Show evaluation system info
+        try:
+            if (
+                hasattr(session_manager, "evaluation_system")
+                and session_manager.evaluation_system
+            ):
+                print(f"   🎓 Evaluation: Advanced Rubrics System")
+            else:
+                print(f"   📝 Evaluation: Standard System")
+        except:
+            print(f"   📝 Evaluation: Standard System")
 
         print_separator()
         print("🚀 Starting the interview... Be yourself and answer naturally!")
+        print("📊 Your answers will be evaluated and scored in real-time!")
+        print("🎯 You'll see detailed feedback after each technical question.")
         print("(Type 'exit' at any time to end the interview)")
         print_separator()
 
         # Interview loop
         interview_active = True
         question_count = 0
+        last_answer = None
+        last_evaluation = None
+        current_question = None
 
         while interview_active:
             try:
                 # Get next question from AI interviewer
                 if question_count == 0:
                     # First question (greeting)
-                    question, metadata = qg.get_next_question(context)
+                    current_question, metadata = qg.get_next_question(context)
                 else:
-                    # Subsequent questions with previous answer
-                    question, metadata = qg.get_next_question(
+                    # Subsequent questions with previous answer and evaluation
+                    current_question, metadata = qg.get_next_question(
                         context,
                         last_answer,
-                        {"overall_score": 0.7},  # Simulated evaluation
+                        last_evaluation,
                     )
 
                 # Display the question
-                print_interviewer_message(question)
+                print_interviewer_message(current_question)
 
                 # Show current phase info
                 phase_emojis = {
@@ -148,26 +252,98 @@ def interactive_interview():
                     print("\n👋 Ending interview session. Thank you!")
                     break
 
+                # Evaluate ALL answers (not just technical ones) using session manager
+                if (
+                    last_answer.strip() and len(last_answer.strip()) > 3
+                ):  # Only evaluate substantial answers
+                    print("\n🔄 Evaluating your answer...")
+                    try:
+                        # Use session manager to evaluate the answer
+                        eval_result = session_manager.submit_answer(
+                            session_id, current_question, last_answer
+                        )
+
+                        if "error" in eval_result:
+                            print(f"⚠️  Evaluation error: {eval_result['error']}")
+                            # Use fallback evaluation
+                            last_evaluation = {
+                                "overall_score": 0.7,
+                                "evaluation_method": "fallback",
+                            }
+                        else:
+                            # Extract evaluation from session manager result
+                            last_evaluation = eval_result.get("current_evaluation", {})
+
+                            # Display the evaluation for ALL questions
+                            display_answer_evaluation(last_evaluation)
+
+                            # Check if interview is complete from session manager
+                            if eval_result.get("interview_complete", False):
+                                print_separator()
+                                print("🎉 Interview Complete!")
+
+                                # Show final evaluation
+                                final_eval = eval_result.get("final_evaluation", {})
+                                if final_eval:
+                                    print("\n📊 Final Evaluation:")
+                                    if "overall_score" in final_eval:
+                                        final_score = int(
+                                            final_eval["overall_score"] * 100
+                                        )
+                                        print(
+                                            f"   🎯 Overall Performance: {final_score}%"
+                                        )
+
+                                    if "summary" in final_eval:
+                                        print(f"   📝 Summary: {final_eval['summary']}")
+
+                                # Show conversation summary
+                                conv_summary = eval_result.get(
+                                    "conversation_summary", {}
+                                )
+                                if conv_summary:
+                                    print(f"\n📋 Interview Summary:")
+                                    if "topics_covered" in conv_summary:
+                                        print(
+                                            f"   Topics Covered: {', '.join(conv_summary['topics_covered'])}"
+                                        )
+                                    if "total_questions" in conv_summary:
+                                        print(
+                                            f"   Total Questions: {conv_summary['total_questions']}"
+                                        )
+                                    if "average_score" in conv_summary:
+                                        avg_score = int(
+                                            conv_summary["average_score"] * 100
+                                        )
+                                        print(f"   Average Score: {avg_score}%")
+
+                                print(
+                                    "\nThank you for participating in this AI interview simulation!"
+                                )
+                                break
+
+                    except Exception as eval_error:
+                        print(
+                            f"⚠️  Evaluation temporarily unavailable: {str(eval_error)}"
+                        )
+                        import traceback
+
+                        traceback.print_exc()
+                        # Use fallback evaluation
+                        last_evaluation = {
+                            "overall_score": 0.7,
+                            "evaluation_method": "fallback",
+                        }
+                else:
+                    # For very short answers, use neutral evaluation
+                    last_evaluation = {
+                        "overall_score": 0.7,
+                        "evaluation_method": "short-answer",
+                    }
+
                 question_count += 1
 
-                # Check if interview is naturally complete
-                if (
-                    context.interview_phase == InterviewPhase.CLOSING
-                    and question_count > 1
-                ):
-                    print_separator()
-                    print("🎉 Interview Complete!")
-                    print("\n📊 Interview Summary:")
-                    print(f"   Total Questions: {context.question_count}")
-                    print(f"   Topics Covered: {', '.join(context.topics_covered)}")
-                    print(f"   Final Phase: {context.interview_phase.value}")
-                    print(f"   Your Skill Level: {context.candidate_skill_level}")
-                    print(
-                        "\nThank you for participating in this AI interview simulation!"
-                    )
-                    break
-
-                # Show progress after technical questions
+                # Show progress after questions
                 if context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
                     topics_left = [
                         kw
@@ -176,6 +352,22 @@ def interactive_interview():
                     ]
                     if topics_left:
                         print(f"\n📝 Upcoming Topics: {', '.join(topics_left[:3])}")
+
+                # Also check for natural interview completion (as backup)
+                if (
+                    context.interview_phase == InterviewPhase.CLOSING
+                    and question_count > 8
+                ):
+                    print_separator()
+                    print("🎉 Interview naturally completed!")
+                    print(f"\n📊 Basic Interview Summary:")
+                    print(f"   Total Questions: {context.question_count}")
+                    print(f"   Topics Covered: {', '.join(context.topics_covered)}")
+                    print(f"   Your Skill Level: {context.candidate_skill_level}")
+                    print(
+                        "\nThank you for participating in this AI interview simulation!"
+                    )
+                    break
 
                 print_separator()
 

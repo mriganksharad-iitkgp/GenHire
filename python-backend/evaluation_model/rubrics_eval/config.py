@@ -2,13 +2,15 @@
 
 import os
 from typing import Optional
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class Config:
     """Configuration class for the evaluation system."""
 
     # OpenAI Configuration
-    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     RUBRIC_GENERATION_MODEL: str = "gpt-4o"
     EVALUATION_MODEL: str = "gpt-4o-mini"
     ANSWER_GENERATION_MODEL: str = "gpt-4o"
@@ -30,6 +32,7 @@ class Config:
     @classmethod
     def load_from_environment(cls) -> None:
         """Load configuration from environment variables."""
+
         cls.OPENAI_API_KEY = cls._get_api_key()
         cls.LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
 
@@ -46,13 +49,13 @@ class Config:
     @staticmethod
     def _get_api_key() -> str:
         """Get OpenAI API key from environment variables."""
-        # Get API key from environment variables only
+        # Get API key from environment variables (loaded from .env file)
         api_key = os.getenv("OPENAI_API_KEY")
 
         if not api_key:
             raise ValueError(
                 "Error: OPENAI_API_KEY not found. "
-                "Please set it in Colab Secrets or as an environment variable."
+                "Please set it in the .env file or as an environment variable."
             )
 
         return api_key
