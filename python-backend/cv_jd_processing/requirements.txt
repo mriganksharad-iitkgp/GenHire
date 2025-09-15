@@ -1,7 +1,7 @@
-llama-parse
-python-dotenv
-google-generativeai
-langchain-google-genai
-fastapi
-uvicorn
-pydantic
+llama-parse==0.5.17
+python-dotenv==1.1.1
+google-generativeai==0.7.2
+langchain-google-genai==1.0.10
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic==2.8.2

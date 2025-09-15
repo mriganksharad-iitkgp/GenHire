@@ -3,6 +3,6 @@ Core module for interview system.
 """
 
 from .session_manager import InterviewSessionManager, InterviewSession
-from .question_generator import QuestionGenerator
+from .prompt_based_question_generator import PromptBasedQuestionGenerator
 
-__all__ = ["InterviewSessionManager", "InterviewSession", "QuestionGenerator"]
+__all__ = ["InterviewSessionManager", "InterviewSession", "PromptBasedQuestionGenerator"]
