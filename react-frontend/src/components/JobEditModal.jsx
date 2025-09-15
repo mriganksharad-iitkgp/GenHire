@@ -26,9 +26,10 @@ const DEPARTMENTS = [
 ];
 
 const LOCATIONS = [
-  'Remote', 'San Francisco, CA', 'New York, NY', 'Austin, TX', 'Seattle, WA',
-  'Boston, MA', 'Chicago, IL', 'Los Angeles, CA', 'Denver, CO', 'Atlanta, GA',
-  'Remote (US)', 'Remote (Global)', 'Hybrid - San Francisco', 'Hybrid - New York'
+  'Remote', 'Bangalore, Karnataka', 'Mumbai, Maharashtra', 'Delhi, NCR', 'Hyderabad, Telangana',
+  'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Kolkata, West Bengal', 'Ahmedabad, Gujarat', 'Gurgaon, Haryana',
+  'Noida, Uttar Pradesh', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Jaipur, Rajasthan',
+  'Remote (India)', 'Remote (Global)', 'Hybrid - Bangalore', 'Hybrid - Mumbai', 'Hybrid - Delhi'
 ];
 
 const EXPERIENCE_LEVELS = [
@@ -37,10 +38,9 @@ const EXPERIENCE_LEVELS = [
 ];
 
 const SALARY_RANGES = [
-  '$40,000 - $60,000', '$50,000 - $70,000', '$60,000 - $80,000', '$70,000 - $90,000',
-  '$80,000 - $100,000', '$90,000 - $110,000', '$100,000 - $120,000', '$110,000 - $130,000',
-  '$120,000 - $140,000', '$130,000 - $150,000', '$140,000 - $160,000', '$150,000 - $180,000',
-  '$160,000 - $200,000', '$180,000 - $220,000', '$200,000 - $250,000'
+  '₹3,00,000 - ₹5,00,000', '₹5,00,000 - ₹8,00,000', '₹8,00,000 - ₹12,00,000', '₹12,00,000 - ₹18,00,000',
+  '₹18,00,000 - ₹25,00,000', '₹25,00,000 - ₹35,00,000', '₹35,00,000 - ₹50,00,000', '₹50,00,000 - ₹75,00,000',
+  '₹75,00,000 - ₹1,00,00,000', '₹1,00,00,000 - ₹1,50,00,000', '₹1,50,00,000 - ₹2,00,00,000', '₹2,00,00,000+'
 ];
 
 // Job status workflow with one-way progression
@@ -89,7 +89,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
     responsibilities: '',
     requirements: '',
     benefits: '',
-    status: 'draft'
+    status: 'draft',
+    minimum_cv_score: 50
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,7 +123,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
         responsibilities: toString(initialJobData.responsibilities),
         requirements: toString(initialJobData.requirements),
         benefits: toString(initialJobData.benefits),
-        status: initialJobData.status || 'draft'
+        status: initialJobData.status || 'draft',
+        minimum_cv_score: initialJobData?.minimum_cv_score || 50
       });
     }
   }, [isOpen, initialJobData]);
@@ -509,6 +511,28 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
                 </div>
               </div>
             </div>
+
+            {/* Minimum CV Score */}
+            <div className={styles.formGroup}>
+              <label>
+                Minimum CV Score
+                <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span>
+              </label>
+              <input
+                type="number"
+                name="minimum_cv_score"
+                value={jobData.minimum_cv_score}
+                onChange={handleInputChange}
+                min="0"
+                max="100"
+                step="1"
+                className={styles.smartInput}
+              />
+              <div className={styles.helpText}>
+                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
+              </div>
+            </div>
+
           </div>
 
           {/* Skills Section */}

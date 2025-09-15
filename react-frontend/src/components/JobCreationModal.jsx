@@ -7,7 +7,7 @@ const JOB_TEMPLATES = {
     department: 'Engineering',
     skills: ['JavaScript', 'React', 'Node.js', 'MongoDB', 'Git'],
     experience: '2-4 years',
-    salary: '$70,000 - $100,000',
+    salary: '₹12,00,000 - ₹18,00,000',
     description: 'We are seeking a talented Software Engineer to join our dynamic development team. You will be responsible for building scalable web applications and contributing to our product development lifecycle.',
     responsibilities: [
       'Develop and maintain web applications using modern technologies',
@@ -35,7 +35,7 @@ const JOB_TEMPLATES = {
     department: 'Data & Analytics',
     skills: ['Python', 'SQL', 'Machine Learning', 'TensorFlow', 'Pandas', 'Jupyter'],
     experience: '3-5 years',
-    salary: '$80,000 - $120,000',
+    salary: '₹18,00,000 - ₹25,00,000',
     description: 'Join our data science team to extract insights from large datasets and build predictive models that drive business decisions.',
     responsibilities: [
       'Analyze large datasets to identify trends and patterns',
@@ -63,7 +63,7 @@ const JOB_TEMPLATES = {
     department: 'Product',
     skills: ['Product Strategy', 'Agile', 'Analytics', 'User Research', 'Roadmap Planning'],
     experience: '4-6 years',
-    salary: '$90,000 - $130,000',
+    salary: '₹25,00,000 - ₹35,00,000',
     description: 'Lead product development initiatives and work cross-functionally to deliver exceptional user experiences.',
     responsibilities: [
       'Define product roadmap and strategy',
@@ -91,7 +91,7 @@ const JOB_TEMPLATES = {
     department: 'Design',
     skills: ['Figma', 'Sketch', 'User Research', 'Prototyping', 'Design Systems'],
     experience: '2-4 years',
-    salary: '$60,000 - $90,000',
+    salary: '₹8,00,000 - ₹15,00,000',
     description: 'Design intuitive and engaging user experiences for our digital products.',
     responsibilities: [
       'Create wireframes, prototypes, and high-fidelity designs',
@@ -141,9 +141,10 @@ const DEPARTMENTS = [
 ];
 
 const LOCATIONS = [
-  'Remote', 'San Francisco, CA', 'New York, NY', 'Austin, TX', 'Seattle, WA',
-  'Boston, MA', 'Chicago, IL', 'Los Angeles, CA', 'Denver, CO', 'Atlanta, GA',
-  'Remote (US)', 'Remote (Global)', 'Hybrid - San Francisco', 'Hybrid - New York'
+  'Remote', 'Bangalore, Karnataka', 'Mumbai, Maharashtra', 'Delhi, NCR', 'Hyderabad, Telangana',
+  'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Kolkata, West Bengal', 'Ahmedabad, Gujarat', 'Gurgaon, Haryana',
+  'Noida, Uttar Pradesh', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Jaipur, Rajasthan',
+  'Remote (India)', 'Remote (Global)', 'Hybrid - Bangalore', 'Hybrid - Mumbai', 'Hybrid - Delhi'
 ];
 
 const EXPERIENCE_LEVELS = [
@@ -152,10 +153,9 @@ const EXPERIENCE_LEVELS = [
 ];
 
 const SALARY_RANGES = [
-  '$40,000 - $60,000', '$50,000 - $70,000', '$60,000 - $80,000', '$70,000 - $90,000',
-  '$80,000 - $100,000', '$90,000 - $110,000', '$100,000 - $120,000', '$110,000 - $130,000',
-  '$120,000 - $140,000', '$130,000 - $150,000', '$140,000 - $160,000', '$150,000 - $180,000',
-  '$160,000 - $200,000', '$180,000 - $220,000', '$200,000 - $250,000'
+  '₹3,00,000 - ₹5,00,000', '₹5,00,000 - ₹8,00,000', '₹8,00,000 - ₹12,00,000', '₹12,00,000 - ₹18,00,000',
+  '₹18,00,000 - ₹25,00,000', '₹25,00,000 - ₹35,00,000', '₹35,00,000 - ₹50,00,000', '₹50,00,000 - ₹75,00,000',
+  '₹75,00,000 - ₹1,00,00,000', '₹1,00,00,000 - ₹1,50,00,000', '₹1,50,00,000 - ₹2,00,00,000', '₹2,00,00,000+'
 ];
 
 const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
@@ -163,16 +163,16 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     title: '',
     department: '',
     location: '',
-    type: 'Full-time',
+    type: '',
     experience: '',
     salary: '',
-    deadline: '',
-    skills: [],
     description: '',
-    responsibilities: '',
-    requirements: '',
-    benefits: '',
-    status: 'draft'  // Default to draft status
+    skills: [],
+    responsibilities: [],
+    requirements: [],
+    benefits: [],
+    deadline: '',
+    minimum_cv_score: 50  // Default minimum CV score
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -393,7 +393,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       responsibilities: '',
       requirements: '',
       benefits: '',
-      status: 'draft' // Reset to draft status
+      status: 'draft', // Reset to draft status
+      minimum_cv_score: 50 // Reset to default minimum CV score
     });
     setSkillInput('');
     setFilteredSuggestions([]);
@@ -545,7 +546,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('location')}
                   required
-                  placeholder="e.g. San Francisco, CA (Remote)"
+                  placeholder="e.g., Bangalore, Karnataka (Remote)"
                   autoComplete="off"
                 />
                 <button
@@ -632,7 +633,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('salary')}
                   required
-                  placeholder="e.g. $80,000 - $120,000"
+                  placeholder="e.g., ₹12,00,000 - ₹18,00,000"
                   autoComplete="off"
                 />
                 <button
@@ -686,6 +687,25 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               </select>
               <div className={styles.helpText}>
                 💡 Draft: Preview before publishing | Active: Live and accepting applications
+              </div>
+            </div>
+
+            {/* Minimum CV Score */}
+            <div className={styles.formGroup}>
+              <label>Minimum CV Score * <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span></label>
+              <input
+                type="number"
+                name="minimum_cv_score"
+                value={jobData.minimum_cv_score}
+                onChange={handleInputChange}
+                required
+                min="0"
+                max="100"
+                step="1"
+                className={styles.enhancedInput}
+              />
+              <div className={styles.helpText}>
+                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
               </div>
             </div>
 

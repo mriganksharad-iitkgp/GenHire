@@ -65,20 +65,35 @@ class ApplicationController:
                 print(f"Error calculating CV score: {e}")
                 cv_score = 75.0
         
+        # Determine application status based on CV score vs minimum threshold
+        minimum_cv_score = job.get('minimum_cv_score', 50.0)  # Default to 50 if not set
+        
+        if cv_score >= minimum_cv_score:
+            application_status = 'shortlisted'
+            status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
+            print(f"✅ Application auto-shortlisted: {status_reason}")
+        else:
+            application_status = 'rejected'
+            status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
+            print(f"❌ Application auto-rejected: {status_reason}")
+        
         application_doc = {
             'job_id': job_id,
             'student_id': user_id,
             'student_name': user_profile.get('name', ''),
             'student_email': user_profile.get('email', ''),
             'cover_letter': application_data.get('cover_letter', ''),
-            'status': 'pending',
+            'status': application_status,  # Auto-determined status
+            'status_reason': status_reason,  # Reason for the status
             'applied_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
             'job_title': job.get('title', ''),
             'recruiter_id': job.get('created_by', ''),
-            # AI-calculated CV score
+            # AI-calculated CV score and comparison data
             'cv_score': cv_score,
             'cv_score_breakdown': cv_score_breakdown,
+            'minimum_cv_score_required': minimum_cv_score,  # Store the threshold used
+            'auto_processed': True,  # Flag to indicate automatic processing
             'interview_score': None,
             'student_profile': {
                 'bio': user_profile.get('bio', ''),
@@ -93,17 +108,29 @@ class ApplicationController:
         # Insert application
         result = self.applications_collection.insert_one(application_doc)
         
-        # Update job applicant count
+        # Update job statistics based on the determined status
+        job_update = {'applicants': 1}
+        if application_status == 'shortlisted':
+            # For legacy compatibility, we'll use 'selected' counter for shortlisted
+            job_update['selected'] = 1
+        elif application_status == 'rejected':
+            job_update['rejected'] = 1
+        else:
+            job_update['pending'] = 1  # Fallback
+        
         self.jobs_collection.update_one(
             {'_id': ObjectId(job_id)},
-            {'$inc': {'applicants': 1, 'pending': 1}}
+            {'$inc': job_update}
         )
         
         application_doc['_id'] = str(result.inserted_id)
         
         return {
-            'message': 'Application submitted successfully',
-            'application': application_doc
+            'message': f'Application submitted and automatically {application_status}',
+            'application': application_doc,
+            'cv_score': cv_score,
+            'minimum_cv_score_required': minimum_cv_score,
+            'status_reason': status_reason
         }, 201
         
     def withdraw_application(self, job_id, user_id):
@@ -455,24 +482,64 @@ class ApplicationController:
                 new_cv_score = scoring_result.get('total_score', 75.0)
                 new_cv_score_breakdown = scoring_result.get('score_breakdown')
                 
-                # Update application with new score
+                # Determine new application status based on CV score vs minimum threshold
+                minimum_cv_score = job.get('minimum_cv_score', 50.0)  # Default to 50 if not set
+                old_status = application.get('status', 'pending')
+                
+                if new_cv_score >= minimum_cv_score:
+                    new_status = 'shortlisted'
+                    status_reason = f'CV score ({new_cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
+                    print(f"✅ Application auto-shortlisted after recalculation: {status_reason}")
+                else:
+                    new_status = 'rejected'
+                    status_reason = f'CV score ({new_cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
+                    print(f"❌ Application auto-rejected after recalculation: {status_reason}")
+                
+                # Update application with new score and status
+                update_data = {
+                    'cv_score': new_cv_score,
+                    'cv_score_breakdown': new_cv_score_breakdown,
+                    'minimum_cv_score_required': minimum_cv_score,
+                    'updated_at': datetime.datetime.utcnow()
+                }
+                
+                # Only update status if it changed and wasn't manually overridden
+                if new_status != old_status and application.get('auto_processed', True):
+                    update_data['status'] = new_status
+                    update_data['status_reason'] = status_reason
+                    update_data['auto_processed'] = True
+                    
+                    # Update job statistics if status changed
+                    job_update = {}
+                    status_counters = ['pending', 'interviewed', 'selected', 'rejected']
+                    
+                    if old_status in status_counters:
+                        job_update[old_status] = -1
+                    
+                    # Map new status to job counter
+                    if new_status == 'shortlisted':
+                        job_update['selected'] = job_update.get('selected', 0) + 1
+                    elif new_status in status_counters:
+                        job_update[new_status] = job_update.get(new_status, 0) + 1
+                    
+                    if job_update:
+                        self.jobs_collection.update_one({'_id': ObjectId(application['job_id'])}, {'$inc': job_update})
+                
                 self.applications_collection.update_one(
                     {'_id': ObjectId(application_id)},
-                    {
-                        '$set': {
-                            'cv_score': new_cv_score,
-                            'cv_score_breakdown': new_cv_score_breakdown,
-                            'updated_at': datetime.datetime.utcnow()
-                        }
-                    }
+                    {'$set': update_data}
                 )
                 
-                print(f"CV score updated: {new_cv_score}")
+                print(f"CV score updated: {new_cv_score}, Status: {update_data.get('status', old_status)}")
                 
                 return {
                     'message': 'CV score recalculated successfully',
                     'cv_score': new_cv_score,
-                    'cv_score_breakdown': new_cv_score_breakdown
+                    'cv_score_breakdown': new_cv_score_breakdown,
+                    'minimum_cv_score_required': minimum_cv_score,
+                    'status': update_data.get('status', old_status),
+                    'status_reason': update_data.get('status_reason', 'Status unchanged'),
+                    'status_changed': new_status != old_status and application.get('auto_processed', True)
                 }, 200
                 
             except Exception as e:

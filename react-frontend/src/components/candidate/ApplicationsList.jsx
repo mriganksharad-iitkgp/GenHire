@@ -139,6 +139,18 @@ export default function ApplicationsList({
                         <span className={styles.pillLabel}>CV Score</span>
                         <span className={styles.pillValue}>{app.cvScore}%</span>
                         <div className={styles.miniBar}><div style={{ width: `${app.cvScore}%` }} /></div>
+                        {app.minimum_cv_score_required && (
+                          <div className={styles.scoreThreshold}>
+                            <span className={styles.thresholdLabel}>Required: {app.minimum_cv_score_required}</span>
+                            <span className={`${styles.passFailIndicator} ${
+                              app.cvScore >= app.minimum_cv_score_required 
+                                ? styles.pass 
+                                : styles.fail
+                            }`}>
+                              {app.cvScore >= app.minimum_cv_score_required ? '✓ Pass' : '✗ Below'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {app.interviewScore !== null && (
@@ -156,6 +168,14 @@ export default function ApplicationsList({
                       </div>
                     )}
                   </div>
+                  {app.auto_processed && (
+                    <div className={styles.autoProcessedBadge}>
+                      <span className={styles.robotIcon}>🤖</span>
+                      <span className={styles.autoLabel}>
+                        Auto-{app.status === 'shortlisted' ? 'shortlisted' : 'rejected'}
+                      </span>
+                    </div>
+                  )}
 
                   <div className={styles.actionsRight}>
                     {/* Always show View CV button */}
