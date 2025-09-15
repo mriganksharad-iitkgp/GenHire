@@ -1,0 +1,11 @@
+# Interview Module Requirements
+# Only dependencies NOT already present in python-backend/requirements.txt
+
+llama-index-llms-gemini
+# Document processing (MS Word support)
+python-docx==1.1.2
+
+# Development dependencies (optional)
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0

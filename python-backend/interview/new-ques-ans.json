@@ -1,0 +1,32 @@
+[
+  {
+    "question": "How are you doing?",
+    "answer": "I'm doing well, thank you! I'm excited about this opportunity to discuss my technical experience. I've been working on several projects recently and I'm looking forward to sharing what I've learned.",
+    "acknowledgement": "Great to hear you're doing well! I can sense your enthusiasm about discussing your technical experience, which is exactly what we're looking for."
+  },
+  {
+    "question": "So today, we're going to have a relaxed chat about your experience with Python, JavaScript, and Java. I'm really looking forward to hearing about the projects you've been involved in and exploring some of the technical aspects together. Just think of it as a casual conversation where we get to share ideas and insights. Ready to dive in?",
+    "answer": "yes",
+    "acknowledgement": "Perfect! I love your enthusiasm. Let's start exploring your technical journey together."
+  },
+  {
+    "question": "Can you explain how Python's memory management works? Specifically, how does Python handle memory allocation and garbage collection?",
+    "answer": "i don't know about this.",
+    "acknowledgement": "I appreciate your honesty in saying you don't know about that particular topic. It's great that you're open about your current knowledge."
+  },
+  {
+    "question": "Can you explain how Python handles memory management? What are some key concepts or mechanisms in place for resource allocation?",
+    "answer": "i am not clear about the python memory management. well i have done projects on flask , and backend.",
+    "acknowledgement": "I appreciate your honesty about your understanding of Python memory management, especially since it can be a complex topic, particularly when you're working with frameworks like Flask. It sounds like you've gained valuable experience in backend development through your projects."
+  },
+  {
+    "question": "Can you describe a specific challenge you faced while working with JavaScript and how you overcame it?",
+    "answer": "i don't have faced any challege during javascript projects.",
+    "acknowledgement": "I appreciate your perspective on not facing challenges during your JavaScript projects; it's great to hear that you've had a smooth experience with it. You mentioned your familiarity with JavaScript, so let's dive a bit deeper."
+  },
+  {
+    "question": "Can you walk me through a scenario where you had to optimize a JavaScript function for performance? What specific techniques or methods did you use to ensure it ran efficiently?",
+    "answer": "I haven't really had to optimize JavaScript functions for performance in my projects. Most of the time, the basic JavaScript I wrote worked fine for what I needed. I mainly focused on making sure the code worked correctly rather than optimizing for performance. I know there are techniques like reducing DOM manipulations and using efficient loops, but I haven't had practical experience with performance optimization yet.",
+    "acknowledgement": "I understand that performance optimization might not have been a priority in your projects so far, especially when you're focused on getting the functionality right first. That's actually a common approach for many developers starting out."
+  }
+]

@@ -1,0 +1,33 @@
+"""
+Central prompt manager for importing all interview prompts.
+"""
+
+from .extract_cv_keywords_prompts import CV_KEYWORDS_EXTRACTION_PROMPT
+from .skill_assessment_prompts import SKILL_LEVEL_ASSESSMENT_PROMPT
+from .greeting_prompts import GREETING_PROMPT, FALLBACK_GREETING
+from .structure_explanation_prompts import (
+    STRUCTURE_EXPLANATION_PROMPT,
+    FALLBACK_STRUCTURE_EXPLANATION,
+)
+from .technical_question_prompts import (
+    TECHNICAL_QUESTION_PROMPT,
+    FALLBACK_TECHNICAL_QUESTION,
+    PERFORMANCE_GUIDANCE,
+    PREVIOUS_ANSWER_CONTEXT,
+)
+from .closing_prompts import CLOSING_PROMPT, FALLBACK_CLOSING
+
+__all__ = [
+    "CV_KEYWORDS_EXTRACTION_PROMPT",
+    "SKILL_LEVEL_ASSESSMENT_PROMPT",
+    "GREETING_PROMPT",
+    "FALLBACK_GREETING",
+    "STRUCTURE_EXPLANATION_PROMPT",
+    "FALLBACK_STRUCTURE_EXPLANATION",
+    "TECHNICAL_QUESTION_PROMPT",
+    "FALLBACK_TECHNICAL_QUESTION",
+    "PERFORMANCE_GUIDANCE",
+    "PREVIOUS_ANSWER_CONTEXT",
+    "CLOSING_PROMPT",
+    "FALLBACK_CLOSING",
+]
