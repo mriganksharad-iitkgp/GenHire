@@ -2,6 +2,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
+import matplotlib.pyplot as plt
+import os
 
 class SimpleCheatingDetector:
     # Paste your SimpleCheatingDetector class here without any changes.
@@ -93,6 +95,10 @@ class ProctoringGazeDetector:
         self.detector = SimpleCheatingDetector(duration_threshold=3.5, normal_range=(-0.35, 0.35))
         self.gaze_tracker = GazeTracker()
         
+        # Data for plotting
+        self.gaze_data = []
+        self.session_start_time = time.time()
+        
         # Landmark Indices for eye corners and iris
         self.P_LEFT_IRIS = 473
         self.P_RIGHT_IRIS = 468
@@ -137,8 +143,47 @@ class ProctoringGazeDetector:
             self.gaze_tracker.update(gaze_direction_text)
             is_cheating_alert = self.detector.check_gaze(gaze_ratio)
         
+        # Record data for plotting
+        current_time = time.time() - self.session_start_time
+        # Use np.nan when gaze is not detected to create gaps in the plot
+        self.gaze_data.append((current_time, gaze_ratio if gaze_ratio is not None else np.nan))
+        
         return {
             "is_cheating_alert": is_cheating_alert,
             "gaze_direction": gaze_direction_text,
             "gaze_times": self.gaze_tracker.get_times()
         }
+
+    def generate_gaze_plot(self, output_dir=".", filename="gaze_movement_plot.png"):
+        """
+        Generates and saves a plot of gaze ratio over time.
+        Call this method after the video processing is complete.
+        """
+        if not self.gaze_data:
+            print("No gaze data to plot.")
+            return
+
+        timestamps, gaze_ratios = zip(*self.gaze_data)
+
+        plt.figure(figsize=(15, 6))
+        plt.plot(timestamps, gaze_ratios, label='Gaze Ratio', color='royalblue', linewidth=1)
+        
+        # Highlight suspicious regions (outside normal range)
+        normal_min, normal_max = self.detector.normal_min, self.detector.normal_max
+        plt.axhspan(normal_min, normal_max, color='green', alpha=0.2, label='Normal Gaze Zone')
+        
+        plt.title('Eyeball Movement Over Time')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Gaze Ratio (Left < 0 > Right)')
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.legend()
+        plt.ylim(-1.5, 1.5) # Set a fixed y-axis range for consistency
+        
+        # Ensure the output directory exists
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath)
+        plt.close()
+        print(f"Gaze plot saved to {filepath}")

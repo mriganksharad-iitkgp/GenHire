@@ -114,7 +114,7 @@ export default function Chat({ interviewId }) {
                     const imageData = canvas.toDataURL('image/jpeg', 0.5);
                     socket.emit('proctoring_frame', { session_id: currentSessionId, image: imageData });
                 }
-            }, 200);
+            }, 100);
         });
         socket.on('disconnect', () => {
             console.log('❌ WebSocket disconnected.');

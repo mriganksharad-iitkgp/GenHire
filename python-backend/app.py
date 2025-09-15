@@ -162,6 +162,8 @@ def submit_answer(current_user, session_id):
     
     return jsonify(result)
 
+# ... (all other code in app.py remains the same)
+
 @app.route('/api/interviews/<session_id>/end', methods=['POST'])
 @token_required
 def end_interview(current_user, session_id):
@@ -193,7 +195,26 @@ def end_interview(current_user, session_id):
         end_time = datetime.datetime.utcnow()
         interview_duration = (end_time - start_time).total_seconds()
 
-    # --- NEW: Log the final times to the backend console ---
+    # --- NEW: Generate and save the gaze plot ---
+    gaze_plot_path = None
+    if detector:
+        try:
+            # Define a unique filename for the plot
+            plot_filename = f"{session_id}_gaze_plot.png"
+            
+            # Call the method from your detector to generate the plot
+            detector.generate_gaze_plot(
+                output_dir=app.config["PROCTORING_FOLDER"], 
+                filename=plot_filename
+            )
+            
+            # Create the full path to be saved in the database
+            gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], plot_filename)
+            print(f"📈 Gaze plot generated for session {session_id} at {gaze_plot_path}")
+        except Exception as e:
+            print(f"Error generating gaze plot for session {session_id}: {e}")
+
+    # --- Log the final times to the backend console ---
     print(f"--- Interview {session_id} Ended ---")
     print(f"Total Interview Duration: {round(interview_duration, 2)} seconds")
     print(f"Total Suspicious Gaze Time: {round(suspicious_activity_time, 2)} seconds")
@@ -208,6 +229,7 @@ def end_interview(current_user, session_id):
             'proctoring_score': final_score,
             'manual_infractions': manual_infractions,
             'gaze_metrics': gaze_times,
+            'gaze_plot_path': gaze_plot_path, # <-- ADDED: Save the plot path
             'updated_at': datetime.datetime.utcnow()
         }}
     )
@@ -227,29 +249,27 @@ def end_interview(current_user, session_id):
             )
         except Exception:
             pass
-    
-    # --- MODIFIED: Return only status and evaluation ---
+            
     return jsonify({
         'status': 'interview_ended',
         'evaluation': final_evaluation
     })
 
-# Add this new route
+# ... (rest of app.py remains the same)
+
+
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
 @token_required
 def upload_recording(current_user, session_id):
     if 'recording' not in request.files:
         return jsonify({'error': 'No recording file part'}), 400
-    
     file = request.files['recording']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
     if file:
         filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
         filepath = os.path.join(app.config['RECORDING_FOLDER'], filename)
         file.save(filepath)
-
         # Update the interview record with the path to the recording
         interviews_collection.update_one(
             {'session_id': session_id, 'user_id': str(current_user['_id'])},
