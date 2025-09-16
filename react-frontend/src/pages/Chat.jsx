@@ -443,6 +443,7 @@ const handleFaceRegistration = useCallback(async () => {
     }, [currentQuestion, interviewStatus, endInterview]);
 
     // --- SPEECH RECOGNITION & SYNTHESIS (Modified) ---
+    // --- SPEECH RECOGNITION & SYNTHESIS (Modified) ---
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
@@ -450,7 +451,7 @@ const handleFaceRegistration = useCallback(async () => {
             recognitionRef.current.continuous = false; // Important for auto-stop
             recognitionRef.current.interimResults = true; // Show live transcript
             recognitionRef.current.lang = "en-US";
-            
+
             recognitionRef.current.onresult = (event) => {
                 let finalTranscript = '';
                 for (let i = 0; i < event.results.length; ++i) {
@@ -463,22 +464,37 @@ const handleFaceRegistration = useCallback(async () => {
                 if (finalTranscript) {
                     setInput(finalTranscript);
                     onSend(finalTranscript); // Automatically send final transcript
-                }
-            };
+}
+        };
 
             recognitionRef.current.onerror = (event) => console.error("Speech recognition error", event);
             recognitionRef.current.onend = () => setIsRecording(false);
         }
     }, [onSend]);
 
-    const handleVoiceInput = () => {
-        if (isRecording || isSpeaking) return; // Prevent recording while AI is speaking
-        if (recognitionRef.current) {
+    const handleVoiceInput = useCallback(() => {
+        if (isSpeaking) return; // Prevent any action while AI is speaking
+
+        const recognition = recognitionRef.current;
+        if (!recognition) return;
+
+        if (isRecording) {
+            // --- STOP RECORDING ---
+            recognition.stop();
+            setIsRecording(false);
+            // Send the final accumulated transcript after a short delay to ensure state updates
+            setTimeout(() => {
+                if (input.trim()) {
+                    onSend(input);
+                }
+            }, 100);
+        } else {
+            // --- START RECORDING ---
             setInput(""); // Clear previous transcript
-            recognitionRef.current.start();
+            recognition.start();
             setIsRecording(true);
         }
-    };
+    }, [isRecording, isSpeaking, input, onSend]); // Add dependencies
 
     const speakResponse = (text) => {
         if (!window.speechSynthesis || !text) return;

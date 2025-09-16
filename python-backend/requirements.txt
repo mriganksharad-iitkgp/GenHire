@@ -1,4 +1,4 @@
-absl-py==2.3.1
+﻿absl-py
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.15
 aiosignal==1.4.0
@@ -135,7 +135,7 @@ python-dotenv==1.1.1
 python-engineio==4.12.2
 python-socketio==5.13.0
 pytz==2025.2
-pywin32==311
+pywin32
 PyYAML==6.0.2
 regex==2025.7.34
 requests==2.32.4
