@@ -219,9 +219,11 @@ def end_interview(current_user, session_id):
         final_evaluation = (
             session.evaluation if hasattr(session, "evaluation") else None
         )
+        print(f"Final evaluation from session: {final_evaluation}")
     elif session:
         # If ended prematurely, generate evaluation now
         final_evaluation = interview_manager._generate_final_evaluation(session)
+        print(f"Final evaluation generated at end: {final_evaluation}")
     else:
         final_evaluation = {
             "summary": "Evaluation could not be computed as session was not found."
