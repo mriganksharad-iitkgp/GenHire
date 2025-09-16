@@ -12,6 +12,8 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModel
 import torch
 import time
+import matplotlib
+matplotlib.use('Agg')
 
 # Import configuration
 from config.database import db_config
@@ -91,6 +93,74 @@ app.config["RECORDING_FOLDER"] = RECORDING_FOLDER
 # Import middleware for interview routes
 from middleware.auth_middleware import token_required
 
+
+
+
+def process_video_for_proctoring(video_path, session_id):
+    """
+    Processes a saved video file to generate proctoring metrics.
+    
+    Args:
+        video_path (str): The full path to the saved video file.
+        session_id (str): The unique session ID for naming the plot.
+        
+    Returns:
+        dict: A dictionary containing all the generated proctoring data.
+    """
+    print(f"🎬 Starting proctoring analysis for video: {video_path}")
+    
+    detector = ProctoringGazeDetector()
+    cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        print(f"❌ Error: Could not open video file {video_path}")
+        return None
+
+    # Loop through all frames in the video
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break # End of video
+        
+        # Process each frame using your existing detector
+        detector.process_frame(frame)
+        
+    cap.release()
+    print("✅ Video processing complete.")
+
+    # --- Generate the Gaze Plot ---
+    plot_filename = f"{session_id}_gaze_plot.png"
+    detector.generate_gaze_plot(
+        output_dir=app.config["PROCTORING_FOLDER"],
+        filename=plot_filename
+    )
+    gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], plot_filename)
+    print(f"📈 Gaze plot generated at: {gaze_plot_path}")
+
+    # --- Collect all the final data ---
+    gaze_times = detector.gaze_tracker.get_times()
+    suspicious_activity_time = detector.detector.total_suspicious_time
+    
+    # You can create a final score here based on the results
+    # For example, deduct points for suspicious time
+    total_duration = sum(gaze_times.values())
+    suspicious_percentage = (suspicious_activity_time / total_duration) * 100 if total_duration > 0 else 0
+    final_proctoring_score = max(0, 100 - suspicious_percentage * 2) # Example scoring logic
+
+    print(f"--- Proctoring Results for {session_id} ---")
+    print(f"Total Suspicious Gaze Time: {round(suspicious_activity_time, 2)} seconds")
+    print(f"Final Proctoring Score: {round(final_proctoring_score, 2)}")
+    print("------------------------------------------")
+
+    return {
+        "gaze_metrics": gaze_times,
+        "gaze_plot_path": gaze_plot_path,
+        "total_suspicious_time": suspicious_activity_time,
+        "proctoring_score": final_proctoring_score
+    }
+
+
+
 # Interview System API Routes
 @app.route('/api/interviews/start', methods=['POST'])
 @token_required
@@ -167,77 +237,36 @@ def submit_answer(current_user, session_id):
 @app.route('/api/interviews/<session_id>/end', methods=['POST'])
 @token_required
 def end_interview(current_user, session_id):
-    # Get the final evaluation from the session manager if it exists
+    # Get the final evaluation from the session manager
     session = interview_manager.sessions.get(session_id)
     if session and session.get('is_complete'):
         final_evaluation = session.get('evaluation')
     elif session:
-        # If ended prematurely, generate evaluation now
         final_evaluation = interview_manager._generate_final_evaluation(session)
     else:
         final_evaluation = {'summary': 'Evaluation could not be computed as session was not found.'}
-
-    # Get final proctoring data from the live session
+        
+    # --- REMOVED PROCTORING LOGIC FROM HERE ---
+    # The gaze data, plot, and score are now handled by the /upload-recording endpoint.
+    # We can still get manual infractions if needed.
     session_data = live_sessions.get(session_id, {})
-    final_score = session_data.get('proctoring_score', 'N/A')
     manual_infractions = session_data.get('manual_infractions', [])
 
-    # Get the final gaze data from the in-memory detector
-    detector = proctoring_detectors.get(session_id)
-    gaze_times = detector.gaze_tracker.get_times() if detector else None
-    suspicious_activity_time = detector.detector.total_suspicious_time if detector else 0
-
-    # Calculate total interview duration
-    interview_duration = 0
-    session_doc = interviews_collection.find_one({'session_id': session_id, 'user_id': str(current_user['_id'])})
-    if session_doc and 'created_at' in session_doc:
-        start_time = session_doc['created_at']
-        end_time = datetime.datetime.utcnow()
-        interview_duration = (end_time - start_time).total_seconds()
-
-    # --- NEW: Generate and save the gaze plot ---
-    gaze_plot_path = None
-    if detector:
-        try:
-            # Define a unique filename for the plot
-            plot_filename = f"{session_id}_gaze_plot.png"
-            
-            # Call the method from your detector to generate the plot
-            detector.generate_gaze_plot(
-                output_dir=app.config["PROCTORING_FOLDER"], 
-                filename=plot_filename
-            )
-            
-            # Create the full path to be saved in the database
-            gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], plot_filename)
-            print(f"📈 Gaze plot generated for session {session_id} at {gaze_plot_path}")
-        except Exception as e:
-            print(f"Error generating gaze plot for session {session_id}: {e}")
-
-    # --- Log the final times to the backend console ---
-    print(f"--- Interview {session_id} Ended ---")
-    print(f"Total Interview Duration: {round(interview_duration, 2)} seconds")
-    print(f"Total Suspicious Gaze Time: {round(suspicious_activity_time, 2)} seconds")
-    print(f"------------------------------------")
-
-    # Update the database record with final data
+    # Update the database record with final evaluation and status
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
             'status': 'completed',
             'evaluation': final_evaluation,
-            'proctoring_score': final_score,
-            'manual_infractions': manual_infractions,
-            'gaze_metrics': gaze_times,
-            'gaze_plot_path': gaze_plot_path, # <-- ADDED: Save the plot path
+            'manual_infractions': manual_infractions, # Tab-switching infractions
             'updated_at': datetime.datetime.utcnow()
         }}
     )
     
-    # Also update the related application with interview_score if linked
+    # Update the related application (this logic remains the same)
+    session_doc = interviews_collection.find_one({'session_id': session_id, 'user_id': str(current_user['_id'])})
     if session_doc and session_doc.get('application_id'):
         try:
-            # Use the quantitative score for the application
             numeric_score = final_evaluation.get('quantitative', {}).get('average_relevance_score', 0) * 100
             applications_collection.update_one(
                 {'_id': ObjectId(session_doc['application_id'])},
@@ -247,16 +276,21 @@ def end_interview(current_user, session_id):
                     'updated_at': datetime.datetime.utcnow()
                 }}
             )
-        except Exception:
+        except Exception as e:
+            print(f"Could not update application score: {e}")
             pass
             
+    # Clean up the in-memory session
+    if session_id in live_sessions:
+        del live_sessions[session_id]
+        
     return jsonify({
         'status': 'interview_ended',
         'evaluation': final_evaluation
     })
 
-# ... (rest of app.py remains the same)
 
+# ... inside app.py
 
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
 @token_required
@@ -266,17 +300,37 @@ def upload_recording(current_user, session_id):
     file = request.files['recording']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
+    
     if file:
         filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
         filepath = os.path.join(app.config['RECORDING_FOLDER'], filename)
         file.save(filepath)
-        # Update the interview record with the path to the recording
-        interviews_collection.update_one(
-            {'session_id': session_id, 'user_id': str(current_user['_id'])},
-            {'$set': {'recording_path': filepath}}
-        )
         
-        return jsonify({'message': 'Recording uploaded successfully', 'path': filepath}), 200
+        # --- NEW: PROCESS THE SAVED VIDEO AND GET PROCTORING DATA ---
+        proctoring_results = process_video_for_proctoring(filepath, session_id)
+        
+        if proctoring_results:
+            # Update the interview record with the recording path AND all proctoring results
+            interviews_collection.update_one(
+                {'session_id': session_id, 'user_id': str(current_user['_id'])},
+                {'$set': {
+                    'recording_path': filepath,
+                    'gaze_metrics': proctoring_results['gaze_metrics'],
+                    'gaze_plot_path': proctoring_results['gaze_plot_path'],
+                    'total_suspicious_time': proctoring_results['total_suspicious_time'],
+                    'proctoring_score': proctoring_results['proctoring_score'],
+                    'updated_at': datetime.datetime.utcnow()
+                }}
+            )
+            print(f"💾 Successfully saved recording and proctoring data for session {session_id}")
+            return jsonify({'message': 'Recording uploaded and processed successfully', 'path': filepath}), 200
+        else:
+            # Handle case where video processing failed
+            interviews_collection.update_one(
+                {'session_id': session_id, 'user_id': str(current_user['_id'])},
+                {'$set': {'recording_path': filepath}} # Still save the path
+            )
+            return jsonify({'error': 'Recording saved, but proctoring analysis failed.'}), 500
 
     return jsonify({'error': 'File upload failed'}), 500
 
@@ -361,51 +415,54 @@ def handle_connect():
 def handle_disconnect():
     print(f"🔌 Client disconnected with sid: {request.sid}")
     for session_id, data in list(live_sessions.items()):
-        if data.get('sid') == request.sid:
-            # Clean up both the live session data and the detector instance
-            del live_sessions[session_id]
-            if session_id in proctoring_detectors:
-                del proctoring_detectors[session_id]
-            print(f"🧹 Cleaned up live session data and detector for {session_id}")
-            break
+        pass
+        # if data.get('sid') == request.sid:
+        #     # Clean up both the live session data and the detector instance
+        #     del live_sessions[session_id]
+        #     if session_id in proctoring_detectors:
+        #         del proctoring_detectors[session_id]
+        #     print(f"🧹 Cleaned up live session data and detector for {session_id}")
+        #     break
 
-@socketio.on('start_proctoring')
-def handle_start_proctoring(data):
-    session_id = data.get('session_id')
-    if session_id and session_id in live_sessions:
-        live_sessions[session_id]['sid'] = request.sid
-        # Initialize the gaze detector for this session
-        proctoring_detectors[session_id] = ProctoringGazeDetector()
-        print(f"▶️ Live proctoring stream started for session: {session_id}")
-    else:
-        print(f"⚠️ Attempted to start proctoring for invalid/unregistered session: {session_id}")
+# @socketio.on('start_proctoring')
+# def handle_start_proctoring(data):
+#     session_id = data.get('session_id')
+#     if session_id and session_id in live_sessions:
+#         live_sessions[session_id]['sid'] = request.sid
+#         # Initialize the gaze detector for this session
+#         proctoring_detectors[session_id] = ProctoringGazeDetector()
+#         print(f"▶️ Live proctoring stream started for session: {session_id}")
+#     else:
+#         print(f"⚠️ Attempted to start proctoring for invalid/unregistered session: {session_id}")
 
-@socketio.on('proctoring_frame')
-def handle_proctoring_frame(data):
-    session_id = data.get('session_id')
-    session_data = live_sessions.get(session_id)
-    detector = proctoring_detectors.get(session_id)
+# @socketio.on('proctoring_frame')
+# def handle_proctoring_frame(data):
+#     session_id = data.get('session_id')
+#     session_data = live_sessions.get(session_id)
+#     detector = proctoring_detectors.get(session_id)
 
-    if not session_data or not detector: return
+#     if not session_data or not detector: return
+    
+#     header, encoded = data['image'].split(",", 1)
+#     frame = cv2.imdecode(np.frombuffer(base64.b64decode(encoded), np.uint8), cv2.IMREAD_COLOR)
+    
+#     # Pass the frame to your cheating detection logic
+#     analysis_result = detector.process_frame(frame)
 
-    header, encoded = data['image'].split(",", 1)
-    frame = cv2.imdecode(np.frombuffer(base64.b64decode(encoded), np.uint8), cv2.IMREAD_COLOR)
+#     # Update the session data in memory with real metrics
+#     session_data['gaze_times'] = analysis_result['gaze_times']
 
-    # Pass the frame to your cheating detection logic
-    analysis_result = detector.process_frame(frame)
-
-    # Update the session data in memory with real metrics
-    session_data['gaze_times'] = analysis_result['gaze_times']
-
-    # Emit the results back to the frontend
-    socketio.emit('gaze_data', {
-        'session_id': session_id,
-        'is_cheating_alert': analysis_result['is_cheating_alert'],
-        'gaze_direction': analysis_result['gaze_direction'],
-        'gaze_times': analysis_result['gaze_times']
-    }, room=session_data['sid'])
+#     # Emit the results back to the frontend
+#     socketio.emit('gaze_data', {
+#         'session_id': session_id,
+#         'is_cheating_alert': analysis_result['is_cheating_alert'],
+#         'gaze_direction': analysis_result['gaze_direction'],
+#         'gaze_times': analysis_result['gaze_times']
+#     }, room=session_data['sid'])
 
 # New handler for tab/window switching violations
+# In app.py
+
 @socketio.on('proctoring_violation')
 def handle_proctoring_violation(data):
     session_id = data.get('session_id')
@@ -427,7 +484,6 @@ def handle_proctoring_violation(data):
     # Optionally, deduct from the proctoring score for each violation
     session_data['proctoring_score'] = max(0, session_data.get('proctoring_score', 100) - 5) # Deduct 5 points
     
-    # print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
-
+    print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)

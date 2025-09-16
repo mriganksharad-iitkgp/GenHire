@@ -25,8 +25,8 @@ export default function Chat({ interviewId }) {
     const [proctoringAlert, setProctoringAlert] = useState({ active: false, message: '' });
     const [warningCount, setWarningCount] = useState(0);
     // Add these new states
-    const [gazeDirection, setGazeDirection] = useState('Face Not Detected');
-    const [gazeTimes, setGazeTimes] = useState({ Left: 0, Center: 0, Right: 0 });
+    // const [gazeDirection, setGazeDirection] = useState('Face Not Detected');
+    // const [gazeTimes, setGazeTimes] = useState({ Left: 0, Center: 0, Right: 0 });
 
     // --- REFS ---
     const videoRef = useRef(null);
@@ -37,7 +37,7 @@ export default function Chat({ interviewId }) {
     const stopPromiseResolver = useRef(null);
     const recordedChunksRef = useRef([]);
     const socketRef = useRef(null);
-    const proctoringIntervalRef = useRef(null);
+    // const proctoringIntervalRef = useRef(null);
     const sessionIdRef = useRef(null);
     const interviewStartInitiated = useRef(false);
 
@@ -70,109 +70,159 @@ export default function Chat({ interviewId }) {
             }
         };
 
-        if (interviewStatus === 'active') {
-            document.addEventListener("visibilitychange", handleVisibilityChange);
-            window.addEventListener("blur", handleBlur);
-        }
-
-        return () => {
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("blur", handleBlur);
-        };
-    }, [interviewStatus, proctoringAlert.active, warningCount]);
-
-
-    // --- LIVE PROCTORING & WEBSOCKETS (Modified) ---
-    const startLiveProctoring = useCallback(() => {
-        const currentSessionId = sessionIdRef.current;
-        if (!currentSessionId || (socketRef.current && socketRef.current.connected)) return;
+    // Connect socket ONLY when interview is active for tab-switching alerts
+    if (interviewStatus === 'active' && !socketRef.current) {
         const socket = io('http://localhost:5000');
         socketRef.current = socket;
         socket.on('connect', () => {
-            console.log('✅ WebSocket connected.');
-            socket.emit('start_proctoring', { session_id: currentSessionId });
-            
-            // Add this new listener for real-time gaze data
-            socket.on('gaze_data', (data) => {
-                setGazeDirection(data.gaze_direction);
-                setGazeTimes(data.gaze_times);
-                if (data.is_cheating_alert) {
-                    const newWarningCount = warningCount + 1;
-                    setWarningCount(newWarningCount);
-                    setProctoringAlert({ active: true, message: `Suspicious gaze detected! This is warning #${newWarningCount}.` });
-                    socket.emit('proctoring_violation', { session_id: sessionIdRef.current, type: 'gaze_violation' });
-                }
-            });
-
-            proctoringIntervalRef.current = setInterval(() => {
-                if (videoRef.current && videoRef.current.srcObject && videoRef.current.readyState === 4) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = videoRef.current.videoWidth;
-                    canvas.height = videoRef.current.videoHeight;
-                    const context = canvas.getContext('2d');
-                    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                    const imageData = canvas.toDataURL('image/jpeg', 0.5);
-                    socket.emit('proctoring_frame', { session_id: currentSessionId, image: imageData });
-                }
-            }, 100);
+            console.log('✅ WebSocket connected for violation monitoring.');
         });
-        socket.on('disconnect', () => {
-            console.log('❌ WebSocket disconnected.');
-            if (proctoringIntervalRef.current) clearInterval(proctoringIntervalRef.current);
-        });
-    }, []);
-
-const stopLiveProctoring = useCallback(() => {
-    // Only stop sending frames. Don't disconnect yet.
-    if (proctoringIntervalRef.current) {
-        clearInterval(proctoringIntervalRef.current);
-        proctoringIntervalRef.current = null;
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("blur", handleBlur);
     }
-}, []);
+
+    return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("blur", handleBlur);
+    };
+}, [interviewStatus, proctoringAlert.active, warningCount]);
+
+
+    // --- LIVE PROCTORING & WEBSOCKETS (Modified) ---
+// const startLiveProctoring = useCallback(() => {
+//     const currentSessionId = sessionIdRef.current;
+//     if (!currentSessionId || (socketRef.current && socketRef.current.connected)) return;
+    
+//     const socket = io('http://localhost:5000');
+//     socketRef.current = socket;
+    
+//     socket.on('connect', () => {
+//         console.log('✅ WebSocket connected.');
+//         socket.emit('start_proctoring', { session_id: currentSessionId });
+        
+//         // Listen for real-time gaze data from backend
+//         socket.on('gaze_data', (data) => {
+//             console.log('👁️ Gaze data received:', data);
+//             setGazeDirection(data.gaze_direction);
+//             setGazeTimes(data.gaze_times);
+            
+//             if (data.is_cheating_alert) {
+//                 const newWarningCount = warningCount + 1;
+//                 setWarningCount(newWarningCount);
+//                 setProctoringAlert({ 
+//                     active: true, 
+//                     message: `Suspicious gaze detected! This is warning #${newWarningCount}.` 
+//                 });
+//                 // Note: Don't emit proctoring_violation here as it's already handled by backend
+//             }
+//         });
+
+//         // Optimized frame capture - less frequent and smaller images
+//         proctoringIntervalRef.current = setInterval(() => {
+//             if (videoRef.current && 
+//                 videoRef.current.srcObject && 
+//                 videoRef.current.readyState === 4) {
+                
+//                 try {
+//                     const canvas = document.createElement('canvas');
+//                     // Reduce resolution for better performance
+//                     const width = 320; // Reduced from full video width
+//                     const height = 240; // Reduced from full video height
+                    
+//                     canvas.width = width;
+//                     canvas.height = height;
+                    
+//                     const context = canvas.getContext('2d');
+//                     context.drawImage(videoRef.current, 0, 0, width, height);
+                    
+//                     // Lower quality for faster transmission
+//                     const imageData = canvas.toDataURL('image/jpeg', 0.3); // Reduced quality
+                    
+//                     console.log('📤 Sending frame to backend');
+//                     socket.emit('proctoring_frame', { 
+//                         session_id: currentSessionId, 
+//                         image: imageData 
+//                     });
+//                 } catch (error) {
+//                     console.error('❌ Error capturing frame:', error);
+//                 }
+//             }
+//         }, 1000); // Increased interval to 1 second (from 200ms)
+//     });
+    
+//     socket.on('disconnect', () => {
+//         console.log('❌ WebSocket disconnected.');
+//         if (proctoringIntervalRef.current) {
+//             clearInterval(proctoringIntervalRef.current);
+//             proctoringIntervalRef.current = null;
+//         }
+//     });
+    
+//     socket.on('connect_error', (error) => {
+//         console.error('❌ Socket connection error:', error);
+//     });
+// }, [warningCount]); // Add warningCount as dependency
+
+// const stopLiveProctoring = useCallback(() => {
+//     // Only stop sending frames. Don't disconnect yet.
+//     if (proctoringIntervalRef.current) {
+//         clearInterval(proctoringIntervalRef.current);
+//         proctoringIntervalRef.current = null;
+//     }
+// }, []);
 
     // --- FACE REGISTRATION ---
-    const handleFaceRegistration = useCallback(async () => {
-        // Request fullscreen before proceeding
-        const elem = document.documentElement;
-        try {
-            if (elem.requestFullscreen) {
-                await elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) { /* Safari */
-                await elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) { /* IE11 */
-                await elem.msRequestFullscreen();
-            }
-        } catch (err) {
-            console.warn(`Fullscreen request failed: ${err.message}`);
-            alert("Please enable fullscreen mode to continue the interview.");
-            return;
+const handleFaceRegistration = useCallback(async () => {
+    // Request fullscreen before proceeding
+    const elem = document.documentElement;
+    try {
+        if (elem.requestFullscreen) {
+            await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) { /* Safari */
+            await elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) { /* IE11 */
+            await elem.msRequestFullscreen();
         }
+    } catch (err) {
+        console.warn(`Fullscreen request failed: ${err.message}`);
+        alert("Please enable fullscreen mode to continue the interview.");
+        return;
+    }
 
-        const currentSessionId = sessionIdRef.current;
-        if (!videoRef.current || !currentSessionId || videoRef.current.readyState < 3) {
-            alert("Webcam not ready or session not started.");
-            return;
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-        const context = canvas.getContext('2d');
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const imageData = canvas.toDataURL('image/jpeg');
-        try {
-            const token = localStorage.getItem("companyxyz-token");
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/register-face`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ image: imageData }),
-            });
-            if (!response.ok) throw new Error((await response.json()).message || 'Face registration failed.');
-            setInterviewStatus("active");
-        } catch (error) {
-            console.error("Face registration error:", error);
-            alert(`Could not register face: ${error.message}.`);
-        }
-    }, []);
+    const currentSessionId = sessionIdRef.current;
+    if (!videoRef.current || !currentSessionId || videoRef.current.readyState < 3) {
+        alert("Webcam not ready or session not started.");
+        return;
+    }
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/jpeg');
+    
+    try {
+        const token = localStorage.getItem("companyxyz-token");
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/register-face`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ image: imageData }),
+        });
+        
+        if (!response.ok) throw new Error((await response.json()).message || 'Face registration failed.');
+        
+        console.log("✅ Face registered successfully, starting live proctoring...");
+        
+        // IMPORTANT: Start live proctoring AFTER successful face registration
+        // startLiveProctoring();
+        
+        setInterviewStatus("active");
+    } catch (error) {
+        console.error("Face registration error:", error);
+        alert(`Could not register face: ${error.message}.`);
+    }
+}, []); 
 
     // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed here) ---
     const uploadRecording = useCallback(async (blob) => {
@@ -219,36 +269,39 @@ const stopLiveProctoring = useCallback(() => {
     }, [mediaRecorder]);
 
     const startWebcamAndArchivalRecording = useCallback(async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            if (videoRef.current) videoRef.current.srcObject = stream;
-            startLiveProctoring();
-            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) recordedChunksRef.current.push(e.data);
-            };
-            recorder.onstop = async () => {
-                setIsRecordingVideo(false);
-                const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-                if (blob.size > 0 && stopPromiseResolver.current) {
-                    try {
-                        await uploadRecording(blob);
-                        stopPromiseResolver.current.resolve();
-                    } catch (err) {
-                        stopPromiseResolver.current.reject(err);
-                    }
-                } else if (stopPromiseResolver.current) {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        
+        // DON'T start live proctoring here - it will be started after face registration
+        // startLiveProctoring(); // REMOVE THIS LINE
+        
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+        };
+        recorder.onstop = async () => {
+            setIsRecordingVideo(false);
+            const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+            if (blob.size > 0 && stopPromiseResolver.current) {
+                try {
+                    await uploadRecording(blob);
                     stopPromiseResolver.current.resolve();
+                } catch (err) {
+                    stopPromiseResolver.current.reject(err);
                 }
-                recordedChunksRef.current = [];
-            };
-            recorder.start(1000);
-            setMediaRecorder(recorder);
-            setIsRecordingVideo(true);
-        } catch (error) {
-            console.error("Error accessing webcam:", error);
-        }
-    }, [startLiveProctoring, uploadRecording]);
+            } else if (stopPromiseResolver.current) {
+                stopPromiseResolver.current.resolve();
+            }
+            recordedChunksRef.current = [];
+        };
+        recorder.start(1000);
+        setMediaRecorder(recorder);
+        setIsRecordingVideo(true);
+    } catch (error) {
+        console.error("Error accessing webcam:", error);
+    }
+}, [uploadRecording]);
 
     // --- INTERVIEW LIFECYCLE MANAGEMENT (No changes needed here) ---
     useEffect(() => {
@@ -315,7 +368,7 @@ const stopLiveProctoring = useCallback(() => {
     if (!currentSessionId || interviewStatus !== "active" || uploadStatus === 'uploading') return;
 
     setInterviewStatus("ending");
-    stopLiveProctoring(); // Now this only stops sending frames
+    // stopLiveProctoring(); // Now this only stops sending frames
 
     try {
         // 1. First, complete all async operations
@@ -345,7 +398,7 @@ const stopLiveProctoring = useCallback(() => {
             socketRef.current.disconnect();
         }
     }
-}, [interviewStatus, uploadStatus, stopAndUploadRecording, stopLiveProctoring]);
+}, [interviewStatus, uploadStatus, stopAndUploadRecording]);
     
     const onSend = useCallback(async (userAnswer) => { // Modified to accept answer directly
         const currentSessionId = sessionIdRef.current;
@@ -394,55 +447,36 @@ const stopLiveProctoring = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = true; // Change to true for continuous recording
-            recognitionRef.current.interimResults = true;
+            recognitionRef.current.continuous = false; // Important for auto-stop
+            recognitionRef.current.interimResults = true; // Show live transcript
             recognitionRef.current.lang = "en-US";
             
             recognitionRef.current.onresult = (event) => {
-                let interimTranscript = '';
                 let finalTranscript = '';
-                
                 for (let i = 0; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
                         finalTranscript += event.results[i][0].transcript;
                     } else {
-                        interimTranscript += event.results[i][0].transcript;
+                        setInput(event.results[i][0].transcript); // Update live transcript
                     }
                 }
-                
-                // Update input with both final and interim results
-                setInput(finalTranscript + interimTranscript);
+                if (finalTranscript) {
+                    setInput(finalTranscript);
+                    onSend(finalTranscript); // Automatically send final transcript
+                }
             };
 
             recognitionRef.current.onerror = (event) => console.error("Speech recognition error", event);
-            recognitionRef.current.onend = () => {
-                // Restart recognition if it ends and we're still supposed to be recording
-                if (isRecording) {
-                    recognitionRef.current.start();
-                }
-            };
+            recognitionRef.current.onend = () => setIsRecording(false);
         }
-    }, []);
+    }, [onSend]);
 
     const handleVoiceInput = () => {
-        if (isSpeaking) return; // Prevent recording while AI is speaking
-
+        if (isRecording || isSpeaking) return; // Prevent recording while AI is speaking
         if (recognitionRef.current) {
-            if (isRecording) {
-                // Stop recording if already recording
-                recognitionRef.current.stop();
-                setIsRecording(false);
-                // Send the final transcript
-                if (input.trim()) {
-                    onSend(input.trim());
-                }
-                setInput(""); // Clear the transcript
-            } else {
-                // Start recording
-                setInput(""); // Clear previous transcript
-                recognitionRef.current.start();
-                setIsRecording(true);
-            }
+            setInput(""); // Clear previous transcript
+            recognitionRef.current.start();
+            setIsRecording(true);
         }
     };
 
@@ -484,12 +518,12 @@ const stopLiveProctoring = useCallback(() => {
     // --- Component Cleanup ---
     useEffect(() => {
         return () => {
-            stopLiveProctoring();
+            // stopLiveProctoring();
             if (videoRef.current && videoRef.current.srcObject) {
                 videoRef.current.srcObject.getTracks().forEach(track => track.stop());
             }
         };
-    }, [stopLiveProctoring]);
+    }, []);
 
 
     // --- RENDER LOGIC (Modified) ---
@@ -538,11 +572,12 @@ const stopLiveProctoring = useCallback(() => {
             </div>
 
             {/* Gaze Direction Warning */}
+            {/* {console.log(gazeDirection, gazeTimes)}
             {(gazeDirection === 'Left' || gazeDirection === 'Right') && (
                 <div className={Styles["gaze-warning"]}>
                     Please look at the center of the screen
                 </div>
-            )}
+            )} */}
 
             {/* Main Avatar View */}
             <div className={Styles["avatar-container"]}>
@@ -555,16 +590,11 @@ const stopLiveProctoring = useCallback(() => {
                     {isRecording ? input || "Listening..." : isSpeaking ? "AI is speaking..." : "Press the button to speak"}
                 </p>
                 <button
-                    className={`${Styles["mic-button"]} 
-                        ${isRecording ? Styles["mic-recording"] : ''} 
-                        ${isSpeaking ? Styles["mic-disabled"] : ''}`}
+                    className={`${Styles["mic-button"]} ${isRecording ? Styles["mic-recording"] : ''} ${isSpeaking ? Styles["mic-disabled"] : ''}`}
                     onClick={handleVoiceInput}
-                    disabled={isSpeaking}
+                    disabled={isSpeaking || isRecording}
                 >
-                    {isRecording ? "Stop" : "Start"} {/* Add text to indicate current state */}
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 14q.825 0 1.413-.588T14 12V6q0-.825-.588-1.413T12 4q-.825 0-1.413.588T10 6v6q0 .825.588 1.413T12 14Zm-1 7v-3.075q-2.6-.35-4.3-2.325T5 11H7q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.25-1.7 4.225T13 17.925V21h-2Z"/>
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14q.825 0 1.413-.588T14 12V6q0-.825-.588-1.413T12 4q-.825 0-1.413.588T10 6v6q0 .825.588 1.413T12 14Zm-1 7v-3.075q-2.6-.35-4.3-2.325T5 11H7q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.25-1.7 4.225T13 17.925V21h-2Z"/></svg>
                 </button>
                 {interviewStatus === "active" && (
                     <button className={Styles["end-interview-btn-bottom"]} onClick={endInterview} disabled={uploadStatus === 'uploading'}>
