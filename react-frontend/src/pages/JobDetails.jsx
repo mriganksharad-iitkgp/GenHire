@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Toast from "../components/Toast";
 import JobEditModal from "../components/JobEditModal";
 import styles from "./JobDetails.module.css";
+import InterviewReportModal from '../components/InterviewReportModal';
 
 const JobDetails = () => {
 	const { jobId } = useParams();

@@ -199,3 +199,4 @@ langchain-google-genai
 llama-parse
 fastapi
 uvicorn
+langchain_openai
