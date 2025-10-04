@@ -2,26 +2,25 @@ import os
 import json
 import re
 from dotenv import load_dotenv
-import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict, Any, Optional
+from pydantic import SecretStr
 
 class CVScoringService:
     """Service for calculating CV-JD matching scores using AI"""
     
     def __init__(self):
         load_dotenv()
+        load_dotenv()
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         if not self.google_api_key:
             raise ValueError("GOOGLE_API_KEY not found in .env file")
-        
-        genai.configure(api_key=self.google_api_key)
+        # Use gemini-flash-latest for better stability and automatic model updates
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
-            google_api_key=self.google_api_key,
-            temperature=0.3  # Lower temperature for more consistent scoring
+            model="gemini-flash-latest",
+            temperature=0.3,  # Lower temperature for more consistent scoring
+            api_key=SecretStr(self.google_api_key)
         )
-    
     def format_cv_details(self, cv_details: Dict[str, Any]) -> str:
         """Format CV details dictionary into readable text for AI processing"""
         if not cv_details:
@@ -280,7 +279,10 @@ class CVScoringService:
             response = self.llm.invoke(input_prompt)
             
             # Parse and clean response
-            return self._parse_ai_response(response.content)
+            response_content = response.content
+            if not isinstance(response_content, str):
+                response_content = str(response_content)
+            return self._parse_ai_response(response_content)
             
         except Exception as e:
             print(f"Error in CV scoring: {str(e)}")
