@@ -82,12 +82,86 @@ const Profile = () => {
 
 	// Hooks for profile and applications
 	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
-	const { applications, loading: loadingApps, openReport, companies } = useCandidateApplications(showToast);
+	const { applications, loading: loadingApps, openReport, companies, load: reloadApplications } = useCandidateApplications(showToast);
+	
+	// Check for interview completion on mount and force immediate refresh
+	useEffect(() => {
+		const interviewCompleted = localStorage.getItem('interview-just-completed');
+		if (interviewCompleted === 'true') {
+			console.log('🎯 Interview completion detected on Profile mount - forcing immediate refresh...');
+			localStorage.removeItem('interview-just-completed'); // Clear immediately
+			
+			// Force multiple refreshes with delays to ensure database sync
+			reloadApplications(true);
+			setTimeout(() => reloadApplications(true), 1000);
+			setTimeout(() => reloadApplications(true), 2000);
+			setTimeout(() => reloadApplications(true), 3000);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []); // Run only once on mount - reloadApplications is stable
+	
+	// Reload applications when page becomes visible (after returning from interview)
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				// Check if interview was just completed
+				const interviewCompleted = localStorage.getItem('interview-just-completed');
+				if (interviewCompleted === 'true') {
+					localStorage.removeItem('interview-just-completed'); // Clear the flag
+					
+					// Multiple refresh attempts with increasing delays to ensure update is caught
+					reloadApplications(true);
+					
+					setTimeout(() => {
+						reloadApplications(true);
+					}, 1000);
+					
+					setTimeout(() => {
+						reloadApplications(true);
+					}, 2000);
+					
+					setTimeout(() => {
+						reloadApplications(true);
+					}, 3000);
+				} else {
+					// Force reload when page becomes visible again
+					reloadApplications(true); // Force parameter bypasses throttle
+				}
+			}
+		};
+		
+		// Also reload when hash changes to applications tab
+		const handleHashChange = () => {
+			if (window.location.hash === '#applications') {
+				reloadApplications(true);
+			}
+		};
+		
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		window.addEventListener('hashchange', handleHashChange);
+		
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.removeEventListener('hashchange', handleHashChange);
+		};
+	}, [reloadApplications]);
 
 	// Handle tab change
 	const handleTabChange = (tab) => {
 		setActiveTab(tab);
 		window.location.hash = `#${tab}`;
+		
+		// If switching to applications tab, check for interview completion and refresh
+		if (tab === 'applications') {
+			const interviewCompleted = localStorage.getItem('interview-just-completed');
+			if (interviewCompleted === 'true') {
+				localStorage.removeItem('interview-just-completed');
+				reloadApplications(true);
+			} else {
+				// Always refresh when switching to applications tab for latest data
+				reloadApplications(true);
+			}
+		}
 	};
 
 	// Handle CV upload
@@ -208,25 +282,22 @@ const Profile = () => {
 			setIsReportOpen(true);
 		};
 		
-		// Handle Give Interview action for shortlisted candidates
-		const handleGiveInterview = async (application) => {
-			try {
-				showToast(`Starting interview session for ${application.position}...`, 'info');
-				
-				// Call the startInterview API with the application ID
-				const { startInterview } = await import('../services/api');
-				const response = await startInterview(application.id);
-				
-				// Navigate to the interview page with the session ID
-				navigate(`/interview/${response.session_id}`, {
-					state: { applicationId: application.id }
-				});
-				
-			} catch (error) {
-				console.error('Error starting interview:', error);
-				showToast('Failed to start interview session. Please try again.', 'error');
-			}
-		};
+	// Handle Give Interview action for shortlisted candidates
+	const handleGiveInterview = async (application) => {
+		try {
+			showToast(`Starting interview session for ${application.position}...`, 'info');
+			
+			// Navigate directly to the interview page with application ID
+			// Chat.jsx will handle the API call to start the interview
+			navigate(`/interview/start`, {
+				state: { applicationId: application.id }
+			});
+			
+		} catch (error) {
+			console.error('Error starting interview:', error);
+			showToast('Failed to start interview session. Please try again.', 'error');
+		}
+	};
 
 	return (
 		<div className={styles.profileContainer}>

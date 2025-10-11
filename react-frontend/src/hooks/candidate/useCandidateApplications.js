@@ -14,10 +14,10 @@ export default function useCandidateApplications(toast) {
   const inflightRef = useRef(false);
   const lastLoadAtRef = useRef(0);
 
-  const load = useCallback(async () => {
-    // Throttle to at most once per 3s and avoid parallel calls
+  const load = useCallback(async (force = false) => {
+    // Throttle to at most once per 500ms and avoid parallel calls
     const now = Date.now();
-    if (inflightRef.current || now - lastLoadAtRef.current < 3000) {
+    if (!force && (inflightRef.current || now - lastLoadAtRef.current < 500)) {
       return;
     }
     inflightRef.current = true;
@@ -25,14 +25,11 @@ export default function useCandidateApplications(toast) {
     setLoading(true);
     try {
       const apps = await getApplications();
-      console.log("Raw applications data:", apps); // Debug log
       const mapped = (apps || []).map((a) => {
-        console.log(
-          "Processing application:",
-          a._id,
-          "proctoring_score:",
-          a.proctoring_score
-        ); // Debug log
+        const mappedStatus = (a.status || "pending").replace(/\b\w/g, (c) =>
+          c.toUpperCase()
+        );
+
         return {
           id: a._id,
           company: a.job_details?.company || "TechCorp Solutions",
@@ -42,9 +39,7 @@ export default function useCandidateApplications(toast) {
           department: a.job_details?.department || null,
           position: a.job_title || a.job_details?.title || "",
           appliedDate: a.applied_at,
-          status: (a.status || "pending").replace(/\b\w/g, (c) =>
-            c.toUpperCase()
-          ),
+          status: mappedStatus,
           cvScore:
             typeof a.cv_score === "number"
               ? Math.round(a.cv_score)
@@ -63,7 +58,6 @@ export default function useCandidateApplications(toast) {
           interviews: [],
         };
       });
-      console.log("Mapped applications:", mapped); // Debug log
       setApplications(mapped);
     } catch (e) {
       toastRef.current?.("Failed to load applications", "error");

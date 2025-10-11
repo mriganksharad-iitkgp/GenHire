@@ -30,8 +30,6 @@ const Layout = ({ children }) => {
 					}
 				);
 
-				console.log('Auth verification response:', response.data); // Debug log
-
 				if (response.data) {
 					setIsAuthenticated(true);
 					setUserType(response.data.user_type);
@@ -42,7 +40,6 @@ const Layout = ({ children }) => {
 						return;
 					}
 				} else {
-					console.log('No response data, clearing localStorage'); // Debug log
 					localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY);
 					localStorage.removeItem(process.env.REACT_APP_USER_KEY);
 					setIsAuthenticated(false);

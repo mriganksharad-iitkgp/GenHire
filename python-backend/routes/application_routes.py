@@ -141,6 +141,29 @@ def recalculate_cv_score(current_user, application_id):
     result, status_code = application_controller.recalculate_cv_score(application_id, user_id, user_type)
     return jsonify(result), status_code
 
+@application_bp.route('/applications/<application_id>/update-score', methods=['PUT'])
+@cross_origin()
+@token_required
+def update_interview_score(current_user, application_id):
+    """Update interview score for an application"""
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    user_id = str(current_user['_id'])
+    
+    try:
+        data = request.get_json()
+        interview_score = data.get('interview_score')
+        
+        if interview_score is None:
+            return jsonify({'error': 'interview_score is required'}), 400
+            
+        if not isinstance(interview_score, (int, float)) or interview_score < 0 or interview_score > 100:
+            return jsonify({'error': 'interview_score must be a number between 0 and 100'}), 400
+        
+        result, status_code = application_controller.update_interview_score(application_id, user_id, user_type, interview_score)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Debug endpoints
 @application_bp.route('/debug/applications', methods=['GET'])
 @cross_origin()

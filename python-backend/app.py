@@ -1,4 +1,12 @@
 import os
+import warnings
+# Suppress pydantic warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+
+# Suppress TensorFlow and mediapipe warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warn, 3=error
+warnings.filterwarnings("ignore", category=UserWarning)
+
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from dotenv import load_dotenv
@@ -102,6 +110,8 @@ def start_interview(current_user):
     jd_path = data.get("jd_path")
     reference_paths = data.get("reference_paths")  # <-- FIX IS HERE
     application_id = data.get("application_id")
+    
+
 
     if not all([cv_path, jd_path, reference_paths]):
         return (
@@ -132,21 +142,21 @@ def start_interview(current_user):
         return jsonify(session_details), 400
 
     # Store session info in database
-    interview_id = interviews_collection.insert_one(
-        {
-            "user_id": str(current_user["_id"]),
-            "session_id": session_details["session_id"],
-            "cv_path": cv_path,
-            "jd_path": jd_path,
-            "reference_paths": reference_paths,
-            "application_id": application_id,
-            "status": "active",
-            "similarity_score": 0.8,  # hardcoded for now
-            "created_at": datetime.datetime.utcnow(),
-            "updated_at": datetime.datetime.utcnow(),
-            "start_time": time.time(),  # Add start time
-        }
-    ).inserted_id
+    interview_doc = {
+        "user_id": str(current_user["_id"]),
+        "session_id": session_details["session_id"],
+        "cv_path": cv_path,
+        "jd_path": jd_path,
+        "reference_paths": reference_paths,
+        "application_id": application_id,
+        "status": "active",
+        "similarity_score": 0.8,  # hardcoded for now
+        "created_at": datetime.datetime.utcnow(),
+        "updated_at": datetime.datetime.utcnow(),
+        "start_time": time.time(),  # Add start time
+    }
+    
+    interview_id = interviews_collection.insert_one(interview_doc).inserted_id
 
     return jsonify(
         {
@@ -182,7 +192,6 @@ def submit_answer(current_user, session_id):
     try:
         # Submit answer using new system
         result = interview_manager.submit_answer(session_id, question, answer)
-        print(f"response after submitting the answer: {result}")
 
         if "error" in result:
             return jsonify(result), 400
@@ -229,23 +238,55 @@ def submit_answer(current_user, session_id):
 def end_interview(current_user, session_id):
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
+    final_evaluation = {}
+    interview_transcript = []
+    
+    # HARDCODED SCORES - To be replaced with actual model calculations
+    interview_score = 85  # Hardcoded interview score
+    
     if session and session.is_complete:
         # Generate evaluation from the session manager instead of accessing session attribute
         final_evaluation = interview_manager._generate_final_evaluation(session)
-        print(f"Final evaluation from session: {final_evaluation}")
+        
+        # Extract transcript from interview data
+        if hasattr(session, 'interview_data') and session.interview_data:
+            for qa in session.interview_data:
+                interview_transcript.append({
+                    'role': 'assistant',
+                    'text': qa.get('question', '')
+                })
+                interview_transcript.append({
+                    'role': 'user',
+                    'text': qa.get('answer', '')
+                })
+            
     elif session:
         # If ended prematurely, generate evaluation now
         final_evaluation = interview_manager._generate_final_evaluation(session)
-        print(f"Final evaluation generated at end: {final_evaluation}")
+        
+        # Extract transcript
+        if hasattr(session, 'interview_data') and session.interview_data:
+            for qa in session.interview_data:
+                interview_transcript.append({
+                    'role': 'assistant',
+                    'text': qa.get('question', '')
+                })
+                interview_transcript.append({
+                    'role': 'user',
+                    'text': qa.get('answer', '')
+                })
     else:
         final_evaluation = {
-            "summary": "Evaluation could not be computed as session was not found."
+            "summary": "Evaluation not computed in this build.",
+            "final_score": None
         }
 
     # Get final proctoring data from the live session
     session_data = live_sessions.get(session_id, {})
-    final_score = session_data.get("proctoring_score", "N/A")
     manual_infractions = session_data.get("manual_infractions", [])
+    
+    # HARDCODED SCORE - To be replaced with actual proctoring model calculations
+    proctoring_score = 90  # Hardcoded proctoring score
 
     # Get the final gaze data from the in-memory detector
     detector = proctoring_detectors.get(session_id)
@@ -254,7 +295,7 @@ def end_interview(current_user, session_id):
         detector.detector.total_suspicious_time if detector else 0
     )
 
-    # Calculate total interview duration
+    # Calculate total interview duration for logging
     interview_duration = 0
     session_doc = interviews_collection.find_one(
         {"session_id": session_id, "user_id": str(current_user["_id"])}
@@ -263,6 +304,9 @@ def end_interview(current_user, session_id):
         start_time = session_doc["created_at"]
         end_time = datetime.datetime.utcnow()
         interview_duration = (end_time - start_time).total_seconds()
+        
+        # Note: Proctoring score is currently hardcoded at 90%
+        # Future: Will be calculated based on gaze metrics and infractions
 
     # --- NEW: Generate and save the gaze plot ---
     gaze_plot_path = None
@@ -279,15 +323,10 @@ def end_interview(current_user, session_id):
             
             # Create the full path to be saved in the database
             gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], plot_filename)
-            print(f"📈 Gaze plot generated for session {session_id} at {gaze_plot_path}")
         except Exception as e:
             print(f"Error generating gaze plot for session {session_id}: {e}")
 
-    # --- Log the final times to the backend console ---
-    print(f"--- Interview {session_id} Ended ---")
-    print(f"Total Interview Duration: {round(interview_duration, 2)} seconds")
-    print(f"Total Suspicious Gaze Time: {round(suspicious_activity_time, 2)} seconds")
-    print(f"------------------------------------")
+
 
     # Update the database record with final data
     interviews_collection.update_one(
@@ -295,41 +334,62 @@ def end_interview(current_user, session_id):
         {'$set': {
             'status': 'completed',
             'evaluation': final_evaluation,
-            'proctoring_score': final_score,
+            'final_score': interview_score,  # Store calculated interview score
+            'proctoring_score': proctoring_score,  # Store calculated proctoring score
+            'transcript': interview_transcript,  # Store conversation transcript
             'manual_infractions': manual_infractions,
             'gaze_metrics': gaze_times,
-            'gaze_plot_path': gaze_plot_path, # <-- ADDED: Save the plot path
+            'gaze_plot_path': gaze_plot_path,
             'updated_at': datetime.datetime.utcnow()
         }}
     )
 
-    # Also update the related application with interview_score if linked
+    # Also update the related application with both scores if linked
     if session_doc and session_doc.get("application_id"):
         try:
-            # Use the quantitative score for the application
-            numeric_score = 0
-            if isinstance(final_evaluation, dict):
-                quantitative_data = final_evaluation.get("quantitative", {})
-                if isinstance(quantitative_data, dict):
-                    numeric_score = (
-                        quantitative_data.get("average_relevance_score", 0) * 100
-                    )
-            applications_collection.update_one(
-                {"_id": ObjectId(session_doc["application_id"])},
+            application_id = session_doc["application_id"]
+            # First, check if the application exists
+            existing_app = applications_collection.find_one({"_id": ObjectId(application_id)})
+            if not existing_app:
+                print(f"❌ ERROR: Application with ID {application_id} NOT FOUND in database!")
+                return jsonify({
+                    'status': 'interview_ended',
+                    'evaluation': final_evaluation,
+                    'interview_score': interview_score,
+                    'proctoring_score': proctoring_score,
+                    'transcript': interview_transcript,
+                    'error': 'Application not found'
+                })
+            
+            result = applications_collection.update_one(
+                {"_id": ObjectId(application_id)},
                 {
                     "$set": {
-                        "interview_score": numeric_score,
+                        "interview_score": interview_score,  # Store interview performance score
+                        "proctoring_score": proctoring_score,  # Store proctoring behavior score
                         "status": "interviewed",
                         "updated_at": datetime.datetime.utcnow(),
                     }
                 },
             )
-        except Exception:
-            pass
+            
+            if result.modified_count == 0:
+                print(f"❌ Warning: Application {application_id} was not updated (no documents modified)")
+                
+        except Exception as e:
+            print(f"❌ Error updating application: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print(f"⚠️ WARNING: No application_id found in session document!")
+        print(f"⚠️ Session doc keys: {session_doc.keys() if session_doc else 'No session doc'}")
             
     return jsonify({
         'status': 'interview_ended',
-        'evaluation': final_evaluation
+        'evaluation': final_evaluation,
+        'interview_score': interview_score,
+        'proctoring_score': proctoring_score,
+        'transcript': interview_transcript
     })
 
 # ... (rest of app.py remains the same)
@@ -431,8 +491,6 @@ def register_face(current_user, session_id):
             {"session_id": session_id, "user_id": str(current_user["_id"])},
             {"$set": {"status": "active"}},
         )
-
-        print(f"✅ Face registered for session: {session_id}. Interview is now active.")
         return jsonify({"message": "Face registered successfully"}), 200
     except Exception as e:
         print(f"Error during face registration: {e}")
@@ -443,15 +501,15 @@ def register_face(current_user, session_id):
 @socketio.on("connect")
 def handle_connect():
     from flask import request
-    print(f"🔌 Client connected")
+    pass
 
 @socketio.on("disconnect")  
 def handle_disconnect():
     from flask import request  
-    print(f"🔌 Client disconnected")
     # Clean up any sessions associated with this client
     # Note: In SocketIO, we don't have direct access to sid in these handlers
     # We'll need to handle cleanup differently
+    pass
 
 @socketio.on("start_proctoring")
 def handle_start_proctoring(data):
@@ -462,11 +520,8 @@ def handle_start_proctoring(data):
         live_sessions[session_id]["connected"] = True
         # Initialize the gaze detector for this session
         proctoring_detectors[session_id] = ProctoringGazeDetector()
-        print(f"▶️ Live proctoring stream started for session: {session_id}")
     else:
-        print(
-            f"⚠️ Attempted to start proctoring for invalid/unregistered session: {session_id}"
-        )
+        pass
 def handle_proctoring_frame(data):
     session_id = data.get("session_id")
     session_data = live_sessions.get(session_id)

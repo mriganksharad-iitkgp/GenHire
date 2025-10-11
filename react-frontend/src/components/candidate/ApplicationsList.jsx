@@ -14,8 +14,6 @@ export default function ApplicationsList({
   onOpenReport,
   onGiveInterview, // Add new prop for interview action
 }) {
-  // Debug log to see applications data
-  console.log('ApplicationsList received applications:', applications);
   const filtered = applications.filter((app) => {
     const matchesCompany = companyFilter === "" || app.company.toLowerCase().includes(companyFilter.toLowerCase());
     const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
@@ -160,11 +158,11 @@ export default function ApplicationsList({
                         <div className={`${styles.miniBar} ${styles.miniBarSuccess}`}><div style={{ width: `${app.interviewScore}%` }} /></div>
                       </div>
                     )}
-                    {app.interviewScore !== null && (
+                    {app.proctoringScore !== null && (
                       <div className={`${styles.scorePill} ${styles.scorePillWarning}`} title="Proctoring Score">
                         <span className={styles.pillLabel}>Proctoring</span>
-                        <span className={styles.pillValue}>{app.proctoringScore || 85}%</span>
-                        <div className={`${styles.miniBar} ${styles.miniBarWarning}`}><div style={{ width: `${app.proctoringScore || 85}%` }} /></div>
+                        <span className={styles.pillValue}>{app.proctoringScore}%</span>
+                        <div className={`${styles.miniBar} ${styles.miniBarWarning}`}><div style={{ width: `${app.proctoringScore}%` }} /></div>
                       </div>
                     )}
                   </div>

@@ -56,11 +56,9 @@ class ApplicationController:
         
         if self.cv_scoring_service and cv_details:
             try:
-                print("Calculating CV-JD matching score...")
                 scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
                 cv_score = scoring_result.get('total_score', 75.0)
                 cv_score_breakdown = scoring_result.get('score_breakdown')
-                print(f"CV score calculated: {cv_score}")
             except Exception as e:
                 print(f"Error calculating CV score: {e}")
                 cv_score = 75.0
@@ -71,11 +69,9 @@ class ApplicationController:
         if cv_score >= minimum_cv_score:
             application_status = 'shortlisted'
             status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
-            print(f"✅ Application auto-shortlisted: {status_reason}")
         else:
             application_status = 'rejected'
             status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
-            print(f"❌ Application auto-rejected: {status_reason}")
         
         application_doc = {
             'job_id': job_id,
@@ -170,7 +166,9 @@ class ApplicationController:
             
             # Convert ObjectId to string and fetch job details
             for app in applications:
-                app['_id'] = str(app['_id'])
+                app_id = str(app['_id'])
+                app['_id'] = app_id
+                
                 # Normalize datetime serialization for frontend
                 if isinstance(app.get('applied_at'), datetime.datetime):
                     app['applied_at'] = app['applied_at'].isoformat()
@@ -194,26 +192,35 @@ class ApplicationController:
                         'logo': job.get('logo')
                     }
                     
-                # Get proctoring score from most recent completed interview
+                # Use proctoring_score from application if available, otherwise get from interview
                 completed_interview = self.interviews_collection.find_one(
                     {'application_id': app['_id'], 'status': 'completed'},
                     sort=[('updated_at', -1)]
                 )
-                if completed_interview and completed_interview.get('proctoring_score'):
-                    proctoring_score = completed_interview.get('proctoring_score')
-                    # Handle both numeric and string values, exclude 'N/A'
-                    if isinstance(proctoring_score, (int, float)):
-                        app['proctoring_score'] = proctoring_score
-                    elif isinstance(proctoring_score, str) and proctoring_score.replace('.', '', 1).isdigit():
-                        app['proctoring_score'] = float(proctoring_score)
+                
+                # Prioritize scores stored directly in the application (from interview end process)
+                if 'proctoring_score' not in app or app.get('proctoring_score') is None:
+                    # Fallback to interview collection if not in application
+                    if completed_interview and completed_interview.get('proctoring_score'):
+                        proctoring_score = completed_interview.get('proctoring_score')
+                        # Handle both numeric and string values, exclude 'N/A'
+                        if isinstance(proctoring_score, (int, float)):
+                            app['proctoring_score'] = proctoring_score
+                        elif isinstance(proctoring_score, str) and proctoring_score.replace('.', '', 1).isdigit():
+                            app['proctoring_score'] = float(proctoring_score)
+                        else:
+                            app['proctoring_score'] = None
                     else:
                         app['proctoring_score'] = None
-                else:
-                    app['proctoring_score'] = None
+                
+                # Ensure interview_score is also preserved from application
+                if 'interview_score' not in app:
+                    app['interview_score'] = None
                     
                 # Whether an interview report is available
                 app['report_available'] = completed_interview is not None
-            
+                
+
             return applications, 200
             
         elif user_type == 'recruiter':
@@ -392,12 +399,13 @@ class ApplicationController:
         if not report:
             return {'error': 'Report not found'}, 404
 
-        # Return lightweight report summary
+        # Return complete report with transcript
         payload = {
             'session_id': report.get('session_id'),
             'final_score': report.get('final_score'),
             'proctoring_score': report.get('proctoring_score'),
-            'evaluation': report.get('evaluation')
+            'evaluation': report.get('evaluation'),
+            'transcript': report.get('transcript', [])  # Include conversation transcript
         }
         return payload, 200
     
@@ -477,7 +485,6 @@ class ApplicationController:
                 return {'error': 'CV scoring service not available'}, 503
             
             try:
-                print(f"Recalculating CV score for application {application_id}...")
                 scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
                 new_cv_score = scoring_result.get('total_score', 75.0)
                 new_cv_score_breakdown = scoring_result.get('score_breakdown')
@@ -489,11 +496,9 @@ class ApplicationController:
                 if new_cv_score >= minimum_cv_score:
                     new_status = 'shortlisted'
                     status_reason = f'CV score ({new_cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
-                    print(f"✅ Application auto-shortlisted after recalculation: {status_reason}")
                 else:
                     new_status = 'rejected'
                     status_reason = f'CV score ({new_cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
-                    print(f"❌ Application auto-rejected after recalculation: {status_reason}")
                 
                 # Update application with new score and status
                 update_data = {
@@ -530,8 +535,6 @@ class ApplicationController:
                     {'$set': update_data}
                 )
                 
-                print(f"CV score updated: {new_cv_score}, Status: {update_data.get('status', old_status)}")
-                
                 return {
                     'message': 'CV score recalculated successfully',
                     'cv_score': new_cv_score,
@@ -548,3 +551,47 @@ class ApplicationController:
                 
         except Exception as e:
             return {'error': f'Internal error: {str(e)}'}, 500
+            
+    def update_interview_score(self, application_id, user_id, user_type, interview_score):
+        """Update the interview score for an application"""
+        try:
+            # Validate application ID
+            try:
+                app_doc = self.applications_collection.find_one({'_id': ObjectId(application_id)})
+            except Exception:
+                return {'error': 'Invalid application ID'}, 400
+            
+            if not app_doc:
+                return {'error': 'Application not found'}, 404
+            
+            # Authorization check
+            if user_type in ['candidate', 'student']:
+                if app_doc.get('student_id') != user_id:
+                    return {'error': 'Unauthorized access'}, 403
+            elif user_type == 'recruiter':
+                job = self.jobs_collection.find_one({'_id': ObjectId(app_doc['job_id'])})
+                if not job or job.get('created_by') != user_id:
+                    return {'error': 'Unauthorized access'}, 403
+            else:
+                return {'error': 'Invalid user type'}, 403
+            
+            # Update the interview score
+            update_result = self.applications_collection.update_one(
+                {'_id': ObjectId(application_id)},
+                {
+                    '$set': {
+                        'interview_score': interview_score,
+                        'updated_at': datetime.datetime.utcnow()
+                    }
+                }
+            )
+            
+            if update_result.modified_count > 0:
+                print(f"✅ Interview score updated for application {application_id}: {interview_score}%")
+                return {'message': 'Interview score updated successfully', 'interview_score': interview_score}, 200
+            else:
+                return {'error': 'Failed to update interview score'}, 500
+                
+        except Exception as e:
+            print(f"Error updating interview score: {e}")
+            return {'error': f'Failed to update interview score: {str(e)}'}, 500

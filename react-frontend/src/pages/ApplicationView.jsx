@@ -172,16 +172,6 @@ const ApplicationView = () => {
 		const windowStart = new Date(interview.getTime() - 30 * 60000); // 30 minutes before
 		const windowEnd = new Date(interview.getTime() + 30 * 60000); // 30 minutes after
 
-		// For debugging
-		console.log("Current time:", currentDate);
-		console.log("Interview time:", interview);
-		console.log("Window start:", windowStart);
-		console.log("Window end:", windowEnd);
-		console.log(
-			"Is within window:",
-			currentDate >= windowStart && currentDate <= windowEnd
-		);
-
 		return currentDate >= windowStart && currentDate <= windowEnd;
 	};
 

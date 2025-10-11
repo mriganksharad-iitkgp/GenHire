@@ -8,6 +8,9 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
   const interviewScorePct = (typeof application.interview_score === 'number')
     ? Math.round(application.interview_score)
     : null;
+  const proctoringScorePct = (typeof application.proctoring_score === 'number')
+    ? Math.round(application.proctoring_score)
+    : null;
 
   // Define the status progression hierarchy
   const statusHierarchy = ['pending', 'reviewed', 'shortlisted', 'interviewed', 'selected', 'rejected'];
@@ -81,6 +84,15 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
             <div className={styles.scoreBar}>
               <div className={styles.scoreFill} style={{ width: `${interviewScorePct}%`, background: '#27ae60' }} />
               <span className={styles.scoreText}>{interviewScorePct}%</span>
+            </div>
+          </div>
+        )}
+        {proctoringScorePct !== null && (
+          <div className={styles.scoreItem}>
+            <span className={styles.scoreLabel}>Proctoring</span>
+            <div className={styles.scoreBar}>
+              <div className={styles.scoreFill} style={{ width: `${proctoringScorePct}%`, background: '#8e44ad' }} />
+              <span className={styles.scoreText}>{proctoringScorePct}%</span>
             </div>
           </div>
         )}

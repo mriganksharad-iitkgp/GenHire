@@ -32,6 +32,29 @@ export default function InterviewReportModal({ isOpen, onClose, report, cvScore,
     return null;
   }, [report]);
 
+  // Extract qualitative assessment for display (matches Chat.jsx format)
+  const qualitativeAssessment = useMemo(() => {
+    const ev = report?.evaluation;
+    if (!ev) return null;
+    
+    // If it's an object, look for qualitative_assessment field
+    if (typeof ev === 'object') {
+      return ev.qualitative_assessment || ev.summary || null;
+    }
+    
+    // If it's a string, try to parse it
+    if (typeof ev === 'string') {
+      try {
+        const parsed = JSON.parse(ev);
+        return parsed.qualitative_assessment || parsed.summary || ev;
+      } catch {
+        return ev;
+      }
+    }
+    
+    return null;
+  }, [report]);
+
   const prettyJSON = useMemo(() => JSON.stringify(report || {}, null, 2), [report]);
 
   const scoreChip = (label, val, color) => (
@@ -137,8 +160,69 @@ export default function InterviewReportModal({ isOpen, onClose, report, cvScore,
           <div style={{ paddingTop: 14 }}>
             {tab === 'summary' && (
               <div>
-                <SectionTitle>Evaluation Summary</SectionTitle>
-                {evaluationObj ? (
+                {/* Display quantitative metrics if available - matches Chat.jsx format */}
+                {evaluationObj?.quantitative && (
+                  <div>
+                    <SectionTitle>Performance Metrics</SectionTitle>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '20px',
+                      marginBottom: '25px'
+                    }}>
+                      {evaluationObj.quantitative.number_of_questions && (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                          padding: '20px',
+                          borderRadius: '12px',
+                          color: 'white',
+                          textAlign: 'center',
+                          boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                        }}>
+                          <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>Questions Answered</div>
+                          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>
+                            {evaluationObj.quantitative.number_of_questions}
+                          </div>
+                        </div>
+                      )}
+                      {evaluationObj.quantitative.average_relevance_score && (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          padding: '20px',
+                          borderRadius: '12px',
+                          color: 'white',
+                          textAlign: 'center',
+                          boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
+                        }}>
+                          <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>Relevance Score</div>
+                          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>
+                            {Math.round(evaluationObj.quantitative.average_relevance_score)}%
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <SectionTitle>📋 Evaluation Summary</SectionTitle>
+                {qualitativeAssessment ? (
+                  <div style={{
+                    background: '#f8f9fa',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    marginBottom: '20px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <div style={{
+                      color: '#495057',
+                      lineHeight: '1.6'
+                    }}>
+                      {qualitativeAssessment.split("\n").map((line, index) => (
+                        <p key={index} style={{ marginBottom: '8px' }}>{line}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : evaluationObj ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
                     {evaluationObj.summary && (
                       <div style={{ background: '#f8f9fb', padding: 12, borderRadius: 8 }}>{evaluationObj.summary}</div>
