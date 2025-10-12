@@ -23,6 +23,15 @@ from ..prompts import (
     CLOSING_PROMPT,
     FALLBACK_CLOSING,
 )
+from ..prompts.experiential_question_prompts import (
+    EXPERIENTIAL_QUESTION_PROMPT,
+    FALLBACK_EXPERIENTIAL_QUESTION,
+    EXPERIENTIAL_PERFORMANCE_GUIDANCE,
+    EXPERIENTIAL_ANSWER_CONTEXT,
+    EXPERIENTIAL_QUESTION_TEMPLATES,
+    EXPERIENTIAL_FOLLOW_UPS,
+    EXPERIENTIAL_QUESTION_FLOW,
+)
 
 
 class InterviewPhase(Enum):
@@ -30,6 +39,7 @@ class InterviewPhase(Enum):
 
     GREETING = "greeting"
     STRUCTURE_EXPLANATION = "structure_explanation"
+    EXPERIENTIAL_QUESTIONS = "experiential_questions"
     TECHNICAL_QUESTIONS = "technical_questions"
     CLOSING = "closing"
 
@@ -75,6 +85,10 @@ class ConversationContext:
     job_title: str = "Software Developer"
     last_mentioned_concepts: List[str] = None  # Track what candidate mentioned
     conversation_history: List[Dict[str, str]] = None  # Track Q&A pairs
+    cv_projects: List[Dict[str, str]] = None  # Track projects from CV
+    cv_experiences: List[Dict[str, str]] = None  # Track work experiences from CV
+    current_project_focus: str = None  # Current project being discussed
+    projects_covered: List[str] = None  # Projects already discussed
 
     def __post_init__(self):
         if self.previous_answers is None:
@@ -85,6 +99,12 @@ class ConversationContext:
             self.last_mentioned_concepts = []
         if self.conversation_history is None:
             self.conversation_history = []
+        if self.cv_projects is None:
+            self.cv_projects = []
+        if self.cv_experiences is None:
+            self.cv_experiences = []
+        if self.projects_covered is None:
+            self.projects_covered = []
 
 
 @dataclass
@@ -122,6 +142,10 @@ class PromptBasedQuestionGenerator:
         # Extract keywords from CV
         cv_keywords = self._extract_cv_keywords(self.cv_content)
 
+        # Extract projects and experiences from CV
+        cv_projects = self._extract_cv_projects(resume_sections)
+        cv_experiences = self._extract_cv_experiences(resume_sections)
+
         # Extract job title from job description
         job_title = self._extract_job_title(job_description)
 
@@ -133,6 +157,9 @@ class PromptBasedQuestionGenerator:
 
         # Select starting topic
         starting_topic = cv_keywords[0] if cv_keywords else "technical background"
+        
+        # Select starting project for experiential questions
+        starting_project = cv_projects[0]["name"] if cv_projects else "your most recent project"
 
         context = ConversationContext(
             current_topic=starting_topic,
@@ -149,6 +176,9 @@ class PromptBasedQuestionGenerator:
             candidate_name=candidate_name,
             cv_keywords=cv_keywords,
             job_title=job_title,
+            cv_projects=cv_projects,
+            cv_experiences=cv_experiences,
+            current_project_focus=starting_project,
         )
 
         self.conversation_context = context
@@ -169,8 +199,19 @@ class PromptBasedQuestionGenerator:
 
         elif context.interview_phase == InterviewPhase.STRUCTURE_EXPLANATION:
             question = self._generate_structure_explanation(context)
-            context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
-
+            context.interview_phase = InterviewPhase.EXPERIENTIAL_QUESTIONS
+        
+        elif context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+            if context.question_count >= 7:
+                context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
+                question = self._generate_technical_question(
+                    context, last_answer, answer_evaluation
+                )
+            else:
+                question = self._generate_experiential_question(
+                    context, last_answer, answer_evaluation
+                )
+                                                
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
             if (
                 context.question_count >= 20
@@ -190,15 +231,25 @@ class PromptBasedQuestionGenerator:
                 context, last_answer, answer_evaluation
             )
 
-        # Create metadata
-        metadata = QuestionMetadata(
-            question_type=QuestionType.TECHNICAL,
-            intent=QuestionIntent.ASSESS_EXPERIENCE,
-            difficulty_level=context.candidate_skill_level,
-            expected_depth=context.depth_level,
-            topic_area=context.current_topic,
-            prerequisites=[],
-        )
+        # Create metadata based on current phase
+        if context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+            metadata = QuestionMetadata(
+                question_type=QuestionType.TECHNICAL,  # Using TECHNICAL as base type
+                intent=QuestionIntent.ASSESS_EXPERIENCE,
+                difficulty_level=context.candidate_skill_level,
+                expected_depth=context.depth_level,
+                topic_area=context.current_project_focus or "project experience",
+                prerequisites=[],
+            )
+        else:
+            metadata = QuestionMetadata(
+                question_type=QuestionType.TECHNICAL,
+                intent=QuestionIntent.ASSESS_EXPERIENCE,
+                difficulty_level=context.candidate_skill_level,
+                expected_depth=context.depth_level,
+                topic_area=context.current_topic,
+                prerequisites=[],
+            )
 
         context.question_count += 1
         return question, metadata
@@ -250,6 +301,126 @@ class PromptBasedQuestionGenerator:
             )
         except Exception:
             return self._fallback_structure_explanation(context)
+
+    def _generate_experiential_question(
+        self,
+        context: ConversationContext,
+        last_answer: Optional[str] = None,
+        answer_evaluation: Optional[Dict] = None,
+    ) -> str:
+        """Generate experiential questions using the prompt template."""
+        
+        # Prepare CV projects and experiences for the prompt
+        cv_projects_str = self._format_cv_projects_for_prompt(context.cv_projects)
+        cv_experiences_str = self._format_cv_experiences_for_prompt(context.cv_experiences)
+        
+        # Build context about previous answers and score
+        previous_context = ""
+        acknowledgment = ""
+        follow_up_strategy = ""
+
+        if last_answer and answer_evaluation:
+            score = answer_evaluation.get("relevance_score", 0.5)
+
+            # Extract key projects/experiences mentioned by candidate
+            mentioned_projects = self._extract_projects_from_answer(last_answer)
+            mentioned_technologies = self._extract_technologies_from_answer(last_answer)
+
+            # Store conversation history
+            if context.conversation_history:
+                last_question = context.conversation_history[-1].get("question", "")
+                context.conversation_history.append(
+                    {
+                        "question": last_question,
+                        "answer": (
+                            last_answer[:200] + "..."
+                            if len(last_answer) > 200
+                            else last_answer
+                        ),
+                        "score": score,
+                    }
+                )
+
+            # Analyze the candidate's answer to provide contextual response
+            if score < 0.3:
+                performance_guidance = EXPERIENTIAL_PERFORMANCE_GUIDANCE["vague"]
+            elif score < 0.6:
+                performance_guidance = EXPERIENTIAL_PERFORMANCE_GUIDANCE["surface"]
+            elif score < 0.8:
+                performance_guidance = EXPERIENTIAL_PERFORMANCE_GUIDANCE["detailed"]
+            else:
+                performance_guidance = EXPERIENTIAL_PERFORMANCE_GUIDANCE["comprehensive"]
+
+            # Extract key concepts from their answer for follow-up
+            projects_mentioned = (
+                ", ".join(mentioned_projects[:2])
+                if mentioned_projects
+                else "the projects discussed"
+            )
+            technologies_mentioned = (
+                ", ".join(mentioned_technologies[:3])
+                if mentioned_technologies
+                else "the technologies mentioned"
+            )
+            
+            previous_context = EXPERIENTIAL_ANSWER_CONTEXT.format(
+                last_answer_preview=last_answer[:200],
+                experiences_mentioned=projects_mentioned,
+                technologies_mentioned=technologies_mentioned,
+                score=score,
+                performance_guidance=performance_guidance,
+            )
+
+        # Determine question type based on context
+        question_flow = EXPERIENTIAL_QUESTION_FLOW.get(
+            context.question_count, 
+            {"type": "project_overview", "focus": "General project discussion"}
+        )
+        question_type = question_flow["type"]
+
+        prompt = EXPERIENTIAL_QUESTION_PROMPT.format(
+            cv_projects=cv_projects_str,
+            experiences=cv_experiences_str,
+            current_focus=context.current_project_focus,
+            question_type=question_type,
+            topics_covered=context.projects_covered,
+            previous_context=previous_context,
+            performance_guidance=(
+                performance_guidance
+                if "performance_guidance" in locals()
+                else "Ask an appropriate follow-up question"
+            ),
+        )
+
+        try:
+            response = self.llm.complete(prompt)
+            question = (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else self._fallback_experiential_question_with_context(
+                    context, last_answer, score if "score" in locals() else 0.5
+                )
+            )
+
+            # Update projects covered
+            if context.current_project_focus not in context.projects_covered:
+                context.projects_covered.append(context.current_project_focus)
+
+            # Switch to next project if needed
+            should_switch_project = self._should_switch_project(context, answer_evaluation)
+            if should_switch_project:
+                next_project = self._get_next_project(context)
+                if next_project:
+                    context.current_project_focus = next_project
+
+            return question
+
+        except Exception as e:
+            print(f"Error generating experiential question: {e}")
+            return self._fallback_experiential_question_with_context(
+                context, last_answer, score if "score" in locals() else 0.5
+            )
+    
 
     def _generate_technical_question(
         self,
@@ -868,3 +1039,253 @@ class PromptBasedQuestionGenerator:
         return FALLBACK_CLOSING.format(
             candidate_name=context.candidate_name, primary_technology=primary_technology
         )
+
+    # Experiential question helper methods
+
+    def _extract_cv_projects(self, resume_sections: Dict[str, str]) -> List[Dict[str, str]]:
+        """Extract projects from CV sections."""
+        projects = []
+        
+        # Look for common project section names
+        project_sections = ["projects", "project", "portfolio", "work", "experience"]
+        
+        for section_name, content in resume_sections.items():
+            if any(keyword in section_name.lower() for keyword in project_sections):
+                # Simple project extraction - look for bullet points or numbered items
+                lines = content.split('\n')
+                current_project = {}
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    # Look for project titles (usually start with bullet points or numbers)
+                    if line.startswith(('•', '-', '*', '1.', '2.', '3.', '4.', '5.')):
+                        # Save previous project if exists
+                        if current_project and 'name' in current_project:
+                            projects.append(current_project)
+                        
+                        # Start new project
+                        project_name = line.lstrip('•-*123456789. ').strip()
+                        current_project = {
+                            'name': project_name,
+                            'description': '',
+                            'technologies': []
+                        }
+                    elif current_project and 'name' in current_project:
+                        # Add description or technology to current project
+                        if any(tech in line.lower() for tech in ['python', 'javascript', 'react', 'node', 'java', 'c++', 'sql', 'mongodb', 'aws', 'docker']):
+                            current_project['technologies'].append(line)
+                        else:
+                            current_project['description'] += ' ' + line
+                
+                # Add last project
+                if current_project and 'name' in current_project:
+                    projects.append(current_project)
+        
+        # If no projects found in specific sections, try to extract from general content
+        if not projects:
+            projects = self._fallback_extract_projects(resume_sections)
+        
+        return projects[:5]  # Limit to 5 projects
+
+    def _extract_cv_experiences(self, resume_sections: Dict[str, str]) -> List[Dict[str, str]]:
+        """Extract work experiences from CV sections."""
+        experiences = []
+        
+        # Look for experience-related sections
+        experience_sections = ["experience", "work", "employment", "career", "professional"]
+        
+        for section_name, content in resume_sections.items():
+            if any(keyword in section_name.lower() for keyword in experience_sections):
+                lines = content.split('\n')
+                current_experience = {}
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # Look for company names or job titles
+                    if any(indicator in line.lower() for indicator in ['inc', 'corp', 'ltd', 'llc', 'company', 'technologies', 'solutions']):
+                        if current_experience and 'company' in current_experience:
+                            experiences.append(current_experience)
+                        current_experience = {
+                            'company': line,
+                            'position': '',
+                            'duration': '',
+                            'description': ''
+                        }
+                    elif current_experience and 'company' in current_experience:
+                        # Check if it's a position or duration
+                        if any(role in line.lower() for role in ['developer', 'engineer', 'analyst', 'intern', 'assistant', 'manager', 'lead']):
+                            current_experience['position'] = line
+                        elif any(month in line.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                            current_experience['duration'] = line
+                        else:
+                            current_experience['description'] += ' ' + line
+                
+                # Add last experience
+                if current_experience and 'company' in current_experience:
+                    experiences.append(current_experience)
+        
+        return experiences[:3]  # Limit to 3 experiences
+
+    def _format_cv_projects_for_prompt(self, projects: List[Dict[str, str]]) -> str:
+        """Format CV projects for use in prompts."""
+        if not projects:
+            return "No specific projects mentioned in CV"
+        
+        formatted_projects = []
+        for i, project in enumerate(projects, 1):
+            project_str = f"{i}. {project['name']}"
+            if project.get('description'):
+                project_str += f" - {project['description'][:100]}..."
+            if project.get('technologies'):
+                techs = ', '.join(project['technologies'][:3])
+                project_str += f" (Technologies: {techs})"
+            formatted_projects.append(project_str)
+        
+        return '\n'.join(formatted_projects)
+
+    def _format_cv_experiences_for_prompt(self, experiences: List[Dict[str, str]]) -> str:
+        """Format CV experiences for use in prompts."""
+        if not experiences:
+            return "No work experience mentioned in CV"
+        
+        formatted_experiences = []
+        for i, exp in enumerate(experiences, 1):
+            exp_str = f"{i}. {exp.get('company', 'Unknown Company')}"
+            if exp.get('position'):
+                exp_str += f" - {exp['position']}"
+            if exp.get('duration'):
+                exp_str += f" ({exp['duration']})"
+            if exp.get('description'):
+                exp_str += f" - {exp['description'][:100]}..."
+            formatted_experiences.append(exp_str)
+        
+        return '\n'.join(formatted_experiences)
+
+    def _extract_projects_from_answer(self, answer: str) -> List[str]:
+        """Extract project names mentioned in candidate's answer."""
+        if not answer:
+            return []
+        
+        # Look for project indicators
+        project_indicators = [
+            'project', 'application', 'system', 'platform', 'website', 'app',
+            'tool', 'software', 'program', 'solution', 'product'
+        ]
+        
+        mentioned_projects = []
+        answer_lower = answer.lower()
+        
+        # Simple extraction - look for phrases that might be project names
+        words = answer.split()
+        for i, word in enumerate(words):
+            if any(indicator in word.lower() for indicator in project_indicators):
+                # Try to get the full project name (2-3 words around the indicator)
+                start = max(0, i-1)
+                end = min(len(words), i+3)
+                project_name = ' '.join(words[start:end])
+                mentioned_projects.append(project_name)
+        
+        return mentioned_projects[:3]  # Return top 3
+
+    def _extract_technologies_from_answer(self, answer: str) -> List[str]:
+        """Extract technologies mentioned in candidate's answer."""
+        if not answer:
+            return []
+        
+        # Common technology terms
+        tech_terms = [
+            'python', 'javascript', 'java', 'react', 'node', 'django', 'flask',
+            'sql', 'mongodb', 'postgresql', 'aws', 'docker', 'kubernetes',
+            'git', 'linux', 'api', 'rest', 'graphql', 'html', 'css'
+        ]
+        
+        mentioned_techs = []
+        answer_lower = answer.lower()
+        
+        for term in tech_terms:
+            if term in answer_lower:
+                mentioned_techs.append(term)
+        
+        return mentioned_techs[:5]  # Return top 5
+
+    def _should_switch_project(self, context: ConversationContext, answer_evaluation: Optional[Dict]) -> bool:
+        """Determine if we should switch to a new project."""
+        # Don't switch too early
+        if context.question_count < 3:
+            return False
+        
+        # Switch every 2-3 questions in experiential phase
+        base_switch_interval = 2
+        
+        if answer_evaluation:
+            score = answer_evaluation.get("overall_score", 0.5)
+            
+            # If they're struggling, switch sooner
+            if score < 0.4 and context.question_count % 2 == 0:
+                return True
+        
+        # Check if it's time to switch based on interval
+        questions_on_current_project = context.question_count % base_switch_interval
+        return questions_on_current_project == 0 and len(context.cv_projects) > len(context.projects_covered)
+
+    def _get_next_project(self, context: ConversationContext) -> Optional[str]:
+        """Get the next project to discuss."""
+        uncovered_projects = [
+            project['name']
+            for project in context.cv_projects
+            if project['name'] not in context.projects_covered
+        ]
+        
+        if uncovered_projects:
+            return uncovered_projects[0]
+        
+        # If all projects covered, cycle back
+        if context.projects_covered:
+            return context.projects_covered[
+                context.question_count % len(context.projects_covered)
+            ]
+        
+        return None
+
+    def _fallback_extract_projects(self, resume_sections: Dict[str, str]) -> List[Dict[str, str]]:
+        """Fallback method to extract projects when specific sections not found."""
+        projects = []
+        
+        # Look for any content that might be projects
+        for section_name, content in resume_sections.items():
+            if 'project' in section_name.lower() or 'work' in section_name.lower():
+                lines = content.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if len(line) > 10 and any(tech in line.lower() for tech in ['python', 'javascript', 'react', 'node', 'java']):
+                        projects.append({
+                            'name': line[:50] + '...' if len(line) > 50 else line,
+                            'description': line,
+                            'technologies': []
+                        })
+        
+        return projects[:3]
+
+    def _fallback_experiential_question_with_context(
+        self, context: ConversationContext, last_answer: str = "", score: float = 0.5
+    ) -> str:
+        """Fallback method for experiential questions with contextual acknowledgment."""
+        base_question = f"Can you tell me about your {context.current_project_focus} project and what you learned from it?"
+        
+        if last_answer:
+            if score < 0.4:
+                acknowledgment = "I appreciate you sharing that. Let me ask about something else - "
+            elif score < 0.7:
+                acknowledgment = "That's helpful context. Now, "
+            else:
+                acknowledgment = "Great insights! Building on that, "
+            
+            return f"{acknowledgment}{base_question.lower()}"
+        
+        return base_question

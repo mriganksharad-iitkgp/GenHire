@@ -1,6 +1,6 @@
 """
-Interactive test for the prompt-based question generator.
-Allows you to have a real conversation with the AI interviewer.
+Interactive test for the role-based question generator.
+Allows you to have a real conversation with the AI interviewer based on specific roles.
 """
 
 import sys
@@ -13,10 +13,11 @@ load_dotenv()
 # Add the parent directory to the path so we can import from interview
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from interview.core.prompt_based_question_generator import (
-    PromptBasedQuestionGenerator,
+from interview.core.role_based_question_generator import (
+    RoleBasedQuestionGenerator,
     ConversationContext,
     InterviewPhase,
+    Role,
 )
 from interview.core.session_manager import InterviewSessionManager
 from interview.config.settings import LLMConfig, LLMProvider, InterviewConfig
@@ -112,6 +113,25 @@ def display_answer_evaluation(evaluation_result):
     print("-" * 40)
 
 
+def select_role():
+    """Allow the user to select a role for the interview."""
+    print("\n🎭 Select a Role for the Interview:")
+    print("1. Finance")
+    print("2. Software Development")
+    print("3. AI")
+    print("4. Data Analyst")
+    
+    while True:
+        try:
+            choice = int(input("\nEnter your choice (1-4): "))
+            if 1 <= choice <= 4:
+                roles = [Role.FINANCE, Role.SOFTWARE_DEVELOPMENT, Role.AI, Role.DATA_ANALYST]
+                return roles[choice - 1]
+            else:
+                print("❌ Invalid choice. Please enter a number between 1 and 4.")
+        except ValueError:
+            print("❌ Please enter a valid number.")
+
 def interactive_interview():
     """Run an interactive interview session."""
     print("🎯 Interactive AI Interview Session")
@@ -120,10 +140,15 @@ def interactive_interview():
     print("an AI interviewer using your actual CV and the job description.")
     print("Type your responses naturally - this is a real interview simulation!")
     print_separator()
+    
+    # Select role for the interview
+    selected_role = select_role()
+    print(f"\n✅ Selected Role: {selected_role.value}")
+    print_separator()
 
     # Set up paths to the actual CV and JD files
-    cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
     reference_paths = []
 
     # Check if files exist
@@ -147,7 +172,14 @@ def interactive_interview():
         # Initialize the interview system
         print("\n🔧 Initializing AI interviewer...")
         llm = LLMFactory.create(llm_config)
-        qg = PromptBasedQuestionGenerator(llm)
+        qg = RoleBasedQuestionGenerator(llm)
+        
+        # Check if question bank is available for the selected role
+        has_question_bank = qg.set_role(selected_role)
+        if has_question_bank:
+            print(f"✅ Using question bank for {selected_role.value}")
+        else:
+            print(f"⚠️ No question bank available for {selected_role.value}. Using AI-generated questions.")
 
         # Initialize session manager for answer evaluation
         interview_config = InterviewConfig(min_questions=5, max_questions=15)
@@ -165,7 +197,7 @@ def interactive_interview():
         job_description = document_loader.get_jd_text()
 
         # Initialize both systems
-        context = qg.initialize_conversation(resume_sections, job_description)
+        context = qg.initialize_conversation(resume_sections, job_description, selected_role)
 
         # Create a session with session manager for evaluation
         session_result = session_manager.create_session(
@@ -216,6 +248,8 @@ def interactive_interview():
                 if question_count == 0:
                     # First question (greeting)
                     current_question, metadata = qg.get_next_question(context)
+                elif question_count > 25:  # Increased to accommodate experiential + technical questions
+                    return
                 else:
                     # Subsequent questions with previous answer and evaluation
                     current_question, metadata = qg.get_next_question(
@@ -231,6 +265,7 @@ def interactive_interview():
                 phase_emojis = {
                     InterviewPhase.GREETING: "👋",
                     InterviewPhase.STRUCTURE_EXPLANATION: "📋",
+                    InterviewPhase.EXPERIENTIAL_QUESTIONS: "💼",
                     InterviewPhase.TECHNICAL_QUESTIONS: "🔬",
                     InterviewPhase.CLOSING: "👋",
                 }
@@ -240,7 +275,27 @@ def interactive_interview():
                     f"\n{phase_emoji} Interview Phase: {context.interview_phase.value.replace('_', ' ').title()}"
                 )
 
-                if context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
+                if context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+                    print(f"💼 Current Project: {context.current_project_focus}")
+                    print(f"📊 Questions Asked: {context.question_count}")
+                elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
+                    # Display role-specific topic information
+                    if selected_role:
+                        role_emoji_map = {
+                            Role.FINANCE: "💰",
+                            Role.SOFTWARE_DEVELOPMENT: "💻",
+                            Role.AI: "🤖",
+                            Role.DATA_ANALYST: "📊"
+                        }
+                        role_emoji = role_emoji_map.get(selected_role, "🔬")
+                        print(f"{role_emoji} Role: {selected_role.value}")
+                        
+                        # Display if using question bank or AI-generated questions
+                        if qg.using_question_bank:
+                            print(f"📚 Using: Role-specific question bank")
+                        else:
+                            print(f"🧠 Using: AI-generated questions")
+                            
                     print(f"🎯 Current Topic: {context.current_topic}")
                     print(f"📊 Questions Asked: {context.question_count}")
 
@@ -344,7 +399,15 @@ def interactive_interview():
                 question_count += 1
 
                 # Show progress after questions
-                if context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
+                if context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+                    projects_left = [
+                        project['name']
+                        for project in context.cv_projects
+                        if project['name'] not in context.projects_covered
+                    ]
+                    if projects_left:
+                        print(f"\n💼 Upcoming Projects: {', '.join(projects_left[:2])}")
+                elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
                     topics_left = [
                         kw
                         for kw in context.cv_keywords
@@ -392,8 +455,8 @@ def demo_mode():
     print("📄 CV/JD Analysis Demo")
     print("=" * 50)
 
-    cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
     try:
         document_loader = DocumentLoader(cv_path, jd_path, [])
@@ -422,6 +485,24 @@ def demo_mode():
         for section, content in resume_sections.items():
             content_preview = content[:100] + "..." if len(content) > 100 else content
             print(f"   {section}: {content_preview}")
+
+        print(f"\n💼 Projects Found:")
+        for i, project in enumerate(context.cv_projects, 1):
+            print(f"   {i}. {project['name']}")
+            if project.get('description'):
+                desc = project['description'][:50] + "..." if len(project['description']) > 50 else project['description']
+                print(f"      Description: {desc}")
+            if project.get('technologies'):
+                techs = ', '.join(project['technologies'][:3])
+                print(f"      Technologies: {techs}")
+
+        print(f"\n🏢 Work Experiences Found:")
+        for i, exp in enumerate(context.cv_experiences, 1):
+            print(f"   {i}. {exp.get('company', 'Unknown Company')}")
+            if exp.get('position'):
+                print(f"      Position: {exp['position']}")
+            if exp.get('duration'):
+                print(f"      Duration: {exp['duration']}")
 
         print(f"\n📄 Job Description Preview:")
         print(f"   {job_description[:200]}...")
