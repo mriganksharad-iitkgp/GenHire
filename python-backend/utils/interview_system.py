@@ -31,6 +31,29 @@ def extract_text_from_pdf(file_path):
     text = "".join(page.extract_text() for page in reader.pages if page.extract_text())
     return text
 
+def extract_text_from_txt(file_path):
+    """Extracts text from a TXT file."""
+    if not os.path.exists(file_path):
+        print(f"Warning: TXT file not found at {file_path}")
+        return ""
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except Exception as e:
+        print(f"Error reading text file {file_path}: {e}")
+        return ""
+
+def extract_text(file_path):
+    """Extracts text from supported file formats."""
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext == ".pdf":
+        return extract_text_from_pdf(file_path)
+    elif file_ext == ".txt":
+        return extract_text_from_txt(file_path)
+    else:
+        print(f"Unsupported file format: {file_ext}")
+        return ""
+
 def preprocess_text(text):
     """Preprocesses text for embedding by cleaning and filtering words."""
     text = text.lower()
@@ -114,8 +137,8 @@ class LLMEngine:
 class DocumentLoader:
     """Loads and holds text from CV, JD, and reference documents."""
     def __init__(self, cv_path, jd_path, reference_paths):
-        self.cv_text = extract_text_from_pdf(cv_path)
-        self.jd_text = extract_text_from_pdf(jd_path)
+        self.cv_text = extract_text(cv_path)
+        self.jd_text = extract_text(jd_path)
         # Handle single or multiple reference paths
         paths = [reference_paths] if isinstance(reference_paths, str) else reference_paths
         self.documents = SimpleDirectoryReader(input_files=paths).load_data()

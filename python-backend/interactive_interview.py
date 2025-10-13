@@ -19,6 +19,7 @@ from interview.core.role_based_question_generator import (
     InterviewPhase,
     Role,
 )
+from interview.core.prompt_based_question_generator import PromptBasedQuestionGenerator
 from interview.core.session_manager import InterviewSessionManager
 from interview.config.settings import LLMConfig, LLMProvider, InterviewConfig
 from interview.llm.factory import LLMFactory

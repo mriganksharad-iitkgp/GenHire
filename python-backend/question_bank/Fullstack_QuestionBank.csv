@@ -1,0 +1,1001 @@
+Question Number,Interview Question
+1,What is HTML and what does it stand for?
+2,What are semantic elements in HTML?
+3,Differentiate between inline and block elements in HTML.
+4,What is the DOCTYPE declaration?
+5,What are HTML attributes?
+6,What is the difference between HTML and XHTML?
+7,What are void elements in HTML?
+8,How do you create a hyperlink in HTML?
+9,What is the purpose of the alt attribute in images?
+10,What are HTML forms and how do you create them?
+11,What is the difference between GET and POST methods?
+12,What are HTML5 new features?
+13,What is the canvas element?
+14,What is local storage in HTML5?
+15,What are data attributes in HTML?
+16,How do you embed audio and video in HTML5?
+17,What is the difference between session storage and local storage?
+18,What are web workers in HTML5?
+19,What is the manifest file in HTML5?
+20,How do you make an HTML page responsive?
+21,What are meta tags and their importance?
+22,What is the difference between div and span?
+23,How do you create tables in HTML?
+24,What are HTML entities?
+25,What is the purpose of the head section?
+26,How do you include CSS in HTML?
+27,What is the difference between id and class attributes?
+28,How do you create lists in HTML?
+29,What are iframes and when to use them?
+30,What is the importance of the title tag?
+31,What are HTML5 form input types?
+32,What is the difference between article and section tags?
+33,What are microdata and structured data in HTML?
+34,What is the picture element and responsive images?
+35,What are custom data attributes?
+36,What is the difference between script async and defer?
+37,What are HTML templates?
+38,What is shadow DOM?
+39,What are custom elements?
+40,What is the difference between innerHTML and textContent?
+41,What is CSS and what does it stand for?
+42,What are the different ways to apply CSS?
+43,What is the CSS box model?
+44,What is the difference between margin and padding?
+45,What are CSS selectors?
+46,What is specificity in CSS?
+47,What are pseudo-classes and pseudo-elements?
+48,What is the difference between absolute and relative positioning?
+49,What is Flexbox and how does it work?
+50,What is CSS Grid?
+51,What are media queries?
+52,What is responsive design?
+53,What are CSS preprocessors?
+54,What is the difference between SCSS and Sass?
+55,What are CSS frameworks?
+56,What is Bootstrap?
+57,What are CSS animations?
+58,What are CSS transitions?
+59,What is the z-index property?
+60,What is the float property?
+61,What are CSS variables?
+62,What is the difference between display: none and visibility: hidden?
+63,What is the clearfix hack?
+64,What are CSS sprites?
+65,What is the cascade in CSS?
+66,What are vendor prefixes?
+67,What is normalize.css?
+68,What is the difference between rem and em units?
+69,What are CSS methodologies like BEM?
+70,How do you center a div in CSS?
+71,What are CSS custom properties (variables)?
+72,What is the difference between CSS Grid and Flexbox?
+73,What are CSS transforms?
+74,What are CSS transitions vs animations?
+75,What is CSS specificity calculation?
+76,What are CSS pseudo-elements?
+77,What are CSS pseudo-classes?
+78,What is CSS containment?
+79,What are CSS logical properties?
+80,What is CSS subgrid?
+81,What are CSS container queries?
+82,What is CSS cascade layers (@layer)?
+83,"What are CSS functions (calc, clamp, etc.)?"
+84,What is CSS Houdini?
+85,What are CSS custom elements?
+86,What is CSS-in-JS?
+87,What is styled-components?
+88,What is emotion CSS?
+89,What are CSS modules?
+90,What is PostCSS?
+91,What is JavaScript?
+92,What are the data types in JavaScript?
+93,"What is the difference between var, let, and const?"
+94,What is hoisting in JavaScript?
+95,What are closures in JavaScript?
+96,What is the difference between == and ===?
+97,What are arrow functions?
+98,What is the this keyword?
+99,What are JavaScript promises?
+100,What is async/await?
+101,What is the event loop in JavaScript?
+102,What are callbacks in JavaScript?
+103,What is prototype inheritance?
+104,What are higher-order functions?
+105,What is the difference between null and undefined?
+106,What are template literals?
+107,What is destructuring in JavaScript?
+108,What are spread and rest operators?
+109,What are JavaScript modules?
+110,What is JSON and how do you work with it?
+111,What are JavaScript events?
+112,What is event delegation?
+113,What is the DOM?
+114,How do you manipulate the DOM?
+115,What are JavaScript timers?
+116,What is error handling in JavaScript?
+117,What are regular expressions?
+118,What is the difference between synchronous and asynchronous JavaScript?
+119,What are JavaScript classes?
+120,What is the fetch API?
+121,What is the prototype chain in JavaScript?
+122,What is function currying?
+123,What is function composition?
+124,What is memoization?
+125,What are generators in JavaScript?
+126,What are iterators in JavaScript?
+127,What is the Symbol data type?
+128,What are WeakMap and WeakSet?
+129,What is the Proxy object?
+130,What is the Reflect API?
+131,What are Web Workers?
+132,What is Service Worker?
+133,What is IndexedDB?
+134,What is the Intersection Observer API?
+135,What is the Mutation Observer API?
+136,What are Custom Elements?
+137,What is Shadow DOM?
+138,What are Progressive Web Apps (PWA)?
+139,What is the Fetch API vs XMLHttpRequest?
+140,What is the Broadcast Channel API?
+141,What is React?
+142,What are React components?
+143,What is JSX?
+144,What is the virtual DOM?
+145,What are props in React?
+146,What is state in React?
+147,What are React hooks?
+148,What is useState hook?
+149,What is useEffect hook?
+150,What is the component lifecycle?
+151,What is the difference between functional and class components?
+152,What is prop drilling?
+153,What is the Context API?
+154,What is Redux?
+155,What are controlled and uncontrolled components?
+156,What is React Router?
+157,What are higher-order components (HOCs)?
+158,What are render props?
+159,What is React.memo?
+160,What is useCallback hook?
+161,What is useMemo hook?
+162,What is useRef hook?
+163,What is useContext hook?
+164,What is useReducer hook?
+165,What are custom hooks?
+166,How do you handle forms in React?
+167,What is code splitting in React?
+168,What is lazy loading in React?
+169,What are React portals?
+170,How do you optimize React applications?
+171,What is React Fiber?
+172,What is reconciliation in React?
+173,What is the difference between controlled and uncontrolled components?
+174,What are error boundaries in React?
+175,What is React.StrictMode?
+176,What is React.Fragment?
+177,What are portals in React?
+178,What is code splitting in React?
+179,What is React.lazy and Suspense?
+180,What is the useCallback hook optimization?
+181,What is the useMemo hook optimization?
+182,What is the useImperativeHandle hook?
+183,What is the useLayoutEffect hook?
+184,What is the difference between useEffect and useLayoutEffect?
+185,What are custom hooks in React?
+186,How do you share logic between components?
+187,What is prop drilling and how to avoid it?
+188,What is the Context API?
+189,What is Redux and when to use it?
+190,What is the difference between Redux and Context API?
+191,What is Node.js?
+192,What is npm?
+193,What is the event loop in Node.js?
+194,What are Node.js modules?
+195,What is the difference between require and import?
+196,What is Express.js?
+197,How do you create a server in Node.js?
+198,What are middleware functions?
+199,What is asynchronous programming in Node.js?
+200,"What are callbacks, promises, and async/await in Node.js?"
+201,What is the fs module?
+202,What is the path module?
+203,What is the http module?
+204,What are streams in Node.js?
+205,What is the difference between readFile and createReadStream?
+206,What is clustering in Node.js?
+207,What is process in Node.js?
+208,What are environment variables?
+209,How do you handle errors in Node.js?
+210,What is package.json?
+211,What is the difference between dependencies and devDependencies?
+212,What is nodemon?
+213,What is body-parser?
+214,What is CORS?
+215,How do you implement authentication in Node.js?
+216,What are JWT tokens?
+217,What is bcrypt?
+218,How do you connect to a database in Node.js?
+219,What is Mongoose?
+220,What are Node.js best practices?
+221,What is the Buffer class in Node.js?
+222,What are child processes in Node.js?
+223,What is the crypto module?
+224,What is the os module?
+225,What are worker threads in Node.js?
+226,What is the util module?
+227,What is the events module?
+228,What is the stream module?
+229,What is the cluster module?
+230,What is PM2?
+231,What is a database?
+232,What is the difference between SQL and NoSQL databases?
+233,What is a relational database?
+234,What are primary keys and foreign keys?
+235,What is normalization?
+236,What are the different types of joins?
+237,What is an index?
+238,What are stored procedures?
+239,What are triggers?
+240,What is a transaction?
+241,What are ACID properties?
+242,What is database sharding?
+243,What is database replication?
+244,What is MongoDB?
+245,What are collections and documents in MongoDB?
+246,What is MySQL?
+247,What is PostgreSQL?
+248,How do you optimize database queries?
+249,What is a connection pool?
+250,What are database migrations?
+251,What is the CAP theorem?
+252,What is eventual consistency?
+253,What are aggregate functions in SQL?
+254,What is the GROUP BY clause?
+255,What is the HAVING clause?
+256,What are subqueries?
+257,What are views in databases?
+258,What is database backup and recovery?
+259,What are database constraints?
+260,What is data modeling?
+261,What is database indexing?
+262,What are the types of database indexes?
+263,What is query optimization?
+264,What is database partitioning?
+265,What is database replication?
+266,What is master-slave replication?
+267,What is master-master replication?
+268,What is database sharding?
+269,What is horizontal vs vertical partitioning?
+270,What is database normalization?
+271,What is system design?
+272,What is scalability?
+273,What is the difference between horizontal and vertical scaling?
+274,What is load balancing?
+275,What is caching?
+276,What are different caching strategies?
+277,What is a CDN?
+278,What is microservices architecture?
+279,What is monolithic architecture?
+280,What is the difference between microservices and monolithic architecture?
+281,What is an API?
+282,What is REST?
+283,What is GraphQL?
+284,What is the difference between REST and GraphQL?
+285,What is API rate limiting?
+286,What is database partitioning?
+287,What is consistent hashing?
+288,What is eventual consistency?
+289,What is the CAP theorem?
+290,Design a URL shortener like bit.ly
+291,Design a chat application
+292,Design a social media feed
+293,Design a video streaming service
+294,Design a ride-sharing service
+295,Design a messaging system
+296,Design a notification system
+297,Design a search engine
+298,Design a recommendation system
+299,Design a payment system
+300,How would you handle high traffic?
+301,What is service discovery?
+302,What is service mesh?
+303,What is circuit breaker pattern?
+304,What is the saga pattern?
+305,What is event sourcing?
+306,What is CQRS (Command Query Responsibility Segregation)?
+307,What is distributed tracing?
+308,What is service communication in microservices?
+309,What is synchronous vs asynchronous communication?
+310,What is message queuing in microservices?
+311,What is backend development?
+312,What is a web server?
+313,What is the difference between GET and POST requests?
+314,What are HTTP status codes?
+315,What is middleware?
+316,What are RESTful APIs?
+317,What is SOAP?
+318,What is GraphQL?
+319,What is API versioning?
+320,What is authentication?
+321,What is authorization?
+322,What is OAuth?
+323,What is JWT?
+324,What is session management?
+325,What are cookies?
+326,What is HTTPS?
+327,What is SSL/TLS?
+328,What is input validation?
+329,What is SQL injection?
+330,What is XSS?
+331,What is CSRF?
+332,What is rate limiting?
+333,What is logging?
+334,What is monitoring?
+335,What is containerization?
+336,What is Docker?
+337,What is Kubernetes?
+338,What is CI/CD?
+339,What is deployment?
+340,What is cloud computing?
+341,What is AWS?
+342,What is Azure?
+343,What is Google Cloud Platform?
+344,What is serverless computing?
+345,What is Lambda functions?
+346,What is message queuing?
+347,What is Redis?
+348,What is Elasticsearch?
+349,What is Apache Kafka?
+350,What is WebSocket?
+351,What are data structures?
+352,What is an array?
+353,What is a linked list?
+354,What is the difference between array and linked list?
+355,What is a stack?
+356,What is a queue?
+357,What is a tree?
+358,What is a binary tree?
+359,What is a binary search tree?
+360,What is a hash table?
+361,What is a graph?
+362,What is Big O notation?
+363,What is time complexity?
+364,What is space complexity?
+365,What is recursion?
+366,What is dynamic programming?
+367,What is the difference between BFS and DFS?
+368,What are sorting algorithms?
+369,What is bubble sort?
+370,What is quick sort?
+371,What is merge sort?
+372,What is heap sort?
+373,What are searching algorithms?
+374,What is binary search?
+375,What is linear search?
+376,Implement a function to reverse a string
+377,Find the maximum element in an array
+378,Check if a string is a palindrome
+379,Implement FizzBuzz
+380,Find duplicate elements in an array
+381,Implement a function to find factorial
+382,Find the nth Fibonacci number
+383,Reverse a linked list
+384,Check if two strings are anagrams
+385,Find the missing number in an array
+386,Implement binary search
+387,Find the intersection of two arrays
+388,Implement a stack using arrays
+389,Implement a queue using stacks
+390,Check if parentheses are balanced
+391,Find the first non-repeating character in a string
+392,Find the maximum subarray sum
+393,Detect a cycle in a linked list
+394,Merge two sorted arrays
+395,Find the kth largest element in an array
+396,Valid parentheses checker
+397,Longest common subsequence
+398,Fibonacci sequence with memoization
+399,Two sum problem
+400,Three sum problem
+401,What is software testing?
+402,What are the types of testing?
+403,What is unit testing?
+404,What is integration testing?
+405,What is end-to-end testing?
+406,What is Test-Driven Development (TDD)?
+407,What is Behavior-Driven Development (BDD)?
+408,What is Jest?
+409,What is Mocha?
+410,What is Chai?
+411,What is Enzyme?
+412,What is React Testing Library?
+413,What is Cypress?
+414,What is Selenium?
+415,What is Puppeteer?
+416,How do you test React components?
+417,How do you test API endpoints?
+418,What is mocking in testing?
+419,What are test doubles?
+420,What is code coverage?
+421,What is continuous testing?
+422,What are testing best practices?
+423,How do you write maintainable tests?
+424,What is snapshot testing?
+425,What is property-based testing?
+426,What is performance testing?
+427,What is load testing?
+428,What is stress testing?
+429,What is security testing?
+430,What is accessibility testing?
+431,What is TypeScript?
+432,What are the benefits of TypeScript?
+433,What are TypeScript types?
+434,What is type annotation in TypeScript?
+435,What is type inference in TypeScript?
+436,What are interfaces in TypeScript?
+437,What are classes in TypeScript?
+438,What are enums in TypeScript?
+439,What are generics in TypeScript?
+440,What are union types?
+441,What are intersection types?
+442,What are type guards?
+443,What are mapped types?
+444,What are conditional types?
+445,What is the any type?
+446,What is the unknown type?
+447,What is the never type?
+448,What is the void type?
+449,What are optional properties?
+450,What are readonly properties?
+451,What is type assertion?
+452,What are namespaces in TypeScript?
+453,What are modules in TypeScript?
+454,What is the tsconfig.json file?
+455,What is strict mode in TypeScript?
+456,How do you migrate JavaScript to TypeScript?
+457,What are TypeScript decorators?
+458,What is the difference between interface and type?
+459,How do you handle third-party libraries in TypeScript?
+460,What are TypeScript utility types?
+461,What is web security?
+462,What is HTTPS?
+463,What is SSL/TLS?
+464,What is encryption?
+465,What is hashing?
+466,What is the difference between encryption and hashing?
+467,What is SQL injection?
+468,How do you prevent SQL injection?
+469,What is Cross-Site Scripting (XSS)?
+470,How do you prevent XSS attacks?
+471,What is Cross-Site Request Forgery (CSRF)?
+472,How do you prevent CSRF attacks?
+473,What is input validation?
+474,What is output encoding?
+475,What is authentication?
+476,What is authorization?
+477,What is the difference between authentication and authorization?
+478,What is OAuth?
+479,What is JWT?
+480,What are the security considerations for JWT?
+481,What is session management?
+482,What are secure cookies?
+483,What is CORS?
+484,What is Content Security Policy (CSP)?
+485,What is OWASP?
+486,What are the OWASP Top 10?
+487,What is penetration testing?
+488,What is vulnerability assessment?
+489,What is secure coding practices?
+490,How do you store passwords securely?
+491,What is web performance optimization?
+492,What are Core Web Vitals?
+493,What is Largest Contentful Paint (LCP)?
+494,What is First Input Delay (FID)?
+495,What is Cumulative Layout Shift (CLS)?
+496,How do you optimize website loading speed?
+497,What is lazy loading?
+498,What is code splitting?
+499,What is tree shaking?
+500,What is minification?
+501,What is compression?
+502,What is caching?
+503,What are caching strategies?
+504,What is a CDN?
+505,What is image optimization?
+506,What are web fonts optimization techniques?
+507,What is critical rendering path?
+508,What is render blocking resources?
+509,How do you optimize JavaScript performance?
+510,How do you optimize CSS performance?
+511,What is database query optimization?
+512,What is connection pooling?
+513,What is horizontal scaling?
+514,What is vertical scaling?
+515,What is load balancing?
+516,What are performance monitoring tools?
+517,What is Lighthouse?
+518,What is WebPageTest?
+519,How do you measure web performance?
+520,What are performance budgets?
+521,What is an API?
+522,What is REST?
+523,What are REST principles?
+524,What are HTTP methods?
+525,What is the difference between PUT and PATCH?
+526,What are HTTP status codes?
+527,What is API versioning?
+528,What is API documentation?
+529,What is Swagger/OpenAPI?
+530,What is GraphQL?
+531,What are the advantages of GraphQL over REST?
+532,What is a GraphQL schema?
+533,"What are GraphQL queries, mutations, and subscriptions?"
+534,What is API rate limiting?
+535,What is API throttling?
+536,What is API authentication?
+537,What is API authorization?
+538,What is OAuth 2.0?
+539,What is API key authentication?
+540,What is Bearer token authentication?
+541,What is CORS?
+542,What is JSONP?
+543,What is webhooks?
+544,What is API gateway?
+545,What is microservices architecture?
+546,What is service-oriented architecture (SOA)?
+547,What is gRPC?
+548,What is Protocol Buffers?
+549,What is API testing?
+550,How do you handle API errors?
+551,What is DevOps?
+552,What is continuous integration?
+553,What is continuous deployment?
+554,What is version control?
+555,What is Git?
+556,What are Git branches?
+557,What is Git merge vs rebase?
+558,What is a pull request?
+559,What is Docker?
+560,What is a Dockerfile?
+561,What is Docker Compose?
+562,What is Kubernetes?
+563,What is a container orchestration?
+564,What is Jenkins?
+565,What is GitHub Actions?
+566,What is GitLab CI/CD?
+567,What is monitoring?
+568,What is logging?
+569,What is infrastructure as code?
+570,What is Terraform?
+571,What is Ansible?
+572,What is a reverse proxy?
+573,What is Nginx?
+574,What is Apache?
+575,What is load balancing?
+576,What is blue-green deployment?
+577,What is canary deployment?
+578,What is rolling deployment?
+579,What is environment configuration?
+580,What are environment variables?
+581,What is containerization?
+582,What is orchestration?
+583,What is service mesh?
+584,What is Istio?
+585,What is Prometheus?
+586,What is Grafana?
+587,What is ELK stack?
+588,What is monitoring and alerting?
+589,What is infrastructure monitoring?
+590,What is application monitoring?
+591,What is Angular?
+592,What are Angular components?
+593,What is TypeScript?
+594,What are Angular services?
+595,What is dependency injection in Angular?
+596,What are Angular directives?
+597,What are Angular pipes?
+598,What is Angular CLI?
+599,What is Angular routing?
+600,What are Angular modules?
+601,What is RxJS?
+602,What are observables?
+603,What is Vue.js?
+604,What is the Vue instance?
+605,What are Vue components?
+606,What is Vue CLI?
+607,What is Vuex?
+608,What is Vue routing?
+609,What are Vue directives?
+610,What are computed properties in Vue?
+611,What are watchers in Vue?
+612,What is Next.js?
+613,What is Nuxt.js?
+614,What is server-side rendering?
+615,What is static site generation?
+616,What is Gatsby?
+617,What is Svelte?
+618,What is Remix?
+619,What is Vite?
+620,What is Webpack?
+621,What is Babel?
+622,What is ESLint?
+623,What is Prettier?
+624,What is module bundling?
+625,What is hot module replacement?
+626,What is tree shaking?
+627,What is code splitting?
+628,What is lazy loading?
+629,What is server-side rendering vs client-side rendering?
+630,What is hydration in web development?
+631,What is cloud computing?
+632,"What are the types of cloud services (IaaS, PaaS, SaaS)?"
+633,What is AWS?
+634,What is EC2?
+635,What is S3?
+636,What is RDS?
+637,What is Lambda?
+638,What is API Gateway?
+639,What is CloudFront?
+640,What is Route 53?
+641,What is VPC?
+642,What is IAM?
+643,What is Azure?
+644,What is Google Cloud Platform?
+645,What is serverless computing?
+646,What are the benefits of serverless?
+647,What is Function as a Service (FaaS)?
+648,What is containerization?
+649,What is Docker?
+650,What is a Docker image?
+651,What is a Docker container?
+652,What is Docker Compose?
+653,What is Kubernetes?
+654,What is a Kubernetes pod?
+655,What is a Kubernetes service?
+656,What is a Kubernetes deployment?
+657,What is container orchestration?
+658,What is infrastructure as code?
+659,What is Terraform?
+660,What is Ansible?
+661,What is monitoring in cloud?
+662,What is CloudWatch?
+663,What is auto-scaling?
+664,What is load balancing in cloud?
+665,What is disaster recovery?
+666,What is backup and restore?
+667,What is multi-region deployment?
+668,What is CDN and its benefits?
+669,What is edge computing?
+670,What are microservices in cloud?
+671,What is the prototype chain in JavaScript?
+672,What is function currying?
+673,What is function composition?
+674,What is memoization?
+675,What are generators in JavaScript?
+676,What are iterators in JavaScript?
+677,What is the Symbol data type?
+678,What are WeakMap and WeakSet?
+679,What is the Proxy object?
+680,What is the Reflect API?
+681,What are Web Workers?
+682,What is Service Worker?
+683,What is IndexedDB?
+684,What is the Intersection Observer API?
+685,What is the Mutation Observer API?
+686,What are Custom Elements?
+687,What is Shadow DOM?
+688,What are Progressive Web Apps (PWA)?
+689,What is the Fetch API vs XMLHttpRequest?
+690,What is the Broadcast Channel API?
+691,What is the Payment Request API?
+692,What is the Geolocation API?
+693,What is the Notification API?
+694,What is the History API?
+695,What is event bubbling and capturing?
+696,What is event delegation?
+697,What is debouncing and throttling?
+698,"What is the difference between call, apply, and bind?"
+699,What is strict mode in JavaScript?
+700,What are JavaScript design patterns?
+701,What is the module pattern?
+702,What is the observer pattern?
+703,What is the singleton pattern?
+704,What is the factory pattern?
+705,What is the decorator pattern?
+706,What is lexical scoping?
+707,What is temporal dead zone?
+708,What are microtasks and macrotasks?
+709,What is JavaScript execution context?
+710,What is the call stack?
+711,What are microservices?
+712,What are the benefits of microservices?
+713,What are the challenges of microservices?
+714,What is service decomposition?
+715,What is the database per service pattern?
+716,What is API gateway in microservices?
+717,What is service discovery?
+718,What is service mesh?
+719,What is circuit breaker pattern?
+720,What is the saga pattern?
+721,What is event sourcing?
+722,What is CQRS (Command Query Responsibility Segregation)?
+723,What is distributed tracing?
+724,What is service communication in microservices?
+725,What is synchronous vs asynchronous communication?
+726,What is message queuing in microservices?
+727,What is event-driven architecture?
+728,What is containerization for microservices?
+729,What is orchestration vs choreography?
+730,What is service versioning?
+731,What is distributed transaction management?
+732,What is monitoring in microservices?
+733,What is logging in distributed systems?
+734,What is configuration management?
+735,What is security in microservices?
+736,What is testing microservices?
+737,What is contract testing?
+738,What is chaos engineering?
+739,What is deployment strategies for microservices?
+740,What is distributed caching?
+741,What is GraphQL?
+742,What are the advantages of GraphQL over REST?
+743,What is a GraphQL schema?
+744,What are GraphQL types?
+745,What are GraphQL queries?
+746,What are GraphQL mutations?
+747,What are GraphQL subscriptions?
+748,What are GraphQL resolvers?
+749,What is the GraphQL execution engine?
+750,What are GraphQL fragments?
+751,What are GraphQL variables?
+752,What are GraphQL directives?
+753,What is GraphQL introspection?
+754,What is Apollo GraphQL?
+755,What is Relay?
+756,What is GraphQL caching?
+757,What is the N+1 problem in GraphQL?
+758,How do you handle authentication in GraphQL?
+759,How do you handle file uploads in GraphQL?
+760,What are GraphQL best practices?
+761,What is GraphQL federation?
+762,What is schema stitching?
+763,What is GraphQL playground?
+764,What is GraphQL code generation?
+765,How do you test GraphQL APIs?
+766,What is GraphQL error handling?
+767,What is GraphQL rate limiting?
+768,What is GraphQL security?
+769,What is GraphQL vs REST performance?
+770,What are GraphQL tools and libraries?
+771,What is React Native?
+772,What is the difference between React and React Native?
+773,What is Expo in React Native?
+774,What are React Native components?
+775,What is Flutter?
+776,What is the difference between React Native and Flutter?
+777,What is Progressive Web App (PWA)?
+778,What are service workers?
+779,What is the app manifest?
+780,What is responsive design for mobile?
+781,What is mobile-first design approach?
+782,What are touch events in web development?
+783,What is viewport meta tag?
+784,What are media queries for mobile?
+785,What is hybrid app development?
+786,What is native app development?
+787,What is cross-platform development?
+788,What is Ionic framework?
+789,What is Cordova/PhoneGap?
+790,What is mobile app performance optimization?
+791,What is React Navigation?
+792,What is AsyncStorage in React Native?
+793,What is Redux in React Native?
+794,What are React Native bridges?
+795,What is hot reloading in React Native?
+796,What are native modules in React Native?
+797,What is Flipper for React Native?
+798,What is CodePush in React Native?
+799,What are React Native animations?
+800,What is gesture handling in React Native?
+801,What is software architecture?
+802,What are design patterns?
+803,What is the Model-View-Controller (MVC) pattern?
+804,What is the Model-View-ViewModel (MVVM) pattern?
+805,What is the Observer pattern?
+806,What is the Singleton pattern?
+807,What is the Factory pattern?
+808,What is the Strategy pattern?
+809,What is the Command pattern?
+810,What is the Adapter pattern?
+811,What is the Decorator pattern?
+812,What is the Facade pattern?
+813,What is the Repository pattern?
+814,What is the Unit of Work pattern?
+815,What is Dependency Injection?
+816,What is Inversion of Control?
+817,What are SOLID principles?
+818,What is the Single Responsibility Principle?
+819,What is the Open/Closed Principle?
+820,What is the Liskov Substitution Principle?
+821,What is the Interface Segregation Principle?
+822,What is the Dependency Inversion Principle?
+823,What is DRY (Don't Repeat Yourself)?
+824,"What is KISS (Keep It Simple, Stupid)?"
+825,What is YAGNI (You Aren't Gonna Need It)?
+826,What is layered architecture?
+827,What is hexagonal architecture?
+828,What is clean architecture?
+829,What is domain-driven design?
+830,What is event-driven architecture?
+831,What are the normal forms in database design?
+832,What is denormalization and when to use it?
+833,What are materialized views?
+834,What are database triggers?
+835,What are stored procedures vs functions?
+836,What is a database transaction?
+837,What are ACID properties?
+838,What is isolation level?
+839,What is deadlock in databases?
+840,How do you handle database deadlocks?
+841,What is database backup and recovery?
+842,What is point-in-time recovery?
+843,What is database migration?
+844,What is schema migration?
+845,What is connection pooling?
+846,What is ORM?
+847,What are the advantages and disadvantages of ORM?
+848,What is the N+1 query problem?
+849,How do you optimize database performance?
+850,What is database monitoring?
+851,What are database constraints?
+852,What is referential integrity?
+853,What is eventual consistency?
+854,What is strong consistency?
+855,What is distributed database?
+856,What is ACID vs BASE?
+857,What is the CAP theorem?
+858,What is MongoDB aggregation?
+859,What are Redis caching strategies?
+860,What is database clustering?
+861,What is WebAssembly (WASM)?
+862,What is Edge computing?
+863,What is JAMstack architecture?
+864,What is headless CMS?
+865,What is static site generation?
+866,What is server-side rendering vs client-side rendering?
+867,What is hydration in web development?
+868,What is code splitting and lazy loading?
+869,What is tree shaking?
+870,What is bundling in web development?
+871,What is hot module replacement?
+872,What is the difference between development and production builds?
+873,What is environment configuration management?
+874,What is feature flags?
+875,What is A/B testing implementation?
+876,What is analytics integration in web apps?
+877,What is error tracking and monitoring?
+878,What is performance profiling?
+879,What is memory leak detection?
+880,What is browser developer tools usage?
+881,What is cross-browser testing?
+882,What is automated testing strategies?
+883,What is continuous integration setup?
+884,What is deployment automation?
+885,What is infrastructure monitoring?
+886,What is capacity planning?
+887,What is disaster recovery planning?
+888,What is data backup strategies?
+889,What is GDPR compliance for web applications?
+890,What is data privacy in web development?
+891,What are Redux middleware?
+892,What is Redux Thunk?
+893,What is Redux Saga?
+894,What is Redux Toolkit?
+895,What is Zustand?
+896,What is Recoil?
+897,What is React Query/TanStack Query?
+898,What is SWR?
+899,How do you optimize React performance?
+900,What is React profiler?
+901,What are render props?
+902,What are higher-order components (HOCs)?
+903,What is compound component pattern?
+904,What is the provider pattern?
+905,What is React Testing Library?
+906,How do you test React components?
+907,What is snapshot testing?
+908,What is React Router?
+909,What is nested routing?
+910,What is programmatic navigation?
+911,What is React Suspense?
+912,What is React Concurrent Mode?
+913,What is React Server Components?
+914,What is React 18 new features?
+915,What is automatic batching in React?
+916,What is startTransition in React?
+917,What is useDeferredValue hook?
+918,What is useId hook?
+919,What is useTransition hook?
+920,What is React Streaming?
+921,What is the Buffer class in Node.js?
+922,What are child processes in Node.js?
+923,What is the crypto module?
+924,What is the os module?
+925,What are worker threads in Node.js?
+926,What is the util module?
+927,What is the events module?
+928,What is the stream module?
+929,What is the cluster module?
+930,What is PM2?
+931,"What is the difference between spawn, exec, and fork?"
+932,What is the dgram module?
+933,What is the net module?
+934,What is the tls module?
+935,What is the url module?
+936,What is the querystring module?
+937,What is the zlib module?
+938,What is the dns module?
+939,What is the readline module?
+940,What is the vm module?
+941,What is the assert module?
+942,What is the cluster module in detail?
+943,What is load balancing in Node.js?
+944,What is memory management in Node.js?
+945,What is garbage collection in Node.js?
+946,What is profiling Node.js applications?
+947,What is debugging Node.js applications?
+948,What is monitoring Node.js applications?
+949,What is scaling Node.js applications?
+950,What are Node.js security best practices?
+951,Climbing stairs problem
+952,House robber problem
+953,Maximum depth of binary tree
+954,Binary tree level order traversal
+955,Validate binary search tree
+956,Lowest common ancestor
+957,Word ladder problem
+958,Course schedule problem
+959,Number of islands
+960,Clone graph
+961,Minimum window substring
+962,Sliding window maximum
+963,Design LRU cache
+964,Design a hash map
+965,Implement trie
+966,Word search in a 2D board
+967,Serialize and deserialize binary tree
+968,Merge k sorted lists
+969,Find median from data stream
+970,Trapping rain water
+971,Longest increasing subsequence
+972,Edit distance problem
+973,Coin change problem
+974,Knapsack problem
+975,Longest palindromic substring
+976,Group anagrams
+977,Top K frequent elements
+978,Meeting rooms problem
+979,Product of array except self
+980,Container with most water
+981,Best time to buy and sell stock
+982,Maximum product subarray
+983,Rotate array
+984,Search in rotated sorted array
+985,Find minimum in rotated sorted array
+986,Merge intervals
+987,Insert interval
+988,Non-overlapping intervals
+989,Jump game
+990,Unique paths
+991,What is Server-Sent Events (SSE)?
+992,What is Long Polling?
+993,What is WebRTC?
+994,What is the File API?
+995,What is the Drag and Drop API?
+996,What is the Fullscreen API?
+997,What is the Page Visibility API?
+998,What is the Battery API?
+999,What is the DeviceOrientation API?
+1000,What is the Vibration API?

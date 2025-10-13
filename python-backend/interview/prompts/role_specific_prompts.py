@@ -36,6 +36,89 @@ ROLE_SPECIFIC_TOPICS = {
     ]
 }
 
+# Role-specific job descriptions
+ROLE_JOB_DESCRIPTIONS = {
+    "FINANCE": """
+Senior Financial Analyst
+
+We are seeking an experienced Financial Analyst to join our Finance team. The ideal candidate will have strong analytical skills and experience in financial modeling, forecasting, and data analysis.
+
+Responsibilities:
+• Develop and maintain financial models to support business decisions
+• Prepare monthly, quarterly, and annual financial reports
+• Analyze financial data and provide insights to management
+• Support budgeting and forecasting processes
+• Identify trends and opportunities for cost reduction and revenue growth
+
+Requirements:
+• Bachelor's degree in Finance, Accounting, or related field
+• 3+ years of experience in financial analysis
+• Proficiency in Excel and financial modeling
+• Strong analytical and problem-solving skills
+• Knowledge of accounting principles and financial reporting
+""",
+
+    "SOFTWARE_DEVELOPMENT": """
+Senior Software Engineer
+
+We are looking for a talented Software Engineer to design, develop, and maintain high-quality software solutions. The ideal candidate will have strong programming skills and experience with modern development practices.
+
+Responsibilities:
+• Design and implement new features and functionality
+• Write clean, maintainable, and efficient code
+• Collaborate with cross-functional teams to define requirements
+• Troubleshoot and debug issues in existing applications
+• Participate in code reviews and contribute to technical documentation
+
+Requirements:
+• Bachelor's degree in Computer Science or related field
+• 3+ years of experience in software development
+• Proficiency in at least one programming language (e.g., Python, Java, JavaScript)
+• Experience with web development frameworks and databases
+• Knowledge of software design patterns and best practices
+""",
+
+    "AI": """
+AI Research Scientist
+
+We are seeking an AI Research Scientist to join our innovative team. The ideal candidate will have strong expertise in machine learning algorithms, neural networks, and AI applications.
+
+Responsibilities:
+• Design and implement machine learning models and algorithms
+• Conduct research to advance the state-of-the-art in AI
+• Develop prototypes and proof-of-concepts for new AI applications
+• Collaborate with engineering teams to deploy AI solutions
+• Stay current with the latest developments in AI and machine learning
+
+Requirements:
+• Master's or PhD in Computer Science, Machine Learning, or related field
+• Experience with deep learning frameworks (e.g., TensorFlow, PyTorch)
+• Strong programming skills in Python
+• Knowledge of natural language processing or computer vision
+• Publication record in AI/ML conferences or journals is a plus
+""",
+
+    "DATA_ANALYST": """
+Senior Data Analyst
+
+We are looking for a skilled Data Analyst to help transform data into actionable insights. The ideal candidate will have strong analytical skills and experience with data visualization tools.
+
+Responsibilities:
+• Collect, process, and analyze large datasets
+• Create dashboards and reports to visualize key metrics
+• Identify trends and patterns to support business decisions
+• Collaborate with stakeholders to understand data requirements
+• Develop and maintain data quality processes
+
+Requirements:
+• Bachelor's degree in Statistics, Mathematics, Computer Science, or related field
+• 3+ years of experience in data analysis
+• Proficiency in SQL and data visualization tools (e.g., Tableau, Power BI)
+• Experience with statistical analysis and data mining techniques
+• Strong problem-solving and communication skills
+"""
+}
+
 # Role-specific greeting prompts
 ROLE_GREETING_PROMPTS = {
     "FINANCE": """You are a Senior Finance Hiring Manager. Give a warm, natural greeting for the {job_title} interview. 

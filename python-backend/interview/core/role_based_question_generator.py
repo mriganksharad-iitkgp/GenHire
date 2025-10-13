@@ -147,13 +147,18 @@ class RoleBasedQuestionGenerator(PromptBasedQuestionGenerator):
         self, resume_sections: Dict[str, str], job_description: str = "", role: Role = None
     ) -> ConversationContext:
         """Initialize conversation context based on resume, job description, and role."""
-        # Initialize with parent method
-        context = super().initialize_conversation(resume_sections, job_description)
-        
         # Set role if provided
         if role:
             self.set_role(role)
             
+        # Use role-specific job description if role is set and no job description provided
+        if self.role and not job_description:
+            from ..prompts.role_specific_prompts import ROLE_JOB_DESCRIPTIONS
+            job_description = ROLE_JOB_DESCRIPTIONS.get(self.role.name, job_description)
+        
+        # Initialize with parent method using potentially updated job description
+        context = super().initialize_conversation(resume_sections, job_description)
+        
         # Update CV keywords to be role-specific if role is set
         if self.role and hasattr(context, 'cv_keywords'):
             role_keywords = ROLE_KEYWORDS.get(self.role.name, [])
