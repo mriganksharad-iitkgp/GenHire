@@ -65,6 +65,8 @@ proctoring_detectors = {}
 # Initialize interview system with proper configuration
 from interview.config.settings import InterviewConfig, LLMConfig, LLMProvider
 from interview.core.session_manager import InterviewSessionManager
+from interview.llm.factory import LLMFactory
+from interview.core.role_based_question_generator import RoleBasedQuestionGenerator, Role
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -105,13 +107,12 @@ from middleware.auth_middleware import token_required
 def start_interview(current_user):
     data = request.json or {}
 
-    # Get file paths from the request
+    # Get file paths and role from the request
     cv_path = data.get("cv_path")
     jd_path = data.get("jd_path")
-    reference_paths = data.get("reference_paths")  # <-- FIX IS HERE
+    reference_paths = data.get("reference_paths")
     application_id = data.get("application_id")
-    
-
+    role_str = data.get("role")
 
     if not all([cv_path, jd_path, reference_paths]):
         return (
@@ -130,10 +131,44 @@ def start_interview(current_user):
     if isinstance(reference_paths, str):
         reference_paths = [reference_paths]
     elif isinstance(reference_paths, list):
-        # Ensure all items in the list are strings
         reference_paths = [str(path) for path in reference_paths]
 
-    # Create interview session using the correct keyword
+    # Role selection and question generator integration
+    selected_role = None
+    if role_str:
+        try:
+            selected_role = Role[role_str.upper().replace(" ", "_")]
+        except Exception:
+            selected_role = None
+
+    llm_config = LLMConfig()
+    llm = None
+    qg = None
+    initial_question = None
+    question_source = "llm"
+
+    try:
+        llm = LLMFactory.create(llm_config)
+        if selected_role:
+            qg = RoleBasedQuestionGenerator(llm)
+            has_question_bank = qg.set_role(selected_role)
+            if has_question_bank:
+                # Load and process documents
+                from interview.document.loader import DocumentLoader
+                document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
+                resume_sections = document_loader.get_cv_sections()
+                job_description = document_loader.get_jd_text()
+                context = qg.initialize_conversation(resume_sections, job_description, selected_role)
+                initial_question = qg.get_next_question(context)
+                question_source = "question_bank"
+            else:
+                initial_question = None
+                question_source = "llm"
+    except Exception as e:
+        initial_question = None
+        question_source = "llm"
+
+    # Create interview session using InterviewSessionManager
     session_details = interview_manager.create_session(
         cv_path=cv_path, jd_path=jd_path, reference_paths=reference_paths
     )
@@ -149,20 +184,22 @@ def start_interview(current_user):
         "jd_path": jd_path,
         "reference_paths": reference_paths,
         "application_id": application_id,
+        "role": role_str,
+        "question_source": question_source,
         "status": "active",
         "similarity_score": 0.8,  # hardcoded for now
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
         "start_time": time.time(),  # Add start time
     }
-    
     interview_id = interviews_collection.insert_one(interview_doc).inserted_id
 
     return jsonify(
         {
             "interview_id": str(interview_id),
             "session_id": session_details["session_id"],
-            "initial_questions": session_details["first_question"],
+            "initial_question": initial_question if initial_question else session_details.get("first_question"),
+            "question_source": question_source,
             "similarity_score": 0.8,  # hardcoded for now
             "conversation_context": session_details.get("conversation_context", {}),
         }
@@ -500,12 +537,12 @@ def register_face(current_user, session_id):
 # Add this entire block for WebSocket event handling
 @socketio.on("connect")
 def handle_connect():
-    from flask import request
+    # ...existing code...
     pass
 
 @socketio.on("disconnect")  
 def handle_disconnect():
-    from flask import request  
+    # ...existing code...
     # Clean up any sessions associated with this client
     # Note: In SocketIO, we don't have direct access to sid in these handlers
     # We'll need to handle cleanup differently
@@ -513,7 +550,7 @@ def handle_disconnect():
 
 @socketio.on("start_proctoring")
 def handle_start_proctoring(data):
-    from flask import request
+    # ...existing code...
     session_id = data.get("session_id")
     if session_id and session_id in live_sessions:
         # Store session info but without relying on sid
@@ -522,6 +559,8 @@ def handle_start_proctoring(data):
         proctoring_detectors[session_id] = ProctoringGazeDetector()
     else:
         pass
+
+@socketio.on("proctoring_frame")
 def handle_proctoring_frame(data):
     session_id = data.get("session_id")
     session_data = live_sessions.get(session_id)

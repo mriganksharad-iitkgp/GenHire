@@ -46,7 +46,7 @@ export default function SidebarProfile({
               <label className={styles.fileInputLabel}>
                 <i className="fa fa-file-text" aria-hidden="true"></i>
                 <span>Resume/CV</span>
-                <input type="file" accept=".pdf,.docx" onChange={onCvFileChange} className={styles.hiddenInput} />
+                <input type="file" accept=".pdf,.docx,.txt" onChange={onCvFileChange} className={styles.hiddenInput} />
                 <div className={styles.fileInfo}>{cvFileName || "No file selected"}</div>
               </label>
               {cvPath && (

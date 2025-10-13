@@ -43,6 +43,7 @@ class JobController:
             if field not in job_data or not job_data[field]:
                 return {'error': f'{field} is required'}, 400
         
+
         # Validate minimum CV score if provided
         minimum_cv_score = job_data.get('minimum_cv_score')
         if minimum_cv_score is not None:
@@ -55,6 +56,7 @@ class JobController:
         else:
             minimum_cv_score = 50.0  # Default minimum CV score
         
+
         # Check for unique job title
         job_title = job_data['title'].strip()
         existing_job = self.jobs_collection.find_one({'title': job_title, 'created_by': recruiter_id})
@@ -98,7 +100,9 @@ class JobController:
             'requirements': normalize_list_field(job_data.get('requirements', []), separator='\n'),
             'benefits': normalize_list_field(job_data.get('benefits', []), separator='\n'),
             'status': status,
+
             'minimum_cv_score': minimum_cv_score,  # Add minimum CV score field
+
             'created_by': recruiter_id,
             'created_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
@@ -152,7 +156,10 @@ class JobController:
                 return [p for p in parts if p]
             return []
         
+
         allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline', 'minimum_cv_score']
+
+
         for field in allowed_fields:
             if field in job_data:
                 if field == 'status':
@@ -166,6 +173,7 @@ class JobController:
                             return {'error': f'Cannot change status from {current_status} to {raw}. Status can only progress forward.'}, 400
                     else:
                         return {'error': f'Invalid status: {raw}. Allowed values: {list(allowed_statuses)}'}, 400
+
                 elif field == 'minimum_cv_score':
                     # Validate minimum CV score
                     try:
@@ -175,6 +183,8 @@ class JobController:
                         update_fields[field] = cv_score
                     except (ValueError, TypeError):
                         return {'error': 'Minimum CV score must be a valid number'}, 400
+
+
                 elif field in {'skills'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []))
                 elif field in {'responsibilities', 'requirements', 'benefits'}:

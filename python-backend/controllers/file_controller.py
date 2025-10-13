@@ -7,7 +7,7 @@ class FileController:
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
         self.upload_folder = os.getenv('UPLOAD_FOLDER', 'uploads')
-        self.allowed_extensions = {'pdf', 'jpg', 'jpeg', 'png', 'gif'}
+        self.allowed_extensions = {'pdf', 'txt', 'jpg', 'jpeg', 'png', 'gif'}
         
         # Ensure folders exist
         self.jd_folder = os.path.join(self.upload_folder, "jd")

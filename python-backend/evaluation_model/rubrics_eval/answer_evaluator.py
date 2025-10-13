@@ -34,6 +34,16 @@ class AnswerEvaluator:
         Returns:
             Score from 1 to 100.
         """
+
+        # Check for "I don't know" type answers first
+        dont_know_phrases = ["i don't know", "don't know", "no idea", "not sure", 
+                            "cannot answer", "can't answer", "do not know", 
+                            "idk", "i have no clue", "no clue"]
+        
+        if student_answer.lower().strip() in dont_know_phrases or any(phrase in student_answer.lower() for phrase in dont_know_phrases):
+            return 0.0
+            
+
         prompt = self._create_evaluation_prompt(student_answer, question, rubric_item)
 
         try:
@@ -104,6 +114,9 @@ class AnswerEvaluator:
         Based on the factual correctness and completeness of the student's answer concerning the grading criterion, provide a score from 1 to 100.
         - A score of 100 means the criterion is fully and correctly addressed.
         - A score of 1 means the criterion is not addressed at all or is completely incorrect.
+
+        - IMPORTANT: If the student's answer indicates they don't know (e.g., "I don't know", "Not sure", "No idea", etc.) or if they explicitly state they cannot answer, you MUST give a score of 0.
+
 
         Respond with only the integer score and nothing else.
         """
