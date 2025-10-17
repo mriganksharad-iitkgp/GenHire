@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
 
 const Register = () => {
@@ -11,10 +12,12 @@ const Register = () => {
   const [userType, setUserType] = useState("candidate"); // 'candidate' or 'recruiter'
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
     if (!name.trim() || !email.trim() || !password || !confirmPassword) {
       setError("All fields are required");
       return;
@@ -44,24 +47,87 @@ const Register = () => {
         throw new Error(data.error || "Registration failed");
       }
 
-      // Store token and user data with user type (consistent with Login)
-      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
-      localStorage.setItem(
-        process.env.REACT_APP_USER_KEY,
-        JSON.stringify({ ...data.user, userType })
-      );
-
-      // Navigate based on user type
-      if (userType === "recruiter") {
-        navigate("/recruiter-dashboard");
+      // Check if email verification is required
+      if (data.email_verification_required) {
+        setSuccessMessage(
+          "Account created successfully! Please check your email to verify your account before logging in."
+        );
+        // Clear form
+        setName("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        // Don't navigate, let user read the message
       } else {
-        navigate("/");
+        // Store token and user data with user type (consistent with Login)
+        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+        localStorage.setItem(
+          process.env.REACT_APP_USER_KEY,
+          JSON.stringify({ ...data.user, userType })
+        );
+
+        // Navigate based on user type
+        if (userType === "recruiter") {
+          navigate("/recruiter-dashboard");
+        } else {
+          navigate("/");
+        }
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setIsLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE}/google-oauth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: credentialResponse.credential,
+          userType: userType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Google sign up failed");
+      }
+
+      // Store token and user data
+      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+      localStorage.setItem(
+        process.env.REACT_APP_USER_KEY,
+        JSON.stringify({
+          ...data.user,
+          userType: data.user.user_type,
+        })
+      );
+
+      // Navigate based on user type
+      if (data.user.user_type === "recruiter") {
+        navigate("/recruiter-dashboard");
+      } else {
+        navigate("/");
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError("Google sign up failed. Please try again.");
   };
 
   return (
@@ -93,6 +159,23 @@ const Register = () => {
         </div>
 
         <form className={styles.loginForm} onSubmit={handleSubmit}>
+          {successMessage && (
+            <div
+              className={styles.successMessage}
+              style={{
+                backgroundColor: "#d1fae5",
+                color: "#065f46",
+                padding: "1rem",
+                borderRadius: "8px",
+                marginBottom: "1rem",
+                border: "1px solid #10b981",
+              }}
+            >
+              <strong>✓ </strong>
+              {successMessage}
+            </div>
+          )}
+
           {error && <div className={styles.errorMessage}>{error}</div>}
 
           <div className={styles.inputGroup}>
@@ -149,6 +232,25 @@ const Register = () => {
               : `Create Account as ${userType === "candidate" ? "Candidate" : "Recruiter"}`}
           </button>
         </form>
+
+        <div style={{ margin: "1.5rem 0", textAlign: "center", color: "#666" }}>
+          <div style={{ display: "flex", alignItems: "center", margin: "1rem 0" }}>
+            <div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
+            <span style={{ padding: "0 1rem", fontSize: "0.9rem" }}>OR</span>
+            <div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              theme="outline"
+              size="large"
+              text="signup_with"
+              width="300"
+            />
+          </div>
+        </div>
 
         <div className={styles.registerSection}>
           <p>

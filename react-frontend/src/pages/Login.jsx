@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
 
 const Login = () => {
@@ -33,7 +34,13 @@ const Login = () => {
 			console.log('Login response:', data); // Debug log
 
 			if (!response.ok) {
-				throw new Error(data.error || "Login failed");
+				// Check if email verification is required
+				if (data.email_verification_required) {
+					setError(data.error + " Please check your email for the verification link.");
+				} else {
+					throw new Error(data.error || "Login failed");
+				}
+				return;
 			}
 
 			// Store token and user data with user type
@@ -59,6 +66,52 @@ const Login = () => {
 		} finally {
 			setIsLoading(false);
 		}
+	};
+
+	const handleGoogleSuccess = async (credentialResponse) => {
+		setIsLoading(true);
+		setError("");
+
+		try {
+			const response = await fetch(`${process.env.REACT_APP_API_BASE}/google-oauth`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					token: credentialResponse.credential,
+					userType: userType,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.error || "Google login failed");
+			}
+
+			// Store token and user data
+			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
+				...data.user,
+				userType: data.user.user_type
+			}));
+
+			// Navigate based on user type
+			if (data.user.user_type === "recruiter") {
+				navigate("/recruiter-dashboard");
+			} else {
+				navigate("/");
+			}
+		} catch (error) {
+			setError(error.message);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const handleGoogleError = () => {
+		setError("Google login failed. Please try again.");
 	};
 
 	return (
@@ -121,7 +174,7 @@ const Login = () => {
 					</div>
 
 					<div className={styles.forgotPassword}>
-						<a href="#reset">Forgot password?</a>
+						<Link to="/forgot-password">Forgot password?</Link>
 					</div>
 
 					<button
@@ -132,6 +185,25 @@ const Login = () => {
 						{isLoading ? "Logging in..." : `Log In as ${userType === "candidate" ? "Candidate" : "Recruiter"}`}
 					</button>
 				</form>
+
+				<div style={{ margin: "1.5rem 0", textAlign: "center", color: "#666" }}>
+					<div style={{ display: "flex", alignItems: "center", margin: "1rem 0" }}>
+						<div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
+						<span style={{ padding: "0 1rem", fontSize: "0.9rem" }}>OR</span>
+						<div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
+					</div>
+
+					<div style={{ display: "flex", justifyContent: "center" }}>
+						<GoogleLogin
+							onSuccess={handleGoogleSuccess}
+							onError={handleGoogleError}
+							theme="outline"
+							size="large"
+							text="continue_with"
+							width="300"
+						/>
+					</div>
+				</div>
 
 				<div className={styles.registerSection}>
 					<p>
