@@ -12,34 +12,31 @@ TOPICS ALREADY COVERED: {topics_covered}
 {previous_context}
 
 INSTRUCTIONS:
-1. FIRST: Create a natural acknowledgment of their previous answer based on what they actually said
-2. THEN: Ask a {question_type} question about {current_topic}
-3. Make the acknowledgment specific to their response content, not generic
-4. Reference specific concepts they mentioned when possible
-5. Keep it conversational and encouraging
-6. Follow the performance guidance: {performance_guidance}
+1. Give a brief 1-2 word acknowledgment (like "Great!" or "Good." or "Okay.")
+2. Then immediately ask a {question_type} question about {current_topic}
+3. Keep it conversational but focus on the question
+4. Follow the performance guidance: {performance_guidance}
 
 QUESTION TYPES BY STAGE:
 - Foundational (Questions 1-8): Basic concepts, definitions, "how does X work?"
 - Practical Application (Questions 9-10): "How have you used X?", "What challenges did you face?"
 - Advanced/Scenario (Questions 11+): Complex scenarios, trade-offs, best practices
 
-EXAMPLES OF NATURAL, CONTEXTUAL ACKNOWLEDGMENTS:
-- "I like how you mentioned [specific concept from their answer]. Now, building on that..."
-- "That's a solid approach with [technology they mentioned]. Tell me about..."
-- "Good point about [specific detail]. In your experience, how do you handle..."
-- "Interesting that you've worked with [tool/framework]. When you're using that..."
+EXAMPLES:
+- "Good. Now, how do you handle..."
+- "Great! Tell me about..."
+- "Okay. When working with X, how do you..."
 
-Generate a natural, conversational response with contextual acknowledgment:"""
+Generate a brief response with 1-2 word acknowledgment followed by your question:"""
 
 FALLBACK_TECHNICAL_QUESTION = "Can you tell me about your experience with {current_topic} and how you've applied it in your projects?"
 
 # Performance guidance templates
 PERFORMANCE_GUIDANCE = {
-    "struggled": "The candidate struggled with this concept. Acknowledge their effort positively, then ask a simpler foundational question to help build their confidence.",
-    "partial": "The candidate shows partial understanding. Acknowledge what they got right, then ask a follow-up question that builds on their response to deepen their knowledge.",
-    "good": "The candidate demonstrated good understanding. Give positive acknowledgment of their explanation, then ask a slightly more advanced question to test deeper knowledge.",
-    "excellent": "The candidate showed excellent understanding. Acknowledge their strong answer enthusiastically, then ask a challenging question or explore a different but related area.",
+    "struggled": "Ask a simpler foundational question.",
+    "partial": "Ask a follow-up question to build on their response.",
+    "good": "Ask a slightly more advanced question.",
+    "excellent": "Ask a challenging question or explore a different area.",
 }
 
 # Context templates for previous answers

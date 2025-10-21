@@ -14,8 +14,6 @@ from ..prompts import (
     SKILL_LEVEL_ASSESSMENT_PROMPT,
     GREETING_PROMPT,
     FALLBACK_GREETING,
-    STRUCTURE_EXPLANATION_PROMPT,
-    FALLBACK_STRUCTURE_EXPLANATION,
     TECHNICAL_QUESTION_PROMPT,
     FALLBACK_TECHNICAL_QUESTION,
     PERFORMANCE_GUIDANCE,
@@ -29,7 +27,6 @@ class InterviewPhase(Enum):
     """Different phases of the interview."""
 
     GREETING = "greeting"
-    STRUCTURE_EXPLANATION = "structure_explanation"
     TECHNICAL_QUESTIONS = "technical_questions"
     CLOSING = "closing"
 
@@ -164,12 +161,8 @@ class PromptBasedQuestionGenerator:
 
         if context.interview_phase == InterviewPhase.GREETING:
             question = self._generate_greeting(context)
-            context.interview_phase = InterviewPhase.STRUCTURE_EXPLANATION
-            context.has_been_greeted = True
-
-        elif context.interview_phase == InterviewPhase.STRUCTURE_EXPLANATION:
-            question = self._generate_structure_explanation(context)
             context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
+            context.has_been_greeted = True
 
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
             if (
@@ -230,26 +223,6 @@ class PromptBasedQuestionGenerator:
             )
         except Exception:
             return self._fallback_greeting(context)
-
-    def _generate_structure_explanation(self, context: ConversationContext) -> str:
-        """Generate brief structure explanation using the prompt template."""
-        cv_keywords_str = (
-            ", ".join(context.cv_keywords)
-            if context.cv_keywords
-            else "your technical background"
-        )
-
-        prompt = STRUCTURE_EXPLANATION_PROMPT.format(cv_keywords=cv_keywords_str)
-
-        try:
-            response = self.llm.complete(prompt)
-            return (
-                response.text.strip()
-                if response and hasattr(response, "text")
-                else self._fallback_structure_explanation(context)
-            )
-        except Exception:
-            return self._fallback_structure_explanation(context)
 
     def _generate_technical_question(
         self,
@@ -849,14 +822,6 @@ class PromptBasedQuestionGenerator:
             return "beginner"
         else:
             return "intermediate"  # Default to intermediate if unclear
-
-    def _fallback_structure_explanation(self, context: ConversationContext) -> str:
-        cv_keywords_str = (
-            ", ".join(context.cv_keywords[:2])
-            if context.cv_keywords
-            else "your technical background"
-        )
-        return FALLBACK_STRUCTURE_EXPLANATION.format(cv_keywords=cv_keywords_str)
 
     def _fallback_technical_question(self, context: ConversationContext) -> str:
         return FALLBACK_TECHNICAL_QUESTION.format(current_topic=context.current_topic)
