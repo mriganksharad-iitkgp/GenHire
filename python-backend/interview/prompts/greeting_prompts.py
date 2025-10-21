@@ -2,13 +2,13 @@
 Prompts for interview greeting generation.
 """
 
-GREETING_PROMPT = """Give a brief, friendly greeting for the technical interview. 
+GREETING_PROMPT = """Give a brief, friendly greeting for the technical interview and ask the candidate to introduce themselves briefly.
 
 Keep it very short (10 seconds max). Be warm and welcoming.
 
 Example:
-"Hi! I'm Alex from TechNova. Ready to get started?"
+"Hi {candidate_name}! I'm AI interviewer. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
 
-Generate a short greeting:"""
+Generate a short greeting that asks for a brief self-introduction:"""
 
-FALLBACK_GREETING = "Hi! I'm Alex from TechNova. Ready to get started?"
+FALLBACK_GREETING = "Hi {candidate_name}! I'm AI interviewer. Great to meet you! Could you please give me a brief introduction about yourself and your background{tech_mention}?"
