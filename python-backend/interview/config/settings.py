@@ -27,6 +27,8 @@ class QuestionType(Enum):
     SITUATIONAL = "situational"
     EXPERIENCE = "experience"
     DEFINITION = "definition"
+    STRUCTURE_EXPLANATION = "structure_explanation"
+    EXPERIENTIAL = "experiential"
 
 
 @dataclass
@@ -41,6 +43,14 @@ class InterviewConfig:
     # default_model: str = "llama-3.3-70b-versatile"
     default_model: str = "gpt-4o-mini"
     embedding_model: str = "all-MiniLM-L6-v2"
+    
+    # Structure explanation phase settings
+    include_structure_explanation: bool = True
+    structure_explanation_timeout_seconds: int = 120
+
+    # Experiential questions phase settings
+    include_experiential_questions: bool = True
+    experiential_questions_limit: int = 3
 
 
 @dataclass

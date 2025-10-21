@@ -122,8 +122,12 @@ def interactive_interview():
     print_separator()
 
     # Set up paths to the actual CV and JD files
-    cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+
+    # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
     reference_paths = []
 
     # Check if files exist
@@ -231,6 +235,7 @@ def interactive_interview():
                 phase_emojis = {
                     InterviewPhase.GREETING: "👋",
                     InterviewPhase.STRUCTURE_EXPLANATION: "📋",
+                    InterviewPhase.EXPERIENTIAL_QUESTIONS: "💼",
                     InterviewPhase.TECHNICAL_QUESTIONS: "🔬",
                     InterviewPhase.CLOSING: "👋",
                 }
@@ -392,8 +397,11 @@ def demo_mode():
     print("📄 CV/JD Analysis Demo")
     print("=" * 50)
 
-    cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+    # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\hr_techh\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
     try:
         document_loader = DocumentLoader(cv_path, jd_path, [])

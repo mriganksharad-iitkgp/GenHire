@@ -16,6 +16,10 @@ from .technical_question_prompts import (
     PREVIOUS_ANSWER_CONTEXT,
 )
 from .closing_prompts import CLOSING_PROMPT, FALLBACK_CLOSING
+from .experiential_question_prompts import (
+    EXPERIENTIAL_QUESTION_PROMPT,
+    FALLBACK_EXPERIENTIAL_QUESTION,
+)
 
 __all__ = [
     "CV_KEYWORDS_EXTRACTION_PROMPT",
@@ -30,4 +34,6 @@ __all__ = [
     "PREVIOUS_ANSWER_CONTEXT",
     "CLOSING_PROMPT",
     "FALLBACK_CLOSING",
+    "EXPERIENTIAL_QUESTION_PROMPT",
+    "FALLBACK_EXPERIENTIAL_QUESTION",
 ]

@@ -8,12 +8,16 @@ from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
 from ..llm.base import BaseLLM
-from ..config.settings import QuestionType
+from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
     CV_KEYWORDS_EXTRACTION_PROMPT,
     SKILL_LEVEL_ASSESSMENT_PROMPT,
     GREETING_PROMPT,
     FALLBACK_GREETING,
+    STRUCTURE_EXPLANATION_PROMPT,
+    FALLBACK_STRUCTURE_EXPLANATION,
+    EXPERIENTIAL_QUESTION_PROMPT,
+    FALLBACK_EXPERIENTIAL_QUESTION,
     TECHNICAL_QUESTION_PROMPT,
     FALLBACK_TECHNICAL_QUESTION,
     PERFORMANCE_GUIDANCE,
@@ -27,6 +31,8 @@ class InterviewPhase(Enum):
     """Different phases of the interview."""
 
     GREETING = "greeting"
+    STRUCTURE_EXPLANATION = "structure_explanation"
+    EXPERIENTIAL_QUESTIONS = "experiential_questions"
     TECHNICAL_QUESTIONS = "technical_questions"
     CLOSING = "closing"
 
@@ -70,6 +76,9 @@ class ConversationContext:
     candidate_name: str = "candidate"
     cv_keywords: List[str] = None
     job_title: str = "Software Developer"
+    cv_experiences: List[str] = None
+    cv_projects: List[str] = None
+    experiential_questions_asked: int = 0
     last_mentioned_concepts: List[str] = None  # Track what candidate mentioned
     conversation_history: List[Dict[str, str]] = None  # Track Q&A pairs
 
@@ -78,6 +87,10 @@ class ConversationContext:
             self.previous_answers = []
         if self.cv_keywords is None:
             self.cv_keywords = []
+        if self.cv_experiences is None:
+            self.cv_experiences = []
+        if self.cv_projects is None:
+            self.cv_projects = []
         if self.last_mentioned_concepts is None:
             self.last_mentioned_concepts = []
         if self.conversation_history is None:
@@ -94,6 +107,7 @@ class QuestionMetadata:
     expected_depth: ConversationDepth
     topic_area: str
     prerequisites: List[str]
+    interview_phase: InterviewPhase
 
 
 class PromptBasedQuestionGenerator:
@@ -102,8 +116,10 @@ class PromptBasedQuestionGenerator:
     Works with existing session manager without requiring changes.
     """
 
-    def __init__(self, llm: BaseLLM):
+    def __init__(self, llm: BaseLLM, config: Optional[InterviewConfig] = None):
+        """Initialize the question generator with an LLM instance and configuration."""
         self.llm = llm
+        self.config = config or InterviewConfig()
         self.conversation_context = None
         self.available_topics = []
         self.cv_content = ""
@@ -116,8 +132,8 @@ class PromptBasedQuestionGenerator:
         self.resume_sections = resume_sections
         self.cv_content = " ".join(resume_sections.values())
 
-        # Extract keywords from CV
-        cv_keywords = self._extract_cv_keywords(self.cv_content)
+        # Extract keywords from CV and JD (JD-weighted)
+        cv_keywords = self._extract_cv_keywords(self.cv_content, job_description)
 
         # Extract job title from job description
         job_title = self._extract_job_title(job_description)
@@ -130,6 +146,10 @@ class PromptBasedQuestionGenerator:
 
         # Select starting topic
         starting_topic = cv_keywords[0] if cv_keywords else "technical background"
+
+        # Extract experiences and projects
+        experiences = self._extract_experiences(resume_sections)
+        projects = self._extract_projects(resume_sections)
 
         context = ConversationContext(
             current_topic=starting_topic,
@@ -146,6 +166,8 @@ class PromptBasedQuestionGenerator:
             candidate_name=candidate_name,
             cv_keywords=cv_keywords,
             job_title=job_title,
+            cv_experiences=experiences,
+            cv_projects=projects,
         )
 
         self.conversation_context = context
@@ -161,8 +183,39 @@ class PromptBasedQuestionGenerator:
 
         if context.interview_phase == InterviewPhase.GREETING:
             question = self._generate_greeting(context)
-            context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
+            context.interview_phase = InterviewPhase.STRUCTURE_EXPLANATION
             context.has_been_greeted = True
+
+        elif context.interview_phase == InterviewPhase.STRUCTURE_EXPLANATION:
+            if self.config.include_structure_explanation:
+                question = self._generate_structure_explanation(context)
+                # Move to experiential questions next
+                context.interview_phase = (
+                    InterviewPhase.EXPERIENTIAL_QUESTIONS
+                    if self.config.include_experiential_questions
+                    else InterviewPhase.TECHNICAL_QUESTIONS
+                )
+            else:
+                # Skip structure explanation if disabled in config
+                context.interview_phase = (
+                    InterviewPhase.EXPERIENTIAL_QUESTIONS
+                    if self.config.include_experiential_questions
+                    else InterviewPhase.TECHNICAL_QUESTIONS
+                )
+                question = (
+                    self._generate_experiential_question(context, last_answer, answer_evaluation)
+                    if self.config.include_experiential_questions
+                    else self._generate_technical_question(context, last_answer, answer_evaluation)
+                )
+
+        elif context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+            # Ask experiential questions up to the configured limit, then move to technical
+            question = self._generate_experiential_question(
+                context, last_answer, answer_evaluation
+            )
+            context.experiential_questions_asked += 1
+            if context.experiential_questions_asked >= self.config.experiential_questions_limit:
+                context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
 
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
             if (
@@ -183,14 +236,31 @@ class PromptBasedQuestionGenerator:
                 context, last_answer, answer_evaluation
             )
 
-        # Create metadata
+        # Create metadata based on current phase
+        if context.interview_phase == InterviewPhase.STRUCTURE_EXPLANATION:
+            question_type = QuestionType.STRUCTURE_EXPLANATION
+            intent = QuestionIntent.CLARIFY_UNDERSTANDING
+        elif context.interview_phase == InterviewPhase.GREETING:
+            question_type = QuestionType.BEHAVIORAL
+            intent = QuestionIntent.EXPLORE_NEW_TOPIC
+        elif context.interview_phase == InterviewPhase.CLOSING:
+            question_type = QuestionType.BEHAVIORAL
+            intent = QuestionIntent.TRANSITION_TOPIC
+        elif context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
+            question_type = QuestionType.EXPERIENTIAL
+            intent = QuestionIntent.ASSESS_EXPERIENCE
+        else:
+            question_type = QuestionType.TECHNICAL
+            intent = QuestionIntent.PROBE_DEEPER
+
         metadata = QuestionMetadata(
-            question_type=QuestionType.TECHNICAL,
-            intent=QuestionIntent.ASSESS_EXPERIENCE,
+            question_type=question_type,
+            intent=intent,
             difficulty_level=context.candidate_skill_level,
             expected_depth=context.depth_level,
             topic_area=context.current_topic,
             prerequisites=[],
+            interview_phase=context.interview_phase,
         )
 
         context.question_count += 1
@@ -501,12 +571,12 @@ class PromptBasedQuestionGenerator:
             return f"{acknowledgment}{base_question.lower()}"
         return base_question
 
-    def _extract_cv_keywords(self, cv_content: str) -> List[str]:
-        """Extract technical keywords from CV content using LLM."""
-        if not cv_content.strip():
+    def _extract_cv_keywords(self, cv_content: str, jd_content: str) -> List[str]:
+        """Extract technical keywords from CV and JD content using LLM (JD-weighted)."""
+        if not (cv_content.strip() or jd_content.strip()):
             return ["General Programming"]
 
-        prompt = CV_KEYWORDS_EXTRACTION_PROMPT.format(cv_content=cv_content)
+        prompt = CV_KEYWORDS_EXTRACTION_PROMPT.format(cv_content=cv_content, jd_content=jd_content)
 
         try:
             response = self.llm.complete(prompt)
@@ -516,7 +586,7 @@ class PromptBasedQuestionGenerator:
                 keywords = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
                 # Clean and format keywords
                 formatted_keywords = []
-                for keyword in keywords[:12]:  # Limit to 12 keywords
+                for keyword in keywords[:15]:  # Limit to 15 keywords
                     cleaned = keyword.strip().strip('"').strip("'")
                     if cleaned and len(cleaned) > 1:
                         formatted_keywords.append(cleaned)
@@ -524,15 +594,14 @@ class PromptBasedQuestionGenerator:
                 return (
                     formatted_keywords
                     if formatted_keywords
-                    else self._fallback_extract_cv_keywords(cv_content)
+                    else self._fallback_extract_cv_keywords(cv_content, jd_content)
                 )
             else:
-                return "fallback keywords"
-                # return self._fallback_extract_cv_keywords(cv_content)
+                return self._fallback_extract_cv_keywords(cv_content, jd_content)
 
         except Exception as e:
-            print(f"Error extracting CV keywords with LLM: {e}")
-            return self._fallback_extract_cv_keywords(cv_content)
+            print(f"Error extracting CV/JD keywords with LLM: {e}")
+            return self._fallback_extract_cv_keywords(cv_content, jd_content)
 
     def _extract_job_title(self, job_description: str) -> str:
         """Extract job title from job description."""
@@ -606,7 +675,7 @@ class PromptBasedQuestionGenerator:
             candidate_name=context.candidate_name, tech_mention=tech_mention
         )
 
-    def _fallback_extract_cv_keywords(self, cv_content: str) -> List[str]:
+    def _fallback_extract_cv_keywords(self, cv_content: str, jd_content: str = "") -> List[str]:
         """Fallback method for CV keyword extraction when LLM fails."""
         # Comprehensive technical keywords covering all major domains
         tech_keywords = [
@@ -662,100 +731,68 @@ class PromptBasedQuestionGenerator:
             "cassandra",
             "oracle",
             "sqlite",
-            "dynamodb",
-            "firebase",
-            # Cloud & Infrastructure
+            # Cloud & DevOps
             "aws",
             "azure",
             "gcp",
             "docker",
             "kubernetes",
+            "jenkins",
+            "github actions",
+            "gitlab ci",
             "terraform",
             "ansible",
-            "jenkins",
-            "gitlab ci",
-            "github actions",
-            "heroku",
-            "digital ocean",
-            # Data Science & ML
-            "machine learning",
-            "data science",
-            "tensorflow",
-            "pytorch",
+            "prometheus",
+            "grafana",
+            # Data & ML
             "pandas",
             "numpy",
             "scikit-learn",
-            "jupyter",
-            "tableau",
-            "power bi",
+            "tensorflow",
+            "pytorch",
             "spark",
             "hadoop",
-            # DevOps & Tools
-            "git",
-            "linux",
-            "bash",
-            "powershell",
-            "nginx",
-            "apache",
+            "tableau",
+            "power bi",
+            # Architecture & APIs
             "microservices",
-            "ci/cd",
-            "monitoring",
-            "logging",
-            "prometheus",
-            "grafana",
-            # Testing & QA
-            "unit testing",
-            "selenium",
-            "jest",
-            "pytest",
-            "cypress",
-            "postman",
-            # API & Protocols
             "rest",
             "graphql",
             "grpc",
-            "websockets",
-            "api",
-            "json",
-            "xml",
-            # Security
-            "cybersecurity",
+            "system design",
+            "design patterns",
+            "clean code",
+            # Security & Testing
             "oauth",
             "jwt",
-            "encryption",
-            "penetration testing",
-            # Emerging Tech
-            "blockchain",
-            "iot",
-            "ar/vr",
-            "computer vision",
-            "nlp",
-            "chatbot",
+            "owasp",
+            "unit testing",
+            "integration testing",
+            "selenium",
+            "jest",
+            "pytest"
         ]
+        cv_lower = (cv_content or "").lower()
+        jd_lower = (jd_content or "").lower()
 
-        found_keywords = []
-        cv_lower = cv_content.lower()
+        found_jd = [kw for kw in tech_keywords if kw in jd_lower]
+        found_cv = [kw for kw in tech_keywords if kw in cv_lower]
 
-        for keyword in tech_keywords:
-            if keyword in cv_lower:
-                # Capitalize properly
-                if keyword in [
-                    "iot",
-                    "ar/vr",
-                    "nlp",
-                    "jwt",
-                    "api",
-                    "html",
-                    "css",
-                    "sql",
-                ]:
-                    found_keywords.append(keyword.upper())
-                elif "/" in keyword:
-                    found_keywords.append(keyword.upper())
-                else:
-                    found_keywords.append(keyword.title())
+        ordered = []
+        for kw in found_jd + found_cv:
+            if kw not in ordered:
+                ordered.append(kw)
 
-        return found_keywords[:12] if found_keywords else ["General Programming"]
+        if not ordered:
+            ordered = [
+                "python","system design","rest","react","docker","aws","ci/cd","postgresql","unit testing","kubernetes","microservices","logging"
+            ]
+
+        def present(k: str) -> str:
+            mapping = {"ci/cd": "CI/CD", "rest": "REST APIs", "jwt": "JWT"}
+            return mapping.get(k, k.title() if k.isalpha() else k)
+
+        return [present(k) for k in ordered][:12]
 
     def _fallback_assess_skill_level(self, cv_text: str) -> str:
         """Fallback method for skill level assessment when LLM fails."""
@@ -833,3 +870,82 @@ class PromptBasedQuestionGenerator:
         return FALLBACK_CLOSING.format(
             candidate_name=context.candidate_name, primary_technology=primary_technology
         )
+
+    def _generate_structure_explanation(self, context: ConversationContext) -> str:
+        """Generate a brief explanation of the interview structure."""
+        try:
+            response = self.llm.complete(STRUCTURE_EXPLANATION_PROMPT)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else FALLBACK_STRUCTURE_EXPLANATION
+            )
+        except Exception:
+            return FALLBACK_STRUCTURE_EXPLANATION
+
+    def _generate_experiential_question(
+        self,
+        context: ConversationContext,
+        last_answer: Optional[str] = None,
+        answer_evaluation: Optional[Dict] = None,
+    ) -> str:
+        """Generate an experiential question based on CV experiences and projects."""
+        experiences_str = "\n".join(context.cv_experiences or [])
+        projects_str = "\n".join(context.cv_projects or [])
+        topics_covered_str = ", ".join(context.topics_covered or []) or "none"
+
+        prompt = EXPERIENTIAL_QUESTION_PROMPT.format(
+            candidate_name=context.candidate_name,
+            job_title=context.job_title,
+            cv_experiences=experiences_str,
+            cv_projects=projects_str,
+            topics_covered=topics_covered_str,
+        )
+
+        try:
+            response = self.llm.complete(prompt)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else FALLBACK_EXPERIENTIAL_QUESTION
+            )
+        except Exception:
+            return FALLBACK_EXPERIENTIAL_QUESTION
+
+    def _extract_experiences(self, resume_sections: Dict[str, str]) -> List[str]:
+        """Extract experience items from resume sections."""
+        items: List[str] = []
+        for name, content in resume_sections.items():
+            if any(k in name.lower() for k in ["experience", "work", "employment"]):
+                for line in content.splitlines():
+                    line = line.strip(" -*•")
+                    if len(line) > 6:
+                        items.append(line)
+        # Deduplicate and limit
+        seen = set()
+        result: List[str] = []
+        for it in items:
+            key = it.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(it)
+        return result[:10]
+
+    def _extract_projects(self, resume_sections: Dict[str, str]) -> List[str]:
+        """Extract project items from resume sections."""
+        items: List[str] = []
+        for name, content in resume_sections.items():
+            if "project" in name.lower():
+                for line in content.splitlines():
+                    line = line.strip(" -*•")
+                    if len(line) > 4:
+                        items.append(line)
+        # Deduplicate and limit
+        seen = set()
+        result: List[str] = []
+        for it in items:
+            key = it.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(it)
+        return result[:10]

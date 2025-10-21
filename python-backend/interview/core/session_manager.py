@@ -60,7 +60,7 @@ class InterviewSessionManager:
         self.llm = LLMFactory.create(llm_config)
 
         # Initialize components
-        self.question_generator = QuestionGenerator(self.llm)
+        self.question_generator = QuestionGenerator(self.llm, config=self.config)
 
         # Initialize evaluation system if available
         self.evaluation_system = EvaluationSystem()
@@ -116,6 +116,7 @@ class InterviewSessionManager:
                 "conversation_context": {
                     "candidate_skill_level": conversation_context.candidate_skill_level,
                     "current_topic": conversation_context.current_topic,
+                    "interview_phase": conversation_context.interview_phase.value,
                 },
             }
 
@@ -220,6 +221,7 @@ class InterviewSessionManager:
                         "topics_covered": session.conversation_context.topics_covered,
                         "candidate_skill_level": session.conversation_context.candidate_skill_level,
                         "conversation_energy": session.conversation_context.conversation_energy,
+                        "interview_phase": session.conversation_context.interview_phase.value,
                     },
                     "progress": {
                         "questions_asked": session.questions_asked,
@@ -262,6 +264,11 @@ class InterviewSessionManager:
                 if session.conversation_context
                 else "neutral"
             ),
+            "interview_phase": (
+                session.conversation_context.interview_phase.value
+                if session.conversation_context
+                else "greeting"
+            ),
             "progress_percentage": min(
                 100, (session.questions_asked / self.config.min_questions) * 100
             ),
@@ -301,6 +308,11 @@ class InterviewSessionManager:
                     session.conversation_context.candidate_skill_level
                     if session.conversation_context
                     else "unknown"
+                ),
+                "interview_phase": (
+                    session.conversation_context.interview_phase.value
+                    if session.conversation_context
+                    else "greeting"
                 ),
             },
             "interview_complete": False,
