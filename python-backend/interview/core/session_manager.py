@@ -137,17 +137,27 @@ class InterviewSessionManager:
             # Evaluate the answer using rubrics-eval system
             if self.evaluation_system:
                 try:
-                    # evaluate_single_answer returns (score, details)
+                    # Get technical evaluation
                     score, details = self.evaluation_system.evaluate_single_answer(
                         question=question, student_answer=answer
                     )
 
-                    # Convert single score to expected format
-                    evaluation = self._convert_single_score_to_standard_format(
-                        score, question, answer
+                    # Get communication score
+                    communication_score = (
+                        self.evaluation_system.evaluate_communication_score(
+                            question=question, student_answer=answer
+                        )
+                    )
+
+                    # Convert scores to expected format
+                    evaluation = self._convert_scores_to_standard_format(
+                        technical_score=score,
+                        communication_score=communication_score,
+                        question=question,
+                        answer=answer,
                     )
                 except Exception as e:
-                    print(f"Rubrics evaluation failed: {e}")
+                    print(f"Evaluation failed: {e}")
                     # Fallback to basic evaluation
                     evaluation = self._fallback_evaluation(question, answer)
             else:
@@ -485,6 +495,42 @@ class InterviewSessionManager:
             "overall_score": normalized_score,
             "reasoning": reasoning,
             "evaluation_method": "rubrics-eval",
+        }
+
+    def _convert_scores_to_standard_format(
+        self,
+        technical_score: float,
+        communication_score: float,
+        question: str,
+        answer: str,
+    ) -> Dict[str, Any]:
+        """Convert technical and communication scores to the standard evaluation format."""
+
+        # Normalize technical score (rubrics evaluation returns 0-100)
+        if technical_score > 1.0:
+            technical_normalized = max(0.0, min(1.0, technical_score / 100.0))
+        else:
+            technical_normalized = max(0.0, min(1.0, technical_score))
+
+        # Normalize communication score (also 0-100)
+        if communication_score > 1.0:
+            communication_normalized = max(0.0, min(1.0, communication_score / 100.0))
+        else:
+            communication_normalized = max(0.0, min(1.0, communication_score))
+
+        # Calculate overall score as average of technical and communication
+        overall_score = (technical_normalized + communication_normalized) / 2
+
+        # Generate reasoning
+        reasoning = f"Technical: {technical_score:.1f}/100, Communication: {communication_score:.1f}/100, Overall: {overall_score:.2f}"
+
+        return {
+            "relevance_score": technical_normalized,
+            "technical_accuracy_score": technical_normalized,
+            "communication_score": communication_normalized,
+            "overall_score": overall_score,
+            "reasoning": reasoning,
+            "evaluation_method": "rubrics-eval-with-communication",
         }
 
     def _fallback_evaluation(self, question: str, answer: str) -> Dict[str, Any]:

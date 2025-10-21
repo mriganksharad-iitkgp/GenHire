@@ -10,6 +10,7 @@ from .answer_evaluator import AnswerEvaluator
 from .answer_generator import AnswerGenerator
 from .data_processor import DataProcessor
 from .visualization import VisualizationUtils
+from .communication_evaluator import CommunicationEvaluator
 from .evaluation_system import EvaluationSystem
 
 __version__ = "1.0.0"
@@ -22,5 +23,6 @@ __all__ = [
     "AnswerGenerator",
     "DataProcessor",
     "VisualizationUtils",
+    "CommunicationEvaluator",
     "EvaluationSystem",
 ]

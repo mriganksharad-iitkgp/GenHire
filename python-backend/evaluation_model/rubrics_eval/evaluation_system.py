@@ -9,6 +9,7 @@ from .answer_evaluator import AnswerEvaluator
 from .answer_generator import AnswerGenerator
 from .data_processor import DataProcessor
 from .visualization import VisualizationUtils
+from .communication_evaluator import CommunicationEvaluator
 
 
 class EvaluationSystem:
@@ -29,6 +30,7 @@ class EvaluationSystem:
         self.answer_generator = AnswerGenerator()
         self.data_processor = DataProcessor()
         self.visualization = VisualizationUtils()
+        self.communication_evaluator = CommunicationEvaluator()
 
     def evaluate_single_answer(
         self, question: str, student_answer: str, rubrics: Optional[List[str]] = None
@@ -51,6 +53,20 @@ class EvaluationSystem:
             return 0.0, []
 
         return self.answer_evaluator.evaluate_answer(question, student_answer, rubrics)
+
+    def evaluate_communication_score(self, question: str, student_answer: str) -> float:
+        """Evaluate communication skills and return a single score.
+
+        Args:
+            question: The question to evaluate against.
+            student_answer: The student's answer.
+
+        Returns:
+            Communication score from 0 to 100.
+        """
+        return self.communication_evaluator.evaluate_communication_score(
+            question, student_answer
+        )
 
     def generate_answer_spectrum(
         self, question: str, spectrum_type: str = "balanced"
