@@ -3,11 +3,18 @@ import jwt as pyjwt
 import datetime
 import os
 from bson import ObjectId
+import secrets
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from services.email_service import EmailService
 
 class AuthController:
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
         self.secret_key = os.getenv('JWT_SECRET_KEY', 'your-secret-key-here')
+        self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
+        self.email_service = EmailService()
+        self.require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'true').lower() == 'true'
         
     def register_user(self, user_data):
         """Register a new user"""
@@ -31,14 +38,21 @@ class AuthController:
         if self.users_collection.find_one({'email': email}):
             return {'error': 'Email already exists'}, 400
         
+        # Generate verification token
+        verification_token = secrets.token_urlsafe(32)
+        
         # Create new user
         user_doc = {
             'name': name,
             'email': email,
             'password': generate_password_hash(password),
             'user_type': user_type,
+            'email_verified': False if self.require_email_verification else True,
+            'verification_token': verification_token if self.require_email_verification else None,
+            'verification_token_expires': datetime.datetime.utcnow() + datetime.timedelta(hours=24) if self.require_email_verification else None,
             'created_at': datetime.datetime.utcnow(),
-            'updated_at': datetime.datetime.utcnow()
+            'updated_at': datetime.datetime.utcnow(),
+            'auth_provider': 'local'  # Track auth method
         }
         
         # Add default company information for recruiters
@@ -54,17 +68,31 @@ class AuthController:
         
         user_id = self.users_collection.insert_one(user_doc).inserted_id
         
-        # Generate token
+        # Send verification email if required
+        if self.require_email_verification:
+            try:
+                self.email_service.send_verification_email(email, verification_token, name)
+            except Exception as e:
+                print(f"Error sending verification email: {str(e)}")
+                # Continue registration even if email fails
+        
+        # Generate token (but user may need to verify email before full access)
         token = self.generate_token(user_id)
         
+        response_message = 'User registered successfully'
+        if self.require_email_verification:
+            response_message += '. Please check your email to verify your HR Tech account.'
+        
         return {
-            'message': 'User registered successfully',
+            'message': response_message,
             'token': token,
+            'email_verification_required': self.require_email_verification,
             'user': {
                 'id': str(user_id),
                 'name': name,
                 'email': email,
-                'user_type': user_type
+                'user_type': user_type,
+                'email_verified': user_doc['email_verified']
             }
         }, 201
         
@@ -86,6 +114,15 @@ class AuthController:
         if stored_user_type != user_type:
             return {'error': f'Please login as {stored_user_type}'}, 401
         
+        # Check if email verification is required and if email is verified
+        if self.require_email_verification and not user.get('email_verified', False):
+            # Allow OAuth users to login without verification
+            if user.get('auth_provider') != 'google':
+                return {
+                    'error': 'Please verify your email before logging in to your HR Tech account',
+                    'email_verification_required': True
+                }, 403
+        
         # Generate token
         token = self.generate_token(user['_id'])
         
@@ -96,7 +133,8 @@ class AuthController:
                 'id': str(user['_id']),
                 'name': user['name'],
                 'email': user['email'],
-                'user_type': stored_user_type
+                'user_type': stored_user_type,
+                'email_verified': user.get('email_verified', False)
             }
         }, 200
         
@@ -134,5 +172,268 @@ class AuthController:
             'id': str(user['_id']),
             'name': user['name'],
             'email': user['email'],
-            'user_type': user.get('user_type', 'candidate')
+            'user_type': user.get('user_type', 'candidate'),
+            'email_verified': user.get('email_verified', False),
+            'auth_provider': user.get('auth_provider', 'local')
         }
+    
+    def verify_email(self, token):
+        """Verify user's email address using token"""
+        user = self.users_collection.find_one({
+            'verification_token': token,
+            'email_verified': False
+        })
+        
+        if not user:
+            return {'error': 'Invalid or expired verification token'}, 400
+        
+        # Check if token is expired
+        if user.get('verification_token_expires'):
+            if user['verification_token_expires'] < datetime.datetime.utcnow():
+                return {'error': 'Verification token has expired'}, 400
+        
+        # Update user document
+        self.users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'email_verified': True,
+                    'updated_at': datetime.datetime.utcnow()
+                },
+                '$unset': {
+                    'verification_token': '',
+                    'verification_token_expires': ''
+                }
+            }
+        )
+        
+        return {
+            'message': 'Email verified successfully',
+            'user': {
+                'id': str(user['_id']),
+                'name': user['name'],
+                'email': user['email'],
+                'user_type': user.get('user_type', 'candidate'),
+                'email_verified': True
+            }
+        }, 200
+    
+    def resend_verification_email(self, email):
+        """Resend verification email to user"""
+        user = self.users_collection.find_one({'email': email})
+        
+        if not user:
+            return {'error': 'User not found'}, 404
+        
+        if user.get('email_verified', False):
+            return {'error': 'Email is already verified'}, 400
+        
+        # Generate new verification token
+        verification_token = secrets.token_urlsafe(32)
+        
+        # Update user document with new token
+        self.users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'verification_token': verification_token,
+                    'verification_token_expires': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+                    'updated_at': datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Send verification email
+        try:
+            self.email_service.send_verification_email(email, verification_token, user['name'])
+            return {'message': 'Verification email sent successfully'}, 200
+        except Exception as e:
+            print(f"Error sending verification email: {str(e)}")
+            return {'error': 'Failed to send verification email'}, 500
+    
+    def request_password_reset(self, email):
+        """Send password reset email to user"""
+        user = self.users_collection.find_one({'email': email})
+        
+        if not user:
+            # Don't reveal if user exists for security
+            return {'message': 'If your email is registered, you will receive a password reset link'}, 200
+        
+        # Don't allow password reset for OAuth users
+        if user.get('auth_provider') == 'google':
+            return {'error': 'Cannot reset password for Google accounts'}, 400
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Update user document with reset token
+        self.users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'reset_token': reset_token,
+                    'reset_token_expires': datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+                    'updated_at': datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Send reset email
+        try:
+            self.email_service.send_password_reset_email(email, reset_token, user['name'])
+        except Exception as e:
+            print(f"Error sending password reset email: {str(e)}")
+        
+        return {'message': 'If your email is registered, you will receive a password reset link'}, 200
+    
+    def reset_password(self, token, new_password, confirm_password):
+        """Reset user password using reset token"""
+        if not new_password or not confirm_password:
+            return {'error': 'Password and confirmation are required'}, 400
+        
+        if new_password != confirm_password:
+            return {'error': 'Passwords do not match'}, 400
+        
+        # Validate password strength (basic validation)
+        if len(new_password) < 6:
+            return {'error': 'Password must be at least 6 characters long'}, 400
+        
+        user = self.users_collection.find_one({
+            'reset_token': token
+        })
+        
+        if not user:
+            return {'error': 'Invalid or expired reset token'}, 400
+        
+        # Check if token is expired
+        if user.get('reset_token_expires'):
+            if user['reset_token_expires'] < datetime.datetime.utcnow():
+                return {'error': 'Reset token has expired'}, 400
+        
+        # Update password and remove reset token
+        self.users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'password': generate_password_hash(new_password),
+                    'updated_at': datetime.datetime.utcnow()
+                },
+                '$unset': {
+                    'reset_token': '',
+                    'reset_token_expires': ''
+                }
+            }
+        )
+        
+        # Send confirmation email
+        try:
+            self.email_service.send_password_changed_confirmation(user['email'], user['name'])
+        except Exception as e:
+            print(f"Error sending password change confirmation: {str(e)}")
+        
+        return {'message': 'Password reset successfully'}, 200
+    
+    def google_oauth_login(self, token, user_type='candidate'):
+        """Authenticate or create user using Google OAuth token"""
+        if not self.google_client_id:
+            return {'error': 'Google OAuth not configured'}, 500
+        
+        try:
+            # Verify the token with Google
+            idinfo = id_token.verify_oauth2_token(
+                token, 
+                google_requests.Request(), 
+                self.google_client_id
+            )
+            
+            # Get user info from token
+            email = idinfo.get('email')
+            name = idinfo.get('name')
+            google_id = idinfo.get('sub')
+            
+            if not email:
+                return {'error': 'Email not provided by Google'}, 400
+            
+            # Check if user exists
+            user = self.users_collection.find_one({'email': email})
+            
+            if user:
+                # Update existing user if they signed up with local auth
+                if user.get('auth_provider') != 'google':
+                    self.users_collection.update_one(
+                        {'_id': user['_id']},
+                        {
+                            '$set': {
+                                'auth_provider': 'google',
+                                'google_id': google_id,
+                                'email_verified': True,  # Google accounts are pre-verified
+                                'updated_at': datetime.datetime.utcnow()
+                            }
+                        }
+                    )
+                
+                # Generate token
+                jwt_token = self.generate_token(user['_id'])
+                
+                return {
+                    'message': 'Logged in successfully with Google',
+                    'token': jwt_token,
+                    'user': {
+                        'id': str(user['_id']),
+                        'name': user['name'],
+                        'email': user['email'],
+                        'user_type': user.get('user_type', 'candidate'),
+                        'email_verified': True,
+                        'auth_provider': 'google'
+                    }
+                }, 200
+            else:
+                # Create new user with Google OAuth
+                user_doc = {
+                    'name': name,
+                    'email': email,
+                    'password': generate_password_hash(secrets.token_urlsafe(32)),  # Random password for OAuth users
+                    'user_type': user_type,
+                    'email_verified': True,  # Google accounts are pre-verified
+                    'auth_provider': 'google',
+                    'google_id': google_id,
+                    'created_at': datetime.datetime.utcnow(),
+                    'updated_at': datetime.datetime.utcnow()
+                }
+                
+                # Add default company information for recruiters
+                if user_type == 'recruiter':
+                    user_doc.update({
+                        'company_name': 'TechCorp Solutions',
+                        'company_logo': None,
+                        'company_description': 'A leading technology company focused on innovation.',
+                        'company_website': None,
+                        'company_size': None,
+                        'company_industry': 'Technology'
+                    })
+                
+                user_id = self.users_collection.insert_one(user_doc).inserted_id
+                
+                # Generate token
+                jwt_token = self.generate_token(user_id)
+                
+                return {
+                    'message': 'Account created and logged in successfully with Google',
+                    'token': jwt_token,
+                    'user': {
+                        'id': str(user_id),
+                        'name': name,
+                        'email': email,
+                        'user_type': user_type,
+                        'email_verified': True,
+                        'auth_provider': 'google'
+                    }
+                }, 201
+                
+        except ValueError as e:
+            # Invalid token
+            print(f"Google OAuth error: {str(e)}")
+            return {'error': 'Invalid Google token'}, 401
+        except Exception as e:
+            print(f"Google OAuth error: {str(e)}")
+            return {'error': 'Failed to authenticate with Google'}, 500
