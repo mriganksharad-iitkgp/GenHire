@@ -431,7 +431,7 @@ export default function Chat({ interviewId }) {
         0: {
           response: `Your CV has a ${Math.round(
             similarityScore * 100
-          )}% match. Let's begin.`,
+          )}% match. Let's begin. Please introduce yourself briefly.`,
         },
         1: { response: currentQuestion },
       });
@@ -848,7 +848,7 @@ export default function Chat({ interviewId }) {
       setTimeout(() => {
         const initialMessage = `Your CV has a ${Math.round(
           similarityScore * 100
-        )}% match. Let's begin. ${currentQuestion}`;
+        )}% match. Please introduce yourself briefly. ${currentQuestion}`;
         speakResponse(initialMessage);
       }, 1000);
     } // eslint-disable-next-line react-hooks/exhaustive-deps
