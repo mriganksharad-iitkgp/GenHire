@@ -14,13 +14,14 @@ TOPICS ALREADY COVERED: {topics_covered}
 INSTRUCTIONS:
 1. Give a brief 1-2 word acknowledgment (like "Great!" or "Good." or "Okay.")
 2. Then immediately ask a {question_type} question about {current_topic}
-3. Keep it conversational but focus on the question
-4. Follow the performance guidance: {performance_guidance}
+3. Ask recent interview questions based on the topic - questions that are commonly asked in modern technical interviews
+4. Keep it conversational but focus on the question
+5. Follow the performance guidance: {performance_guidance}
 
 QUESTION TYPES BY STAGE:
-- Foundational (Questions 1-8): Basic concepts, definitions, "how does X work?"
-- Practical Application (Questions 9-10): "How have you used X?", "What challenges did you face?"
-- Advanced/Scenario (Questions 11+): Complex scenarios, trade-offs, best practices
+- Foundational (Questions 1-5): Basic concepts, definitions, "how does X work?"
+- Practical Application (Questions 6-8): "How have you used X?", "What challenges did you face?"
+- Advanced/Scenario (Questions 8+): Complex scenarios, trade-offs, best practices
 
 EXAMPLES:
 - "Good. Now, how do you handle..."

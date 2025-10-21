@@ -378,7 +378,7 @@ export default function Chat({ interviewId }) {
           setSessionId(data.session_id);
           sessionIdRef.current = data.session_id;
           setSimilarityScore(data.similarity_score);
-          setCurrentQuestion(data.initial_questions); // Backend sends a string, not array
+          setCurrentQuestion(data.initial_questions[0]);
           setInterviewStatus("registering");
         })
         .catch((err) => {
@@ -417,8 +417,33 @@ export default function Chat({ interviewId }) {
       setupWebcam();
     }
 
-    // Moved the active interview setup to after speakResponse definition
-  }, [interviewStatus, navigate]);
+    if (interviewStatus === "active" && !isRecordingVideo) {
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      }
+      startWebcamAndArchivalRecording();
+      // Initialize question count to 1 for the first question
+      setQuestionCount(1);
+      // Start interview timer
+      interviewStartTimeRef.current = Date.now();
+      setInterviewElapsedTime(0);
+      setChatContent({
+        0: {
+          response: `Your CV has a ${Math.round(
+            similarityScore * 100
+          )}% match. Let's begin.`,
+        },
+        1: { response: currentQuestion },
+      });
+    }
+  }, [
+    interviewStatus,
+    isRecordingVideo,
+    startWebcamAndArchivalRecording,
+    similarityScore,
+    currentQuestion,
+    navigate,
+  ]);
 
   const endInterview = useCallback(async () => {
     const currentSessionId = sessionIdRef.current;
@@ -552,88 +577,6 @@ export default function Chat({ interviewId }) {
     stopLiveProctoring,
   ]);
 
-  const startRecording = useCallback(() => {
-    if (isSpeaking || isRecording || !recognitionRef.current) return;
-
-    setInput("");
-    transcriptRef.current = "";
-    lastSpeechTimeRef.current = Date.now();
-    setSilenceTimer(0);
-    recognitionRef.current.start();
-    setIsRecording(true);
-  }, [isSpeaking, isRecording]);
-
-  const speakResponse = useCallback(
-    (text) => {
-      if (!window.speechSynthesis || !text) return;
-
-      if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        // Clear any existing typing animation
-        clearInterval(typingIntervalRef.current);
-      }
-
-      // Set full text and start progressive display
-      setFullQuestionText(text);
-      setDisplayedText(""); // Reset displayed text
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      currentUtteranceRef.current = utterance;
-
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-
-        // Start progressive text animation
-        let currentIndex = 0;
-        const words = text.split(" ");
-        const totalWords = words.length;
-
-        // Estimate speech duration (average speaking rate: ~120 words per minute for natural speech)
-        const estimatedDuration = (totalWords / 120) * 60 * 1000; // Convert to milliseconds
-        // Use words for better pacing rather than characters
-        const intervalDelay = estimatedDuration / words.length; // Time per word
-
-        typingIntervalRef.current = setInterval(() => {
-          if (currentIndex < words.length) {
-            // Display words progressively instead of characters for more natural flow
-            const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
-            setDisplayedText(wordsToShow);
-            currentIndex++;
-          } else {
-            clearInterval(typingIntervalRef.current);
-            setDisplayedText(text); // Ensure complete text is shown
-          }
-        }, Math.max(intervalDelay, 300)); // Minimum 300ms per word for natural reading pace
-      };
-
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        currentUtteranceRef.current = null;
-        // Clear typing animation and show full text
-        clearInterval(typingIntervalRef.current);
-        setDisplayedText(text); // Ensure full text is shown
-
-        // Start silence detection after AI finishes speaking
-        if (interviewStatus === "active") {
-          setSilenceTimer(0);
-          lastSpeechTimeRef.current = Date.now();
-          setIsTimerRunning(true);
-          startRecording();
-        }
-      };
-
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        currentUtteranceRef.current = null;
-        clearInterval(typingIntervalRef.current);
-        setDisplayedText(text); // Show full text on error
-      };
-
-      window.speechSynthesis.speak(utterance);
-    },
-    [isSpeaking, interviewStatus, startRecording]
-  );
-
   const onSend = useCallback(
     async (userAnswer) => {
       const currentSessionId = sessionIdRef.current;
@@ -684,41 +627,8 @@ export default function Chat({ interviewId }) {
         setIsSubmittingAnswer(false);
       }
     },
-    [
-      currentQuestion,
-      interviewStatus,
-      endInterview,
-      questionCount,
-      speakResponse,
-    ]
+    [currentQuestion, interviewStatus, endInterview, questionCount]
   );
-
-  // Setup for active interview - speak the initial question
-  useEffect(() => {
-    if (interviewStatus === "active" && !isRecordingVideo) {
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
-      startWebcamAndArchivalRecording();
-      // Initialize question count to 1 for the first question
-      setQuestionCount(1);
-      // Start interview timer
-      interviewStartTimeRef.current = Date.now();
-      setInterviewElapsedTime(0);
-      // Use the backend's first question/greeting directly - no hardcoded responses
-      setChatContent({
-        0: { response: currentQuestion },
-      });
-      // Speak the initial question/greeting
-      speakResponse(currentQuestion);
-    }
-  }, [
-    interviewStatus,
-    isRecordingVideo,
-    startWebcamAndArchivalRecording,
-    currentQuestion,
-    speakResponse,
-  ]);
 
   // --- FIXED --- Only silence detection, no 30-second timer
   useEffect(() => {
@@ -851,8 +761,98 @@ export default function Chat({ interviewId }) {
     };
   }, [interviewStatus]);
 
-  // Remove this effect - the initial question will be spoken when interview becomes active
-  // in the useEffect that handles interviewStatus === "active"
+  const startRecording = useCallback(() => {
+    if (isSpeaking || isRecording || !recognitionRef.current) return;
+
+    setInput("");
+    transcriptRef.current = "";
+    lastSpeechTimeRef.current = Date.now();
+    setSilenceTimer(0);
+    recognitionRef.current.start();
+    setIsRecording(true);
+  }, [isSpeaking, isRecording]);
+  const speakResponse = (text) => {
+    if (!window.speechSynthesis || !text) return;
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      // Clear any existing typing animation
+      clearInterval(typingIntervalRef.current);
+    }
+
+    // Set full text and start progressive display
+    setFullQuestionText(text);
+    setDisplayedText(""); // Reset displayed text
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    currentUtteranceRef.current = utterance;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+
+      // Start progressive text animation
+      let currentIndex = 0;
+      const words = text.split(" ");
+      const totalWords = words.length;
+
+      // Estimate speech duration (average speaking rate: ~120 words per minute for natural speech)
+      const estimatedDuration = (totalWords / 120) * 60 * 1000; // Convert to milliseconds
+      // Use words for better pacing rather than characters
+      const intervalDelay = estimatedDuration / words.length; // Time per word
+
+      typingIntervalRef.current = setInterval(() => {
+        if (currentIndex < words.length) {
+          // Display words progressively instead of characters for more natural flow
+          const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
+          setDisplayedText(wordsToShow);
+          currentIndex++;
+        } else {
+          clearInterval(typingIntervalRef.current);
+          setDisplayedText(text); // Ensure complete text is shown
+        }
+      }, Math.max(intervalDelay, 300)); // Minimum 300ms per word for natural reading pace
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      currentUtteranceRef.current = null;
+      // Clear typing animation and show full text
+      clearInterval(typingIntervalRef.current);
+      setDisplayedText(text); // Ensure full text is shown
+
+      // Start silence detection after AI finishes speaking
+      if (interviewStatus === "active") {
+        setSilenceTimer(0);
+        lastSpeechTimeRef.current = Date.now();
+        setIsTimerRunning(true);
+        startRecording();
+      }
+    };
+
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      currentUtteranceRef.current = null;
+      clearInterval(typingIntervalRef.current);
+      setDisplayedText(text); // Show full text on error
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }; // Automatically speak the first question
+  useEffect(() => {
+    if (
+      interviewStatus === "active" &&
+      currentQuestion &&
+      !isSpeaking &&
+      !currentUtteranceRef.current
+    ) {
+      setTimeout(() => {
+        const initialMessage = `Your CV has a ${Math.round(
+          similarityScore * 100
+        )}% match. Let's begin. ${currentQuestion}`;
+        speakResponse(initialMessage);
+      }, 1000);
+    } // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewStatus]);
 
   // Interview elapsed time tracker
   useEffect(() => {
