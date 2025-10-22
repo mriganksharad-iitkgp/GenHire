@@ -50,14 +50,14 @@ const Register = () => {
       // Check if email verification is required
       if (data.email_verification_required) {
         setSuccessMessage(
-          "Account created successfully! Please check your email to verify your account before logging in."
+          "Account created successfully! Please check your email and verify your account before logging in."
         );
         // Clear form
         setName("");
         setEmail("");
         setPassword("");
         setConfirmPassword("");
-        // Don't navigate, let user read the message
+        // Don't auto-login, user must verify email first
       } else {
         // Store token and user data with user type (consistent with Login)
         localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
