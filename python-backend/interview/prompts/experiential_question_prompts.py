@@ -21,11 +21,7 @@ INSTRUCTIONS:
 3. Prefer items NOT yet discussed; pick the most relevant to the role
 4. Ask for concrete details: goals, responsibilities, tech stack, challenges, outcomes
 5. Keep it short and friendly; one question only
-
-EXAMPLES:
-- "Great! Could you walk me through the payment service you built—goals, stack, and key challenges?"
-- "Okay. In your SDE internship at Acme, what was the most complex task you owned and how did you deliver it?"
-- "Nice. Tell me about the ML pipeline project—what problem it solved and your contribution."
+6. Keep it conversational, dont repeat same question again ans again, sound casual
 
 Generate a brief experiential question now:"""
 

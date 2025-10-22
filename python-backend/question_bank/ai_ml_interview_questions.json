@@ -1,0 +1,1622 @@
+[
+  {
+    "question": "What is Machine Learning and how does it differ from traditional programming?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain the difference between supervised and unsupervised learning.",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between classification and regression?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is overfitting and how can you prevent it?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is underfitting in machine learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Define training set, validation set, and test set.",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a confusion matrix?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the purpose of cross-validation?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain bias and variance in machine learning.",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the curse of dimensionality?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is feature engineering?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between parametric and non-parametric models?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is regularization and why is it important?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain L1 and L2 regularization.",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is gradient descent?",
+    "role": "AI/ML Engineer",
+    "topic": "Machine Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Deep Learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a neural network?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain the difference between AI, Machine Learning, and Deep Learning.",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an activation function?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a perceptron?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are the main components of a neural network?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is backpropagation?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the role of weights and biases in neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an epoch in neural network training?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is batch size in neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the learning rate?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What happens if the learning rate is too high or too low?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the vanishing gradient problem?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the exploding gradient problem?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is dropout in neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain linear regression.",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is logistic regression?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between linear and logistic regression?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a decision tree?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is K-Nearest Neighbors (KNN)?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is K-Means clustering?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Support Vector Machine (SVM)?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Naive Bayes algorithm?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Random Forest?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a neural network layer?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between batch gradient descent and stochastic gradient descent?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is mini-batch gradient descent?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the sigmoid activation function?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the ReLU activation function?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the softmax activation function?",
+    "role": "AI/ML Engineer",
+    "topic": "Common Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data normalization?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data standardization?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between normalization and standardization?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is one-hot encoding?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is label encoding?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is missing data imputation?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data augmentation?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is feature scaling?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is dimensionality reduction?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Principal Component Analysis (PCA)?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the purpose of data preprocessing?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are outliers and how do you handle them?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is feature selection?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the train-test split?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is stratified sampling?",
+    "role": "AI/ML Engineer",
+    "topic": "Data Processing",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is accuracy in machine learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is precision and recall?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the F1 score?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is ROC curve?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is AUC (Area Under Curve)?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is mean squared error (MSE)?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is root mean squared error (RMSE)?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is mean absolute error (MAE)?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is R-squared?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between Type I and Type II errors?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a true positive, false positive, true negative, and false negative?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a baseline model?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is model evaluation?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the purpose of a validation set?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is k-fold cross-validation?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Evaluation",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is transfer learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data leakage?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is imbalanced data?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is ensemble learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is bagging?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is boosting?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between bagging and boosting?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a hyperparameter?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is hyperparameter tuning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is grid search?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is random search?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is early stopping?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is batch normalization?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between online learning and batch learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is reinforcement learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical Concepts",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain the bias-variance tradeoff in detail.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does random forest prevent overfitting?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between bagging and boosting? Explain with examples.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain how gradient boosting works.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is XGBoost and what makes it efficient?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does AdaBoost algorithm work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the kernel trick in SVM?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain different types of kernels in SVM.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle imbalanced datasets?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is SMOTE and when would you use it?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the Expectation-Maximization (EM) algorithm.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between generative and discriminative models?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the difference between L1 and L2 regularization in terms of feature selection.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is elastic net regularization?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does Principal Component Analysis work mathematically?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Concepts",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Convolutional Neural Network (CNN)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the architecture of a typical CNN.",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are convolutional layers and pooling layers?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the purpose of pooling in CNNs?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Recurrent Neural Network (RNN)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between CNN and RNN?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Long Short-Term Memory (LSTM)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are the gates in an LSTM network?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Gated Recurrent Unit (GRU)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between LSTM and GRU?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an autoencoder?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the encoder and decoder in autoencoders.",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Variational Autoencoder (VAE)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Generative Adversarial Network (GAN)?",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the generator and discriminator in GANs.",
+    "role": "AI/ML Engineer",
+    "topic": "Deep Learning Architecture",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does backpropagation work in detail?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain the chain rule in backpropagation.",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is gradient clipping and when is it used?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are different optimization algorithms in deep learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain Adam optimizer.",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between SGD and Adam?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is momentum in optimization?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is RMSprop optimizer?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does batch normalization help in training?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Where should you apply batch normalization in a network?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is layer normalization?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is weight initialization and why is it important?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain Xavier/Glorot initialization.",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is He initialization?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you diagnose overfitting vs underfitting?",
+    "role": "AI/ML Engineer",
+    "topic": "Neural Network Training",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is transfer learning and when should you use it?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you fine-tune a pre-trained model?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data augmentation in computer vision?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What techniques can you use for data augmentation in NLP?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is attention mechanism in neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain self-attention mechanism.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Transformer model?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between RNN and Transformer?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is BERT and how does it work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is GPT architecture?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is residual connection (skip connection)?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is ResNet and why is it important?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is depthwise separable convolution?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is dilated convolution?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is object detection vs image segmentation?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Techniques",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you reduce model size for deployment?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is model quantization?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is knowledge distillation?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is pruning in neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle the vanishing gradient problem?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is gradient accumulation?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is learning rate scheduling?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain cosine annealing learning rate.",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the warm-up strategy in learning rate?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you choose the right batch size?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is mixed precision training?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between model accuracy and model speed?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you evaluate model performance beyond accuracy?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is model calibration?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are confidence intervals in predictions?",
+    "role": "AI/ML Engineer",
+    "topic": "Model Optimization",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle missing data in real-world datasets?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is feature importance and how do you calculate it?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you detect and handle outliers?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is multicollinearity and how do you address it?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you encode categorical variables with high cardinality?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is time series forecasting?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is stationarity in time series?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle temporal data in machine learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is collaborative filtering?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is content-based filtering?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you build a recommendation system?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is A/B testing in machine learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you monitor model performance in production?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is model drift?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is concept drift?",
+    "role": "AI/ML Engineer",
+    "topic": "Practical ML",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Derive the backpropagation algorithm mathematically.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the mathematical foundation of gradient descent.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Prove why L1 regularization leads to sparse solutions.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Derive the update rules for LSTM gates.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the mathematics behind the attention mechanism.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does the Transformer self-attention mechanism compute attention scores?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Derive the loss function for Variational Autoencoders.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the mathematics behind GANs training.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Wasserstein distance in WGANs?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the Universal Approximation Theorem.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the relationship between PAC learning and VC dimension?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the bias-variance decomposition mathematically.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Derive the closed-form solution for linear regression.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the kernel trick mathematically in SVM.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Rademacher complexity?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Theory",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the architecture of Vision Transformer (ViT).",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does BERT's masked language modeling work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the difference between BERT and GPT architectures.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the architecture of T5 (Text-to-Text Transfer Transformer)?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does YOLO (You Only Look Once) work for object detection?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the Mask R-CNN architecture.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is U-Net and why is it effective for image segmentation?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the architecture of StyleGAN.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are Diffusion Models and how do they work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does CLIP (Contrastive Language-Image Pre-training) work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Neural Architecture Search (NAS)?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain EfficientNet and compound scaling.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Perceiver architecture?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do Graph Neural Networks (GNNs) work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between spectral and spatial GNNs?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced Architectures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement distributed training across multiple GPUs?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is data parallelism vs model parallelism?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain gradient checkpointing for memory optimization.",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does mixed precision training with FP16 work?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is ZeRO optimizer and how does it work?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the mathematics behind second-order optimization methods.",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is natural gradient descent?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does K-FAC optimization work?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the lottery ticket hypothesis?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain neural network pruning strategies in depth.",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement dynamic neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is neural ODE (Ordinary Differential Equations)?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle extremely large models that don't fit in memory?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is pipeline parallelism in training?",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the trade-offs between different distributed training strategies.",
+    "role": "AI/ML Engineer",
+    "topic": "Optimization & Training",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design a multi-task learning system?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is meta-learning and few-shot learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain continual learning and catastrophic forgetting.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement online learning with concept drift?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is active learning and when should you use it?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle non-stationary environments in reinforcement learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the exploration-exploitation tradeoff in RL.",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is policy gradient in reinforcement learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does Q-learning work?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between on-policy and off-policy learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design a neural network for graph-structured data?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is attention mechanism in graph neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle heterogeneous graphs?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is knowledge graph embedding?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement neural networks on edge devices?",
+    "role": "AI/ML Engineer",
+    "topic": "Advanced ML Problems",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design an ML system for real-time inference at scale?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What strategies would you use to reduce model latency?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement model versioning in production?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is shadow deployment and how do you implement it?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle model monitoring and debugging in production?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is feature store and why is it important?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design an ML pipeline for continuous training?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the challenges of deploying models on mobile devices?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement model A/B testing at scale?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is model governance and how do you implement it?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you ensure model fairness and reduce bias?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is explainable AI (XAI) and how do you implement it?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you detect and mitigate adversarial attacks?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is federated learning and what are its challenges?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design a secure ML system?",
+    "role": "AI/ML Engineer",
+    "topic": "Production & Scalability",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the latest advances in Large Language Models?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do retrieval-augmented generation (RAG) systems work?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is prompt engineering and in-context learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain chain-of-thought prompting.",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are multimodal models and how do they work?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does RLHF (Reinforcement Learning from Human Feedback) work?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is instruction tuning in LLMs?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the challenges in scaling language models?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement efficient attention mechanisms for long sequences?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is sparse attention and how does it work?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are neural radiance fields (NeRF)?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement 3D vision with neural networks?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is zero-shot learning vs few-shot learning?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do contrastive learning methods work?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the ethical considerations in deploying AI systems?",
+    "role": "AI/ML Engineer",
+    "topic": "Research & Cutting Edge",
+    "difficulty": "Hard"
+  }
+]

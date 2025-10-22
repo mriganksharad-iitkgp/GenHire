@@ -7,6 +7,7 @@ import re
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+
 from ..llm.base import BaseLLM
 from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
@@ -81,6 +82,7 @@ class ConversationContext:
     experiential_questions_asked: int = 0
     last_mentioned_concepts: List[str] = None  # Track what candidate mentioned
     conversation_history: List[Dict[str, str]] = None  # Track Q&A pairs
+    role_difficulty: str = "medium"  # easy|medium|hard derived from JD
 
     def __post_init__(self):
         if self.previous_answers is None:
@@ -124,6 +126,9 @@ class PromptBasedQuestionGenerator:
         self.available_topics = []
         self.cv_content = ""
         self.resume_sections = {}
+        self.question_bank_path = "/product-prototyping-lab/python-backend/question_bank/ai_ml_interview_questions.json"  # set later
+        self.question_bank = None
+        self._load_question_bank()
 
     def initialize_conversation(
         self, resume_sections: Dict[str, str], job_description: str = ""
@@ -141,7 +146,10 @@ class PromptBasedQuestionGenerator:
         # Assess initial skill level
         skill_level = self._assess_initial_skill_level(resume_sections)
 
-        # Extract candidate name if possible
+        # Classify role difficulty from JD and align skill level mapping
+        role_diff = self._classify_role_difficulty(job_description)
+        skill_level_map = {"easy": "beginner", "medium": "intermediate", "hard": "expert"}
+        mapped_skill = skill_level_map.get(role_diff, skill_level)
         candidate_name = self._extract_candidate_name(resume_sections)
 
         # Select starting topic
@@ -155,7 +163,7 @@ class PromptBasedQuestionGenerator:
             current_topic=starting_topic,
             depth_level=ConversationDepth.SURFACE,
             topics_covered=[],
-            candidate_skill_level=skill_level,
+            candidate_skill_level=mapped_skill,
             answer_quality_trend=[],
             follow_up_count=0,
             needs_topic_change=False,
@@ -168,10 +176,473 @@ class PromptBasedQuestionGenerator:
             job_title=job_title,
             cv_experiences=experiences,
             cv_projects=projects,
+            role_difficulty=role_diff,
         )
 
         self.conversation_context = context
         return context
+
+
+    def _generate_greeting(self, context: ConversationContext) -> str:
+        """Generate brief greeting using the prompt template."""
+        cv_keywords = (
+            ", ".join(context.cv_keywords[:2])
+            if context.cv_keywords
+            else "their technical background"
+        )
+        primary_technology = (
+            context.cv_keywords[0] if context.cv_keywords else "technology"
+        )
+
+        prompt = GREETING_PROMPT.format(
+            job_title=context.job_title,
+            cv_keywords=cv_keywords,
+            candidate_name=context.candidate_name,
+            primary_technology=primary_technology,
+        )
+
+        try:
+            response = self.llm.complete(prompt)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else self._fallback_greeting(context)
+            )
+        except Exception:
+            return self._fallback_greeting(context)
+
+
+    def _generate_closing(self, context: ConversationContext) -> str:
+        """Generate closing using the prompt template."""
+        positive_aspect = (
+            context.cv_keywords[0] if context.cv_keywords else "technical knowledge"
+        )
+
+        prompt = CLOSING_PROMPT.format(
+            candidate_name=context.candidate_name, positive_aspect=positive_aspect
+        )
+
+        try:
+            response = self.llm.complete(prompt)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else self._fallback_closing(context)
+            )
+        except Exception:
+            return self._fallback_closing(context)
+
+    # Helper methods for extraction and fallbacks
+
+    def _extract_concepts_from_answer(self, answer: str) -> List[str]:
+        """Extract technical concepts mentioned by the candidate in their answer."""
+        if not answer:
+            return []
+
+        # Common technical terms to look for
+        technical_terms = [
+            # Databases
+            "sql",
+            "mysql",
+            "postgresql",
+            "mongodb",
+            "database",
+            "query",
+            "index",
+            "join",
+            "acid",
+            "transaction",
+            "schema",
+            "normalization",
+            "foreign key",
+            "primary key",
+            # Programming
+            "python",
+            "javascript",
+            "java",
+            "react",
+            "nodejs",
+            "django",
+            "flask",
+            "api",
+            "rest",
+            "graphql",
+            "function",
+            "class",
+            "object",
+            "variable",
+            "loop",
+            "array",
+            # Cloud/DevOps
+            "aws",
+            "azure",
+            "docker",
+            "kubernetes",
+            "server",
+            "deployment",
+            "cloud",
+            "lambda",
+            "ec2",
+            "s3",
+            "load balancer",
+            "scaling",
+            "microservices",
+            # General CS
+            "algorithm",
+            "data structure",
+            "performance",
+            "optimization",
+            "security",
+            "authentication",
+            "authorization",
+            "encryption",
+            "caching",
+            "testing",
+        ]
+
+        answer_lower = answer.lower()
+        found_concepts = []
+
+        for term in technical_terms:
+            if term in answer_lower:
+                found_concepts.append(term)
+
+        return found_concepts[:5]  # Return top 5 concepts mentioned
+
+    def _should_switch_topic(
+        self, context: ConversationContext, answer_evaluation: Optional[Dict]
+    ) -> bool:
+        """Determine if we should switch to a new topic based on conversation flow."""
+
+        # Don't switch too early
+        if context.question_count < 3:
+            return False
+
+        # Switch every 3-4 questions, but also consider performance
+        base_switch_interval = 3
+
+        if answer_evaluation:
+            score = answer_evaluation.get("overall_score", 0.5)
+
+            # If they're struggling (< 0.4), switch sooner to find their strengths
+            if score < 0.4 and context.question_count % 2 == 0:
+                return True
+
+            # If they're doing well (> 0.8), can explore topic longer
+            if score > 0.8:
+                base_switch_interval = 4
+
+        # Check if it's time to switch based on interval
+        questions_on_current_topic = context.question_count % base_switch_interval
+        return questions_on_current_topic == 0 and len(context.cv_keywords) > len(
+            context.topics_covered
+        )
+
+    def _get_next_topic(self, context: ConversationContext) -> Optional[str]:
+        """Get the next topic to explore based on CV keywords."""
+        uncovered_topics = [
+            topic
+            for topic in context.cv_keywords
+            if topic not in context.topics_covered
+        ]
+
+        if uncovered_topics:
+            return uncovered_topics[0]
+
+        # If all CV topics covered, cycle back to previous topics for deeper exploration
+        if context.topics_covered:
+            return context.topics_covered[
+                context.question_count % len(context.topics_covered)
+            ]
+
+        return None
+
+    def _fallback_technical_question_with_context(
+        self, context: ConversationContext, last_answer: str = "", score: float = 0.5
+    ) -> str:
+        """Fallback method that includes contextual acknowledgment."""
+        base_question = f"Can you tell me about your experience with {context.current_topic} and how you've applied it in your projects?"
+
+        if last_answer:
+            # Generate a simple contextual acknowledgment based on score
+            if score < 0.4:
+                acknowledgment = "I appreciate you working through that. Let me ask about something else - "
+            elif score < 0.7:
+                acknowledgment = "That's helpful context. Now, "
+            else:
+                acknowledgment = "Great insights! Building on that, "
+
+            return f"{acknowledgment}{base_question.lower()}"
+        return base_question
+
+
+    def _extract_job_title(self, job_description: str) -> str:
+        """Extract job title from job description."""
+        # Simple extraction - look for common job titles
+        job_titles = [
+            "software developer",
+            "software engineer",
+            "full stack developer",
+            "frontend developer",
+            "backend developer",
+            "data scientist",
+            "machine learning engineer",
+            "devops engineer",
+        ]
+
+        jd_lower = job_description.lower()
+        for title in job_titles:
+            if title in jd_lower:
+                return title.title()
+
+        return "Software Developer"
+
+    def _extract_candidate_name(self, resume_sections: Dict[str, str]) -> str:
+        """Extract candidate name from resume sections."""
+        # Look in personal info or contact sections
+        for section_name, content in resume_sections.items():
+            if "personal" in section_name.lower() or "contact" in section_name.lower():
+                # Simple name extraction - first line that looks like a name
+                lines = content.split("\n")
+                for line in lines[:3]:  # Check first 3 lines
+                    line = line.strip()
+                    if len(line.split()) == 2 and line.replace(" ", "").isalpha():
+                        return line
+        return "candidate"
+
+    def _assess_initial_skill_level(self, resume_sections: Dict[str, str]) -> str:
+        """Assess initial skill level from resume using LLM analysis."""
+        cv_text = " ".join(resume_sections.values())
+
+        if not cv_text.strip():
+            return "beginner"
+
+        prompt = SKILL_LEVEL_ASSESSMENT_PROMPT.format(cv_content=cv_text)
+
+        try:
+            response = self.llm.complete(prompt)
+            if response and hasattr(response, "text"):
+                skill_level = response.text.strip().lower()
+                # Validate and return appropriate skill level
+                if "advanced" in skill_level:
+                    return "advanced"
+                elif "intermediate" in skill_level:
+                    return "intermediate"
+                elif "beginner" in skill_level:
+                    return "beginner"
+                else:
+                    # If LLM response is unclear, fall back to keyword analysis
+                    return self._fallback_assess_skill_level(cv_text)
+            else:
+                return self._fallback_assess_skill_level(cv_text)
+
+        except Exception as e:
+            print(f"Error assessing skill level with LLM: {e}")
+            return self._fallback_assess_skill_level(cv_text)
+
+    # Fallback methods
+
+    def _fallback_greeting(self, context: ConversationContext) -> str:
+        tech_mention = f" with {context.cv_keywords[0]}" if context.cv_keywords else ""
+        return FALLBACK_GREETING.format(
+            candidate_name=context.candidate_name, tech_mention=tech_mention
+        )
+
+
+    def _fallback_assess_skill_level(self, cv_text: str) -> str:
+        """Fallback method for skill level assessment when LLM fails."""
+        cv_lower = cv_text.lower()
+
+        # Enhanced experience indicators
+        advanced_indicators = [
+            "senior",
+            "lead",
+            "architect",
+            "principal",
+            "director",
+            "manager",
+            "team lead",
+            "tech lead",
+            "staff engineer",
+            "expert",
+            "specialist",
+        ]
+
+        intermediate_indicators = [
+            "mid",
+            "intermediate",
+            "experienced",
+            "developer ii",
+            "engineer ii",
+            "associate",
+            "skilled",
+            "proficient",
+            "3 years",
+            "4 years",
+            "5 years",
+        ]
+
+        beginner_indicators = [
+            "junior",
+            "entry",
+            "trainee",
+            "intern",
+            "graduate",
+            "fresher",
+            "1 year",
+            "2 years",
+            "recent graduate",
+        ]
+
+        # Count indicators
+        advanced_count = sum(
+            1 for indicator in advanced_indicators if indicator in cv_lower
+        )
+        intermediate_count = sum(
+            1 for indicator in intermediate_indicators if indicator in cv_lower
+        )
+        beginner_count = sum(
+            1 for indicator in beginner_indicators if indicator in cv_lower
+        )
+
+        # Assess based on counts
+        if advanced_count >= 2:
+            return "advanced"
+        elif intermediate_count >= 2 or advanced_count >= 1:
+            return "intermediate"
+        elif beginner_count >= 1:
+            return "beginner"
+        else:
+            return "intermediate"  # Default to intermediate if unclear
+
+    def _fallback_technical_question(self, context: ConversationContext) -> str:
+        return FALLBACK_TECHNICAL_QUESTION.format(current_topic=context.current_topic)
+
+    def _fallback_closing(self, context: ConversationContext) -> str:
+        primary_technology = (
+            context.cv_keywords[0] if context.cv_keywords else "technology"
+        )
+        return FALLBACK_CLOSING.format(
+            candidate_name=context.candidate_name, primary_technology=primary_technology
+        )
+
+    def _generate_structure_explanation(self, context: ConversationContext) -> str:
+        """Generate a brief explanation of the interview structure."""
+        try:
+            response = self.llm.complete(STRUCTURE_EXPLANATION_PROMPT)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else FALLBACK_STRUCTURE_EXPLANATION
+            )
+        except Exception:
+            return FALLBACK_STRUCTURE_EXPLANATION
+
+    def _generate_experiential_question(
+        self,
+        context: ConversationContext,
+        last_answer: Optional[str] = None,
+        answer_evaluation: Optional[Dict] = None,
+    ) -> str:
+        """Generate an experiential question based on CV experiences and projects."""
+        experiences_str = "\n".join(context.cv_experiences or [])
+        projects_str = "\n".join(context.cv_projects or [])
+        topics_covered_str = ", ".join(context.topics_covered or []) or "none"
+
+        prompt = EXPERIENTIAL_QUESTION_PROMPT.format(
+            candidate_name=context.candidate_name,
+            job_title=context.job_title,
+            cv_experiences=experiences_str,
+            cv_projects=projects_str,
+            topics_covered=topics_covered_str,
+        )
+
+        try:
+            response = self.llm.complete(prompt)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else FALLBACK_EXPERIENTIAL_QUESTION
+            )
+        except Exception:
+            return FALLBACK_EXPERIENTIAL_QUESTION
+
+    def _extract_experiences(self, resume_sections: Dict[str, str]) -> List[str]:
+        """Extract experience items from resume sections."""
+        items: List[str] = []
+        for name, content in resume_sections.items():
+            if any(k in name.lower() for k in ["experience", "work", "employment"]):
+                for line in content.splitlines():
+                    line = line.strip(" -*•")
+                    if len(line) > 6:
+                        items.append(line)
+        # Deduplicate and limit
+        seen = set()
+        result: List[str] = []
+        for it in items:
+            key = it.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(it)
+        return result[:10]
+
+    def _extract_projects(self, resume_sections: Dict[str, str]) -> List[str]:
+        """Extract project items from resume sections."""
+        items: List[str] = []
+        for name, content in resume_sections.items():
+            if "project" in name.lower():
+                for line in content.splitlines():
+                    line = line.strip(" -*•")
+                    if len(line) > 4:
+                        items.append(line)
+        # Deduplicate and limit
+        seen = set()
+        result: List[str] = []
+        for it in items:
+            key = it.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(it)
+        return result[:10]
+
+    def _select_question_difficulty(self, context: ConversationContext) -> str:
+        """Select question difficulty based on JD-derived role difficulty."""
+        role = getattr(context, "role_difficulty", "medium")
+        if role == "easy":
+            schedule = ["easy", "easy", "medium"]
+        elif role == "hard":
+            schedule = ["hard", "hard", "medium"]
+        else:  # medium
+            schedule = ["medium", "medium", "easy", "hard"]
+        return schedule[context.question_count % len(schedule)]
+
+    def _load_question_bank(self) -> None:
+        """Load question bank JSON if path is set; no-op if blank."""
+        if not self.question_bank_path:
+            self.question_bank = None
+            return
+        try:
+            import json
+            with open(self.question_bank_path, "r", encoding="utf-8") as f:
+                self.question_bank = json.load(f)
+        except Exception:
+            self.question_bank = None
+
+    def _get_question_from_bank(self, topic: str, difficulty: str) -> Optional[str]:
+        """Retrieve a question from the bank matching topic and difficulty."""
+        bank = self.question_bank
+        if not bank:
+            return None
+        # Expect list of {"topic": str, "question": str, "difficulty": "easy|medium|hard"}
+        for item in bank if isinstance(bank, list) else bank.get("questions", []):
+            try:
+                t = item.get("topic", "").lower()
+                d = item.get("difficulty", "").lower()
+                if topic and t and topic.lower() in t and d == difficulty.lower():
+                    return item.get("question")
+            except AttributeError:
+                continue
+        return None
 
     def get_next_question(
         self,
@@ -252,11 +723,18 @@ class PromptBasedQuestionGenerator:
         else:
             question_type = QuestionType.TECHNICAL
             intent = QuestionIntent.PROBE_DEEPER
+        
+        difficulty_for_metadata = (
+            self._select_question_difficulty(context)
+            if context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS
+            else context.candidate_skill_level
+        )
+
 
         metadata = QuestionMetadata(
             question_type=question_type,
             intent=intent,
-            difficulty_level=context.candidate_skill_level,
+            difficulty_level=difficulty_for_metadata,
             expected_depth=context.depth_level,
             topic_area=context.current_topic,
             prerequisites=[],
@@ -298,44 +776,49 @@ class PromptBasedQuestionGenerator:
         self,
         context: ConversationContext,
         last_answer: Optional[str] = None,
-        answer_evaluation: Optional[Dict] = None,
-    ) -> str:
-        """Generate technical questions using the prompt template."""
-
+        answer_evaluation: Optional[Dict] = None,) -> str:
+        selected_diff = self._select_question_difficulty(context)
+        bank_q = self._get_question_from_bank(context.current_topic, selected_diff)
+        if bank_q:
+            if context.current_topic not in context.topics_covered:
+                context.topics_covered.append(context.current_topic)
+            should_switch_topic = self._should_switch_topic(context, answer_evaluation)
+            if should_switch_topic:
+                next_topic = self._get_next_topic(context)
+                if next_topic:
+                    context.current_topic = next_topic
+            return bank_q
+        
         cv_keywords_str = (
-            ", ".join(context.cv_keywords)
-            if context.cv_keywords
-            else "technical skills"
+        ", ".join(context.cv_keywords)
+        if context.cv_keywords
+        else "technical skills"
         )
 
-        # Build context about previous answers and score
+    # Build context about previous answers and score
         previous_context = ""
         acknowledgment = ""
         follow_up_strategy = ""
-
+        
         if last_answer and answer_evaluation:
             score = answer_evaluation.get("relevance_score", 0.5)
-
-            # Extract key concepts mentioned by candidate
             mentioned_concepts = self._extract_concepts_from_answer(last_answer)
             context.last_mentioned_concepts = mentioned_concepts
-
-            # Store conversation history
+            
             if context.conversation_history:
                 last_question = context.conversation_history[-1].get("question", "")
                 context.conversation_history.append(
-                    {
-                        "question": last_question,
-                        "answer": (
-                            last_answer[:200] + "..."
-                            if len(last_answer) > 200
-                            else last_answer
-                        ),
-                        "score": score,
-                    }
-                )
-
-            # Analyze the candidate's answer to provide contextual response
+                {
+                    "question": last_question,
+                    "answer": (
+                        last_answer[:200] + "..."
+                        if len(last_answer) > 200
+                        else last_answer
+                    ),
+                    "score": score,
+                }
+            )
+            
             if score < 0.3:
                 performance_guidance = PERFORMANCE_GUIDANCE["struggled"]
             elif score < 0.6:
@@ -345,20 +828,24 @@ class PromptBasedQuestionGenerator:
             else:
                 performance_guidance = PERFORMANCE_GUIDANCE["excellent"]
 
-            # Extract key concepts from their answer for follow-up
+        # Extract key concepts from their answer for follow-up
             concepts_mentioned = (
-                ", ".join(mentioned_concepts[:3])
-                if mentioned_concepts
-                else "the topics discussed"
-            )
+            ", ".join(mentioned_concepts[:3])
+            if mentioned_concepts
+            else "the topics discussed"
+        )
             previous_context = PREVIOUS_ANSWER_CONTEXT.format(
-                last_answer_preview=last_answer[:200],
-                concepts_mentioned=concepts_mentioned,
-                score=score,
-                performance_guidance=performance_guidance,
-            )
+            last_answer_preview=last_answer[:200],
+            concepts_mentioned=concepts_mentioned,
+            score=score,
+            performance_guidance=performance_guidance,
+        )
 
-        # Determine question type based on context
+    # Nudge LLM with target difficulty (added as extra context line)
+        if selected_diff:
+            previous_context = (previous_context + "\n" if previous_context else "") + f"Target difficulty: {selected_diff}"
+
+    # Determine question type based on context
         if context.question_count <= 8:
             question_type = "foundational"
         elif context.question_count <= 10:
@@ -367,33 +854,33 @@ class PromptBasedQuestionGenerator:
             question_type = "advanced/scenario-based"
 
         prompt = TECHNICAL_QUESTION_PROMPT.format(
-            cv_keywords=cv_keywords_str,
-            current_topic=context.current_topic,
-            question_type=question_type,
-            topics_covered=context.topics_covered,
-            previous_context=previous_context,
-            performance_guidance=(
-                performance_guidance
-                if "performance_guidance" in locals()
-                else "Ask an appropriate follow-up question"
-            ),
-        )
+        cv_keywords=cv_keywords_str,
+        current_topic=context.current_topic,
+        question_type=question_type,
+        topics_covered=context.topics_covered,
+        previous_context=previous_context,
+        performance_guidance=(
+            performance_guidance
+            if "performance_guidance" in locals()
+            else "Ask an appropriate follow-up question"
+        ),
+    )
 
         try:
             response = self.llm.complete(prompt)
             question = (
-                response.text.strip()
-                if response and hasattr(response, "text")
-                else self._fallback_technical_question_with_context(
-                    context, last_answer, score if "score" in locals() else 0.5
-                )
+            response.text.strip()
+            if response and hasattr(response, "text")
+            else self._fallback_technical_question_with_context(
+                context, last_answer, score if "score" in locals() else 0.5
             )
+        )
 
-            # Update topics covered - but don't switch topics too frequently
+        # Update topics covered - but don't switch topics too frequently
             if context.current_topic not in context.topics_covered:
                 context.topics_covered.append(context.current_topic)
 
-            # Smarter topic switching based on conversation flow
+        # Smarter topic switching based on conversation flow
             should_switch_topic = self._should_switch_topic(context, answer_evaluation)
             if should_switch_topic:
                 next_topic = self._get_next_topic(context)
@@ -405,8 +892,8 @@ class PromptBasedQuestionGenerator:
         except Exception as e:
             print(f"Error generating question: {e}")
             return self._fallback_technical_question_with_context(
-                context, last_answer, score if "score" in locals() else 0.5
-            )
+            context, last_answer, score if "score" in locals() else 0.5
+        )
 
     def _generate_closing(self, context: ConversationContext) -> str:
         """Generate closing using the prompt template."""
@@ -949,3 +1436,26 @@ class PromptBasedQuestionGenerator:
                 seen.add(key)
                 result.append(it)
         return result[:10]
+
+    def _classify_role_difficulty(self, job_description: str) -> str:
+        """Classify role difficulty from JD content: easy|medium|hard."""
+        jd = (job_description or "").lower()
+        # Heuristics for difficulty classification
+        easy_markers = ["junior", "entry-level", "intern", "0-1 years", "1+ years"]
+        hard_markers = [
+            "senior", "principal", "staff", "architect", "lead",
+            "distributed systems", "scalability", "kubernetes", "microservices",
+            "system design", "aws", "azure", "gcp", "security", "performance",
+            "10+ years", "8+ years"
+        ]
+        medium_markers = ["mid-level", "3+ years", "4+ years", "5+ years", "ownership", "mentorship"]
+
+        score_easy = sum(1 for m in easy_markers if m in jd)
+        score_hard = sum(1 for m in hard_markers if m in jd)
+        score_medium = sum(1 for m in medium_markers if m in jd)
+
+        if score_hard >= max(score_medium, score_easy) and score_hard > 0:
+            return "hard"
+        if score_easy > score_medium:
+            return "easy"
+        return "medium"

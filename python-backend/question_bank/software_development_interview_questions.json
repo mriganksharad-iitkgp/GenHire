@@ -1,0 +1,1622 @@
+[
+  {
+    "question": "What is a variable and how do you declare one?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between a compiler and an interpreter?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are data types in programming?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between int and float?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a string in programming?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are operators in programming?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between '==' and '===' in JavaScript?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a loop and what are different types of loops?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between while and for loop?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a conditional statement?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an array?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between array and list?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a function?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between function parameters and arguments?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is recursion?",
+    "role": "Software Developer",
+    "topic": "Programming Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an array data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a linked list?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between array and linked list?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a stack data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a queue data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between stack and queue?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is LIFO and FIFO?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a tree data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a binary tree?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a graph data structure?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a hash table?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is collision in hashing?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is time complexity?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is space complexity?",
+    "role": "Software Developer",
+    "topic": "Data Structures Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Object-Oriented Programming?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a class in OOP?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an object in OOP?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between class and object?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is encapsulation?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is inheritance?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is polymorphism?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is abstraction?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a constructor?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a destructor?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is method overloading?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is method overriding?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between overloading and overriding?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an access modifier?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between public, private, and protected?",
+    "role": "Software Developer",
+    "topic": "OOP Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Software Development Life Cycle (SDLC)?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are the phases of SDLC?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Agile methodology?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Waterfall model?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is version control?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Git?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between Git and GitHub?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a commit in Git?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a branch in Git?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a pull request?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is debugging?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a bug in software?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is testing in software development?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is unit testing?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between syntax error and logical error?",
+    "role": "Software Developer",
+    "topic": "Software Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is HTML?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is CSS?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is JavaScript?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between HTML and CSS?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a web browser?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is client-side vs server-side?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is HTTP?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is HTTPS?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a URL?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an API?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is REST API?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is JSON?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is XML?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a database?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is SQL?",
+    "role": "Software Developer",
+    "topic": "Web Development Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an algorithm?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is linear search?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is binary search?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between linear and binary search?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is bubble sort?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is selection sort?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is insertion sort?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Big O notation?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the time complexity of linear search?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the time complexity of binary search?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a greedy algorithm?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is brute force approach?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is two-pointer technique?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is sliding window technique?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is dynamic programming at a basic level?",
+    "role": "Software Developer",
+    "topic": "Basic Algorithms",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Explain how a hash map works internally.",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is collision resolution in hash tables?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is chaining vs open addressing?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a binary search tree (BST)?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is tree traversal? Explain inorder, preorder, and postorder.",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a balanced tree?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an AVL tree?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a Red-Black tree?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a heap data structure?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between min-heap and max-heap?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a priority queue?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a trie data structure?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a segment tree?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a disjoint set (Union-Find)?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is path compression in Union-Find?",
+    "role": "Software Developer",
+    "topic": "Advanced Data Structures",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain merge sort algorithm.",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain quick sort algorithm.",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between merge sort and quick sort?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is heap sort?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is counting sort?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is radix sort?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain breadth-first search (BFS).",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain depth-first search (DFS).",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between BFS and DFS?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Dijkstra's algorithm?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Bellman-Ford algorithm?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is dynamic programming? Explain with an example.",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is memoization?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between top-down and bottom-up DP?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the knapsack problem?",
+    "role": "Software Developer",
+    "topic": "Algorithms",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is system design?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is scalability in system design?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is vertical scaling vs horizontal scaling?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is load balancing?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is caching?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is CDN (Content Delivery Network)?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is database sharding?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is database replication?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is master-slave replication?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is CAP theorem?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is eventual consistency?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is strong consistency?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a microservices architecture?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is monolithic vs microservices?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an API gateway?",
+    "role": "Software Developer",
+    "topic": "System Design Basics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are design patterns?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Singleton pattern?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Factory pattern?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Observer pattern?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Strategy pattern?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Dependency Injection?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are SOLID principles?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain Single Responsibility Principle.",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain Open-Closed Principle.",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is code refactoring?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is technical debt?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is test-driven development (TDD)?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is continuous integration (CI)?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is continuous deployment (CD)?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is DevOps?",
+    "role": "Software Developer",
+    "topic": "Software Engineering",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is database normalization?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are the different normal forms?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is denormalization?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is ACID properties in databases?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a database transaction?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is SQL injection?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you prevent SQL injection?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an index in a database?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between clustered and non-clustered index?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a foreign key?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a join in SQL?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between INNER JOIN and OUTER JOIN?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is NoSQL database?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between SQL and NoSQL?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is MongoDB?",
+    "role": "Software Developer",
+    "topic": "Database & Backend",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Document Object Model (DOM)?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is event delegation in JavaScript?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a callback function?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a promise in JavaScript?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is async/await?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is CORS (Cross-Origin Resource Sharing)?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is JWT (JSON Web Token)?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is OAuth?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is session vs token-based authentication?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is middleware in web development?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is React?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Virtual DOM in React?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is state management in React?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Redux?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is RESTful API design?",
+    "role": "Software Developer",
+    "topic": "Web Development",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Implement and explain the A* pathfinding algorithm.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does the Floyd-Warshall algorithm work for all-pairs shortest path?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the Knuth-Morris-Pratt (KMP) string matching algorithm.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does the Rabin-Karp algorithm work?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the Manacher's algorithm for longest palindromic substring.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Z algorithm in string processing?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a suffix array?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Aho-Corasick algorithm?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain topological sorting in graphs.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does Tarjan's algorithm for strongly connected components work?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Hungarian algorithm?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the Ford-Fulkerson algorithm for maximum flow.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Edmonds-Karp algorithm?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you solve the traveling salesman problem?",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain branch and bound algorithm.",
+    "role": "Software Developer",
+    "topic": "Advanced Algorithms",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Implement a B-tree and explain its operations.",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does a B+ tree differ from a B-tree?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the implementation of a skip list.",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a Fenwick tree (Binary Indexed Tree)?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a persistent data structure?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a Bloom filter and how do you implement it?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the implementation of a concurrent hash map.",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does a lock-free data structure work?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a van Emde Boas tree?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the implementation of a rope data structure.",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a splay tree?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a treap data structure?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the implementation of a suffix tree.",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does a quadtree work?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a k-d tree and its applications?",
+    "role": "Software Developer",
+    "topic": "Complex Data Structures",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a URL shortening service like bit.ly.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a distributed cache system like Redis.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design Instagram?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a real-time chat application like WhatsApp.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design Netflix?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a distributed file system like Google Drive.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design Twitter?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a rate limiter for an API.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design Uber?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a web crawler.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design a notification system?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a ticket booking system like BookMyShow.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you implement consistent hashing?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Design a distributed message queue like Kafka.",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How would you design a recommendation system?",
+    "role": "Software Developer",
+    "topic": "System Design Advanced",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between concurrency and parallelism?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain thread safety and race conditions.",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a mutex and semaphore?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between mutex and semaphore?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain deadlock and its prevention.",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the dining philosophers problem?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a thread pool?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the reader-writer problem?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the producer-consumer problem.",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is lock-free programming?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is compare-and-swap (CAS) operation?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain memory barriers and fences.",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the ABA problem in concurrent programming?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does garbage collection work in multithreaded environments?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the actor model for concurrency?",
+    "role": "Software Developer",
+    "topic": "Concurrency & Parallelism",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design a plugin architecture?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is event sourcing?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain CQRS (Command Query Responsibility Segregation) pattern.",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a saga pattern in microservices?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the circuit breaker pattern?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle distributed transactions?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is eventual consistency in distributed systems?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement service discovery?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the strangler pattern for legacy system migration?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement API versioning?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is blue-green deployment?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is canary deployment?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement feature flags?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is chaos engineering?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design for fault tolerance?",
+    "role": "Software Developer",
+    "topic": "Advanced Software Engineering",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you optimize database queries?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is query plan analysis?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement database connection pooling?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is lazy loading vs eager loading?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you optimize frontend performance?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is code splitting in web applications?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement server-side rendering?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between SSR and SSG?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you optimize memory usage in applications?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is garbage collection tuning?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you profile application performance?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the strategies for reducing API latency?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement batch processing for efficiency?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the N+1 query problem and how do you solve it?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you optimize Docker images for production?",
+    "role": "Software Developer",
+    "topic": "Performance & Optimization",
+    "difficulty": "Hard"
+  }
+]
