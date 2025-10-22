@@ -33,7 +33,7 @@ class DocumentLoader:
         ]
 
         # Load with llama-index if available
-        if LLAMA_INDEX_AVAILABLE:
+        if LLAMA_INDEX_AVAILABLE and self.reference_paths:
             try:
                 self.documents = SimpleDirectoryReader(
                     input_files=self.reference_paths
@@ -51,6 +51,10 @@ class DocumentLoader:
         except Exception as e:
             print(f"Error loading document {file_path}: {e}")
             return ""
+
+    def get_cv_text(self) -> str:
+        """Get CV text."""
+        return self.cv_text
 
     def get_cv_sections(self) -> Dict[str, str]:
         """Get segregated CV sections."""
