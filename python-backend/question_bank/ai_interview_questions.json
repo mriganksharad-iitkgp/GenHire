@@ -1,0 +1,1640 @@
+[
+    {
+        "question": "Can you discuss the challenges of generating high-resolution or long-form content using generative AI?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "Can you discuss the concept of latent space in generative models and its importance?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you discuss your experience with implementing and deploying generative AI models in production environments?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "Can you explain the basic principles behind Generative Adversarial Networks (GANs)?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you explain the concept of conditional generation and how it is applied in models like Conditional GANs (cGANs)?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you explain the difference between Variational Autoencoders (VAEs) and GANs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you explain the difference between supervised and unsupervised learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "Can you explain the concept of diffusion models and how they differ from GANs and VAEs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you explain the role of Docker in ML deployment?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you explain word embeddings?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Can you use generative AI for tasks like image-to-image or text-to-image generation?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Choose which algorithm to use for a dataset?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Describe a challenging project involving generative AI that you've tackled. What were the key challenges, and how did you overcome them?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "Describe edge AI and its use cases.",
+        "role": "AI",
+        "topic": "Deployment",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Describe grid search and random search.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Describe partial dependence plots (PDPs).",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "Describe the difference between generative and discriminative models.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Describe the main types of machine learning algorithms.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain how to handle missing values in a dataset.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the assumptions of linear regression.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of 'in-context learning' in the context of large language models.",
+        "role": "GenAI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of local optima in local search algorithms.",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of reusability and fine-tuning in LLMs.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of transfer learning and how it is applied in computer vision.",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the inference steps in a typical convolutional neural network (CNN).",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the steps involved in a typical Reinforcement Learning algorithm.",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the assumptions of linear regression.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between classification and regression.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "Explain the difference between Generative AI and classical AI approaches.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between L1 and L2 regularization.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between segmentation and classification tasks in computer vision.",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between stemming and lemmatization.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between structured prediction and classification.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "Explain the difference between supervised, unsupervised, and reinforcement learning.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the different kernels in support vector machines (SVM).",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between tokenization and word embeddings in NLP.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between tokenization and subword tokenization in NLP.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between transformed data vs original data in neural network inputs.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the function of an embedding layer in a neural network.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the hidden units and architecture of an RNN vs an LSTM.",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the impact of bias in data on machine learning models.",
+        "role": "AI",
+        "topic": "AI Ethics",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the interpretation of the ROC area under the curve.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the major components of a deep learning model (e.g., layers, activations).",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the meaning of 'mode collapse' in GANs.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of dropout in training neural networks.",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of cross-validation in machine learning.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of self-supervised learning in generative AI.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the rules of inference in expert systems (e.g., production rules).",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of tokenization in natural language processing.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "Explain the role of transformers in generative AI.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of weight initialization in neural networks.",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of word embeddings in NLP.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of fine-tuning a pre-trained LLM.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of LeakyReLU vs ReLU in neural networks.",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the role of semantic search in retrieval-augmented generation.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the signature steps in a typical machine learning pipeline (data, training, evaluation).",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the training process of a deep Q-learning model and its benefits.",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between SVM and decision tree classifiers.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the function of the attention mechanism in a Transformer.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the difference between transfer learning and fine-tuning in NLP.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the concept of 'prompt chaining' in LLM usage.",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain the trade-off between bias and variance.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "Explain transfer learning and how it helps in practice.",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain word embeddings and examples like Word2Vec and GloVe.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Explain your approach to hyperparameter tuning in production.",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Give examples of common NLP tasks (e.g., classification, translation).",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "Given two strings A and B, write a function can_shift to determine if A can be cyclically shifted to produce B.",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How BERT works and why is it important?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How can an attention mechanism improve interpretability in NLP?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How can an ensemble of models reduce error in predictions?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How can hyperparameter tuning be automated and when is it useful?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How can interpretability techniques help with model debugging?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How can prompt engineering be used instead of fine-tuning?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do CNNs work for image tasks?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do decision trees decide splits in training?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do RNNs and LSTMs differ in handling sequences?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do transformers compare with RNNs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does batch normalization help in training deep networks?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does cross-validation help in preventing overfitting?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does diffusion model training work (forward and reverse processes)?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How does gradient descent find optimal model weights?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "How does model drift in production get detected and addressed?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does principal component analysis (PCA) reduce dimensionality?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does regularization prevent overfitting in models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "How do you apply ensembling methods like boosting to improve performance?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you assess quality and diversity of generated samples from a generative model?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you combat overfitting in machine learning models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "How do you handle class imbalance in text classification?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you optimize the inference speed of a generative AI model?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you prevent overfitting in deep learning models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "How do you select features for a machine learning model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does an ensemble of decision trees form a random forest?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you interpret SHAP and LIME for model predictions?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How do you leverage data augmentation in computer vision?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How do you manage ethical AI concerns like bias and transparency?",
+        "role": "AI",
+        "topic": "AI Ethics",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does reinforcement learning differ from supervised learning?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does YOLO object detection work in real-time?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How does an attention mechanism assign importance to input features?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would an autoencoder be used for anomaly detection?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you address bias and fairness in machine learning?",
+        "role": "AI",
+        "topic": "AI Ethics",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you balance model complexity vs overfitting?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you build a content moderation system for social media images?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you choose between prompt engineering, RAG, and fine-tuning?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you deal with low bias and high variance in a model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you deploy a machine learning model using Kubernetes?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you detect and correct for dataset shift in production?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you handle model drift in a deployed machine learning model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you handle overfitting in a deep-learning image classification model?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you optimize a facial recognition system for fairness?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you evaluate a classification models performance beyond accuracy?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you handle imbalanced data in a computer vision task?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you improve stability and convergence when training GANs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you make a generative AI model controllable (e.g., style or attributes)?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you maximize model interpretability in a high-stakes application?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you optimize a deep learning models hyperparameters?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you plan a scalable machine learning system architecture?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you scale and deploy an LLM application in production?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you select features when building a machine learning model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you select the appropriate evaluation metric for a given classification problem?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you handle missing data in a dataset?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you implement connected components on an image/matrix?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "How would you leverage data augmentation in computer vision tasks?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you leverage transfer learning to train on a small dataset?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you optimize inference time of a trained transformer model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "How would you tune the training process of a deep learning model?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are common platforms for deploying machine learning models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are precision and recall?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What are the advantages of using managed services like AWS SageMaker for deployment?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the advantages and limitations of LLMs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the main types of machine learning algorithms?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What are the steps involved in a typical reinforcement learning algorithm?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Active learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is AutoML and what are its benefits in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is BERT and why is it important?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Bayes Theorem and how is it used in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Backpropagation and how does it work?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Batch Normalization?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Bias in ML and how does it differ from variance?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is BLEU score?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Chatbot and how does it work?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is CNN?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is CI/CD pipeline in ML and how does it work?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Capsule Network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is CI/CD pipeline in ML and how does it work?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Clustering?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is CNN?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is CI/CD pipeline in ML and how does it work?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Classification?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Cloud",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Clustering?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Cross Validation?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is CPU",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is data augmentation",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Deep learning",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Deep learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Decision Tree",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Deep learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Decision Tree Pruning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is dropout in neural networks?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Early Stopping in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Federated Learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is Fine-tuning in LLMs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Forward Pass in a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Forward Pass in a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is forward pass in a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is GAN?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Generative Adversarial Network (GAN)?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Generative Adversarial Network?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Generative AI?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is GPT?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Graph Neural Network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is Grid Search in machine learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is GPT?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Hyperparameter tuning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Hierarchical clustering?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Image segmentation?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Inductive Bias in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Inference?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Interpretability and why is it important in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Keras?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is KNN (K-Nearest Neighbors)?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is k-means clustering?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is knowledge representation in AI and why is it important?",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is knowledge representation?",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is knowledge representation in AI?",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is knowledge representation in Artificial Intelligence?",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is L1 versus L2 regularization?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Latent Dirichlet Allocation (LDA)?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is LightGBM and what are its advantages?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is logistic regression and how does it work?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is machine learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Meta-Learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is MobileNets?",
+        "role": "AI",
+        "topic": "Computer Vision",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is natural language processing (NLP)?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is named entity recognition (NER)?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is NLP?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is NLTK?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is non-parametric vs parametric model?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is NPS?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is NLP and why is it important?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is normalization vs standardization in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is one-hot encoding?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Optuna and how does it help in hyperparameter tuning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is overfitting in machine learning, and how can it be avoided?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is PCA and how does it reduce dimensionality?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is precision vs recall?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is predict and prevent",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is Principal Component Analysis (PCA)?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Q-learning and how does it work?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is RNN used for?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is RNN vs LSTM?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is reinforcement learning?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is ROC-AUC score?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is ROC",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Root Mean Squared Error (RMSE)?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is reinforcement learning?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is ROC-AUC score?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is self-supervised learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is sequence-to-sequence vs sequence classification?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is sequence-to-sequence model?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is SQL used in ML projects?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is syntactic analysis?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Support Vector Machine (SVM)?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is supervised learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is system design for generative AI content personalization?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is the Bellman equation?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the AI vs ML vs DL difference?",
+        "role": "AI",
+        "topic": "Artificial Intelligence",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the attention mechanism in Transformers?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the difference between classification and regression?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the difference between classification and regression?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the difference between parametric and non-parametric models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the difference between Softmax and other activation functions?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the difference between generative AI models like GPT and traditional AI?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the difference between inference vs training phases in ML models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the difference between language generation and classification tasks?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the main difference between ensemble methods like bagging and boosting?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the objective of reinforcement learning?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the purpose of an embedding layer in deep learning?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of cross-validation in model evaluation?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of hyperparameters vs parameters in ML?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of K-means clustering in unsupervised learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the role of ReLU in a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the role of softmax in classification tasks?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the role of Tanh vs Sigmoid in neural networks?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of tokenization in language models?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is the role of training vs inference in deploying ML models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of transformers in NLP?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the role of validation sets in training models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is the use of Prompt Engineering?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Tokenization?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Trivial Pursuit in knowledge representation?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What is Unsupervised learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is vocabulary in NLP?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is Word Embedding?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is Word2Vec?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What is XGBoost and why is it popular?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the advantages of RNNs over CNNs for sequence tasks?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the advantages of using pre-trained models (transfer learning)?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the basic building blocks of a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What are the main challenges in training GANs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the main differences between RNNs and Transformers?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the main components of a neural network?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What are the methods of reducing dimensionality in machine learning?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the steps involved in a typical reinforcement learning algorithm?",
+        "role": "AI",
+        "topic": "Reinforcement Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the types of fine-tuning techniques for LLMs?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "What are the types of neural networks used in deep learning?",
+        "role": "AI",
+        "topic": "Deep Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What are the unsolved problems in generative AI?",
+        "role": "GenAI",
+        "topic": "Generative AI",
+        "difficulty": "Hard"
+    },
+    {
+        "question": "What does it mean for a model to generalize?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What does tokenization do in NLP preprocessing?",
+        "role": "AI",
+        "topic": "NLP",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What evaluation metrics would you use for classification models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    },
+    {
+        "question": "What is API in the context of machine learning systems?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Medium"
+    },
+    {
+        "question": "Why do we use a validation set when training machine learning models?",
+        "role": "AI",
+        "topic": "Machine Learning",
+        "difficulty": "Easy"
+    }
+]
