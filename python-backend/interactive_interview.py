@@ -127,7 +127,7 @@ def interactive_interview():
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
     cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\AI_JD.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Senior-AI-Engineer-JD.pdf"
     reference_paths = []
 
     # Check if files exist
