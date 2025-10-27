@@ -1,0 +1,337 @@
+[
+  {
+    "question": "Can you describe a challenging work situation and how you overcame it as a leader?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you give an example of a time you showed leadership in a critical situation?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What is the most significant achievement in your career?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you had to coach a struggling employee to success.",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What's your approach to managing a team with mixed personalities and work styles?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you balance hands-on leadership with giving your team autonomy?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you help your team with conflict resolution?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you share an example where you shifted a team's priorities to better align with company goals?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe how you measure success in your function—what metrics matter most to you and why?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "When faced with conflicting priorities, how do you decide what to focus on first?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What's your approach to building trust and credibility with a new team?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a time you helped improve team morale or culture.",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What's been your most challenging technical or functional decision, and how did you approach it?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you led a team through a significant challenge.",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What leadership style do you use, and why?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you handle conflict within your team?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you provide an example of a tough decision you had to make as a leader?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you motivate your team when morale is low?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you describe a time when you had to pivot in response to a major change?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What role does risk-taking play in your leadership approach?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you build resilience in your team?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you celebrate success with your team?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What's your approach to managing up with senior leaders or board members?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you develop future leaders within your team?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What's your approach to managing a team during growth or scaling?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you ensure team accountability?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you share a time when you made an unpopular decision as a leader?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you manage cross-functional teams and stakeholders?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What experience do you have leading a project team with multiple dependencies?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you ensure strategic alignment across different departments?",
+    "seniority_level": "senior",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What are your short-term and long-term strategic goals for this role?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you align your team's goals with the company's strategic objectives?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What are the biggest challenges to company success right now, and how would you address them?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What do you hope to accomplish in the first 90 days of your tenure?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Where do you see the industry heading in the next 5-10 years?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How would you contribute to the organization's long-term vision?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What emerging trends in your field are you most excited about?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you prepare your team to adapt to industry changes?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What initiatives would you implement to drive organizational growth?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you measure success at the organizational level?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What is your vision for this department/function?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you balance strategic planning with operational execution?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What legacy do you hope to leave in your career?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you plan to stay relevant in an evolving industry?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What makes you the best candidate for this senior leadership role?",
+    "seniority_level": "senior",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What is the most challenging aspect of maintaining integrity as a senior leader?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you ensure ethical standards are upheld across your organization?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Describe a time when you had to make a decision between profitability and ethics.",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you handle ethical dilemmas involving senior management or board members?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What policies have you implemented to promote ethical behavior in your teams?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you address ethical violations at the leadership level?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What is your approach to creating a culture of integrity and transparency?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Tell me about a time when you had to take a stand on an ethical issue despite pressure.",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you balance stakeholder interests with ethical considerations?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What role does corporate social responsibility play in your leadership philosophy?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you ensure compliance with regulations while maintaining ethical standards?",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Describe your experience with implementing DEI and ethical practices organization-wide.",
+    "seniority_level": "senior",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What are your salary expectations for this senior leadership position?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "What compensation package would you consider appropriate for this role?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "How do you evaluate the total compensation beyond base salary?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "What equity or stock options are you expecting as part of your package?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "How important are performance bonuses and incentives to you?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "What benefits are most critical to you at this stage of your career?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "Are you open to a performance-based compensation structure?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "How do you typically approach executive compensation negotiations?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "What would make you accept a lower base salary for this opportunity?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  },
+  {
+    "question": "How does this compensation compare to your current or previous executive package?",
+    "seniority_level": "senior",
+    "question_type": "salary"
+  }
+]

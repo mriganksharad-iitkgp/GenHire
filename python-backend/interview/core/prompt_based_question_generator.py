@@ -4,6 +4,8 @@ This is designed to work with the existing session manager without modifications
 """
 
 import re
+import json
+import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -25,6 +27,9 @@ from ..prompts import (
     PREVIOUS_ANSWER_CONTEXT,
     CLOSING_PROMPT,
     FALLBACK_CLOSING,
+    HR_QUESTION_PROMPT,
+    FALLBACK_HR_QUESTION,
+    HR_PREVIOUS_ANSWER_CONTEXT,
 )
 
 
@@ -35,6 +40,7 @@ class InterviewPhase(Enum):
     STRUCTURE_EXPLANATION = "structure_explanation"
     EXPERIENTIAL_QUESTIONS = "experiential_questions"
     TECHNICAL_QUESTIONS = "technical_questions"
+    HR_QUESTIONS = "hr_questions"
     CLOSING = "closing"
 
 
@@ -83,6 +89,8 @@ class ConversationContext:
     last_mentioned_concepts: List[str] = None  # Track what candidate mentioned
     conversation_history: List[Dict[str, str]] = None  # Track Q&A pairs
     role_difficulty: str = "medium"  # easy|medium|hard derived from JD
+    hr_questions_asked: int = 0
+    hr_question_types_asked: List[str] = None
 
     def __post_init__(self):
         if self.previous_answers is None:
@@ -97,6 +105,8 @@ class ConversationContext:
             self.last_mentioned_concepts = []
         if self.conversation_history is None:
             self.conversation_history = []
+        if self.hr_question_types_asked is None:
+            self.hr_question_types_asked = []
 
 
 @dataclass
@@ -126,9 +136,40 @@ class PromptBasedQuestionGenerator:
         self.available_topics = []
         self.cv_content = ""
         self.resume_sections = {}
-        self.question_bank_path = "/product-prototyping-lab/python-backend/question_bank/ai_ml_interview_questions.json"  # set later
+        self.question_bank_path = "/product-prototyping-lab/python-backend/question_bank/technical_question_bank/ai_ml_interview_questions.json"  # set later
         self.question_bank = None
+        self.question_embeddings = None
         self._load_question_bank()
+        # HR question banks
+        self.hr_question_banks: Dict[str, List[Dict[str, Any]]] = {"fresher": [], "intermediate": [], "senior": []}
+        self.hr_question_embeddings: Dict[str, List[Dict[str, Any]]] = {"fresher": [], "intermediate": [], "senior": []}
+        self._load_hr_question_banks()
+        
+    def _get_embedding(self, text: str) -> np.ndarray:
+        """Generate embedding for text using a simple method.
+        
+        In a production environment, you would use a proper embedding model.
+        This is a simplified version for demonstration purposes.
+        """
+        # Simple character-based embedding (for demonstration only)
+        # In production, use a proper embedding model like:
+        # - self.llm.get_embedding(text) if your LLM supports it
+        # - sentence-transformers, OpenAI embeddings API, etc.
+        
+        # Simple character frequency vector (26 lowercase letters + space)
+        vec = np.zeros(27)
+        text = text.lower()
+        for char in text:
+            if 'a' <= char <= 'z':
+                vec[ord(char) - ord('a')] += 1
+            elif char == ' ':
+                vec[26] += 1
+        
+        # Normalize the vector
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        return vec
 
     def initialize_conversation(
         self, resume_sections: Dict[str, str], job_description: str = ""
@@ -617,32 +658,240 @@ class PromptBasedQuestionGenerator:
         return schedule[context.question_count % len(schedule)]
 
     def _load_question_bank(self) -> None:
-        """Load question bank JSON if path is set; no-op if blank."""
+        """Load question bank JSON and generate embeddings for RAG."""
         if not self.question_bank_path:
             self.question_bank = None
+            self.question_embeddings = None
             return
         try:
-            import json
             with open(self.question_bank_path, "r", encoding="utf-8") as f:
                 self.question_bank = json.load(f)
+                
+            # Generate embeddings for each question
+            if self.question_bank:
+                self.question_embeddings = []
+                for item in self.question_bank if isinstance(self.question_bank, list) else self.question_bank.get("questions", []):
+                    try:
+                        # Create a combined text for embedding that includes topic and question
+                        topic = item.get("topic", "").lower()
+                        question = item.get("question", "")
+                        difficulty = item.get("difficulty", "").lower()
+                        combined_text = f"{topic} {question} {difficulty}"
+                        
+                        # Generate and store embedding
+                        embedding = self._get_embedding(combined_text)
+                        self.question_embeddings.append({
+                            "embedding": embedding,
+                            "index": len(self.question_embeddings)
+                        })
+                    except Exception:
+                        # Skip items that cause errors
+                        continue
         except Exception:
             self.question_bank = None
+            self.question_embeddings = None
 
     def _get_question_from_bank(self, topic: str, difficulty: str) -> Optional[str]:
-        """Retrieve a question from the bank matching topic and difficulty."""
+        """Retrieve a question from the bank using RAG (semantic search)."""
         bank = self.question_bank
-        if not bank:
+        if not bank or not self.question_embeddings:
             return None
-        # Expect list of {"topic": str, "question": str, "difficulty": "easy|medium|hard"}
-        for item in bank if isinstance(bank, list) else bank.get("questions", []):
-            try:
-                t = item.get("topic", "").lower()
-                d = item.get("difficulty", "").lower()
-                if topic and t and topic.lower() in t and d == difficulty.lower():
-                    return item.get("question")
-            except AttributeError:
-                continue
+            
+        # Create a query embedding from the topic and difficulty
+        query_text = f"{topic} {difficulty}"
+        query_embedding = self._get_embedding(query_text)
+        
+        # Find the most similar questions using cosine similarity
+        similarities = []
+        for i, emb_data in enumerate(self.question_embeddings):
+            emb = emb_data["embedding"]
+            # Calculate cosine similarity
+            similarity = np.dot(query_embedding, emb)
+            similarities.append((similarity, i))
+        
+        # Sort by similarity (highest first)
+        similarities.sort(reverse=True)
+        
+        # Get top 3 candidates
+        top_candidates = []
+        for sim, idx in similarities[:3]:
+            item_idx = self.question_embeddings[idx]["index"]
+            item = bank[item_idx] if isinstance(bank, list) else bank.get("questions", [])[item_idx]
+            
+            # Check if difficulty matches (exact match required for difficulty)
+            if item.get("difficulty", "").lower() == difficulty.lower():
+                top_candidates.append((sim, item))
+        
+        # Return the highest similarity question that matches the difficulty
+        if top_candidates:
+            return top_candidates[0][1].get("question")
+            
         return None
+
+    def _load_hr_question_banks(self) -> None:
+        """Load HR question banks by seniority and create embeddings."""
+        try:
+            base_dir = "/product-prototyping-lab/python-backend/question_bank/hr_question_banks"
+            file_map = {
+                "fresher": "hr_interview_questions_fresher.json",
+                "intermediate": "hr_interview_questions_intermediate.json",
+                "senior": "hr_interview_questions_senior.json",
+            }
+            for level, fname in file_map.items():
+                path = f"{base_dir}/{fname}"
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        # Expect a list of {question, seniority_level, question_type}
+                        self.hr_question_banks[level] = data if isinstance(data, list) else []
+                        # Build embeddings
+                        emb_list: List[Dict[str, Any]] = []
+                        for idx, item in enumerate(self.hr_question_banks[level]):
+                            qtype = item.get("question_type", "").lower()
+                            qtext = item.get("question", "")
+                            combined = f"{qtype} {qtext}"
+                            emb_list.append({
+                                "embedding": self._get_embedding(combined),
+                                "index": idx,
+                                "type": qtype,
+                            })
+                        self.hr_question_embeddings[level] = emb_list
+                except Exception:
+                    self.hr_question_banks[level] = []
+                    self.hr_question_embeddings[level] = []
+        except Exception:
+            # If loading fails globally, ensure empty structures
+            self.hr_question_banks = {"fresher": [], "intermediate": [], "senior": []}
+            self.hr_question_embeddings = {"fresher": [], "intermediate": [], "senior": []}
+
+    def _is_hr_question_applicable(self, item: Dict[str, Any], context: ConversationContext) -> bool:
+        """Basic applicability check using CV/job context and question content."""
+        qtype = item.get("question_type", "").lower()
+        qtext = item.get("question", "").lower()
+        cv_blob = " ".join([
+            context.job_title or "",
+            " ".join(context.cv_keywords or []),
+            " ".join(context.cv_experiences or []),
+            " ".join(context.cv_projects or []),
+        ]).lower()
+
+        # Always-applicable types
+        always_ok = {"communication", "culture", "culture_fit", "career", "motivation", "strengths", "weaknesses"}
+        if qtype in always_ok:
+            return True
+
+        # Trigger heuristics for applicability
+        triggers: Dict[str, List[str]] = {
+            "leadership": ["lead", "led", "managed", "team", "mentor"],
+            "teamwork": ["team", "collaborat", "scrum", "agile", "pair"],
+            "conflict": ["stakeholder", "client", "team", "conflict", "disagree"],
+            "deadline": ["deadline", "deliver", "timeline", "sprint", "release"],
+            "remote": ["remote", "distributed", "timezone"],
+            "adaptability": ["learn", "new", "change", "pivot", "adap"],
+            "problem_solving": ["problem", "issue", "debug", "fix", "root cause"],
+        }
+        # If type has specific triggers, check presence in CV blob or question text keywords
+        for key, words in triggers.items():
+            if qtype.startswith(key):
+                if any(w in cv_blob for w in words) or any(w in qtext for w in words):
+                    return True
+                return False
+
+        # Default to semantic similarity gate; if high enough, allow
+        query_embedding = self._get_embedding(cv_blob)
+        item_embedding = self._get_embedding(qtext)
+        sim = float(np.dot(query_embedding, item_embedding))
+        return sim >= 0.1
+
+    def _get_hr_question_from_bank(self, context: ConversationContext) -> Optional[str]:
+        """Pick an applicable HR question deterministically via semantic match (no random)."""
+        level_map = {
+            "beginner": "fresher",
+            "intermediate": "intermediate",
+            "expert": "senior",
+        }
+        level = level_map.get((context.candidate_skill_level or "intermediate").lower(), "intermediate")
+        bank = self.hr_question_banks.get(level, [])
+        emb_list = self.hr_question_embeddings.get(level, [])
+        if not bank or not emb_list:
+            return None
+
+        # Build query from CV/job and last concepts
+        context_text = " ".join([
+            context.job_title or "",
+            ", ".join(context.cv_keywords or []),
+            " ".join(context.cv_experiences or []),
+            " ".join(context.cv_projects or []),
+            ", ".join(context.last_mentioned_concepts or []),
+        ])
+        q_emb = self._get_embedding(context_text)
+
+        # Score by cosine similarity
+        scored: List[Tuple[float, int]] = []
+        for i, ed in enumerate(emb_list):
+            sim = float(np.dot(q_emb, ed["embedding"]))
+            scored.append((sim, i))
+        scored.sort(reverse=True)
+
+        # Iterate best to worst and choose first applicable and non-repeated type
+        for sim, i in scored:
+            item = bank[emb_list[i]["index"]]
+            qtype = (item.get("question_type", "") or "").lower()
+            if qtype in (context.hr_question_types_asked or []):
+                continue
+            if sim < 0.1:
+                # Too low similarity, likely not applicable
+                continue
+            if not self._is_hr_question_applicable(item, context):
+                continue
+            # Mark type asked to avoid repetition and return question
+            context.hr_question_types_asked.append(qtype)
+            return item.get("question", None)
+        return None
+
+    def _generate_hr_question(
+        self,
+        context: ConversationContext,
+        last_answer: Optional[str] = None,
+        answer_evaluation: Optional[Dict] = None,
+    ) -> str:
+        """Generate HR question using bank first, then prompt as fallback."""
+        bank_q = self._get_hr_question_from_bank(context)
+        if bank_q:
+            return bank_q
+
+        # Build previous-answer context for HR prompt
+        prev_ctx = ""
+        if last_answer and answer_evaluation:
+            score = answer_evaluation.get("relevance_score", 0.5)
+            concepts_mentioned = self._extract_concepts_from_answer(last_answer)
+            prev_ctx = HR_PREVIOUS_ANSWER_CONTEXT.format(
+                last_answer_preview=last_answer[:200],
+                concepts_mentioned=", ".join(concepts_mentioned[:3]) if concepts_mentioned else "the topics discussed",
+                score=score,
+            )
+
+        # Map skill to human-readable experience level for prompt
+        skill = (context.candidate_skill_level or "intermediate").lower()
+        exp_map = {"beginner": "Fresher", "intermediate": "Intermediate", "expert": "Senior"}
+        exp_level = exp_map.get(skill, "Intermediate")
+        topics_covered_str = ", ".join(context.topics_covered or []) or "—"
+
+        prompt = HR_QUESTION_PROMPT.format(
+            job_title=context.job_title,
+            candidate_name=context.candidate_name,
+            experience_level=exp_level,
+            topics_covered=topics_covered_str,
+        )
+        try:
+            response = self.llm.complete(prompt)
+            return (
+                response.text.strip()
+                if response and hasattr(response, "text")
+                else FALLBACK_HR_QUESTION
+            )
+        except Exception:
+            return FALLBACK_HR_QUESTION
 
     def get_next_question(
         self,
@@ -690,14 +939,26 @@ class PromptBasedQuestionGenerator:
 
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
             if (
-                context.question_count >= 20
-            ):  # After 20 technical questions, go to closing
-                context.interview_phase = InterviewPhase.CLOSING
-                question = self._generate_closing(context)
+                context.question_count >= 7
+            ):  # After 12 technical questions, go to HR phase
+                context.interview_phase = InterviewPhase.HR_QUESTIONS
+                question = self._generate_hr_question(
+                    context, last_answer, answer_evaluation
+                )
             else:
                 question = self._generate_technical_question(
                     context, last_answer, answer_evaluation
                 )
+
+        elif context.interview_phase == InterviewPhase.HR_QUESTIONS:
+            # Ask HR questions at the end, then move to closing
+            question = self._generate_hr_question(
+                context, last_answer, answer_evaluation
+            )
+            context.hr_questions_asked += 1
+            # Limit to 3 HR questions for now
+            if context.hr_questions_asked >= 3:
+                context.interview_phase = InterviewPhase.CLOSING
 
         elif context.interview_phase == InterviewPhase.CLOSING:
             question = "Thank you for your time. The interview is now complete."
@@ -719,6 +980,9 @@ class PromptBasedQuestionGenerator:
             intent = QuestionIntent.TRANSITION_TOPIC
         elif context.interview_phase == InterviewPhase.EXPERIENTIAL_QUESTIONS:
             question_type = QuestionType.EXPERIENTIAL
+            intent = QuestionIntent.ASSESS_EXPERIENCE
+        elif context.interview_phase == InterviewPhase.HR_QUESTIONS:
+            question_type = QuestionType.BEHAVIORAL
             intent = QuestionIntent.ASSESS_EXPERIENCE
         else:
             question_type = QuestionType.TECHNICAL
@@ -778,6 +1042,8 @@ class PromptBasedQuestionGenerator:
         last_answer: Optional[str] = None,
         answer_evaluation: Optional[Dict] = None,) -> str:
         selected_diff = self._select_question_difficulty(context)
+        
+        # Use RAG to get question from bank
         bank_q = self._get_question_from_bank(context.current_topic, selected_diff)
         if bank_q:
             if context.current_topic not in context.topics_covered:
