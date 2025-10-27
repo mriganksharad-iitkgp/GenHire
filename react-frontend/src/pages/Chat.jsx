@@ -60,6 +60,8 @@ export default function Chat({ interviewId }) {
   // --- MODIFICATION --- Add refs for the timer and the latest transcript
   const timerRef = useRef(null);
   const transcriptRef = useRef("");
+  // Track the currently active MediaStream explicitly to guarantee full shutdown
+  const cameraStreamRef = useRef(null);
 
   // --- HOOKS ---
   const navigate = useNavigate();
@@ -308,12 +310,51 @@ export default function Chat({ interviewId }) {
     });
   }, [mediaRecorder]);
 
+  // Centralized camera shutdown to ensure hardware and browser indicator turn off
+  const stopCamera = useCallback(() => {
+    try {
+      // Stop via <video> element stream if present
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject;
+        try {
+          stream.getTracks().forEach((t) => t.stop());
+        } catch (e) {
+          // ignore
+        }
+        videoRef.current.srcObject = null;
+      }
+
+      // Stop any tracked stream not attached to the element
+      if (cameraStreamRef.current) {
+        try {
+          cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+        } catch (e) {
+          // ignore
+        }
+        cameraStreamRef.current = null;
+      }
+
+      // Fully reset the video element
+      if (videoRef.current) {
+        try { videoRef.current.pause(); } catch (e) {}
+        videoRef.current.removeAttribute("src");
+        try { videoRef.current.load(); } catch (e) {}
+      }
+    } catch (e) {
+      // no-op
+    }
+  }, []);
+
   const startWebcamAndArchivalRecording = useCallback(async () => {
     try {
+      // Ensure any previous stream is fully stopped before acquiring a new one
+      stopCamera();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
+      // Track the active stream and attach to the element
+      cameraStreamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       startLiveProctoring();
       const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
@@ -401,6 +442,7 @@ export default function Chat({ interviewId }) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+        cameraStreamRef.current = stream;
       } catch (err) {
         console.error("Webcam access error:", err);
         alert(
@@ -418,9 +460,8 @@ export default function Chat({ interviewId }) {
     }
 
     if (interviewStatus === "active" && !isRecordingVideo) {
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
+      // Stop any previous preview stream from registration phase
+      stopCamera();
       startWebcamAndArchivalRecording();
       // Initialize question count to 1 for the first question
       setQuestionCount(1);
@@ -472,13 +513,8 @@ export default function Chat({ interviewId }) {
     }
     setIsRecording(false);
 
-    // Stop camera and all video tracks
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => {
-        track.stop();
-      });
-      videoRef.current.srcObject = null;
-    }
+    // Stop camera and all media tracks immediately
+    stopCamera();
 
     stopLiveProctoring();
 
@@ -873,17 +909,17 @@ export default function Chat({ interviewId }) {
       // Clear typing animation interval
       clearInterval(typingIntervalRef.current);
       stopLiveProctoring();
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
+      stopCamera();
     };
-  }, [stopLiveProctoring]);
+  }, [stopLiveProctoring, stopCamera]);
 
   // --- Interview Completion Camera Cleanup ---
   useEffect(() => {
     if (interviewStatus === "completed" || interviewStatus === "ending") {
       // Comprehensive camera and media cleanup
       const cleanup = () => {
+        // Ensure camera shutdown via centralized function
+        stopCamera();
         // Stop all camera and microphone tracks
         if (videoRef.current && videoRef.current.srcObject) {
           const stream = videoRef.current.srcObject;
@@ -940,7 +976,7 @@ export default function Chat({ interviewId }) {
       setTimeout(cleanup, 100);
       setTimeout(cleanup, 500); // Ensure complete cleanup
     }
-  }, [interviewStatus, stopLiveProctoring, mediaRecorder]);
+  }, [interviewStatus, stopLiveProctoring, mediaRecorder, stopCamera]);
 
   // --- RENDER LOGIC ---
   if (interviewStatus === "starting") {
