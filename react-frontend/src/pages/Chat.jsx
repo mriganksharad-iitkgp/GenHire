@@ -406,12 +406,7 @@ export default function Chat({ interviewId }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          application_id: applicationId, // Pass the application ID
-          cv_path: "uploads/cv/software_engineering_cv.pdf",
-          jd_path: "uploads/jd/software_engineering_job_description.pdf",
-          reference_paths: [
-            "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
-          ],
+          application_id: applicationId,
         }),
       })
         .then((res) => (res.ok ? res.json() : Promise.reject(res.json())))

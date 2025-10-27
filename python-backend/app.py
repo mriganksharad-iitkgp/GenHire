@@ -31,6 +31,7 @@ from routes.job_routes import job_bp
 from routes.application_routes import application_bp
 from routes.file_routes import file_bp
 from utils.cheating_detection import ProctoringGazeDetector
+from services.cv_scoring_service import CVScoringService
 
 # Load environment variables
 load_dotenv()
@@ -51,6 +52,7 @@ collections = db_config.get_collections()
 users_collection = collections["users"]
 interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
+jobs_collection = collections["jobs"]
 
 # Register blueprints
 app.register_blueprint(auth_bp)
@@ -91,12 +93,65 @@ PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
 os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
 os.makedirs(RECORDING_FOLDER, exist_ok=True)
+TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
+os.makedirs(TMP_FOLDER, exist_ok=True)
 
 app.config["PROCTORING_FOLDER"] = PROCTORING_FOLDER
 app.config["RECORDING_FOLDER"] = RECORDING_FOLDER
+app.config["TMP_FOLDER"] = TMP_FOLDER
 
 # Import middleware for interview routes
 from middleware.auth_middleware import token_required
+
+# Optional CV formatter (does not run AI scoring here)
+try:
+    cv_service = CVScoringService()
+except Exception as e:
+    print(f"Warning initializing CVScoringService for formatting: {e}")
+    cv_service = None
+
+def _format_cv_from_details(cv_details: dict) -> str:
+    parts = []
+    if not isinstance(cv_details, dict):
+        return ""
+    pi = cv_details.get("personalInfo", {})
+    if pi:
+        parts.append("PERSONAL INFORMATION")
+        for k in ["fullName","email","phone","location","linkedin","github"]:
+            v = pi.get(k)
+            if v: parts.append(str(v))
+    if cv_details.get("professionalSummary"):
+        parts.append(cv_details.get("professionalSummary"))
+    for edu in cv_details.get("education", []) or []:
+        line = " ".join(filter(None, [edu.get("degree"), edu.get("institution"), str(edu.get("year") or "")]))
+        if line.strip(): parts.append(line)
+        if edu.get("description"): parts.append(edu["description"])
+    for exp in cv_details.get("workExperience", []) or []:
+        line = " ".join(filter(None, [exp.get("jobTitle"), exp.get("company"), str(exp.get("duration") or "")]))
+        if line.strip(): parts.append(line)
+        if exp.get("description"): parts.append(exp["description"])
+    skills = cv_details.get("skills", {})
+    for key in ["technical", "soft", "languages"]:
+        arr = skills.get(key)
+        if arr: parts.append(", ".join(arr))
+    for proj in cv_details.get("projects", []) or []:
+        if proj.get("title"): parts.append(proj["title"])
+        if proj.get("description"): parts.append(proj["description"])
+    return "\n".join(parts)
+
+def _format_job_from_doc(job: dict) -> str:
+    if not isinstance(job, dict):
+        return ""
+    parts = []
+    for k in ["title","company","department","location","type","experience","salary"]:
+        v = job.get(k)
+        if v: parts.append(str(v))
+    if job.get("description"): parts.append(job["description"])
+    for sec in ["skills","responsibilities","requirements","benefits"]:
+        vals = job.get(sec) or []
+        if isinstance(vals, list) and vals:
+            parts.append("\n".join([str(x) for x in vals]))
+    return "\n".join(parts)
 
 
 # Interview System API Routes
@@ -104,66 +159,80 @@ from middleware.auth_middleware import token_required
 @token_required
 def start_interview(current_user):
     data = request.json or {}
-
-    # Get file paths from the request
-    cv_path = data.get("cv_path")
-    jd_path = data.get("jd_path")
-    reference_paths = data.get("reference_paths")  # <-- FIX IS HERE
     application_id = data.get("application_id")
-    
+    if not application_id:
+        return jsonify({"error": "application_id is required"}), 400
 
+    try:
+        app_doc = applications_collection.find_one({"_id": ObjectId(application_id)})
+    except Exception:
+        return jsonify({"error": "Invalid application_id"}), 400
 
-    if not all([cv_path, jd_path, reference_paths]):
-        return (
-            jsonify({"error": "cv_path, jd_path, and reference_paths are required"}),
-            400,
-        )
+    if not app_doc:
+        return jsonify({"error": "Application not found"}), 404
 
-    # Ensure all paths are strings
-    if not isinstance(cv_path, str) or not isinstance(jd_path, str) or not isinstance(reference_paths, (str, list)):
-        return (
-            jsonify({"error": "Invalid path types provided"}),
-            400,
-        )
+    if app_doc.get("student_id") != str(current_user["_id"]):
+        return jsonify({"error": "Unauthorized"}), 403
 
-    # Convert reference_paths to list of strings if it's a string
-    if isinstance(reference_paths, str):
-        reference_paths = [reference_paths]
-    elif isinstance(reference_paths, list):
-        # Ensure all items in the list are strings
-        reference_paths = [str(path) for path in reference_paths]
+    student = users_collection.find_one({"_id": ObjectId(app_doc["student_id"])})
+    job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
-    # Create interview session using the correct keyword
+    if not student or not job:
+        return jsonify({"error": "Student or job not found"}), 404
+
+    cv_details = student.get("cv_details")
+    if not cv_details:
+        return jsonify({"error": "CV details not found for this candidate"}), 400
+
+    # Build plain-text CV and JD from stored structured data
+    cv_text = (
+        cv_service.format_cv_details(cv_details) if cv_service else _format_cv_from_details(cv_details)
+    )
+    jd_text = (
+        cv_service.format_job_description(job) if cv_service else _format_job_from_doc(job)
+    )
+
+    # Persist as temporary .txt files for the interview document pipeline
+    import uuid as _uuid
+    cv_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_cv.txt")
+    jd_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_jd.txt")
+    with open(cv_txt_path, "w", encoding="utf-8") as f:
+        f.write(cv_text)
+    with open(jd_txt_path, "w", encoding="utf-8") as f:
+        f.write(jd_text)
+
     session_details = interview_manager.create_session(
-        cv_path=cv_path, jd_path=jd_path, reference_paths=reference_paths
+        cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[]
     )
 
     if "error" in session_details:
         return jsonify(session_details), 400
 
-    # Store session info in database
+    cv_score = app_doc.get("cv_score")
+    sim_score = (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
+
     interview_doc = {
         "user_id": str(current_user["_id"]),
         "session_id": session_details["session_id"],
-        "cv_path": cv_path,
-        "jd_path": jd_path,
-        "reference_paths": reference_paths,
+        "cv_path": cv_txt_path,
+        "jd_path": jd_txt_path,
+        "reference_paths": [],
         "application_id": application_id,
         "status": "active",
-        "similarity_score": 0.8,  # hardcoded for now
+        "similarity_score": sim_score,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
-        "start_time": time.time(),  # Add start time
+        "start_time": time.time(),
     }
-    
+
     interview_id = interviews_collection.insert_one(interview_doc).inserted_id
 
     return jsonify(
         {
             "interview_id": str(interview_id),
             "session_id": session_details["session_id"],
-            "initial_questions": session_details["first_question"],
-            "similarity_score": 0.8,  # hardcoded for now
+            "initial_questions": [session_details["first_question"]],
+            "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
         }
     )
