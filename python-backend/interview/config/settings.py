@@ -70,7 +70,7 @@ class DocumentConfig:
     """Configuration for document processing."""
 
     max_file_size_mb: int = 10
-    supported_formats: List[str] = None
+    supported_formats: Optional[List[str]] = None
     chunk_size: int = 512
     overlap_size: int = 50
 

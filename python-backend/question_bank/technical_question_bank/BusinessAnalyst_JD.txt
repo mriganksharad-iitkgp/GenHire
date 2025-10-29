@@ -1,0 +1,46 @@
+Job Title: Business Analyst
+
+Company Overview:
+We are a global consulting firm that helps organizations optimize their operations, improve efficiency, and drive growth through data-driven insights and strategic recommendations.
+
+Job Description:
+We are seeking a skilled Business Analyst to bridge the gap between business stakeholders and technical teams. You will analyze business processes, identify improvement opportunities, and help implement solutions.
+
+Key Responsibilities:
+- Gather and document business requirements from stakeholders
+- Analyze business processes and identify areas for improvement
+- Create detailed functional specifications and user stories
+- Facilitate meetings and workshops with stakeholders
+- Develop process flow diagrams and documentation
+- Conduct gap analysis and feasibility studies
+- Support UAT (User Acceptance Testing) activities
+- Create reports and dashboards for business metrics
+- Collaborate with IT teams to ensure requirements are met
+- Track project progress and communicate updates to stakeholders
+
+Required Qualifications:
+- Bachelor's degree in Business Administration, Finance, or related field
+- 2+ years of experience as a Business Analyst
+- Strong analytical and critical thinking skills
+- Proficiency in Microsoft Excel, PowerPoint, and Visio
+- Experience with SQL for data extraction and analysis
+- Excellent written and verbal communication skills
+- Knowledge of business process modeling techniques
+- Understanding of project management methodologies
+- Ability to work effectively with diverse stakeholders
+
+Preferred Qualifications:
+- MBA or relevant certifications (CBAP, PMI-PBA)
+- Experience with business intelligence tools (Tableau, Power BI)
+- Knowledge of Agile and Scrum methodologies
+- Familiarity with CRM and ERP systems
+- Industry-specific domain knowledge
+- Experience with requirements management tools (JIRA, Confluence)
+
+What We Offer:
+- Competitive salary and performance bonuses
+- Professional certification support
+- Exposure to diverse projects and industries
+- Collaborative work environment
+- Health and retirement benefits
+- Work-life balance and flexible schedules

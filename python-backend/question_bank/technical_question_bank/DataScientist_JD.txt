@@ -1,0 +1,44 @@
+Job Title: Data Scientist
+
+Company Overview:
+We are a data-driven organization that leverages advanced analytics and machine learning to solve complex business problems and drive strategic decision-making.
+
+Job Description:
+We are seeking a talented Data Scientist to join our analytics team. You will work with large datasets to extract meaningful insights, build predictive models, and help shape our data strategy.
+
+Key Responsibilities:
+- Analyze large, complex datasets to identify trends, patterns, and insights
+- Build and deploy machine learning models to solve business problems
+- Create data visualizations and reports to communicate findings to stakeholders
+- Collaborate with engineering teams to productionize models
+- Design and conduct A/B tests and experiments
+- Develop predictive models and recommendation systems
+- Clean, preprocess, and validate data for analysis
+- Stay current with latest developments in data science and ML
+
+Required Qualifications:
+- Master's or PhD in Statistics, Computer Science, Mathematics, or related field
+- 2+ years of experience in data science or analytics role
+- Strong proficiency in Python and R for data analysis
+- Experience with machine learning frameworks (TensorFlow, PyTorch, scikit-learn)
+- Solid understanding of statistics and probability theory
+- Proficiency in SQL and database querying
+- Experience with data visualization tools (Tableau, Power BI, matplotlib, seaborn)
+- Strong analytical and problem-solving skills
+- Excellent communication skills to present technical concepts to non-technical audiences
+
+Preferred Qualifications:
+- Experience with big data technologies (Spark, Hadoop)
+- Knowledge of deep learning and neural networks
+- Experience with cloud platforms (AWS SageMaker, Azure ML, Google AI Platform)
+- Familiarity with MLOps practices
+- Published research or contributions to data science community
+- Domain expertise in specific industries (finance, healthcare, e-commerce)
+
+What We Offer:
+- Competitive compensation and comprehensive benefits
+- Access to state-of-the-art computing resources
+- Opportunities to work on challenging problems with real-world impact
+- Collaborative team environment
+- Professional development and conference attendance
+- Flexible work arrangements

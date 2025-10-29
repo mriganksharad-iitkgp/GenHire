@@ -391,23 +391,39 @@ export default function Chat({ interviewId }) {
     if (interviewStartInitiated.current) return;
     interviewStartInitiated.current = true;
 
+    // Check if this is a practice mode interview
+    const isPracticeMode = location.state?.isPractice || false;
+
     // Check if coming from "Give Interview" button (URL will be /interview/start)
     const isDirectStart = interviewId === "start";
 
     if ((interviewId || isDirectStart) && interviewStatus === "starting") {
-      // Get application ID from navigation state
+      // For practice mode, if session was already created, use it directly
+      if (isPracticeMode && location.state?.sessionId && location.state?.initialQuestion) {
+        // Session already created by Practice page
+        setSessionId(location.state.sessionId);
+        sessionIdRef.current = location.state.sessionId;
+        setSimilarityScore(location.state.similarityScore || 0);
+        setCurrentQuestion(location.state.initialQuestion);
+        setInterviewStatus("registering");
+        return;
+      }
+
+      // Get application ID from navigation state (not needed for practice mode)
       const applicationId = location.state?.applicationId;
 
       const token = localStorage.getItem("companyxyz-token");
-      fetch(`${process.env.REACT_APP_API_URL}/api/interviews/start`, {
+      
+      // For real interviews (not practice with pre-created session)
+      const endpoint = `${process.env.REACT_APP_API_URL}/api/interviews/start`;
+
+      fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          application_id: applicationId,
-        }),
+        body: JSON.stringify({ application_id: applicationId }),
       })
         .then((res) => (res.ok ? res.json() : Promise.reject(res.json())))
         .then((data) => {
@@ -422,8 +438,9 @@ export default function Chat({ interviewId }) {
           setChatContent({
             0: { response: "⚠️ Error: Could not start the interview session." },
           });
-          // Redirect back to profile on error
-          setTimeout(() => navigate("/profile#applications"), 3000);
+          // Redirect back appropriately based on mode
+          const redirectPath = isPracticeMode ? "/practice" : "/profile#applications";
+          setTimeout(() => navigate(redirectPath), 3000);
         });
     }
   }, [interviewId, interviewStatus, navigate, location.state]);
@@ -467,7 +484,7 @@ export default function Chat({ interviewId }) {
         0: {
           response: `Your CV has a ${Math.round(
             similarityScore * 100
-          )}% match. Let's begin. Please introduce yourself briefly.`,
+          )}% match.`,
         },
         1: { response: currentQuestion },
       });
@@ -517,16 +534,20 @@ export default function Chat({ interviewId }) {
       await stopAndUploadRecording();
 
       const token = localStorage.getItem("companyxyz-token");
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const isPracticeMode = location.state?.isPractice || false;
+      
+      // Use different endpoint for practice mode
+      const endpoint = isPracticeMode
+        ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/end`
+        : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`;
+      
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
       if (!response.ok)
@@ -536,7 +557,20 @@ export default function Chat({ interviewId }) {
       setEvaluation(data.evaluation);
       console.log("✅ Interview ended successfully:", data.evaluation);
 
-      // Extract and update interview score from evaluation
+      // For practice mode, don't update application scores
+      if (isPracticeMode) {
+        setChatContent((prev) => ({
+          ...prev,
+          [Object.keys(prev).length]: {
+            response: "Practice interview ended. Generating your feedback...",
+          },
+        }));
+        
+        // No need to update application or store interview-just-completed flag
+        return;
+      }
+
+      // Extract and update interview score from evaluation (only for real interviews)
       let extractedScore = null;
 
       // Handle different evaluation data structures
@@ -612,6 +646,8 @@ export default function Chat({ interviewId }) {
     async (userAnswer) => {
       const currentSessionId = sessionIdRef.current;
       const answer = userAnswer.trim();
+      const isPracticeMode = location.state?.isPractice || false;
+      
       if (
         !currentQuestion ||
         !currentSessionId ||
@@ -625,17 +661,20 @@ export default function Chat({ interviewId }) {
 
       try {
         const token = localStorage.getItem("companyxyz-token");
-        const response = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ question: currentQuestion, answer: answer }),
-          }
-        );
+        
+        // Use different endpoint for practice mode
+        const endpoint = isPracticeMode
+          ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/answer`
+          : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`;
+        
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ question: currentQuestion, answer: answer }),
+        });
         const data = await response.json();
         if (!response.ok)
           throw new Error(data.error || "Failed to submit answer");
@@ -658,7 +697,7 @@ export default function Chat({ interviewId }) {
         setIsSubmittingAnswer(false);
       }
     },
-    [currentQuestion, interviewStatus, endInterview, questionCount]
+    [currentQuestion, interviewStatus, endInterview, questionCount, location.state]
   );
 
   // --- FIXED --- Only silence detection, no 30-second timer
@@ -879,7 +918,7 @@ export default function Chat({ interviewId }) {
       setTimeout(() => {
         const initialMessage = `Your CV has a ${Math.round(
           similarityScore * 100
-        )}% match. Please introduce yourself briefly. ${currentQuestion}`;
+        )}% match. ${currentQuestion}`;
         speakResponse(initialMessage);
       }, 1000);
     } // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1421,7 +1460,11 @@ export default function Chat({ interviewId }) {
             <div style={{ textAlign: "center" }}>
               <button
                 className={Styles["back-to-dashboard"]}
-                onClick={() => navigate("/profile#applications")}
+                onClick={() => {
+                  const isPracticeMode = location.state?.isPractice || false;
+                  const redirectPath = isPracticeMode ? "/practice" : "/profile#applications";
+                  navigate(redirectPath);
+                }}
                 style={{
                   background:
                     "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -1446,7 +1489,7 @@ export default function Chat({ interviewId }) {
                     "0 4px 15px rgba(102, 126, 234, 0.4)";
                 }}
               >
-                Go to Dashboard
+                {location.state?.isPractice ? "Back to Practice" : "Go to Dashboard"}
               </button>
             </div>
                        {" "}

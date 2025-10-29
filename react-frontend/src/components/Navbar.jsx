@@ -148,6 +148,12 @@ const Navbar = ({ userType = 'candidate' }) => {
 							>
 								My Applications
 							</Link>
+							<Link 
+								to="/practice" 
+								className={`${styles.navLink} ${location.pathname === '/practice' ? styles.active : ''}`}
+							>
+								Practice
+							</Link>
 						</>
 					)}
 				</nav>

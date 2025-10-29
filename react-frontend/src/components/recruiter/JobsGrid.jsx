@@ -1,9 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
+import Pagination from '../Pagination';
 
-const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit }) => (
-  <div className={styles.jobsGrid}>
-    {jobs.map((job, idx) => (
+const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9; // 3x3 grid
+  
+  // Reset to page 1 when jobs change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [jobs.length]);
+  
+  // Pagination logic
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedJobs = jobs.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(jobs.length / itemsPerPage);
+  
+  return (
+    <>
+      <div className={styles.jobsGrid}>
+        {paginatedJobs.map((job, idx) => (
       <div key={job._id || job.id || `job-${idx}`} className={styles.jobCard}>
         <div className={styles.jobHeader}>
           <h3>{job.title}</h3>
@@ -49,8 +66,21 @@ const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, on
           </button>
         </div>
       </div>
-    ))}
-  </div>
-);
+        ))}
+      </div>
+      
+      {/* Pagination */}
+      {jobs.length > 0 && totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={jobs.length}
+          itemsPerPage={itemsPerPage}
+        />
+      )}
+    </>
+  );
+};
 
 export default JobsGrid;

@@ -25,7 +25,8 @@ class DatabaseConfig:
             'users': self.db['users'],
             'jobs': self.db['jobs'],
             'applications': self.db['applications'],
-            'interviews': self.db['interviews']
+            'interviews': self.db['interviews'],
+            'practice_sessions': self.db['practice_sessions']
         }
     
     def close_connection(self):

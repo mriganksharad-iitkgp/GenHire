@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
+import Pagination from "../components/Pagination";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -17,6 +18,10 @@ const Dashboard = () => {
 	const [error, setError] = useState(null);
 	const [applications, setApplications] = useState([]);
 	
+	// Pagination state
+	const [currentPage, setCurrentPage] = useState(1);
+	const itemsPerPage = 10;
+	
 	// Toast state
 	const [toast, setToast] = useState(null);
 
@@ -24,6 +29,11 @@ const Dashboard = () => {
 	const showToast = (message, type = 'info') => {
 		setToast({ message, type });
 	};
+
+	// Reset page when filters change
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchQuery, typeFilter, locationFilter, experienceFilter, jobRoleFilter, companyFilter, skillsFilter]);
 
 	// Load jobs from backend
 	useEffect(() => {
@@ -475,16 +485,23 @@ const Dashboard = () => {
 								const unappliedJobs = filteredJobs.filter(job => !hasApplied(job._id));
 								const appliedJobs = filteredJobs.filter(job => hasApplied(job._id));
 								
+								// Pagination logic
+								const startIndex = (currentPage - 1) * itemsPerPage;
+								const endIndex = startIndex + itemsPerPage;
+								const paginatedUnappliedJobs = unappliedJobs.slice(startIndex, endIndex);
+								const paginatedAppliedJobs = appliedJobs.slice(Math.max(0, startIndex - unappliedJobs.length), Math.max(0, endIndex - unappliedJobs.length));
+								const totalPages = Math.ceil(filteredJobs.length / itemsPerPage);
+								
 								return (
 									<>
 										{/* Available Jobs First */}
-										{unappliedJobs.length > 0 && (
+										{paginatedUnappliedJobs.length > 0 && (
 											<div className={styles.jobSection}>
 												<h4 style={{color: '#27ae60', marginBottom: '1rem'}}>
 													<i className="fa fa-circle" style={{marginRight: '8px'}}></i>
 													Available Jobs ({unappliedJobs.length})
 												</h4>
-												{unappliedJobs.map((job) => (
+												{paginatedUnappliedJobs.map((job) => (
 													<div key={job._id} className={styles.jobCard}>
 														<div className={styles.jobMain}>
 															<div className={styles.jobTitleSection}>
@@ -566,13 +583,13 @@ const Dashboard = () => {
 										)}
 										
 										{/* Applied Jobs Section */}
-										{appliedJobs.length > 0 && (
+										{paginatedAppliedJobs.length > 0 && (
 											<div className={styles.jobSection} style={{marginTop: '2rem'}}>
 												<h4 style={{color: '#3498db', marginBottom: '1rem'}}>
 													<i className="fa fa-check-circle" style={{marginRight: '8px'}}></i>
 													Your Applications ({appliedJobs.length})
 												</h4>
-												{appliedJobs.map((job) => (
+												{paginatedAppliedJobs.map((job) => (
 													<div key={job._id} className={`${styles.jobCard} ${styles.appliedJobCard}`}>
 														<div className={styles.jobMain}>
 															<div className={styles.jobTitleSection}>
@@ -640,6 +657,15 @@ const Dashboard = () => {
 												))}
 											</div>
 										)}
+										
+										{/* Pagination */}
+										<Pagination
+											currentPage={currentPage}
+											totalPages={totalPages}
+											onPageChange={setCurrentPage}
+											totalItems={filteredJobs.length}
+											itemsPerPage={itemsPerPage}
+										/>
 									</>
 								);
 							})()}

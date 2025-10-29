@@ -1,5 +1,3 @@
-Of course. Here are the more detailed README files for both the backend and frontend, suitable for placing directly in their respective directories.
-
 Backend README (python-backend/README.md)
 
 

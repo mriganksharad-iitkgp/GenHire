@@ -1,12 +1,5 @@
 """
-Maimport uuid
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
-
-from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
-from ..config.settings import InterviewConfig, LLMConfig
-from ..llm.factory import LLMFactory
-from ..document.loader import DocumentLoaderview session manager with natural conversation flow.
+Interview session manager with natural conversation flow.
 """
 
 import re
@@ -14,7 +7,7 @@ import uuid
 import sys
 import os
 from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
 from ..config.settings import InterviewConfig, LLMConfig
@@ -38,14 +31,10 @@ class InterviewSession:
     questions_asked: int = 0
     is_complete: bool = False
     interview_history: str = ""
-    interview_data: List[Dict[str, Any]] = None
+    interview_data: List[Dict[str, Any]] = field(default_factory=list)
     conversation_context: Optional[ConversationContext] = None
     current_question: Optional[str] = None
     current_question_metadata: Optional[QuestionMetadata] = None
-
-    def __post_init__(self):
-        if self.interview_data is None:
-            self.interview_data = []
 
 
 class InterviewSessionManager:
@@ -184,6 +173,9 @@ class InterviewSessionManager:
             )
 
             # Generate next question using natural conversation flow
+            if session.conversation_context is None:
+                return {"error": "Conversation context not initialized"}
+                
             next_question, next_metadata = self.question_generator.get_next_question(
                 session.conversation_context,
                 last_answer=answer,
@@ -216,12 +208,12 @@ class InterviewSessionManager:
                     "next_question": next_question,
                     "question_metadata": asdict(next_metadata),
                     "conversation_context": {
-                        "current_topic": session.conversation_context.current_topic,
-                        "depth_level": session.conversation_context.depth_level.value,
-                        "topics_covered": session.conversation_context.topics_covered,
-                        "candidate_skill_level": session.conversation_context.candidate_skill_level,
-                        "conversation_energy": session.conversation_context.conversation_energy,
-                        "interview_phase": session.conversation_context.interview_phase.value,
+                        "current_topic": session.conversation_context.current_topic if session.conversation_context else "unknown",
+                        "depth_level": session.conversation_context.depth_level.value if session.conversation_context else "beginner",
+                        "topics_covered": session.conversation_context.topics_covered if session.conversation_context else [],
+                        "candidate_skill_level": session.conversation_context.candidate_skill_level if session.conversation_context else "unknown",
+                        "conversation_energy": session.conversation_context.conversation_energy if session.conversation_context else "neutral",
+                        "interview_phase": session.conversation_context.interview_phase.value if session.conversation_context else "greeting",
                     },
                     "progress": {
                         "questions_asked": session.questions_asked,
@@ -356,13 +348,14 @@ class InterviewSessionManager:
             # But require at least 10 questions and 5 topics
             if (
                 avg_recent_score > 0.8
+                and session.conversation_context
                 and len(session.conversation_context.topics_covered) >= 5
                 and session.questions_asked >= 10
             ):
                 return False
 
         # Check topic coverage - require more topics before ending
-        if len(session.conversation_context.topics_covered) >= 8:
+        if session.conversation_context and len(session.conversation_context.topics_covered) >= 8:
             return False
 
         return True
@@ -379,7 +372,7 @@ class InterviewSessionManager:
         scores = [
             item["evaluation"]["overall_score"] for item in session.interview_data
         ]
-        topics_explored = session.conversation_context.topics_covered
+        topics_explored = session.conversation_context.topics_covered if session.conversation_context else []
 
         conversation_trend = "neutral"
         if len(scores) >= 3:
@@ -400,10 +393,10 @@ class InterviewSessionManager:
         return {
             "topics_covered": topics_explored,
             "conversation_trend": conversation_trend,
-            "final_skill_assessment": session.conversation_context.candidate_skill_level,
+            "final_skill_assessment": session.conversation_context.candidate_skill_level if session.conversation_context else "unknown",
             "total_questions": session.questions_asked,
             "average_score": sum(scores) / len(scores) if scores else 0,
-            "conversation_energy": session.conversation_context.conversation_energy,
+            "conversation_energy": session.conversation_context.conversation_energy if session.conversation_context else "neutral",
         }
 
     def _get_session(self, session_id: str) -> Optional[InterviewSession]:

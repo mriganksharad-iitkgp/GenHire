@@ -1,0 +1,50 @@
+Job Title: Full Stack Developer
+
+Company Overview:
+We are a fast-growing tech startup building cutting-edge web applications that serve thousands of businesses worldwide. We value innovation, quality code, and continuous learning.
+
+Job Description:
+We are looking for a talented Full Stack Developer to build and maintain our web applications. You will work on both frontend and backend development, contributing to all phases of the development lifecycle.
+
+Key Responsibilities:
+- Design and develop full-stack web applications
+- Build responsive and user-friendly frontend interfaces
+- Develop robust backend APIs and services
+- Implement database schemas and optimize queries
+- Write clean, maintainable, and well-tested code
+- Participate in code reviews and architectural discussions
+- Debug and troubleshoot application issues
+- Deploy applications to cloud environments
+- Collaborate with designers, product managers, and other developers
+- Stay updated with modern web technologies and best practices
+
+Required Qualifications:
+- Bachelor's degree in Computer Science or related field
+- 2+ years of full-stack development experience
+- Proficiency in frontend technologies (React, Angular, or Vue.js)
+- Strong knowledge of HTML, CSS, and JavaScript/TypeScript
+- Experience with backend frameworks (Node.js, Django, Spring, etc.)
+- Solid understanding of RESTful API design
+- Proficiency in SQL and experience with relational databases
+- Familiarity with version control (Git)
+- Understanding of web security best practices
+- Strong problem-solving and debugging skills
+
+Preferred Qualifications:
+- Experience with modern frontend build tools (Webpack, Vite)
+- Knowledge of state management libraries (Redux, MobX)
+- Experience with NoSQL databases (MongoDB, Redis)
+- Familiarity with containerization (Docker)
+- Knowledge of cloud platforms (AWS, Azure, GCP)
+- Experience with CI/CD pipelines
+- Understanding of microservices architecture
+- Contributions to open-source projects
+
+What We Offer:
+- Competitive salary and equity options
+- Remote work flexibility
+- Latest development tools and technologies
+- Learning and development budget
+- Collaborative and inclusive culture
+- Health insurance and wellness programs
+- Team building activities and events

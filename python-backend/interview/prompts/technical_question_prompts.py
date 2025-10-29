@@ -8,6 +8,7 @@ CANDIDATE'S CV TECHNOLOGIES: {cv_keywords}
 CURRENT FOCUS TOPIC: {current_topic}
 QUESTION TYPE NEEDED: {question_type}
 TOPICS ALREADY COVERED: {topics_covered}
+ROLE/JD CONTEXT: Job title: {job_title}. Important JD keywords: {role_jd_keywords}
 
 {previous_context}
 
@@ -17,6 +18,7 @@ INSTRUCTIONS:
 3. Ask recent interview questions based on the topic - questions that are commonly asked in modern technical interviews
 4. Keep it conversational but focus on the question
 5. Follow the performance guidance: {performance_guidance}
+6. Stay strictly relevant to the role and JD context above; avoid off-role topics.
 
 QUESTION TYPES BY STAGE:
 - Foundational (Questions 1-5): Basic concepts, definitions, "how does X work?"

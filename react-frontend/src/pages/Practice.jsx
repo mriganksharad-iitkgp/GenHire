@@ -1,0 +1,425 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Toast from "../components/Toast";
+import InterviewReportModal from "../components/InterviewReportModal";
+import Pagination from "../components/Pagination";
+import styles from "./Practice.module.css";
+
+const Practice = () => {
+	const navigate = useNavigate();
+	const [selectedRole, setSelectedRole] = useState("");
+	const [uploadedJD, setUploadedJD] = useState(null);
+	const [isStarting, setIsStarting] = useState(false);
+	const [practiceHistory, setPracticeHistory] = useState([]);
+	const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+	const [selectedReport, setSelectedReport] = useState(null);
+	const [showReportModal, setShowReportModal] = useState(false);
+	
+	// Pagination state for practice history
+	const [currentPage, setCurrentPage] = useState(1);
+	const itemsPerPage = 5;
+	
+	// Toast state
+	const [toast, setToast] = useState(null);
+
+	// Show toast function
+	const showToast = (message, type = 'info') => {
+		setToast({ message, type });
+	};
+
+	// Predefined roles for quick practice
+	const roles = [
+		{ id: 'software-engineer', name: 'Software Engineer', icon: 'fa-code' },
+		{ id: 'data-scientist', name: 'Data Scientist', icon: 'fa-line-chart' },
+		{ id: 'product-manager', name: 'Product Manager', icon: 'fa-tasks' },
+		{ id: 'business-analyst', name: 'Business Analyst', icon: 'fa-briefcase' },
+		{ id: 'fullstack-developer', name: 'Full Stack Developer', icon: 'fa-laptop' },
+		{ id: 'devops-engineer', name: 'DevOps Engineer', icon: 'fa-server' },
+		{ id: 'custom', name: 'Custom (Upload JD)', icon: 'fa-upload' }
+	];
+
+	// Fetch practice history on component mount
+	useEffect(() => {
+		fetchPracticeHistory();
+	}, []);
+
+	// Fetch practice interview history
+	const fetchPracticeHistory = async () => {
+		setIsLoadingHistory(true);
+		try {
+			const token = localStorage.getItem("companyxyz-token");
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/practice/history`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${token}`
+				}
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				setPracticeHistory(data.sessions || []);
+			}
+		} catch (error) {
+			console.error('Error fetching practice history:', error);
+		} finally {
+			setIsLoadingHistory(false);
+		}
+	};
+
+	// View practice interview report
+	const viewPracticeReport = async (sessionId) => {
+		try {
+			const token = localStorage.getItem("companyxyz-token");
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/practice/${sessionId}/report`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${token}`
+				}
+			});
+
+			if (response.ok) {
+				const report = await response.json();
+				setSelectedReport(report);
+				setShowReportModal(true);
+			} else {
+				showToast('Failed to load practice report', 'error');
+			}
+		} catch (error) {
+			console.error('Error fetching practice report:', error);
+			showToast('Error loading practice report', 'error');
+		}
+	};
+
+	// Handle JD file upload
+	const handleJDUpload = (e) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			if (file.type !== 'application/pdf') {
+				showToast('Please upload a PDF file', 'error');
+				return;
+			}
+			setUploadedJD(file);
+			showToast('Job Description uploaded successfully!', 'success');
+		}
+	};
+
+	// Start practice interview
+	const handleStartPractice = async () => {
+		// Validation
+		if (!selectedRole) {
+			showToast('Please select a role to practice', 'error');
+			return;
+		}
+
+		if (selectedRole === 'custom' && !uploadedJD) {
+			showToast('Please upload a job description for custom practice', 'error');
+			return;
+		}
+
+		setIsStarting(true);
+
+		try {
+			const formData = new FormData();
+			formData.append('role', selectedRole);
+			formData.append('difficulty', 'medium');
+			
+			if (selectedRole === 'custom' && uploadedJD) {
+				formData.append('jd', uploadedJD);
+			}
+
+			const token = localStorage.getItem("companyxyz-token");
+			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/practice/start`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${token}`
+				},
+				body: formData
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || 'Failed to start practice interview');
+			}
+
+			const data = await response.json();
+			
+			// Navigate to interview page with practice mode
+			navigate(`/interview/${data.session_id}`, {
+				state: { 
+					isPractice: true,
+					practiceRole: selectedRole,
+					sessionId: data.session_id,
+					initialQuestion: data.initial_questions?.[0] || '',
+					similarityScore: data.similarity_score || 0,
+					cvScore: data.cv_score || 0
+				}
+			});
+
+		} catch (error) {
+			console.error('Error starting practice interview:', error);
+			showToast(error.message || 'Failed to start practice interview', 'error');
+			setIsStarting(false);
+		}
+	};
+
+	// Helper function to get role icon
+	function getRoleIcon(roleId) {
+		const role = roles.find(r => r.id === roleId);
+		return role ? role.icon : 'fa-briefcase';
+	}
+
+	// Helper function to get role name
+	function getRoleName(roleId) {
+		const role = roles.find(r => r.id === roleId);
+		return role ? role.name : roleId;
+	}
+
+	return (
+		<div className={styles.practiceContainer}>
+			{/* Toast notifications */}
+			{toast && (
+				<Toast
+					message={toast.message}
+					type={toast.type}
+					onClose={() => setToast(null)}
+				/>
+			)}
+
+			<div className={styles.content}>
+				<div className={styles.welcomeSection}>
+					<h2>Practice Interview Mode</h2>
+					<p>
+						Master your interview skills with AI-powered practice sessions. Select a role, 
+						practice in a realistic environment, and receive instant personalized feedback.
+					</p>
+				</div>
+
+				<div className={styles.practiceContent}>
+					{/* Role Selection */}
+					<div className={styles.section}>
+						<h3 className={styles.sectionTitle}>
+							<i className="fa fa-briefcase"></i> Select Practice Role
+						</h3>
+						<div className={styles.rolesGrid}>
+							{roles.map((role) => (
+								<div
+									key={role.id}
+									className={`${styles.roleCard} ${selectedRole === role.id ? styles.selected : ''}`}
+									onClick={() => setSelectedRole(role.id)}
+								>
+									<div className={styles.roleIcon}>
+										<i className={`fa ${role.icon}`}></i>
+									</div>
+									<h4>{role.name}</h4>
+									{selectedRole === role.id && (
+										<div className={styles.selectedBadge}>
+											<i className="fa fa-check-circle"></i>
+										</div>
+									)}
+								</div>
+							))}
+						</div>
+					</div>
+
+					{/* JD Upload (only for custom role) */}
+					{selectedRole === 'custom' && (
+						<div className={styles.section}>
+							<h3 className={styles.sectionTitle}>
+								<i className="fa fa-file-pdf-o"></i> Upload Job Description
+							</h3>
+							
+							<div className={styles.uploadSection}>
+								<div className={styles.uploadCard}>
+									<div className={styles.uploadHeader}>
+										<h4>Job Description</h4>
+										<span className={styles.required}>Required for custom practice</span>
+									</div>
+									<div className={styles.uploadArea}>
+										<input
+											type="file"
+											id="jd-upload"
+											accept=".pdf"
+											onChange={handleJDUpload}
+											className={styles.fileInput}
+										/>
+										<label htmlFor="jd-upload" className={styles.uploadLabel}>
+											{uploadedJD ? (
+												<>
+													<i className="fa fa-check-circle" style={{ color: '#10b981' }}></i>
+													<span>{uploadedJD.name}</span>
+													<span className={styles.uploadSubtext}>Click to change</span>
+												</>
+											) : (
+												<>
+													<i className="fa fa-cloud-upload"></i>
+													<span>Click to upload Job Description</span>
+													<span className={styles.uploadSubtext}>PDF format only</span>
+												</>
+											)}
+										</label>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* Start Button */}
+					<div className={styles.actionSection}>
+						<button
+							className={styles.startButton}
+							onClick={handleStartPractice}
+							disabled={isStarting || !selectedRole}
+						>
+							{isStarting ? (
+								<>
+									<i className="fa fa-spinner fa-spin"></i> Starting Practice Interview...
+								</>
+							) : (
+								<>
+									<i className="fa fa-play-circle"></i> Start Practice Interview
+								</>
+							)}
+						</button>
+					</div>
+
+					{/* Practice History Section */}
+					<div className={styles.section}>
+						<h3 className={styles.sectionTitle}>
+							<i className="fa fa-history"></i> Practice History
+						</h3>
+						
+						{isLoadingHistory ? (
+							<div className={styles.loadingState}>
+								<i className="fa fa-spinner fa-spin"></i> Loading history...
+							</div>
+						) : practiceHistory.length === 0 ? (
+							<div className={styles.emptyState}>
+								<i className="fa fa-inbox"></i>
+								<p>No practice interviews yet. Start your first practice session above!</p>
+							</div>
+						) : (
+							<>
+							<div className={styles.historyGrid}>
+								{(() => {
+									const completedSessions = practiceHistory.filter(session => session.status === 'completed' || session.status === 'ended');
+									const startIndex = (currentPage - 1) * itemsPerPage;
+									const endIndex = startIndex + itemsPerPage;
+									const paginatedSessions = completedSessions.slice(startIndex, endIndex);
+									const totalPages = Math.ceil(completedSessions.length / itemsPerPage);
+									
+									return (
+										<>
+											{paginatedSessions.map((session) => (
+									<div key={session.session_id} className={styles.applicationCard} data-status="ended">
+										{/* Card Header - Matching ApplicationsList */}
+										<div className={styles.applicationHeader}>
+											<div className={styles.companyAvatar}>
+												<div className={styles.practiceLogoWrapper}>
+													<i className={`fa ${getRoleIcon(session.role)}`}></i>
+												</div>
+											</div>
+											<div className={styles.jobTitleWrap}>
+												<h3>{getRoleName(session.role)}</h3>
+												<div className={styles.companySubtle}>Practice Mode</div>
+											</div>
+											<div className={styles.headerBadges}>
+												<span className={`${styles.statusBadge} ${styles.ended}`}>ENDED</span>
+											</div>
+										</div>
+
+										{/* Application Details - Matching ApplicationsList */}
+										<div className={styles.applicationDetails}>
+											<div className={styles.metaRow}>
+												<div className={styles.metaItem}>
+													<i className="fa fa-building"></i>
+													<span>Practice Session</span>
+												</div>
+											<div className={styles.metaItem}>
+												<i className="fa fa-map-marker"></i>
+												<span>Online</span>
+											</div>
+											<div className={styles.metaItem}>
+													<i className="fa fa-calendar"></i>
+													<span>Completed {new Date(session.created_at).toLocaleDateString()}</span>
+												</div>
+											</div>
+											<div className={styles.tagsRow}>
+												<span className={styles.chip}><i className="fa fa-history"></i> Practice</span>
+											</div>
+										</div>
+
+										{/* Application Actions - Matching ApplicationsList with scores */}
+										<div className={styles.applicationActions}>
+											<div className={styles.scoresRow}>
+												<div className={styles.scorePill}>
+													<span className={styles.pillLabel}>CV Score</span>
+													<span className={styles.pillValue}>{Math.round((session.cv_score || 0) * 100)}%</span>
+													<div className={styles.miniBar}>
+														<div style={{ width: `${Math.round((session.cv_score || 0) * 100)}%`, backgroundColor: '#3b82f6' }}></div>
+													</div>
+												</div>
+												<div className={styles.scorePill}>
+													<span className={styles.pillLabel}>Interview</span>
+													<span className={styles.pillValue}>{session.interview_score || 0}%</span>
+													<div className={styles.miniBar}>
+														<div style={{ width: `${session.interview_score || 0}%`, backgroundColor: '#10b981' }}></div>
+													</div>
+												</div>
+											<div className={styles.scorePill}>
+												<span className={styles.pillLabel}>Proctoring</span>
+												<span className={styles.pillValue}>{session.proctoring_score || 90}%</span>
+												<div className={styles.miniBar}>
+													<div style={{ width: `${session.proctoring_score || 90}%`, backgroundColor: '#f59e0b' }}></div>
+												</div>
+											</div>
+											</div>
+											<div className={styles.actionButtons}>
+												<button
+													className={styles.reportButton}
+													onClick={() => viewPracticeReport(session.session_id)}
+												>
+													<i className="fa fa-file-text-o"></i> Report
+												</button>
+											</div>
+										</div>
+									</div>
+											))}
+											
+											{/* Pagination for Practice History */}
+											{totalPages > 1 && (
+												<Pagination
+													currentPage={currentPage}
+													totalPages={totalPages}
+													onPageChange={setCurrentPage}
+													totalItems={completedSessions.length}
+													itemsPerPage={itemsPerPage}
+												/>
+											)}
+										</>
+									);
+								})()}
+							</div>
+							</>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{/* Interview Report Modal */}
+			{showReportModal && selectedReport && (
+				<InterviewReportModal
+					isOpen={showReportModal}
+					onClose={() => {
+						setShowReportModal(false);
+						setSelectedReport(null);
+					}}
+					report={selectedReport}
+					cvScore={selectedReport.cv_score || 0}
+					interviewScore={selectedReport.interview_score || 0}
+				/>
+			)}
+		</div>
+	);
+};
+
+export default Practice;

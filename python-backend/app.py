@@ -30,6 +30,7 @@ from routes.profile_routes import profile_bp
 from routes.job_routes import job_bp
 from routes.application_routes import application_bp
 from routes.file_routes import file_bp
+from routes.practice_routes import practice_bp
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
 
@@ -42,7 +43,11 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-CORS(app, origins=["http://localhost:3000"])  # Allow your React app
+CORS(app, 
+     origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])  # Allow your React app
 
 # Initialize database
 db = db_config.connect()
@@ -60,6 +65,7 @@ app.register_blueprint(profile_bp)
 app.register_blueprint(job_bp)
 app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
+app.register_blueprint(practice_bp)
 
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}

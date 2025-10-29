@@ -18,6 +18,7 @@ import ApplicationView from "./pages/ApplicationView";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Practice from "./pages/Practice";
 import Layout from "./components/Layout";
 import "./App.css";
 
@@ -46,6 +47,14 @@ function App() {
 						element={
 							<Layout>
 								<Profile />
+							</Layout>
+						}
+					/>
+					<Route
+						path="/practice"
+						element={
+							<Layout>
+								<Practice />
 							</Layout>
 						}
 					/>

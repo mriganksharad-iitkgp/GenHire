@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import styles from "../../pages/Profile.module.css";
 import { Link } from "react-router-dom";
+import Pagination from "../Pagination";
 
 export default function ApplicationsList({
   applications,
@@ -14,12 +15,26 @@ export default function ApplicationsList({
   onOpenReport,
   onGiveInterview, // Add new prop for interview action
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+  
   const filtered = applications.filter((app) => {
     const matchesCompany = companyFilter === "" || app.company.toLowerCase().includes(companyFilter.toLowerCase());
     const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesCompany && matchesStatus;
   });
   const sorted = [...filtered].sort((a, b) => new Date(b.appliedDate) - new Date(a.appliedDate));
+  
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [companyFilter, statusFilter]);
+  
+  // Pagination logic
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedApplications = sorted.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(sorted.length / itemsPerPage);
 
   // Helper function to determine which buttons to show based on status
   const getButtonsForStatus = (status) => {
@@ -81,8 +96,8 @@ export default function ApplicationsList({
       </div>
 
       <div className={styles.applicationsList}>
-        {sorted.length > 0 ? (
-          sorted.map((app) => {
+        {paginatedApplications.length > 0 ? (
+          paginatedApplications.map((app) => {
             const statusKey = app.status.toLowerCase().replace(/\s+/g, "");
             return (
               <div key={app.id} className={styles.applicationCard} data-status={statusKey}>
@@ -225,6 +240,17 @@ export default function ApplicationsList({
           <p className={styles.noApplications}>No job applications yet.</p>
         )}
       </div>
+      
+      {/* Pagination */}
+      {sorted.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={sorted.length}
+          itemsPerPage={itemsPerPage}
+        />
+      )}
     </section>
   );
 }
