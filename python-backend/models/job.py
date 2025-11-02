@@ -27,6 +27,10 @@ class Job:
     pending: int = 0
     created_at: datetime.datetime = None
     updated_at: datetime.datetime = None
+    # NEW: JD PDF support
+    jd_pdf_path: Optional[str] = None  # Path to JD PDF file
+    jd_extracted_text: Optional[str] = None  # Extracted text from JD PDF
+    jd_upload_date: Optional[datetime.datetime] = None  # When JD was uploaded
     
     def __post_init__(self):
         if self.skills is None:
@@ -67,7 +71,10 @@ class Job:
             'rejected': self.rejected,
             'pending': self.pending,
             'created_at': self.created_at,
-            'updated_at': self.updated_at
+            'updated_at': self.updated_at,
+            'jd_pdf_path': self.jd_pdf_path,
+            'jd_extracted_text': self.jd_extracted_text,
+            'jd_upload_date': self.jd_upload_date
         }
     
     @classmethod
@@ -96,5 +103,8 @@ class Job:
             rejected=data.get('rejected', 0),
             pending=data.get('pending', 0),
             created_at=data.get('created_at'),
-            updated_at=data.get('updated_at')
+            updated_at=data.get('updated_at'),
+            jd_pdf_path=data.get('jd_pdf_path'),
+            jd_extracted_text=data.get('jd_extracted_text'),
+            jd_upload_date=data.get('jd_upload_date')
         )

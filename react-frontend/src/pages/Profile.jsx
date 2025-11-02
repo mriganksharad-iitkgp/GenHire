@@ -317,6 +317,7 @@ const Profile = () => {
 				uploadingCV={uploadingCV}
 				cvDetails={cvDetails}
 				onSaveCvDetails={handleSaveCvDetails}
+				showToast={showToast}
 			>						{/* Application Statistics Card */}
 						<div className={styles.statsCard}>
 						<h3>Application Status</h3>

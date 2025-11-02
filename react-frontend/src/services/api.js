@@ -73,8 +73,9 @@ export const updateCvDetails = (payload) =>
 // File uploads (candidate)
 export const uploadCV = (file) => {
   const formData = new FormData();
-  formData.append("cv", file);
-  return request("/upload-cv", { method: "POST", body: formData });
+  formData.append("cv_file", file);  // Changed from 'cv' to 'cv_file' for new CV management system
+  formData.append("is_primary", "false");  // Don't set as primary automatically
+  return request("/cv/upload", { method: "POST", body: formData });  // New endpoint
 };
 
 export const uploadPhoto = (file) => {

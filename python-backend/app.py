@@ -31,6 +31,7 @@ from routes.job_routes import job_bp
 from routes.application_routes import application_bp
 from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
+from routes.cv_routes import create_cv_routes
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
 
@@ -66,6 +67,10 @@ app.register_blueprint(job_bp)
 app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(practice_bp)
+
+# Register CV routes (requires collections, so created after database initialization)
+cv_bp = create_cv_routes(collections)
+app.register_blueprint(cv_bp, url_prefix='/api/cv')
 
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}

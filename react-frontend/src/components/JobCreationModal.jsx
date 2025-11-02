@@ -180,6 +180,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [jdFile, setJdFile] = useState(null);
   
   const dropdownRefs = {
     department: useRef(null),
@@ -379,6 +380,29 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     }, 1000);
   };
 
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        e.target.value = null;
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        alert('File size must be less than 10MB');
+        e.target.value = null;
+        return;
+      }
+      setJdFile(file);
+    }
+  };
+
+  const removeJdFile = () => {
+    setJdFile(null);
+    const fileInput = document.querySelector('input[type="file"][accept=".pdf"]');
+    if (fileInput) fileInput.value = '';
+  };
+
   const resetForm = () => {
     setJobData({
       title: '',
@@ -400,6 +424,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     setFilteredSuggestions([]);
     setActiveDropdown(null);
     setShowTemplates(false);
+    setJdFile(null);
   };
 
   const handleCancel = () => {
@@ -800,6 +825,55 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               />
               <div className={styles.helpText}>
                 💡 Tip: Include company mission, role impact, and growth opportunities
+              </div>
+            </div>
+
+            {/* JD PDF Upload */}
+            <div className={styles.formGroup}>
+              <label>
+                Job Description PDF 
+                <span className={styles.optional}>(Optional)</span>
+                <span className={styles.smartIndicator}>📄 Pro</span>
+              </label>
+              <div className={styles.fileUploadSection}>
+                {!jdFile ? (
+                  <div className={styles.fileUploadBox}>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleJdFileChange}
+                      className={styles.fileInput}
+                      id="jd-file-input"
+                    />
+                    <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
+                      <i className="fa fa-cloud-upload"></i>
+                      <span>Upload JD PDF</span>
+                      <small>Click to browse or drag & drop (Max 10MB)</small>
+                    </label>
+                  </div>
+                ) : (
+                  <div className={styles.uploadedFile}>
+                    <div className={styles.fileInfo}>
+                      <i className="fa fa-file-pdf-o"></i>
+                      <div className={styles.fileDetails}>
+                        <span className={styles.fileName}>{jdFile.name}</span>
+                        <span className={styles.fileSize}>
+                          {(jdFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.removeFileButton}
+                      onClick={removeJdFile}
+                    >
+                      <i className="fa fa-times"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className={styles.helpText}>
+                💡 Pro Tip: Upload a JD PDF for candidates to download and reference. Standard companies like LinkedIn and Indeed provide this option.
               </div>
             </div>
 

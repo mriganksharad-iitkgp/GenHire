@@ -2,8 +2,12 @@ import datetime
 from bson import ObjectId
 import sys
 import os
+import logging
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from services.cv_scoring_service import CVScoringService
+from controllers.cv_controller import CVController
+
+logger = logging.getLogger(__name__)
 
 class ApplicationController:
     def __init__(self, db_collections):
@@ -16,31 +20,34 @@ class ApplicationController:
         try:
             self.cv_scoring_service = CVScoringService()
         except Exception as e:
-            print(f"Warning: CV scoring service initialization failed: {e}")
+            logger.warning(f"CV scoring service initialization failed: {e}")
             self.cv_scoring_service = None
         
-    def apply_for_job(self, job_id, user_id, application_data, user_profile):
-        """Submit job application"""
+        # Initialize CV controller for accessing CV PDFs
+        try:
+            self.cv_controller = CVController(db_collections)
+        except Exception as e:
+            logger.warning(f"CV controller initialization failed: {e}")
+            self.cv_controller = None
+        
+    def apply_for_job(self, job_id, user_id, application_data, user_profile, cv_id=None):
+        """
+        Submit job application
+        
+        Args:
+            job_id: Job ID to apply for
+            user_id: User ID applying
+            application_data: Application data (cover letter, etc.)
+            user_profile: User profile data
+            cv_id: Optional CV ID to use (if not provided, uses primary CV or manual entry)
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
         # Check if job exists
         job = self.jobs_collection.find_one({'_id': ObjectId(job_id)})
         if not job:
             return {'error': 'Job not found'}, 404
-        
-        # Check if CV details are completed (mandatory requirement)
-        cv_details = user_profile.get('cv_details')
-        if not cv_details:
-            return {
-                'error': 'CV details are required before applying for jobs. Please complete your CV details first.',
-                'redirect': '/profile/cv-details'
-            }, 400
-        
-        # Validate required CV sections
-        validation_errors = self._validate_cv_completion(cv_details)
-        if validation_errors:
-            return {
-                'error': 'Please complete the following required CV sections before applying:\n' + '\n'.join(validation_errors),
-                'redirect': '/profile/cv-details'
-            }, 400
         
         # Check if already applied
         existing_application = self.applications_collection.find_one({
@@ -50,17 +57,81 @@ class ApplicationController:
         if existing_application:
             return {'error': 'You have already applied for this job'}, 400
         
+        # Get CV content (PDF or manual entry)
+        cv_text = None
+        cv_source = None  # Track where CV came from
+        selected_cv = None  # Store CV metadata for snapshot
+        
+        # Priority order: Selected CV → Primary CV → Manual CV details
+        if cv_id:
+            # User explicitly selected a CV PDF
+            if self.cv_controller:
+                selected_cv = self.cv_controller.get_cv_by_id(user_id, cv_id)
+                if selected_cv:
+                    cv_text = selected_cv.get('extracted_text', '')
+                    cv_source = 'cv_pdf_selected'
+                    logger.info(f"Using selected CV PDF: {cv_id}")
+                else:
+                    return {'error': f'CV with ID {cv_id} not found'}, 404
+            else:
+                return {'error': 'CV management system not available'}, 500
+        
+        elif user_profile.get('cv_uploads'):
+            # No CV selected, try primary CV
+            if self.cv_controller:
+                primary_cv = self.cv_controller.get_primary_cv(user_id)
+                if primary_cv:
+                    selected_cv = primary_cv
+                    cv_text = primary_cv.get('extracted_text', '')
+                    cv_source = 'cv_pdf_primary'
+                    cv_id = primary_cv.get('cv_id')
+                    logger.info(f"Using primary CV PDF: {cv_id}")
+        
+        # Fallback to manual CV details if no PDF CV found
+        cv_details = user_profile.get('cv_details')
+        if not cv_text:
+            if not cv_details:
+                return {
+                    'error': 'CV is required before applying for jobs. Please upload a CV PDF or complete your CV details.',
+                    'redirect': '/profile/cv-details'
+                }, 400
+            
+            # Validate required CV sections for manual entry
+            validation_errors = self._validate_cv_completion(cv_details)
+            if validation_errors:
+                return {
+                    'error': 'Please complete the following required CV sections before applying:\n' + '\n'.join(validation_errors),
+                    'redirect': '/profile/cv-details'
+                }, 400
+            
+            cv_source = 'cv_manual_entry'
+            logger.info("Using manual CV details")
+        
         # Calculate actual CV score using AI
         cv_score = 75.0  # fallback score
         cv_score_breakdown = None
         
-        if self.cv_scoring_service and cv_details:
+        if self.cv_scoring_service:
             try:
-                scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
+                # Get JD text (extracted from PDF or manual description)
+                jd_text = job.get('jd_extracted_text') or job.get('description', '')
+                
+                if cv_text:
+                    # Use PDF CV text
+                    logger.info(f"Scoring using CV PDF text ({len(cv_text)} chars)")
+                    scoring_result = self.cv_scoring_service.calculate_cv_score_from_text(cv_text, jd_text)
+                else:
+                    # Use manual CV details
+                    logger.info("Scoring using manual CV details")
+                    scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
+                
                 cv_score = scoring_result.get('total_score', 75.0)
                 cv_score_breakdown = scoring_result.get('score_breakdown')
+                logger.info(f"CV score calculated: {cv_score}")
             except Exception as e:
-                print(f"Error calculating CV score: {e}")
+                logger.error(f"Error calculating CV score: {e}")
+                import traceback
+                traceback.print_exc()
                 cv_score = 75.0
         
         # Determine application status based on CV score vs minimum threshold
@@ -72,6 +143,33 @@ class ApplicationController:
         else:
             application_status = 'rejected'
             status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
+        
+        # Create CV snapshot (preserve CV content at application time)
+        cv_snapshot = None
+        if selected_cv:
+            cv_snapshot = {
+                'cv_id': selected_cv.get('cv_id'),
+                'filename': selected_cv.get('filename'),
+                'text': cv_text,
+                'upload_date': selected_cv.get('upload_date'),
+                'source': cv_source,
+                'metadata': selected_cv.get('metadata', {})
+            }
+        elif cv_text:
+            # Manual entry formatted as text
+            cv_snapshot = {
+                'text': cv_text,
+                'source': cv_source
+            }
+        
+        # Create JD snapshot (preserve JD content at application time)
+        jd_text = job.get('jd_extracted_text') or job.get('description', '')
+        jd_snapshot = {
+            'text': jd_text,
+            'job_title': job.get('title', ''),
+            'company': job.get('company', ''),
+            'has_pdf': bool(job.get('jd_pdf_path'))
+        }
         
         application_doc = {
             'job_id': job_id,
@@ -98,7 +196,12 @@ class ApplicationController:
                 'education': user_profile.get('education', ''),
                 'phone': user_profile.get('phone', ''),
                 'location': user_profile.get('location', '')
-            }
+            },
+            # NEW: CV and JD snapshots (Phase 5)
+            'cv_id': cv_id,  # Reference to CV used (None for manual entry)
+            'cv_snapshot': cv_snapshot,  # Snapshot of CV at application time
+            'jd_snapshot': jd_snapshot,  # Snapshot of JD at application time
+            'cv_source': cv_source  # Track where CV came from for analytics
         }
         
         # Insert application

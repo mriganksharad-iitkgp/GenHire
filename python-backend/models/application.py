@@ -20,6 +20,10 @@ class Application:
     applied_at: datetime.datetime = None
     updated_at: datetime.datetime = None
     updated_by: Optional[str] = None
+    # NEW: CV PDF support
+    cv_id: Optional[str] = None  # Reference to specific CV used from cv_uploads
+    cv_snapshot: Optional[Dict[str, Any]] = None  # Snapshot of CV at application time
+    jd_snapshot: Optional[str] = None  # JD text snapshot at application time
     
     def __post_init__(self):
         if self.applied_at is None:
@@ -47,7 +51,10 @@ class Application:
             'student_profile': self.student_profile,
             'applied_at': self.applied_at,
             'updated_at': self.updated_at,
-            'updated_by': self.updated_by
+            'updated_by': self.updated_by,
+            'cv_id': self.cv_id,
+            'cv_snapshot': self.cv_snapshot,
+            'jd_snapshot': self.jd_snapshot
         }
     
     @classmethod
@@ -69,5 +76,8 @@ class Application:
             student_profile=data.get('student_profile', {}),
             applied_at=data.get('applied_at'),
             updated_at=data.get('updated_at'),
-            updated_by=data.get('updated_by')
+            updated_by=data.get('updated_by'),
+            cv_id=data.get('cv_id'),
+            cv_snapshot=data.get('cv_snapshot'),
+            jd_snapshot=data.get('jd_snapshot')
         )

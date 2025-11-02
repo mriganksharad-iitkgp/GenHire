@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import Pagination from "../components/Pagination";
+import CVSelectionModal from "../components/CVSelectionModal";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -17,6 +18,11 @@ const Dashboard = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [applications, setApplications] = useState([]);
+	const [applyingJobId, setApplyingJobId] = useState(null); // Track which job is being applied to
+	const [withdrawingJobId, setWithdrawingJobId] = useState(null); // Track which job is being withdrawn
+	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
+	const [showCVModal, setShowCVModal] = useState(false);
+	const [selectedJobForApplication, setSelectedJobForApplication] = useState(null);
 	
 	// Pagination state
 	const [currentPage, setCurrentPage] = useState(1);
@@ -101,22 +107,36 @@ const Dashboard = () => {
 		}
 	};
 
-	const applyForJob = async (jobId) => {
+	const applyForJob = (jobId) => {
+		const token = localStorage.getItem('companyxyz-token');
+		const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
+		
+		if (!token) {
+			navigate('/login');
+			return;
+		}
+
+		// Prevent recruiters from applying
+		const role = (user?.user_type || user?.userType || 'candidate').toLowerCase();
+		if (role === 'recruiter') {
+			showToast('Recruiters cannot apply to jobs.', 'error');
+			return;
+		}
+
+		// Find the job to get its title
+		const job = jobOpenings.find(j => j._id === jobId);
+		setSelectedJobForApplication({ id: jobId, title: job?.title || 'this position' });
+		setShowCVModal(true);
+	};
+
+	const handleCVSelectionSubmit = async (cvSelection) => {
+		const jobId = selectedJobForApplication?.id;
+		if (!jobId) return;
+
+		setApplyingJobId(jobId);
+		
 		try {
 			const token = localStorage.getItem('companyxyz-token');
-			const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
-			if (!token) {
-				navigate('/login');
-				return;
-			}
-
-			// Prevent recruiters from applying
-			const role = (user?.user_type || user?.userType || 'candidate').toLowerCase();
-			if (role === 'recruiter') {
-				showToast('Recruiters cannot apply to jobs.', 'error');
-				return;
-			}
-
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
@@ -124,20 +144,26 @@ const Dashboard = () => {
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
+					cv_id: cvSelection.cv_id,
 					cover_letter: `I am interested in applying for this position and believe my skills align well with the requirements.`
 				})
 			});
 
+			const data = await response.json();
+
 			if (response.ok) {
 				showToast('Application submitted successfully!', 'success');
-				loadApplications(); // Reload applications
+				await loadApplications(); // Reload applications
+				setShowCVModal(false);
+				setSelectedJobForApplication(null);
 			} else {
-				const errorData = await response.json();
-				showToast(errorData.error || 'Failed to submit application', 'error');
+				showToast(data.error || 'Failed to submit application', 'error');
 			}
 		} catch (error) {
 			console.error('Error applying for job:', error);
 			showToast('Failed to submit application', 'error');
+		} finally {
+			setApplyingJobId(null);
 		}
 	};
 
@@ -161,37 +187,52 @@ const Dashboard = () => {
 		const hasAppliedToJob = hasApplied(jobId);
 		const canWithdraw = canWithdrawApplication(jobId);
 		const isPendingWithdrawal = pendingWithdrawal === jobId;
+		const isApplying = applyingJobId === jobId;
 		
 		// State 1: Apply Now (not applied yet)
 		if (!hasAppliedToJob) {
 			return {
 				type: 'apply',
-				text: 'Apply Now',
+				text: isApplying ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Applying...
+					</>
+				) : 'Apply Now',
 				className: styles.applyButton,
 				onClick: () => applyForJob(jobId),
-				disabled: false
+				disabled: isApplying
 			};
 		}
 		
 		// State 2: Withdraw Application (applied and can withdraw, not pending)
 		if (hasAppliedToJob && canWithdraw && !isPendingWithdrawal) {
+			const isWithdrawing = withdrawingJobId === jobId;
 			return {
 				type: 'withdraw',
-				text: 'Withdraw Application',
+				text: isWithdrawing ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Withdrawing...
+					</>
+				) : 'Withdraw Application',
 				className: `${styles.applyButton} ${styles.withdrawButton}`,
 				onClick: () => withdrawApplication(jobId),
-				disabled: false
+				disabled: isWithdrawing
 			};
 		}
 		
 		// State 3: Confirm Withdrawal (applied, can withdraw, and pending confirmation)
 		if (hasAppliedToJob && canWithdraw && isPendingWithdrawal) {
+			const isWithdrawing = withdrawingJobId === jobId;
 			return {
 				type: 'confirm_withdraw',
-				text: 'Confirm Withdrawal',
+				text: isWithdrawing ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Withdrawing...
+					</>
+				) : 'Confirm Withdrawal',
 				className: `${styles.applyButton} ${styles.withdrawButton} ${styles.confirmWithdraw}`,
 				onClick: () => withdrawApplication(jobId),
-				disabled: false
+				disabled: isWithdrawing
 			};
 		}
 		
@@ -209,14 +250,16 @@ const Dashboard = () => {
 		// Fallback to Apply Now
 		return {
 			type: 'apply',
-			text: 'Apply Now',
+			text: isApplying ? (
+				<>
+					<i className="fa fa-spinner fa-spin"></i> Applying...
+				</>
+			) : 'Apply Now',
 			className: styles.applyButton,
 			onClick: () => applyForJob(jobId),
-			disabled: false
+			disabled: isApplying
 		};
 	};
-
-	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 
 	const withdrawApplication = async (jobId) => {
 		try {
@@ -240,6 +283,8 @@ const Dashboard = () => {
 			}
 
 			// This is the confirmation step (second click)
+			setWithdrawingJobId(jobId);
+			
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 				method: 'DELETE',
 				headers: {
@@ -250,16 +295,18 @@ const Dashboard = () => {
 
 			if (response.ok) {
 				showToast('Application withdrawn successfully!', 'success');
-				loadApplications(); // Reload applications
+				await loadApplications(); // Reload applications
 			} else {
 				const errorData = await response.json();
 				showToast(errorData.error || 'Failed to withdraw application', 'error');
 			}
 			setPendingWithdrawal(null);
+			setWithdrawingJobId(null);
 		} catch (error) {
 			console.error('Error withdrawing application:', error);
 			showToast('Failed to withdraw application', 'error');
 			setPendingWithdrawal(null);
+			setWithdrawingJobId(null);
 		}
 	};
 
@@ -680,6 +727,18 @@ const Dashboard = () => {
 					onClose={() => setToast(null)}
 				/>
 			)}
+			
+			{/* CV Selection Modal */}
+			<CVSelectionModal
+				isOpen={showCVModal}
+				onClose={() => {
+					setShowCVModal(false);
+					setSelectedJobForApplication(null);
+				}}
+				onSubmit={handleCVSelectionSubmit}
+				jobTitle={selectedJobForApplication?.title}
+				mode="apply"
+			/>
 		</div>
 	);
 };

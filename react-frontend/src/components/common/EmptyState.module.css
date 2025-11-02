@@ -1,0 +1,209 @@
+/* ===================================
+   EMPTY STATE COMPONENT
+   =================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.container.small {
+  padding: 40px 20px;
+}
+
+.container.large {
+  padding: 80px 20px;
+  min-height: 400px;
+}
+
+.iconWrapper {
+  margin-bottom: 24px;
+  animation: fadeInUp 0.5s ease;
+}
+
+.icon {
+  font-size: 64px;
+  color: #d1d5db;
+  transition: color 0.3s ease;
+}
+
+.container.small .icon {
+  font-size: 48px;
+}
+
+.container.large .icon {
+  font-size: 80px;
+}
+
+:global(.dark) .icon {
+  color: #4b5563;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+  animation: fadeInUp 0.6s ease;
+}
+
+.container.small .title {
+  font-size: 18px;
+}
+
+.container.large .title {
+  font-size: 24px;
+}
+
+:global(.dark) .title {
+  color: #f3f4f6;
+}
+
+.message {
+  font-size: 14px;
+  color: #6b7280;
+  max-width: 400px;
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+  animation: fadeInUp 0.7s ease;
+}
+
+.container.small .message {
+  font-size: 13px;
+  max-width: 300px;
+}
+
+.container.large .message {
+  font-size: 16px;
+  max-width: 500px;
+}
+
+:global(.dark) .message {
+  color: #9ca3af;
+}
+
+.actionButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: fadeInUp 0.8s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.actionButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.actionButton:active {
+  transform: translateY(0);
+}
+
+.container.small .actionButton {
+  padding: 10px 24px;
+  font-size: 13px;
+}
+
+.container.large .actionButton {
+  padding: 14px 40px;
+  font-size: 16px;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover effect for icon */
+.container:hover .icon {
+  color: #667eea;
+  transform: scale(1.05);
+}
+
+:global(.dark) .container:hover .icon {
+  color: #818cf8;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 40px 16px;
+  }
+  
+  .container.large {
+    padding: 60px 16px;
+    min-height: 300px;
+  }
+  
+  .icon {
+    font-size: 48px;
+  }
+  
+  .container.large .icon {
+    font-size: 64px;
+  }
+  
+  .title {
+    font-size: 18px;
+  }
+  
+  .container.large .title {
+    font-size: 20px;
+  }
+  
+  .message {
+    font-size: 13px;
+    max-width: 280px;
+  }
+  
+  .container.large .message {
+    font-size: 14px;
+    max-width: 350px;
+  }
+  
+  .actionButton {
+    padding: 10px 24px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 30px 12px;
+  }
+  
+  .message {
+    max-width: 240px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .iconWrapper,
+  .title,
+  .message,
+  .actionButton {
+    animation: none;
+  }
+  
+  .actionButton:hover {
+    transform: none;
+  }
+}

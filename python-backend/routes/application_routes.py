@@ -17,7 +17,13 @@ application_controller = ApplicationController(collections)
 @cross_origin()
 @token_required
 def apply_for_job(current_user, job_id):
-    """Apply for a job (candidates only)"""
+    """
+    Apply for a job (candidates only)
+    
+    Request Body:
+        cover_letter: str - Optional cover letter
+        cv_id: str - Optional CV ID to use for application (if not provided, uses primary CV or manual entry)
+    """
     # Normalize user_type with backward compatibility (missing -> candidate)
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
     if user_type not in ['candidate', 'student']:
@@ -26,7 +32,16 @@ def apply_for_job(current_user, job_id):
     data = request.get_json() or {}
     user_id = str(current_user['_id'])
     
-    result, status_code = application_controller.apply_for_job(job_id, user_id, data, current_user)
+    # Extract optional cv_id from request data
+    cv_id = data.get('cv_id')  # None if not provided
+    
+    result, status_code = application_controller.apply_for_job(
+        job_id, 
+        user_id, 
+        data, 
+        current_user,
+        cv_id=cv_id  # Pass cv_id to controller
+    )
     return jsonify(result), status_code
 
 @application_bp.route('/jobs/<job_id>/withdraw', methods=['DELETE'])

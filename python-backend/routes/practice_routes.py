@@ -14,16 +14,25 @@ practice_controller = PracticeController(collections)
 @cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
 def start_practice_interview(current_user):
-    """Start a practice interview session"""
+    """
+    Start a practice interview session
+    
+    Form Data:
+        role: str - Role type (software-engineer, data-scientist, custom, etc.)
+        difficulty: str - Interview difficulty (easy, medium, hard)
+        jd: file - Optional JD file for custom practice (PDF or TXT)
+        cv_id: str - Optional CV ID to use (if not provided, uses primary CV or manual entry)
+    """
     # Only candidates can use practice mode
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
     if user_type not in ['candidate', 'student']:
         return jsonify({'error': 'Unauthorized. Only candidates can use practice mode.'}), 403
     
-    # Get files and data from request (CV not required - use profile CV)
+    # Get files and data from request
     jd_file = request.files.get('jd')  # Optional for custom practice
     role = request.form.get('role')
     difficulty = request.form.get('difficulty', 'medium')
+    cv_id = request.form.get('cv_id')  # Optional CV selection (Phase 6)
     
     user_id = str(current_user['_id'])
     
@@ -31,7 +40,8 @@ def start_practice_interview(current_user):
         user_id=user_id,
         jd_file=jd_file,
         role=role,
-        difficulty=difficulty
+        difficulty=difficulty,
+        cv_id=cv_id  # Pass cv_id to controller
     )
     
     return jsonify(result), status_code

@@ -737,6 +737,24 @@ body.dark .content,
 	background-color: #3b73b9;
 }
 
+.submitButton:disabled,
+.cancelButton:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.submitButton:disabled:hover {
+	background-color: #4a90e2;
+}
+
+.cancelButton:disabled:hover {
+	background-color: white;
+}
+
+.submitButton i.fa-spinner {
+	margin-right: 8px;
+}
+
 .loadingContainer {
 	display: flex;
 	flex-direction: column;

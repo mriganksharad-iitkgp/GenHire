@@ -1,0 +1,221 @@
+/* CV Selector Component Styles */
+
+.cvSelector {
+  margin: 16px 0;
+}
+
+.cvSelector label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.optional {
+  font-weight: 400;
+  color: #666;
+  font-size: 0.875rem;
+  margin-left: 8px;
+}
+
+.loading {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.error {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid #c62828;
+  font-size: 0.95rem;
+}
+
+.noCV {
+  background: #f9f9f9;
+  border: 2px dashed #ddd;
+  border-radius: 12px;
+  padding: 32px 20px;
+  text-align: center;
+  color: #999;
+}
+
+.noCV p {
+  margin: 8px 0;
+  font-size: 1rem;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+/* CV List */
+.cvList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* CV Option */
+.cvOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.cvOption:hover {
+  border-color: #667eea;
+  background: #f8f9ff;
+  transform: translateX(4px);
+}
+
+.cvOption.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+/* Radio Button */
+.radioButton {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #999;
+  border-radius: 50%;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.cvOption:hover .radioButton {
+  border-color: #667eea;
+}
+
+.cvOption.selected .radioButton {
+  border-color: #667eea;
+  background: #667eea;
+}
+
+.radioInner {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+}
+
+/* CV Info */
+.cvInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.cvName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.cvIcon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.primaryBadge {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #333;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cvMeta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.cvMeta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Selected Info */
+.selectedInfo {
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: #e8f5e9;
+  border-left: 4px solid #4caf50;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  color: #2e7d32;
+}
+
+.selectedInfo strong {
+  color: #1b5e20;
+}
+
+/* Scrollbar Styling */
+.cvList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cvList::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.cvList::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.cvList::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cvOption {
+    padding: 12px;
+  }
+
+  .cvName {
+    font-size: 0.9rem;
+  }
+
+  .cvMeta {
+    font-size: 0.75rem;
+    gap: 8px;
+  }
+
+  .cvList {
+    max-height: 250px;
+  }
+}
