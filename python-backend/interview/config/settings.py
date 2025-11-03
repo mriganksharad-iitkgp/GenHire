@@ -45,12 +45,12 @@ class InterviewConfig:
     embedding_model: str = "all-MiniLM-L6-v2"
     
     # Structure explanation phase settings
-    include_structure_explanation: bool = True
+    include_structure_explanation: bool = False  # Disabled - goes directly to questions
     structure_explanation_timeout_seconds: int = 120
 
     # Experiential questions phase settings
     include_experiential_questions: bool = True
-    experiential_questions_limit: int = 3
+    experiential_questions_limit: int = 2  # Limit CV-based questions to 2
 
 
 @dataclass

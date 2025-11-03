@@ -602,6 +602,8 @@ def handle_start_proctoring(data):
         proctoring_detectors[session_id] = ProctoringGazeDetector()
     else:
         pass
+
+@socketio.on("proctoring_frame")
 def handle_proctoring_frame(data):
     session_id = data.get("session_id")
     session_data = live_sessions.get(session_id)

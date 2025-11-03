@@ -221,31 +221,42 @@ class PracticeController:
             # Calculate CV score BEFORE starting interview (using CVScoringService - same as real applications)
             cv_score = 75.0  # Default fallback score
             try:
-                if cv_service:
-                    # Create job data structure from JD text for scoring
-                    job_data = {
-                        'title': self.role_names.get(role, role.replace('-', ' ').title()),
-                        'description': jd_text,
-                        'requirements': jd_text,  # Full JD text contains requirements
-                        'role': role
-                    }
-                    
-                    # Use same CV scoring as real applications
-                    scoring_result = cv_service.calculate_cv_score(cv_details, job_data)
-                    cv_score = scoring_result.get('total_score', 75.0)
-                    logger.info(f"CV score calculated using AI: {cv_score}%")
+                # Import CV service for scoring
+                from services.cv_scoring_service import CVScoringService
+                try:
+                    cv_service_for_scoring = CVScoringService()
+                except Exception as e:
+                    logger.warning(f"CVScoringService not available: {e}")
+                    cv_service_for_scoring = None
+                
+                if cv_service_for_scoring:
+                    # Use CVScoringService for both PDF and profile CVs
+                    if cv_details:
+                        # Method 1: Use structured CV details (manual entry) with formatted JD
+                        logger.info("Calculating CV score using AI with structured CV details")
+                        job_data = {
+                            'title': self.role_names.get(role, role.replace('-', ' ').title()),
+                            'description': jd_text,
+                            'requirements': jd_text,
+                            'role': role
+                        }
+                        scoring_result = cv_service_for_scoring.calculate_cv_score(cv_details, job_data)
+                        cv_score = scoring_result.get('total_score', 75.0)
+                        logger.info(f"CV score calculated using AI with structured data: {cv_score}%")
+                    else:
+                        # Method 2: Use raw text (PDF CV) with AI-based text scoring
+                        logger.info("Calculating CV score using AI with text-based analysis")
+                        if cv_text and jd_text and len(cv_text.strip()) > 0 and len(jd_text.strip()) > 0:
+                            scoring_result = cv_service_for_scoring.calculate_cv_score_from_text(cv_text, jd_text)
+                            cv_score = scoring_result.get('total_score', 75.0)
+                            logger.info(f"CV score calculated using AI text analysis: {cv_score}%")
+                        else:
+                            logger.warning("CV or JD text is empty, using default score")
+                            cv_score = 75.0
                 else:
-                    logger.warning("CVScoringService not available, using fallback scoring")
-                    # Fallback: Simple keyword-based similarity
-                    from sklearn.feature_extraction.text import TfidfVectorizer
-                    from sklearn.metrics.pairwise import cosine_similarity
-                    
-                    vectorizer = TfidfVectorizer()
-                    tfidf_matrix = vectorizer.fit_transform([cv_text, jd_text])
-                    # Convert sparse matrix to dense for indexing
-                    similarity_matrix = cosine_similarity(tfidf_matrix)
-                    cv_score = float(similarity_matrix[0, 1] * 100)  # Convert to 0-100 scale
-                    logger.info(f"CV score calculated using fallback: {cv_score:.1f}%")
+                    logger.warning("CVScoringService not available, using default score")
+                    cv_score = 75.0
+                        
             except Exception as e:
                 logger.error(f"CV scoring failed, using default: {e}")
                 import traceback

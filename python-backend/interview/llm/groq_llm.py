@@ -45,6 +45,3 @@ class GroqLLM(BaseLLM):
             return self.validate_response(test_response)
         except Exception:
             return False
-            return self.validate_response(test_response)
-        except:
-            return False
