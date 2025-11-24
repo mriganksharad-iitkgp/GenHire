@@ -34,9 +34,12 @@ from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
+from services.recording_analysis_service import RecordingAnalyzer
 
 # Load environment variables
 load_dotenv()
+
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -120,6 +123,12 @@ try:
 except Exception as e:
     print(f"Warning initializing CVScoringService for formatting: {e}")
     cv_service = None
+try:
+    recording_analyzer = RecordingAnalyzer()
+except Exception as e:
+    print(f"Warning initializing RecordingAnalyzer: {e}")
+    recording_analyzer = None
+
 
 def _format_cv_from_details(cv_details: dict) -> str:
     parts = []
@@ -492,7 +501,13 @@ def upload_recording(current_user, session_id):
             {"session_id": session_id, "user_id": str(current_user["_id"])},
             {"$set": {"recording_path": filepath}},
         )
-
+        if recording_analyzer:
+            # Note: This might take some time to process. 
+            # For a production app, this should be a background task (Celery/Redis).
+            try:
+                recording_analyzer.run_full_analysis(filepath)
+            except Exception as e:
+                print(f"Error running post-interview analysis: {e}")
         return (
             jsonify({"message": "Recording uploaded successfully", "path": filepath}),
             200,

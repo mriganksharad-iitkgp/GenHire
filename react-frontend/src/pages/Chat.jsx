@@ -680,7 +680,7 @@ export default function Chat({ interviewId }) {
           throw new Error(data.error || "Failed to submit answer");
 
         // Auto-end interview after 10 questions
-        if (data.interview_complete || questionCount >= 10) {
+        if (data.interview_complete || questionCount >= 2) {
           // Reset submitting state before ending
           setIsSubmittingAnswer(false);
           await endInterview();
