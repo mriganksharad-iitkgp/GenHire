@@ -20,6 +20,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Practice from "./pages/Practice";
 import Layout from "./components/Layout";
+import MobileRecorder from "./pages/MobileRecorder";
 import "./App.css";
 
 
@@ -34,6 +35,7 @@ function App() {
 					<Route path="/forgot-password" element={<ForgotPassword />} />
 					<Route path="/reset-password" element={<ResetPassword />} />
 					<Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
+					<Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
 					<Route
 						path="/"
 						element={

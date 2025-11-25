@@ -5,6 +5,7 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
 import Avatar from "../components/Avatar"; // Import the new Avatar component
+import QRCode from "react-qr-code";
 
 // Removed formatTime function - no longer needed since we removed the 30-second timer
 
@@ -138,7 +139,11 @@ export default function Chat({ interviewId }) {
     socket.on("connect", () => {
       console.log("✅ WebSocket connected.");
       socket.emit("start_proctoring", { session_id: currentSessionId });
-
+      console.log("📡 Signaling mobile to START...");
+      socket.emit("control_mobile_recording", { 
+          session_id: currentSessionId, 
+          action: "start" 
+      });
       socket.on("gaze_data", (data) => {
         setGazeDirection(data.gaze_direction);
         setGazeTimes(data.gaze_times);
@@ -499,6 +504,13 @@ export default function Chat({ interviewId }) {
   ]);
 
   const endInterview = useCallback(async () => {
+    if (socketRef.current) {
+        console.log("📡 Signaling mobile to STOP...");
+        socketRef.current.emit("control_mobile_recording", { 
+            session_id: sessionIdRef.current, 
+            action: "stop" 
+        });
+    }
     const currentSessionId = sessionIdRef.current;
     if (
       !currentSessionId ||
@@ -1039,37 +1051,49 @@ export default function Chat({ interviewId }) {
   }
 
   if (interviewStatus === "registering") {
+    // Construct URL using current hostname (handles localhost vs IP address)
+    const mobileUrl = `${window.location.protocol}//${window.location.hostname}:3000/mobile-cam/${sessionId}`;
+
     return (
       <div className={Styles.registrationContainer}>
-               {" "}
-        <h2 className={Styles.registrationHeader}>
-                    Camera Setup & Security Check        {" "}
-        </h2>
-               {" "}
-        <p className={Styles.registrationSubheader}>
-                    For a fair evaluation, please close all other applications
-          and browser tabs.           <br />          The interview will be
-          conducted in fullscreen mode.        {" "}
-        </p>
-               {" "}
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className={Styles.registrationVideo}
-        />
-               {" "}
-        <button
-          onClick={handleFaceRegistration}
-          className={Styles.registerButton}
-        >
-                    Register Face & Start Interview        {" "}
-        </button>
-             {" "}
+        <h2 className={Styles.registrationHeader}>Camera Setup & Security Check</h2>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '40px', marginTop: '20px' }}>
+
+            {/* LEFT: QR CODE SECTION */}
+            <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '300px' }}>
+                <h4 style={{ color: '#333', marginBottom: '10px' }}>📱 Step 1: Connect Phone</h4>
+                <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>
+                    Scan to enable 360° environment view. Place phone to show your side profile.
+                </p>
+                <div style={{ background: 'white', padding: '10px', display: 'inline-block' }}>
+                    <QRCode value={mobileUrl} size={140} />
+                </div>
+            </div>
+
+            {/* RIGHT: WEBCAM SECTION */}
+            <div style={{ textAlign: 'center' }}>
+                <h4 style={{ color: '#fff', marginBottom: '10px' }}>💻 Step 2: Face Registration</h4>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className={Styles.registrationVideo}
+                  style={{ width: '320px', height: '240px', borderRadius: '8px', border: '2px solid #667eea' }}
+                />
+                <button
+                  onClick={handleFaceRegistration}
+                  className={Styles.registerButton}
+                  style={{ marginTop: '20px' }}
+                >
+                  Start Interview
+                </button>
+            </div>
+        </div>
       </div>
     );
-  }
+}
 
   // Updated main interview render
   return (

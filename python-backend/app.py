@@ -106,7 +106,9 @@ PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
 # Ensure folders exist
 os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
+M_RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "mobile_recordings")
 os.makedirs(RECORDING_FOLDER, exist_ok=True)
+os.makedirs(M_RECORDING_FOLDER, exist_ok=True)  
 TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
 os.makedirs(TMP_FOLDER, exist_ok=True)
 
@@ -516,6 +518,34 @@ def upload_recording(current_user, session_id):
     return jsonify({"error": "File upload failed"}), 500
 
 
+# In app.py (add near your existing upload-recording route)
+
+@app.route('/api/interviews/<session_id>/upload-mobile-recording', methods=['POST'])
+# @token_required  <-- NOTE: You might need to relax auth or pass a temporary token via URL for the mobile device
+def upload_mobile_recording(session_id):
+    if 'recording' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['recording']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file:
+        # Save with a specific suffix to distinguish from webcam
+        filename = secure_filename(f"{session_id}_mobile_env.webm")
+        filepath = os.path.join(app.config["M_RECORDING_FOLDER"], filename)
+        file.save(filepath)
+        
+        # Update database with mobile recording path
+        interviews_collection.update_one(
+            {"session_id": session_id},
+            {"$set": {"mobile_recording_path": filepath}}
+        )
+        
+        return jsonify({"message": "Mobile recording uploaded"}), 200
+
+
+
 @app.route("/api/interviews", methods=["GET"])
 @token_required
 def get_user_interviews(current_user):
@@ -675,6 +705,33 @@ def handle_proctoring_violation(data):
     )  # Deduct 5 points
 
     # print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
+
+
+# In app.py
+
+@socketio.on("join_mobile_session")
+def handle_mobile_join(data):
+    session_id = data.get("session_id")
+    # Join the specific room for this interview session
+    from flask_socketio import join_room
+    join_room(session_id)
+    # Notify the desktop client that mobile is connected
+    socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
+
+@socketio.on("control_mobile_recording")
+def handle_mobile_control(data):
+    session_id = data.get("session_id")
+    action = data.get("action") # 'start' or 'stop'
+    
+    # Relay the command to the mobile device in the room
+    socketio.emit("mobile_recording_action", {"action": action}, room=session_id)
+
+@socketio.on("mobile_status_update")
+def handle_mobile_status(data):
+    session_id = data.get("session_id")
+    status = data.get("status") # e.g., 'recording', 'uploading', 'completed'
+    # Relay status back to desktop to show user
+    socketio.emit("mobile_status_dashboard", {"status": status}, room=session_id)
 
 
 if __name__ == "__main__":
