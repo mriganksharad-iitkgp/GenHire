@@ -41,5 +41,21 @@
 	<body>
 		<noscript>You need to enable JavaScript to run this app.</noscript>
 		<div id="root"></div>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+					"talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.6/modules/talkinghead.mjs"
+				}
+			}
+		</script>
+		<script type="module">
+			// Preload TalkingHead module so it's available globally
+			import { TalkingHead } from 'talkinghead';
+			window.TalkingHeadClass = TalkingHead;
+			window.TalkingHeadModule = { TalkingHead };
+			console.log('TalkingHead module loaded');
+		</script>
 	</body>
 </html>

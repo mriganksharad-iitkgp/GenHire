@@ -1,0 +1,78 @@
+/* Avatar container - centered large view like Zoom/Google Meet */
+.avatar-container {
+    position: absolute;
+    top: 45%;
+    /* Moved up slightly from 50% */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 55vw;
+    /* Reduced width from 70vw */
+    height: 60vh;
+    max-width: 1000px;
+    /* Reduced max-width */
+    max-height: 700px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 3px solid rgba(102, 126, 234, 0.4);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    z-index: 5;
+}
+
+/* 
+   High-Resolution Zoom:
+   Instead of using transform: scale() which stretches pixels (causing blur),
+   we increase the physical size of the container.
+   The 3D engine will render at this higher resolution.
+   
+   Width/Height 250% = 2.5x zoom equivalent.
+   Positioning centers the upper body/face in the view.
+*/
+.avatar-container>div {
+    width: 250% !important;
+    /* Reduced zoom from 350% to show more body */
+    height: 250% !important;
+    position: absolute;
+    left: 50%;
+    top: 0%;
+    /* Align top to keep head in view */
+    transform: translateX(-50%);
+    /* Center horizontally */
+    pointer-events: none;
+}
+
+/* Interview page controls container - bottom center */
+.controls-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    width: 80%;
+    max-width: 800px;
+}
+
+/* Transcript display area */
+.transcript-display {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 15px 25px;
+    border-radius: 12px;
+    min-height: 50px;
+    text-align: center;
+    font-style: normal;
+    color: #ffffff;
+    flex: 1;
+    line-height: 1.5;
+    font-size: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    max-width: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

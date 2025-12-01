@@ -44,7 +44,7 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 CORS(app, 
-     origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+     origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
      supports_credentials=True,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])  # Allow your React app
@@ -66,6 +66,8 @@ app.register_blueprint(job_bp)
 app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(practice_bp)
+from routes.tts_routes import tts_bp
+app.register_blueprint(tts_bp)
 
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}

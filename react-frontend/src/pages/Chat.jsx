@@ -1,10 +1,14 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Styles from "./Chat.module.css";
+import AvatarStyles from "./AvatarOverrides.module.css";
+import VideoStyles from "./VideoPreview.module.css";
+import ResultStyles from "./ResultScreen.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
-import Avatar from "../components/Avatar"; // Import the new Avatar component
+import TalkingHeadAvatar from "../components/TalkingHeadAvatar"; // Import the TalkingHead Avatar component
+import VoiceSelector, { VOICES } from "../components/VoiceSelector";
 
 // Removed formatTime function - no longer needed since we removed the 30-second timer
 
@@ -16,6 +20,7 @@ export default function Chat({ interviewId }) {
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [textToSpeak, setTextToSpeak] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [interviewStatus, setInterviewStatus] = useState("starting");
@@ -31,6 +36,9 @@ export default function Chat({ interviewId }) {
   const [warningCount, setWarningCount] = useState(0);
   const [gazeDirection, setGazeDirection] = useState("Face Not Detected");
   const [gazeTimes, setGazeTimes] = useState({ Left: 0, Center: 0, Right: 0 });
+
+  // Voice selection state (default to Indian)
+  const [selectedVoice, setSelectedVoice] = useState(VOICES[2]); // Default to Indian
 
   // Removed timeLeft state - using only silence detection now
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -336,9 +344,9 @@ export default function Chat({ interviewId }) {
 
       // Fully reset the video element
       if (videoRef.current) {
-        try { videoRef.current.pause(); } catch (e) {}
+        try { videoRef.current.pause(); } catch (e) { }
         videoRef.current.removeAttribute("src");
-        try { videoRef.current.load(); } catch (e) {}
+        try { videoRef.current.load(); } catch (e) { }
       }
     } catch (e) {
       // no-op
@@ -413,7 +421,7 @@ export default function Chat({ interviewId }) {
       const applicationId = location.state?.applicationId;
 
       const token = localStorage.getItem("companyxyz-token");
-      
+
       // For real interviews (not practice with pre-created session)
       const endpoint = `${process.env.REACT_APP_API_URL}/api/interviews/start`;
 
@@ -535,12 +543,12 @@ export default function Chat({ interviewId }) {
 
       const token = localStorage.getItem("companyxyz-token");
       const isPracticeMode = location.state?.isPractice || false;
-      
+
       // Use different endpoint for practice mode
       const endpoint = isPracticeMode
         ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/end`
         : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`;
-      
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -565,7 +573,7 @@ export default function Chat({ interviewId }) {
             response: "Practice interview ended. Generating your feedback...",
           },
         }));
-        
+
         // No need to update application or store interview-just-completed flag
         return;
       }
@@ -647,7 +655,7 @@ export default function Chat({ interviewId }) {
       const currentSessionId = sessionIdRef.current;
       const answer = userAnswer.trim();
       const isPracticeMode = location.state?.isPractice || false;
-      
+
       if (
         !currentQuestion ||
         !currentSessionId ||
@@ -661,12 +669,12 @@ export default function Chat({ interviewId }) {
 
       try {
         const token = localStorage.getItem("companyxyz-token");
-        
+
         // Use different endpoint for practice mode
         const endpoint = isPracticeMode
           ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/answer`
           : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`;
-        
+
         const response = await fetch(endpoint, {
           method: "POST",
           headers: {
@@ -842,11 +850,11 @@ export default function Chat({ interviewId }) {
     setIsRecording(true);
   }, [isSpeaking, isRecording]);
   const speakResponse = (text) => {
-    if (!window.speechSynthesis || !text) return;
+    if (!text) return;
 
+    // Cancel any ongoing speech
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      // Clear any existing typing animation
+      setTextToSpeak(null);
       clearInterval(typingIntervalRef.current);
     }
 
@@ -854,66 +862,57 @@ export default function Chat({ interviewId }) {
     setFullQuestionText(text);
     setDisplayedText(""); // Reset displayed text
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    currentUtteranceRef.current = utterance;
+    // Start progressive text animation
+    let currentIndex = 0;
+    const words = text.split(" ");
+    const totalWords = words.length;
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
+    // Estimate speech duration (average speaking rate: ~120 words per minute for natural speech)
+    const estimatedDuration = (totalWords / 120) * 60 * 1000; // Convert to milliseconds
+    // Use words for better pacing rather than characters
+    const intervalDelay = estimatedDuration / words.length; // Time per word
 
-      // Start progressive text animation
-      let currentIndex = 0;
-      const words = text.split(" ");
-      const totalWords = words.length;
-
-      // Estimate speech duration (average speaking rate: ~120 words per minute for natural speech)
-      const estimatedDuration = (totalWords / 120) * 60 * 1000; // Convert to milliseconds
-      // Use words for better pacing rather than characters
-      const intervalDelay = estimatedDuration / words.length; // Time per word
-
-      typingIntervalRef.current = setInterval(() => {
-        if (currentIndex < words.length) {
-          // Display words progressively instead of characters for more natural flow
-          const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
-          setDisplayedText(wordsToShow);
-          currentIndex++;
-        } else {
-          clearInterval(typingIntervalRef.current);
-          setDisplayedText(text); // Ensure complete text is shown
-        }
-      }, Math.max(intervalDelay, 300)); // Minimum 300ms per word for natural reading pace
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      // Clear typing animation and show full text
-      clearInterval(typingIntervalRef.current);
-      setDisplayedText(text); // Ensure full text is shown
-
-      // Start silence detection after AI finishes speaking
-      if (interviewStatus === "active") {
-        setSilenceTimer(0);
-        lastSpeechTimeRef.current = Date.now();
-        setIsTimerRunning(true);
-        startRecording();
+    typingIntervalRef.current = setInterval(() => {
+      if (currentIndex < words.length) {
+        // Display words progressively instead of characters for more natural flow
+        const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
+        setDisplayedText(wordsToShow);
+        currentIndex++;
+      } else {
+        clearInterval(typingIntervalRef.current);
+        setDisplayedText(text); // Ensure complete text is shown
       }
-    };
+    }, Math.max(intervalDelay, 300)); // Minimum 300ms per word for natural reading pace
 
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      clearInterval(typingIntervalRef.current);
-      setDisplayedText(text); // Show full text on error
-    };
+    // Trigger TalkingHead to speak
+    setTextToSpeak(text);
+  };
 
-    window.speechSynthesis.speak(utterance);
-  }; // Automatically speak the first question
+  const handleSpeakingStart = () => {
+    setIsSpeaking(true);
+  };
+
+  const handleSpeakingEnd = () => {
+    setIsSpeaking(false);
+    currentUtteranceRef.current = null;
+    // Clear typing animation and show full text
+    clearInterval(typingIntervalRef.current);
+    setDisplayedText(fullQuestionText); // Ensure full text is shown
+
+    // Start silence detection after AI finishes speaking
+    if (interviewStatus === "active") {
+      setSilenceTimer(0);
+      lastSpeechTimeRef.current = Date.now();
+      setIsTimerRunning(true);
+      startRecording();
+    }
+  };   // Automatically speak the first question
   useEffect(() => {
     if (
       interviewStatus === "active" &&
       currentQuestion &&
       !isSpeaking &&
-      !currentUtteranceRef.current
+      !textToSpeak
     ) {
       setTimeout(() => {
         const initialMessage = `Your CV has a ${Math.round(
@@ -976,10 +975,8 @@ export default function Chat({ interviewId }) {
           mediaRecorder.stop();
         }
 
-        // Stop speech synthesis
-        if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
-        }
+        // Stop speech synthesis (TalkingHead will handle cleanup)
+        setTextToSpeak(null);
 
         // Stop speech recognition
         if (recognitionRef.current) {
@@ -1041,17 +1038,17 @@ export default function Chat({ interviewId }) {
   if (interviewStatus === "registering") {
     return (
       <div className={Styles.registrationContainer}>
-               {" "}
+        {" "}
         <h2 className={Styles.registrationHeader}>
-                    Camera Setup & Security Check        {" "}
+          Camera Setup & Security Check        {" "}
         </h2>
-               {" "}
+        {" "}
         <p className={Styles.registrationSubheader}>
-                    For a fair evaluation, please close all other applications
+          For a fair evaluation, please close all other applications
           and browser tabs.           <br />          The interview will be
           conducted in fullscreen mode.        {" "}
         </p>
-               {" "}
+        {" "}
         <video
           ref={videoRef}
           autoPlay
@@ -1059,14 +1056,14 @@ export default function Chat({ interviewId }) {
           playsInline
           className={Styles.registrationVideo}
         />
-               {" "}
+        {" "}
         <button
           onClick={handleFaceRegistration}
           className={Styles.registerButton}
         >
-                    Register Face & Start Interview        {" "}
+          Register Face & Start Interview        {" "}
         </button>
-             {" "}
+        {" "}
       </div>
     );
   }
@@ -1094,38 +1091,51 @@ export default function Chat({ interviewId }) {
           )}
         </div>
       )}
-             {" "}
+      {" "}
       {proctoringAlert.active && (
         <div className={Styles.modalOverlay}>
-                     {" "}
+          {" "}
           <div className={Styles.modal}>
-                          <h2>Warning! ({warningCount})</h2>             {" "}
+            <h2>Warning! ({warningCount})</h2>             {" "}
             <p>{proctoringAlert.message}</p>             {" "}
             <button
               onClick={() => setProctoringAlert({ active: false, message: "" })}
             >
               Acknowledge
             </button>
-                       {" "}
+            {" "}
           </div>
-                   {" "}
+          {" "}
         </div>
       )}
-             {" "}
-      <div className={Styles["video-preview"]}>
-                  <video ref={videoRef} autoPlay muted playsInline />       {" "}
+      {" "}
+      <div className={VideoStyles["video-preview"]}>
+        <video ref={videoRef} autoPlay muted playsInline />       {" "}
       </div>
-             {" "}
+      {" "}
       {(gazeDirection === "Left" || gazeDirection === "Right") && (
-        <div className={Styles["gaze-warning"]}>
-                      Please look at the center of the screen          {" "}
+        <div className={VideoStyles["gaze-warning"]}>
+          Please look at the center of the screen          {" "}
         </div>
       )}
-             {" "}
-      <div className={Styles["avatar-container"]}>
-                  <Avatar />       {" "}
+      {" "}
+      <div className={AvatarStyles["avatar-container"]}>
+        <TalkingHeadAvatar
+          textToSpeak={textToSpeak}
+          onSpeakingStart={handleSpeakingStart}
+          onSpeakingEnd={handleSpeakingEnd}
+          isSpeaking={isSpeaking}
+          voiceConfig={selectedVoice.config}
+        />
       </div>
-      <div className={Styles["controls-container"]}>
+
+      {/* Voice Selector */}
+      <VoiceSelector
+        selectedVoiceId={selectedVoice.id}
+        onVoiceChange={setSelectedVoice}
+      />
+
+      <div className={AvatarStyles["controls-container"]}>
         <div
           style={{
             flex: 1,
@@ -1134,16 +1144,16 @@ export default function Chat({ interviewId }) {
             gap: "8px",
           }}
         >
-          <p className={Styles["transcript-display"]}>
+          <p className={AvatarStyles["transcript-display"]}>
             {isSubmittingAnswer
               ? "AI is thinking..."
               : isRecording
-              ? input || "Listening..."
-              : isTimerRunning
-              ? "Ready to speak..."
-              : isSpeaking
-              ? displayedText
-              : currentQuestion || "Waiting for next question..."}
+                ? input || "Listening..."
+                : isTimerRunning
+                  ? "Ready to speak..."
+                  : isSpeaking
+                    ? displayedText
+                    : currentQuestion || "Waiting for next question..."}
           </p>
           {input && input.trim().length > 0 && (
             <div
@@ -1220,232 +1230,73 @@ export default function Chat({ interviewId }) {
           )}
         </button>
       </div>
-             {" "}
+      {" "}
       {interviewStatus === "completed" && evaluation && (
-        <div className={Styles["evaluation-overlay"]}>
-                     {" "}
-          <div className={Styles["evaluation-container"]}>
-            <div style={{ textAlign: "center", marginBottom: "20px" }}>
-              <h2
-                style={{
-                  color: "#27ae60",
-                  fontSize: "28px",
-                  marginBottom: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                }}
-              >
-                🎉 Interview Completed Successfully!
-              </h2>
-              <p style={{ color: "#666", fontSize: "16px" }}>
-                Your performance has been evaluated and submitted.
-              </p>
-              <p style={{ color: "#999", fontSize: "14px", marginTop: "10px" }}>
-                Review your results below
-              </p>
+        <div className={ResultStyles.overlay}>
+          <div className={ResultStyles.content}>
+            <div className={ResultStyles.header}>
+              <h2 className={ResultStyles.title}>Interview Completed</h2>
+              <div className={ResultStyles.subtitle}>Here's how you performed</div>
             </div>
-            <div
-              className={Styles["quantitative-metrics"]}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "20px",
-                marginBottom: "25px",
-              }}
-            >
-              <div
-                className={Styles["metric"]}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  color: "white",
-                  textAlign: "center",
-                  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "14px",
-                    opacity: 0.9,
-                    marginBottom: "8px",
-                  }}
-                >
-                  Interview Score
-                </div>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {(() => {
-                    // Handle different evaluation data structures
-                    let score = null;
 
-                    // Try quantitative.average_relevance_score (from interview_system.py)
-                    if (evaluation?.quantitative?.average_relevance_score) {
-                      score = evaluation.quantitative.average_relevance_score;
-                    }
-                    // Try quantitative_scores (from session_manager.py)
-                    else if (evaluation?.quantitative_scores) {
+            <div className={ResultStyles.metricsGrid}>
+              {/* Overall Score */}
+              <div className={ResultStyles.metricCard}>
+                <div className={ResultStyles.metricLabel}>Overall Score</div>
+                <div className={`${ResultStyles.metricValue} ${ResultStyles.scoreExcellent}`}>
+                  {(() => {
+                    let score = null;
+                    if (evaluation.final_score) {
+                      score = evaluation.final_score / 100;
+                    } else if (evaluation.quantitative_scores) {
                       if (typeof evaluation.quantitative_scores === "number") {
                         score = evaluation.quantitative_scores;
-                      } else if (
-                        typeof evaluation.quantitative_scores === "object"
-                      ) {
-                        // If it's an object, try to get average or overall score
-                        score =
-                          evaluation.quantitative_scores.average ||
-                          evaluation.quantitative_scores.overall ||
-                          Object.values(evaluation.quantitative_scores)[0];
+                      } else if (typeof evaluation.quantitative_scores === "object") {
+                        score = evaluation.quantitative_scores.average || evaluation.quantitative_scores.overall || Object.values(evaluation.quantitative_scores)[0];
                       }
                     }
-
-                    // Convert to percentage if score is decimal (0-1 range)
                     if (score !== null) {
-                      if (score <= 1) {
-                        return `${Math.round(score * 100)}%`;
-                      } else {
-                        return `${Math.round(score)}%`;
-                      }
+                      return score <= 1 ? `${Math.round(score * 100)}%` : `${Math.round(score)}%`;
                     }
-
-                    return "85%"; // Fallback
+                    return "85%";
                   })()}
                 </div>
               </div>
-              <div
-                className={Styles["metric"]}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  color: "white",
-                  textAlign: "center",
-                  boxShadow: "0 4px 15px rgba(67, 233, 123, 0.4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "14px",
-                    opacity: 0.9,
-                    marginBottom: "8px",
-                  }}
-                >
-                  Communication Score
-                </div>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {(() => {
-                    // Extract communication score from evaluation
-                    let commScore = null;
 
-                    // Try to get communication score from quantitative_scores
+              {/* Communication Score */}
+              <div className={ResultStyles.metricCard}>
+                <div className={ResultStyles.metricLabel}>Communication</div>
+                <div className={`${ResultStyles.metricValue} ${ResultStyles.scoreGood}`}>
+                  {(() => {
+                    let commScore = null;
                     if (evaluation?.quantitative_scores?.communication) {
                       commScore = evaluation.quantitative_scores.communication;
-                    }
-                    // Fallback: check if it's stored differently
-                    else if (evaluation?.quantitative?.communication) {
+                    } else if (evaluation?.quantitative?.communication) {
                       commScore = evaluation.quantitative.communication;
                     }
-
-                    // Convert to percentage if score is decimal (0-1 range)
                     if (commScore !== null) {
-                      if (commScore <= 1) {
-                        return `${Math.round(commScore * 100)}%`;
-                      } else {
-                        return `${Math.round(commScore)}%`;
-                      }
+                      return commScore <= 1 ? `${Math.round(commScore * 100)}%` : `${Math.round(commScore)}%`;
                     }
-
-                    return "80%"; // Fallback
+                    return "80%";
                   })()}
                 </div>
               </div>
-              <div
-                className={Styles["metric"]}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  color: "white",
-                  textAlign: "center",
-                  boxShadow: "0 4px 15px rgba(245, 87, 108, 0.4)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "14px",
-                    opacity: 0.9,
-                    marginBottom: "8px",
-                  }}
-                >
-                  Proctoring Score
-                </div>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {/* TODO: Replace with actual proctoring score when model is developed */}
+
+              {/* Proctoring Score */}
+              <div className={ResultStyles.metricCard}>
+                <div className={ResultStyles.metricLabel}>Proctoring</div>
+                <div className={`${ResultStyles.metricValue} ${ResultStyles.scoreAverage}`}>
                   90%
                 </div>
               </div>
-              {evaluation.quantitative &&
-                evaluation.quantitative.number_of_questions && (
-                  <div
-                    className={Styles["metric"]}
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-                      padding: "20px",
-                      borderRadius: "12px",
-                      color: "white",
-                      textAlign: "center",
-                      boxShadow: "0 4px 15px rgba(79, 172, 254, 0.4)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        opacity: 0.9,
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Questions Answered
-                    </div>
-                    <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                      {evaluation.quantitative.number_of_questions}             
-                         {" "}
-                    </div>
-                                   {" "}
-                  </div>
-                )}
             </div>
+
             {evaluation.qualitative_assessment && (
-              <div
-                style={{
-                  background: "#f8f9fa",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  marginBottom: "20px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h4
-                  style={{
-                    color: "#2c3e50",
-                    marginBottom: "15px",
-                    fontSize: "18px",
-                    fontWeight: "600",
-                  }}
-                >
-                  📋 Evaluation Summary
+              <div className={ResultStyles.summarySection}>
+                <h4 className={ResultStyles.summaryTitle}>
+                  <span>📋</span> Evaluation Summary
                 </h4>
-                <div
-                  className={Styles["qualitative-assessment"]}
-                  style={{
-                    color: "#495057",
-                    lineHeight: "1.6",
-                  }}
-                >
-                                 {" "}
+                <div className={ResultStyles.summaryText}>
                   {(evaluation.qualitative_assessment || "")
                     .split("\n")
                     .map((line, index) => (
@@ -1453,51 +1304,26 @@ export default function Chat({ interviewId }) {
                         {line}
                       </p>
                     ))}
-                               {" "}
                 </div>
               </div>
             )}
-            <div style={{ textAlign: "center" }}>
+
+            <div className={ResultStyles.buttonContainer}>
               <button
-                className={Styles["back-to-dashboard"]}
+                className={ResultStyles.dashboardButton}
                 onClick={() => {
                   const isPracticeMode = location.state?.isPractice || false;
                   const redirectPath = isPracticeMode ? "/practice" : "/profile#applications";
                   navigate(redirectPath);
                 }}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "white",
-                  border: "none",
-                  padding: "15px 40px",
-                  borderRadius: "8px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.transform = "translateY(-2px)";
-                  e.target.style.boxShadow =
-                    "0 6px 20px rgba(102, 126, 234, 0.5)";
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.transform = "translateY(0)";
-                  e.target.style.boxShadow =
-                    "0 4px 15px rgba(102, 126, 234, 0.4)";
-                }}
               >
                 {location.state?.isPractice ? "Back to Practice" : "Go to Dashboard"}
               </button>
             </div>
-                       {" "}
           </div>
-                   {" "}
         </div>
       )}
-           {" "}
+      {" "}
     </div>
   );
 }
