@@ -234,6 +234,16 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		
 		setIsApplying(true);
 		
+		// Close modal and show success immediately for better UX
+		setShowCVModal(false);
+		showToast('Application submitted! CV scoring is being processed...', 'success');
+		
+		// Optimistically toggle applied state for immediate UX feedback
+		setHasApplied(true);
+		setAppliedAt(new Date().toISOString());
+		setApplicationStatus('pending');
+		setIsApplying(false);
+		
 		try {
 			const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
@@ -248,20 +258,21 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 			});
 			const data = await res.json();
 			if (!res.ok) {
+				// Revert optimistic update on error
+				setHasApplied(false);
+				setAppliedAt(null);
+				setApplicationStatus(null);
 				showToast(data.error || 'Failed to submit application', 'error');
-				setIsApplying(false);
 				return;
 			}
-			showToast('Application submitted successfully!', 'success');
-			setShowCVModal(false);
-			// Optimistically toggle applied state for immediate UX feedback
-			setHasApplied(true);
-			setAppliedAt(new Date().toISOString());
-			setApplicationStatus('pending');
-			setIsApplying(false);
+			// Application successful - backend is processing CV score
+			console.log('Application submitted:', data);
 		} catch (e) {
+			// Revert optimistic update on error
+			setHasApplied(false);
+			setAppliedAt(null);
+			setApplicationStatus(null);
 			showToast('Failed to submit application', 'error');
-			setIsApplying(false);
 		}
 	};
 
@@ -733,7 +744,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 						<div className={styles.applyCard}>
 							{userType === 'recruiter' ? (
 								<>
-									<h3>🔧 Manage Job</h3>
+									<h3><i className="fa fa-cog"></i> Manage Job</h3>
 									<button
 										className={styles.editJobBtn}
 										onClick={() => setIsEditModalOpen(true)}

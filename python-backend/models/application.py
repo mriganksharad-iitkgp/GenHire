@@ -24,6 +24,11 @@ class Application:
     cv_id: Optional[str] = None  # Reference to specific CV used from cv_uploads
     cv_snapshot: Optional[Dict[str, Any]] = None  # Snapshot of CV at application time
     jd_snapshot: Optional[str] = None  # JD text snapshot at application time
+    # NEW: Background processing support
+    processing_status: str = 'pending'  # 'pending', 'processing', 'completed', 'failed'
+    is_visible: bool = False  # Only show to users when True (after CV score calculated)
+    cv_score_calculated_at: Optional[datetime.datetime] = None  # When CV scoring completed
+    processing_error: Optional[str] = None  # Error message if processing failed
     
     def __post_init__(self):
         if self.applied_at is None:
@@ -54,7 +59,11 @@ class Application:
             'updated_by': self.updated_by,
             'cv_id': self.cv_id,
             'cv_snapshot': self.cv_snapshot,
-            'jd_snapshot': self.jd_snapshot
+            'jd_snapshot': self.jd_snapshot,
+            'processing_status': self.processing_status,
+            'is_visible': self.is_visible,
+            'cv_score_calculated_at': self.cv_score_calculated_at,
+            'processing_error': self.processing_error
         }
     
     @classmethod
@@ -79,5 +88,9 @@ class Application:
             updated_by=data.get('updated_by'),
             cv_id=data.get('cv_id'),
             cv_snapshot=data.get('cv_snapshot'),
-            jd_snapshot=data.get('jd_snapshot')
+            jd_snapshot=data.get('jd_snapshot'),
+            processing_status=data.get('processing_status', 'pending'),
+            is_visible=data.get('is_visible', False),
+            cv_score_calculated_at=data.get('cv_score_calculated_at'),
+            processing_error=data.get('processing_error')
         )

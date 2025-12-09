@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InterviewReportModal from "../components/InterviewReportModal";
 import Toast from "../components/Toast";
+import { useCandidateData } from "../contexts/CandidateDataContext";
 import styles from "./Profile.module.css";
 import SidebarProfile from "../components/candidate/SidebarProfile";
 import BioForm from "../components/candidate/BioForm";
@@ -12,6 +13,7 @@ import { viewCV as apiViewCV } from "../services/api";
 
 const Profile = () => {
 	const navigate = useNavigate();
+	const { invalidateApplications, invalidateCvs } = useCandidateData();
 	const [activeTab, setActiveTab] = useState("bio"); // Add state for active tab
 	const [cvFile, setCvFile] = useState(null);
 	
@@ -58,10 +60,11 @@ const Profile = () => {
 		}
 		}, [navigate]);
 
-	// Add hash change listener to handle navigation from navbar
+	// Add hash change listener to handle navigation from navbar (NO RELOADING)
 	useEffect(() => {
 		const handleHashChange = () => {
 			const hash = window.location.hash;
+			// ONLY change tab, don't reload data
 			if (hash === "#applications") {
 				setActiveTab("applications");
 			} else if (hash === "#bio") {
@@ -88,7 +91,7 @@ const Profile = () => {
 	useEffect(() => {
 		const interviewCompleted = localStorage.getItem('interview-just-completed');
 		if (interviewCompleted === 'true') {
-			console.log('🎯 Interview completion detected on Profile mount - forcing immediate refresh...');
+			console.log('Interview completion detected on Profile mount - forcing immediate refresh...');
 			localStorage.removeItem('interview-just-completed'); // Clear immediately
 			
 			// Force multiple refreshes with delays to ensure database sync
@@ -100,7 +103,7 @@ const Profile = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []); // Run only once on mount - reloadApplications is stable
 	
-	// Reload applications when page becomes visible (after returning from interview)
+	// Reload applications ONLY when necessary (interview completion or manual refresh)
 	useEffect(() => {
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === 'visible') {
@@ -123,26 +126,17 @@ const Profile = () => {
 					setTimeout(() => {
 						reloadApplications(true);
 					}, 3000);
-				} else {
-					// Force reload when page becomes visible again
-					reloadApplications(true); // Force parameter bypasses throttle
 				}
+				// REMOVED: Don't reload on every visibility change
 			}
 		};
 		
-		// Also reload when hash changes to applications tab
-		const handleHashChange = () => {
-			if (window.location.hash === '#applications') {
-				reloadApplications(true);
-			}
-		};
+		// REMOVED: Don't reload on hash change - just switch tabs without reloading
 		
 		document.addEventListener('visibilitychange', handleVisibilityChange);
-		window.addEventListener('hashchange', handleHashChange);
 		
 		return () => {
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			window.removeEventListener('hashchange', handleHashChange);
 		};
 	}, [reloadApplications]);
 
@@ -172,7 +166,11 @@ const Profile = () => {
 			return;
 		}
 			const ok = await uploadCvFile(cvFile);
-			if (ok) setCvFile(null);
+			if (ok) {
+				setCvFile(null);
+				// Invalidate CVs cache so next modal open fetches fresh list
+				invalidateCvs();
+			}
 	};
 
 	// Handle photo upload

@@ -6,6 +6,7 @@ import {
 	Navigate,
 } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { CandidateDataProvider } from "./contexts/CandidateDataContext";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import Dashboard from "./pages/Dashboard";
@@ -27,7 +28,8 @@ import "./App.css";
 function App() {
 	return (
 		<GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
-			<Router>
+			<CandidateDataProvider>
+				<Router>
 				<Routes>
 					<Route path="/login" element={<Login />} />
 					<Route path="/register" element={<Register />} />
@@ -81,6 +83,7 @@ function App() {
 					<Route path="*" element={<Navigate to="/404" />} />
 				</Routes>
 			</Router>
+			</CandidateDataProvider>
 		</GoogleOAuthProvider>
 	);
 }

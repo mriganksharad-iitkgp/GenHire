@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useCandidateData } from '../contexts/CandidateDataContext';
 import styles from './CVSelectionModal.module.css';
 
 const CVSelectionModal = ({ 
@@ -8,6 +9,7 @@ const CVSelectionModal = ({
   jobTitle,
   mode = 'apply' // 'apply' or 'practice'
 }) => {
+  const { cvs: cachedCvs, cvsLoaded, loadCvsCached } = useCandidateData();
   const [cvList, setCvList] = useState([]);
   const [selectedCvId, setSelectedCvId] = useState(null);
   const [useManualCV, setUseManualCV] = useState(false);
@@ -18,43 +20,68 @@ const CVSelectionModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      fetchCVs();
-      checkManualCVCompletion();
+      // Only fetch if not already loaded (caching via context)
+      if (!cvsLoaded) {
+        fetchCVs();
+        checkManualCVCompletion();
+      } else {
+        // Use cached data - instant loading!
+        console.log('📦 Using cached CVs from context');
+        setCvList(cachedCvs);
+        setLoading(false);
+        
+        // Auto-select primary CV if available
+        const primaryCV = cachedCvs?.find(cv => cv.is_primary);
+        if (primaryCV) {
+          setSelectedCvId(primaryCV.cv_id);
+          setUseManualCV(false);
+        } else if (cachedCvs?.length > 0) {
+          setSelectedCvId(cachedCvs[0].cv_id);
+          setUseManualCV(false);
+        } else {
+          setUseManualCV(true);
+        }
+      }
+    } else {
+      // Reset submitting state when modal closes
+      setIsSubmitting(false);
+      setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, cvsLoaded, cachedCvs]);
 
   const fetchCVs = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('companyxyz-token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      // Use cached data from context
+      const cvs = await loadCvsCached(false, async () => {
+        const token = localStorage.getItem('companyxyz-token');
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.cvs || [];
+        } else {
+          throw new Error('Failed to load CVs');
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📋 CV List Data:', data);
-        console.log('📋 CVs Array:', data.cvs);
-        if (data.cvs && data.cvs.length > 0) {
-          console.log('📋 First CV:', data.cvs[0]);
-          console.log('📋 First CV filename:', data.cvs[0].filename);
-        }
-        setCvList(data.cvs || []);
-        
-        // Auto-select primary CV if available
-        const primaryCV = data.cvs?.find(cv => cv.is_primary);
-        if (primaryCV) {
-          setSelectedCvId(primaryCV.cv_id);
-          setUseManualCV(false);
-        } else if (data.cvs?.length > 0) {
-          setSelectedCvId(data.cvs[0].cv_id);
-          setUseManualCV(false);
-        } else {
-          // No CVs uploaded, default to manual CV
-          setUseManualCV(true);
-        }
+      setCvList(cvs);
+      
+      // Auto-select primary CV if available
+      const primaryCV = cvs?.find(cv => cv.is_primary);
+      if (primaryCV) {
+        setSelectedCvId(primaryCV.cv_id);
+        setUseManualCV(false);
+      } else if (cvs?.length > 0) {
+        setSelectedCvId(cvs[0].cv_id);
+        setUseManualCV(false);
+      } else {
+        // No CVs uploaded, default to manual CV
+        setUseManualCV(true);
       }
     } catch (err) {
       console.error('Error fetching CVs:', err);

@@ -34,7 +34,16 @@ from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
-from services.recording_analysis_service import RecordingAnalyzer
+
+# Optional import - RecordingAnalyzer has heavy dependencies that may conflict
+try:
+    from services.recording_analysis_service import RecordingAnalyzer
+    RECORDING_ANALYZER_AVAILABLE = True
+    print("✓ RecordingAnalyzer loaded successfully")
+except Exception as e:
+    print(f"⚠ Warning: RecordingAnalyzer not available: {str(e)[:100]}")
+    RecordingAnalyzer = None
+    RECORDING_ANALYZER_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -47,11 +56,39 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+
+# Configure CORS to allow all localhost ports
 CORS(app, 
-     origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])  # Allow your React app
+     resources={r"/*": {
+         "origins": ["http://localhost:*", "http://127.0.0.1:*", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+         "supports_credentials": True,
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+         "expose_headers": ["Content-Type", "Authorization"]
+     }})
+
+# Handle preflight OPTIONS requests
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        headers = response.headers
+        headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Access-Control-Allow-Credentials'
+        headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
 
 # Initialize database
 db = db_config.connect()
@@ -62,6 +99,12 @@ users_collection = collections["users"]
 interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
 jobs_collection = collections["jobs"]
+
+# Initialize and start background processor for CV scoring
+from services.background_processor import get_background_processor
+background_processor = get_background_processor()
+background_processor.start()
+logger.info("✓ Background processor started for async CV scoring")
 
 # Register blueprints
 app.register_blueprint(auth_bp)
@@ -125,11 +168,18 @@ try:
 except Exception as e:
     print(f"Warning initializing CVScoringService for formatting: {e}")
     cv_service = None
-try:
-    recording_analyzer = RecordingAnalyzer()
-except Exception as e:
-    print(f"Warning initializing RecordingAnalyzer: {e}")
+
+# Initialize RecordingAnalyzer if available
+if RECORDING_ANALYZER_AVAILABLE and RecordingAnalyzer is not None:
+    try:
+        recording_analyzer = RecordingAnalyzer()
+        print("✓ RecordingAnalyzer initialized successfully")
+    except Exception as e:
+        print(f"⚠ Warning initializing RecordingAnalyzer: {e}")
+        recording_analyzer = None
+else:
     recording_analyzer = None
+    print("ℹ RecordingAnalyzer not available - recording analysis features disabled")
 
 
 def _format_cv_from_details(cv_details: dict) -> str:
@@ -735,4 +785,11 @@ def handle_mobile_status(data):
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    try:
+        # Disable reloader to avoid torch deadlock issues on Windows
+        socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=False)
+    finally:
+        # Cleanup background processor on shutdown
+        logger.info("Shutting down background processor...")
+        background_processor.stop()
+        logger.info("Background processor stopped")

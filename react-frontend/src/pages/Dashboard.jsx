@@ -3,10 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import Pagination from "../components/Pagination";
 import CVSelectionModal from "../components/CVSelectionModal";
+import { useCandidateData } from "../contexts/CandidateDataContext";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
+	const { jobs: cachedJobs, loadJobsCached, invalidateJobs, applications: cachedApplications, loadApplicationsCached, invalidateApplications } = useCandidateData();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState("");
 	const [locationFilter, setLocationFilter] = useState("");
@@ -41,13 +43,20 @@ const Dashboard = () => {
 		setCurrentPage(1);
 	}, [searchQuery, typeFilter, locationFilter, experienceFilter, jobRoleFilter, companyFilter, skillsFilter]);
 
-	// Load jobs from backend
+	// Single useEffect for authentication and initial data load (ONLY ONCE)
 	useEffect(() => {
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
+		if (!isLoggedIn) {
+			navigate("/login");
+			return;
+		}
+		
+		// Load data only once on mount
 		loadJobs();
 		loadApplications();
-	}, []);
+	}, []); // Empty dependency array - run only once
 
-	const loadJobs = async () => {
+	const loadJobs = async (force = false) => {
 		try {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) {
@@ -55,19 +64,24 @@ const Dashboard = () => {
 				return;
 			}
 
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'Content-Type': 'application/json'
+			// Use cached data if available
+			const jobs = await loadJobsCached(force, async () => {
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.ok) {
+					return await response.json();
+				} else {
+					throw new Error('Failed to load jobs');
 				}
 			});
 
-			if (response.ok) {
-				const jobs = await response.json();
-				setJobOpenings(jobs);
-			} else {
-				setError('Failed to load jobs');
-			}
+			setJobOpenings(jobs);
+			setError(null);
 		} catch (error) {
 			console.error('Error loading jobs:', error);
 			setError('Failed to load jobs');
@@ -76,32 +90,28 @@ const Dashboard = () => {
 		}
 	};
 
-	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
-		if (!isLoggedIn) {
-			navigate("/login");
-			return;
-		}
-		loadJobs();
-		loadApplications();
-	}, [navigate]);
-
-	const loadApplications = async () => {
+	const loadApplications = async (force = false) => {
 		try {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) return;
 
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'Content-Type': 'application/json'
+			// Use cached data if available
+			const apps = await loadApplicationsCached(force, async () => {
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.ok) {
+					return await response.json();
+				} else {
+					throw new Error('Failed to load applications');
 				}
 			});
 
-			if (response.ok) {
-				const apps = await response.json();
-				setApplications(apps);
-			}
+			setApplications(apps);
 		} catch (error) {
 			console.error('Error loading applications:', error);
 		}
@@ -135,6 +145,11 @@ const Dashboard = () => {
 
 		setApplyingJobId(jobId);
 		
+		// Close modal and show success immediately for better UX
+		setShowCVModal(false);
+		setSelectedJobForApplication(null);
+		showToast('Application submitted! CV scoring is being processed...', 'success');
+		
 		try {
 			const token = localStorage.getItem('companyxyz-token');
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
@@ -152,10 +167,12 @@ const Dashboard = () => {
 			const data = await response.json();
 
 			if (response.ok) {
-				showToast('Application submitted successfully!', 'success');
-				await loadApplications(); // Reload applications
-				setShowCVModal(false);
-				setSelectedJobForApplication(null);
+				// Application successful - backend is processing CV score
+				console.log('Application submitted:', data);
+				// Invalidate applications cache so next load gets fresh data
+				invalidateApplications();
+				// Don't reload immediately - let user continue browsing
+				// Application will appear after CV scoring completes (30-60s)
 			} else {
 				showToast(data.error || 'Failed to submit application', 'error');
 			}
@@ -295,7 +312,9 @@ const Dashboard = () => {
 
 			if (response.ok) {
 				showToast('Application withdrawn successfully!', 'success');
-				await loadApplications(); // Reload applications
+				// Invalidate cache and reload
+				invalidateApplications();
+				await loadApplications(true); // Force reload
 			} else {
 				const errorData = await response.json();
 				showToast(errorData.error || 'Failed to withdraw application', 'error');

@@ -513,6 +513,7 @@ const RecruiterDashboard = () => {
 						<OverviewMetrics 
 							jobPostingsCount={jobPostings.filter(job => String(job.status || '').toLowerCase() === "active").length}
 							applicationsCount={applications.length}
+							applications={applications}
 						/>
 
 						{/* Recent Activity */}

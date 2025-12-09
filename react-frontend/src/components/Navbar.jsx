@@ -120,7 +120,7 @@ const Navbar = ({ userType = 'candidate' }) => {
 			<div className={styles.navContainer}>
 				<div className={styles.navBrand}>
 					<Link to={userType === 'recruiter' ? "/recruiter-dashboard" : "/"} className={styles.brandLink}>
-						<h1>{userType === 'recruiter' ? 'CompanyXYZ Recruiter Portal' : 'CompanyXYZ Career Portal'}</h1>
+						<h1>{userType === 'recruiter' ? 'SmartHire Recruiter Portal' : 'SmartHire Career Portal'}</h1>
 					</Link>
 				</div>
 
