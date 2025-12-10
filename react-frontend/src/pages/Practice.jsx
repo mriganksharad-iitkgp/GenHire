@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import InterviewReportModal from "../components/InterviewReportModal";
 import Pagination from "../components/Pagination";
+import CVSelectionModal from '../components/CVSelectionModal';
+import CVDetailsModal from '../components/candidate/CVDetailsModal';
+import PracticeDetailsModal from '../components/PracticeDetailsModal';
+import JDDetailsModal from '../components/JDDetailsModal';
 import styles from "./Practice.module.css";
 
 const Practice = () => {
@@ -14,6 +18,7 @@ const Practice = () => {
 	const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 	const [selectedReport, setSelectedReport] = useState(null);
 	const [showReportModal, setShowReportModal] = useState(false);
+	const [showCVModal, setShowCVModal] = useState(false);
 	
 	// Pagination state for practice history
 	const [currentPage, setCurrentPage] = useState(1);
@@ -103,8 +108,8 @@ const Practice = () => {
 		}
 	};
 
-	// Start practice interview
-	const handleStartPractice = async () => {
+	// Start practice interview - Show CV selection modal first
+	const handleStartPractice = () => {
 		// Validation
 		if (!selectedRole) {
 			showToast('Please select a role to practice', 'error');
@@ -116,6 +121,12 @@ const Practice = () => {
 			return;
 		}
 
+		// Show CV selection modal
+		setShowCVModal(true);
+	};
+
+	// Actually start practice with selected CV
+	const handleCVSelectionSubmit = async (cvSelection) => {
 		setIsStarting(true);
 
 		try {
@@ -125,6 +136,11 @@ const Practice = () => {
 			
 			if (selectedRole === 'custom' && uploadedJD) {
 				formData.append('jd', uploadedJD);
+			}
+
+			// Add CV ID if selected
+			if (cvSelection.cv_id) {
+				formData.append('cv_id', cvSelection.cv_id);
 			}
 
 			const token = localStorage.getItem("companyxyz-token");
@@ -143,6 +159,9 @@ const Practice = () => {
 
 			const data = await response.json();
 			
+			// Close modal
+			setShowCVModal(false);
+
 			// Navigate to interview page with practice mode
 			navigate(`/interview/${data.session_id}`, {
 				state: { 
@@ -173,6 +192,71 @@ const Practice = () => {
 		const role = roles.find(r => r.id === roleId);
 		return role ? role.name : roleId;
 	}
+
+	// State for CV details modal
+	const [showCvDetailsModal, setShowCvDetailsModal] = useState(false);
+	const [selectedCvDetails, setSelectedCvDetails] = useState(null);
+	const [showPracticeDetailsModal, setShowPracticeDetailsModal] = useState(false);
+	const [selectedPracticeSession, setSelectedPracticeSession] = useState(null);
+
+	// Handle viewing CV for practice session
+	const handleViewPracticeCV = async (session) => {
+		// If cv_id exists, open PDF
+		if (session.cv_id) {
+			try {
+				const token = localStorage.getItem('companyxyz-token');
+				const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
+				
+				const response = await fetch(url, {
+					headers: {
+						'Authorization': `Bearer ${token}`
+					}
+				});
+				
+				if (!response.ok) {
+					throw new Error('Failed to load CV');
+				}
+				
+				const blob = await response.blob();
+				const blobUrl = window.URL.createObjectURL(blob);
+				window.open(blobUrl, '_blank');
+			} catch (err) {
+				console.error('Error opening CV:', err);
+				showToast('Failed to open CV', 'error');
+			}
+		} else {
+			// If no cv_id, show manual CV details modal
+			try {
+				const token = localStorage.getItem('companyxyz-token');
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv-details`, {
+					headers: {
+						'Authorization': `Bearer ${token}`
+					}
+				});
+				
+				if (response.ok) {
+					const data = await response.json();
+					setSelectedCvDetails(data.cv_details);
+					setShowCvDetailsModal(true);
+				} else {
+					showToast('CV details not found', 'info');
+				}
+			} catch (err) {
+				console.error('Error fetching CV details:', err);
+				showToast('Failed to load CV details', 'error');
+			}
+		}
+	};
+
+	// State for JD details modal
+	const [showJdDetailsModal, setShowJdDetailsModal] = useState(false);
+	const [selectedJdSession, setSelectedJdSession] = useState(null);
+
+	// Handle viewing practice session JD details
+	const handleViewPracticeJD = (session) => {
+		setSelectedJdSession(session);
+		setShowJdDetailsModal(true);
+	};
 
 	return (
 		<div className={styles.practiceContainer}>
@@ -374,13 +458,27 @@ const Practice = () => {
 											</div>
 											</div>
 											<div className={styles.actionButtons}>
-												<button
-													className={styles.reportButton}
-													onClick={() => viewPracticeReport(session.session_id)}
-												>
-													<i className="fa fa-file-text-o"></i> Report
-												</button>
-											</div>
+											<button
+												className={styles.cvButton}
+												onClick={() => handleViewPracticeCV(session)}
+												title="View CV used for this practice"
+											>
+												<i className="fa fa-file-text"></i> View CV
+											</button>
+											<button
+											className={styles.detailsButton}
+											onClick={() => handleViewPracticeJD(session)}
+											title="View job description"
+										>
+											<i className="fa fa-file-text-o"></i> View JD
+										</button>
+											<button
+												className={styles.reportButton}
+												onClick={() => viewPracticeReport(session.session_id)}
+											>
+												<i className="fa fa-file-text-o"></i> Report
+											</button>
+										</div>
 										</div>
 									</div>
 											))}
@@ -418,6 +516,40 @@ const Practice = () => {
 					interviewScore={selectedReport.interview_score || 0}
 				/>
 			)}
+
+			{/* CV Selection Modal */}
+			<CVSelectionModal
+				isOpen={showCVModal}
+				onClose={() => setShowCVModal(false)}
+				onSubmit={handleCVSelectionSubmit}
+				jobTitle={`Practice Interview - ${getRoleName(selectedRole)}`}
+				mode="practice"
+			/>
+
+			{/* CV Details Modal */}
+			<CVDetailsModal
+				isOpen={showCvDetailsModal}
+				onClose={() => setShowCvDetailsModal(false)}
+				cvDetails={selectedCvDetails}
+			/>
+
+			{/* Practice Details Modal */}
+			<PracticeDetailsModal
+				isOpen={showPracticeDetailsModal}
+				onClose={() => setShowPracticeDetailsModal(false)}
+				session={selectedPracticeSession}
+				getRoleName={getRoleName}
+				getRoleIcon={getRoleIcon}
+			/>
+
+			{/* JD Details Modal */}
+			<JDDetailsModal
+				isOpen={showJdDetailsModal}
+				onClose={() => setShowJdDetailsModal(false)}
+				session={selectedJdSession}
+				getRoleName={getRoleName}
+				getRoleIcon={getRoleIcon}
+			/>
 		</div>
 	);
 };

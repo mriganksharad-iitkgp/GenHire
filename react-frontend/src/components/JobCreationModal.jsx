@@ -180,6 +180,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [jdFile, setJdFile] = useState(null);
   
   const dropdownRefs = {
     department: useRef(null),
@@ -379,6 +380,29 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     }, 1000);
   };
 
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        e.target.value = null;
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        alert('File size must be less than 10MB');
+        e.target.value = null;
+        return;
+      }
+      setJdFile(file);
+    }
+  };
+
+  const removeJdFile = () => {
+    setJdFile(null);
+    const fileInput = document.querySelector('input[type="file"][accept=".pdf"]');
+    if (fileInput) fileInput.value = '';
+  };
+
   const resetForm = () => {
     setJobData({
       title: '',
@@ -400,6 +424,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     setFilteredSuggestions([]);
     setActiveDropdown(null);
     setShowTemplates(false);
+    setJdFile(null);
   };
 
   const handleCancel = () => {
@@ -448,7 +473,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
           {/* Quick Templates Section */}
           <div className={styles.templateSection}>
             <div className={styles.templateHeader}>
-              <h3>🚀 Quick Start Templates</h3>
+              <h3><i className="fa fa-bolt"></i> Quick Start Templates</h3>
               <button
                 type="button"
                 className={styles.toggleTemplates}
@@ -468,9 +493,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     onClick={() => applyTemplate(templateName)}
                   >
                     <div className={styles.templateIcon}>
-                      {templateName.includes('Engineer') ? '💻' : 
-                       templateName.includes('Data') ? '📊' : 
-                       templateName.includes('Product') ? '📱' : '🎨'}
+                      <i className={`fa ${
+                        templateName.includes('Engineer') ? 'fa-code' : 
+                        templateName.includes('Data') ? 'fa-database' : 
+                        templateName.includes('Product') ? 'fa-cube' : 'fa-paint-brush'
+                      }`}></i>
                     </div>
                     <div className={styles.templateContent}>
                       <h4>{templateName}</h4>
@@ -486,7 +513,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
           <div className={styles.formGrid}>
             {/* Job Title with Smart Suggestions */}
             <div className={styles.formGroup}>
-              <label>Job Title * <span className={styles.smartIndicator}>🧠 Smart</span></label>
+              <label>Job Title *</label>
               <input
                 type="text"
                 name="title"
@@ -497,7 +524,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.smartInput}
               />
               <div className={styles.helpText}>
-                💡 Try typing: "Software Engineer", "Data Scientist", "Product Manager", or "UX Designer"
+                Try typing: "Software Engineer", "Data Scientist", "Product Manager", or "UX Designer"
               </div>
             </div>
 
@@ -579,7 +606,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 required
                 className={styles.enhancedSelect}
               >
-                <option value="Full-time">💼 Full-time</option>
+                <option value="Full-time">Full-time</option>
                 <option value="Part-time">⏰ Part-time</option>
                 <option value="Contract">📝 Contract</option>
                 <option value="Internship">🎓 Internship</option>
@@ -658,7 +685,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
 
             {/* Application Deadline with Smart Default */}
             <div className={styles.formGroup}>
-              <label>Application Deadline * <span className={styles.autoFilled}>✨ Auto-filled</span></label>
+              <label>Application Deadline *</label>
               <input
                 type="date"
                 name="deadline"
@@ -668,13 +695,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 min={new Date().toISOString().split('T')[0]}
               />
               <div className={styles.helpText}>
-                📅 Default: 30 days from today
+                Default: 30 days from today
               </div>
             </div>
 
             {/* Job Status */}
             <div className={styles.formGroup}>
-              <label>Job Status * <span className={styles.smartIndicator}>🟢 Workflow</span></label>
+              <label>Job Status *</label>
               <select
                 name="status"
                 value={jobData.status}
@@ -682,17 +709,17 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 required
                 className={styles.enhancedSelect}
               >
-                <option value="draft">📝 Draft - Job is being prepared</option>
-                <option value="active">✅ Active - Ready to accept applications</option>
+                <option value="draft">Draft - Job is being prepared</option>
+                <option value="active">Active - Ready to accept applications</option>
               </select>
               <div className={styles.helpText}>
-                💡 Draft: Preview before publishing | Active: Live and accepting applications
+                Draft: Preview before publishing | Active: Live and accepting applications
               </div>
             </div>
 
             {/* Minimum CV Score */}
             <div className={styles.formGroup}>
-              <label>Minimum CV Score * <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span></label>
+              <label>Minimum CV Score *</label>
               <input
                 type="number"
                 name="minimum_cv_score"
@@ -705,13 +732,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedInput}
               />
               <div className={styles.helpText}>
-                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
+                Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
               </div>
             </div>
 
             {/* Skills with Tag System */}
             <div className={styles.formGroup} ref={dropdownRefs.skills}>
-              <label>Required Skills * <span className={styles.smartIndicator}>🏷️ Tags</span></label>
+              <label>Required Skills *</label>
               <div className={styles.skillsContainer}>
                 <div className={styles.skillTags}>
                   {jobData.skills.map((skill, index) => (
@@ -744,7 +771,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 />
               </div>
               <div className={styles.helpText}>
-                💡 Type to search skills, press Enter to add, or click suggestions
+                Type to search skills, press Enter to add, or click suggestions
               </div>
               <div className={styles.popularSkills}>
                 <span>Popular: </span>
@@ -767,8 +794,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
           <div className={styles.textAreasSection}>
             <div className={styles.formGroup}>
               <label>
-                Job Description * 
-                <span className={styles.smartIndicator}>🧠 Smart</span>
+                Job Description *
                 {jobData.title && (
                   <button
                     type="button"
@@ -785,7 +811,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.description}
                   >
-                    ✨ Auto-generate
+                    Auto-generate
                   </button>
                 )}
               </label>
@@ -799,7 +825,55 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                💡 Tip: Include company mission, role impact, and growth opportunities
+                Tip: Include company mission, role impact, and growth opportunities
+              </div>
+            </div>
+
+            {/* JD PDF Upload */}
+            <div className={styles.formGroup}>
+              <label>
+                Job Description PDF 
+                <span className={styles.optional}>(Optional)</span>
+              </label>
+              <div className={styles.fileUploadSection}>
+                {!jdFile ? (
+                  <div className={styles.fileUploadBox}>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleJdFileChange}
+                      className={styles.fileInput}
+                      id="jd-file-input"
+                    />
+                    <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
+                      <i className="fa fa-cloud-upload"></i>
+                      <span>Upload JD PDF</span>
+                      <small>Click to browse or drag & drop (Max 10MB)</small>
+                    </label>
+                  </div>
+                ) : (
+                  <div className={styles.uploadedFile}>
+                    <div className={styles.fileInfo}>
+                      <i className="fa fa-file-pdf-o"></i>
+                      <div className={styles.fileDetails}>
+                        <span className={styles.fileName}>{jdFile.name}</span>
+                        <span className={styles.fileSize}>
+                          {(jdFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.removeFileButton}
+                      onClick={removeJdFile}
+                    >
+                      <i className="fa fa-times"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className={styles.helpText}>
+                Pro Tip: Upload a JD PDF for candidates to download and reference. Standard companies like LinkedIn and Indeed provide this option.
               </div>
             </div>
 
@@ -823,7 +897,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.responsibilities}
                   >
-                    ✨ Auto-generate
+                    Auto-generate
                   </button>
                 )}
               </label>
@@ -840,7 +914,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                📄 Format: Use bullet points or line breaks for better readability
+                 Format: Use bullet points or line breaks for better readability
               </div>
             </div>
 
@@ -864,7 +938,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.requirements}
                   >
-                    ✨ Auto-generate
+                    Auto-generate
                   </button>
                 )}
               </label>
@@ -881,7 +955,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                🎯 Include both technical and soft skills requirements
+                Include both technical and soft skills requirements
               </div>
             </div>
 
@@ -905,7 +979,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.benefits}
                   >
-                    ✨ Auto-generate
+                    Auto-generate
                   </button>
                 )}
               </label>
@@ -923,7 +997,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                🎆 Highlight unique perks that make your company stand out
+                 Highlight unique perks that make your company stand out
               </div>
             </div>
           </div>

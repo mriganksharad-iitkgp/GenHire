@@ -3,6 +3,15 @@ import warnings
 # Suppress pydantic warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Optional: add console handler if missing
+ch = logging.StreamHandler()
+ch.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(ch)
 # Suppress TensorFlow and mediapipe warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warn, 3=error
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -31,11 +40,24 @@ from routes.job_routes import job_bp
 from routes.application_routes import application_bp
 from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
+from routes.cv_routes import create_cv_routes
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
 
+# Optional import - RecordingAnalyzer has heavy dependencies that may conflict
+try:
+    from services.recording_analysis_service import RecordingAnalyzer
+    RECORDING_ANALYZER_AVAILABLE = True
+    print("✓ RecordingAnalyzer loaded successfully")
+except Exception as e:
+    print(f"⚠ Warning: RecordingAnalyzer not available: {str(e)[:100]}")
+    RecordingAnalyzer = None
+    RECORDING_ANALYZER_AVAILABLE = False
+
 # Load environment variables
 load_dotenv()
+
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -43,11 +65,39 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+
+# Configure CORS to allow all localhost ports
 CORS(app, 
-     origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])  # Allow your React app
+     resources={r"/*": {
+         "origins": ["http://localhost:*", "http://127.0.0.1:*", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+         "supports_credentials": True,
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+         "expose_headers": ["Content-Type", "Authorization"]
+     }})
+
+# Handle preflight OPTIONS requests
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        headers = response.headers
+        headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Access-Control-Allow-Credentials'
+        headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
 
 # Initialize database
 db = db_config.connect()
@@ -59,6 +109,12 @@ interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
 jobs_collection = collections["jobs"]
 
+# Initialize and start background processor for CV scoring
+from services.background_processor import get_background_processor
+background_processor = get_background_processor()
+background_processor.start()
+logger.info("✓ Background processor started for async CV scoring")
+
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(profile_bp)
@@ -66,6 +122,10 @@ app.register_blueprint(job_bp)
 app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(practice_bp)
+
+# Register CV routes (requires collections, so created after database initialization)
+cv_bp = create_cv_routes(collections)
+app.register_blueprint(cv_bp, url_prefix='/api/cv')
 
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}
@@ -98,7 +158,9 @@ PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
 # Ensure folders exist
 os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
+M_RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "mobile_recordings")
 os.makedirs(RECORDING_FOLDER, exist_ok=True)
+os.makedirs(M_RECORDING_FOLDER, exist_ok=True)  
 TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
 os.makedirs(TMP_FOLDER, exist_ok=True)
 
@@ -115,6 +177,19 @@ try:
 except Exception as e:
     print(f"Warning initializing CVScoringService for formatting: {e}")
     cv_service = None
+
+# Initialize RecordingAnalyzer if available
+if RECORDING_ANALYZER_AVAILABLE and RecordingAnalyzer is not None:
+    try:
+        recording_analyzer = RecordingAnalyzer()
+        print("✓ RecordingAnalyzer initialized successfully")
+    except Exception as e:
+        print(f"⚠ Warning initializing RecordingAnalyzer: {e}")
+        recording_analyzer = None
+else:
+    recording_analyzer = None
+    print("ℹ RecordingAnalyzer not available - recording analysis features disabled")
+
 
 def _format_cv_from_details(cv_details: dict) -> str:
     parts = []
@@ -487,13 +562,47 @@ def upload_recording(current_user, session_id):
             {"session_id": session_id, "user_id": str(current_user["_id"])},
             {"$set": {"recording_path": filepath}},
         )
-
+        if recording_analyzer:
+            # Note: This might take some time to process. 
+            # For a production app, this should be a background task (Celery/Redis).
+            try:
+                recording_analyzer.run_full_analysis(filepath)
+            except Exception as e:
+                print(f"Error running post-interview analysis: {e}")
         return (
             jsonify({"message": "Recording uploaded successfully", "path": filepath}),
             200,
         )
 
     return jsonify({"error": "File upload failed"}), 500
+
+
+# In app.py (add near your existing upload-recording route)
+
+@app.route('/api/interviews/<session_id>/upload-mobile-recording', methods=['POST'])
+# @token_required  <-- NOTE: You might need to relax auth or pass a temporary token via URL for the mobile device
+def upload_mobile_recording(session_id):
+    if 'recording' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['recording']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file:
+        # Save with a specific suffix to distinguish from webcam
+        filename = secure_filename(f"{session_id}_mobile_env.webm")
+        filepath = os.path.join(app.config["M_RECORDING_FOLDER"], filename)
+        file.save(filepath)
+        
+        # Update database with mobile recording path
+        interviews_collection.update_one(
+            {"session_id": session_id},
+            {"$set": {"mobile_recording_path": filepath}}
+        )
+        
+        return jsonify({"message": "Mobile recording uploaded"}), 200
+
 
 
 @app.route("/api/interviews", methods=["GET"])
@@ -597,6 +706,8 @@ def handle_start_proctoring(data):
         proctoring_detectors[session_id] = ProctoringGazeDetector()
     else:
         pass
+
+@socketio.on("proctoring_frame")
 def handle_proctoring_frame(data):
     session_id = data.get("session_id")
     session_data = live_sessions.get(session_id)
@@ -655,5 +766,39 @@ def handle_proctoring_violation(data):
     # print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
 
 
+# In app.py
+
+@socketio.on("join_mobile_session")
+def handle_mobile_join(data):
+    session_id = data.get("session_id")
+    # Join the specific room for this interview session
+    from flask_socketio import join_room
+    join_room(session_id)
+    # Notify the desktop client that mobile is connected
+    socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
+
+@socketio.on("control_mobile_recording")
+def handle_mobile_control(data):
+    session_id = data.get("session_id")
+    action = data.get("action") # 'start' or 'stop'
+    
+    # Relay the command to the mobile device in the room
+    socketio.emit("mobile_recording_action", {"action": action}, room=session_id)
+
+@socketio.on("mobile_status_update")
+def handle_mobile_status(data):
+    session_id = data.get("session_id")
+    status = data.get("status") # e.g., 'recording', 'uploading', 'completed'
+    # Relay status back to desktop to show user
+    socketio.emit("mobile_status_dashboard", {"status": status}, room=session_id)
+
+
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    try:
+        # Disable reloader to avoid torch deadlock issues on Windows
+        socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=False)
+    finally:
+        # Cleanup background processor on shutdown
+        logger.info("Shutting down background processor...")
+        background_processor.stop()
+        logger.info("Background processor stopped")

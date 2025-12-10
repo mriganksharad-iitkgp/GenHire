@@ -12,13 +12,21 @@ ROLE/JD CONTEXT: Job title: {job_title}. Important JD keywords: {role_jd_keyword
 
 {previous_context}
 
+CRITICAL REQUIREMENTS:
+1. Your question MUST be directly related to the candidate's CV technologies listed above
+2. Your question MUST align with the job role ({job_title}) and JD requirements ({role_jd_keywords})
+3. Focus specifically on {current_topic} which appears in the candidate's CV
+4. Make the question personalized based on their actual background, not generic
+5. Ensure the question tests knowledge relevant to the specific job they applied for
+
 INSTRUCTIONS:
 1. Give a brief 1-2 word acknowledgment (like "Great!" or "Good." or "Okay.")
 2. Then immediately ask a {question_type} question about {current_topic}
 3. Ask recent interview questions based on the topic - questions that are commonly asked in modern technical interviews
 4. Keep it conversational but focus on the question
 5. Follow the performance guidance: {performance_guidance}
-6. Stay strictly relevant to the role and JD context above; avoid off-role topics.
+6. Stay strictly relevant to the role and JD context above; avoid off-role topics
+7. Reference specific technologies or skills from their CV when possible
 
 QUESTION TYPES BY STAGE:
 - Foundational (Questions 1-5): Basic concepts, definitions, "how does X work?"

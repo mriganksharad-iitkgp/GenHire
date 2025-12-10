@@ -26,14 +26,38 @@ def get_jobs(current_user):
 @cross_origin()
 @token_required
 def create_job(current_user):
-    """Create a new job posting (recruiters only)"""
+    """
+    Create a new job posting (recruiters only)
+    
+    Accepts either:
+    - JSON data (application/json) - traditional job creation
+    - Form data (multipart/form-data) - with optional JD PDF file (Phase 4)
+    
+    Form Data (if using multipart/form-data):
+        jd_file: file - Optional JD PDF/TXT file
+        ... other job fields as form fields ...
+    """
     if current_user.get('user_type') != 'recruiter':
         return jsonify({'error': 'Unauthorized. Only recruiters can create jobs.'}), 403
     
-    data = request.get_json()
     recruiter_id = str(current_user['_id'])
     
-    result, status_code = job_controller.create_job(recruiter_id, data, current_user)
+    # Check if request has files (multipart/form-data)
+    jd_file = request.files.get('jd_file')
+    
+    # Get job data from either JSON or form data
+    if request.is_json:
+        data = request.get_json()
+    else:
+        # Convert form data to dictionary
+        data = request.form.to_dict()
+        
+        # Handle array fields that come as comma-separated strings
+        for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
+            if field in data and isinstance(data[field], str):
+                data[field] = [item.strip() for item in data[field].split(',') if item.strip()]
+    
+    result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
     return jsonify(result), status_code
 
 @job_bp.route('/jobs/<job_id>', methods=['GET'])

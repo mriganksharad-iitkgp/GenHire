@@ -297,7 +297,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup}>
               <label>
                 Job Title
-                <span className={styles.smartIndicator}>✨ Smart</span>
               </label>
               <input
                 type="text"
@@ -314,7 +313,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup} ref={dropdownRefs.department}>
               <label>
                 Department
-                <span className={styles.autoFilled}>🎯 Auto-fill</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -353,7 +351,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup} ref={dropdownRefs.location}>
               <label>
                 Location
-                <span className={styles.autoFilled}>🌍 Global</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -408,7 +405,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup} ref={dropdownRefs.experience}>
               <label>
                 Experience Level
-                <span className={styles.autoFilled}>📈 Smart</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -447,7 +443,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup} ref={dropdownRefs.salary}>
               <label>
                 Salary Range
-                <span className={styles.autoFilled}>💰 Market</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -486,7 +481,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup} ref={dropdownRefs.status}>
               <label>
                 Job Status
-                <span className={styles.smartIndicator}>🟢 Workflow</span>
               </label>
               <div className={styles.statusContainer}>
                 <select
@@ -516,7 +510,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
             <div className={styles.formGroup}>
               <label>
                 Minimum CV Score
-                <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span>
               </label>
               <input
                 type="number"
@@ -529,7 +522,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
                 className={styles.smartInput}
               />
               <div className={styles.helpText}>
-                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
+                Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
               </div>
             </div>
 
@@ -539,7 +532,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           <div className={styles.formGroup} ref={dropdownRefs.skills}>
             <label>
               Required Skills
-              <span className={styles.smartIndicator}>🎯 AI-Powered</span>
             </label>
             <div className={styles.skillsContainer}>
               <div className={styles.skillTags}>
@@ -584,7 +576,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           <div className={styles.formGroup}>
             <label>
               Job Description
-              <span className={styles.smartIndicator}>📝 Smart</span>
             </label>
             <textarea
               name="description"
@@ -600,7 +591,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           <div className={styles.formGroup}>
             <label>
               Key Responsibilities
-              <span className={styles.autoFilled}>📋 Auto-list</span>
             </label>
             <textarea
               name="responsibilities"
@@ -616,7 +606,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           <div className={styles.formGroup}>
             <label>
               Requirements
-              <span className={styles.autoFilled}>✅ Auto-list</span>
             </label>
             <textarea
               name="requirements"
@@ -632,7 +621,6 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           <div className={styles.formGroup}>
             <label>
               Benefits & Perks
-              <span className={styles.optional}>💎 Optional</span>
             </label>
             <textarea
               name="benefits"
@@ -666,7 +654,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
                 </>
               ) : (
                 <>
-                  💾 Update Job
+                   Update Job
                 </>
               )}
             </button>

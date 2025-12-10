@@ -73,11 +73,23 @@ export default function useCandidateProfile(toast) {
       if (!file) return false;
       setUploadingCV(true);
       try {
+        console.log('📤 Uploading CV file:', file.name);
         const res = await uploadCV(file);
-        setCvPath(res.cv_path);
+        console.log('✅ CV upload response:', res);
+        
+        // New CV management system returns CV object, not cv_path
+        // Set cvPath to indicate CV exists (for backward compatibility)
+        if (res.cv) {
+          console.log('✅ CV uploaded successfully, cv_id:', res.cv.cv_id);
+          setCvPath(res.cv.cv_id); // Use cv_id as path indicator
+        } else if (res.message) {
+          console.log('✅ Upload successful:', res.message);
+          setCvPath('uploaded'); // Generic indicator
+        }
         toast?.("CV uploaded successfully!", "success");
         return true;
       } catch (e) {
+        console.error('❌ CV upload error:', e);
         toast?.("Failed to upload CV", "error");
         return false;
       } finally {

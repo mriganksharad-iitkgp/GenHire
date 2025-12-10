@@ -9,6 +9,12 @@ ROLE APPLIED: {job_title}
 CANDIDATE EXPERIENCE LEVEL: {experience_level}
 TOPICS ALREADY COVERED: {topics_covered}
 
+CRITICAL REQUIREMENTS:
+1. Your HR question MUST be relevant to the specific role: {job_title}
+2. Your question MUST be appropriate for the candidate's experience level: {experience_level}
+3. Connect the question to the candidate's background and the job requirements
+4. Make the question feel personalized, not generic
+
 INSTRUCTIONS:
 1. Give a brief 1-2 word acknowledgment (like "Great!" or "Good." or "Okay.")
 2. Then ask a relevant HR question that matches the candidate's experience level
@@ -22,6 +28,7 @@ EXAMPLES:
 - "Good. Now, what motivates you to work in this field?"
 - "Great! Tell me about a challenging situation you faced at work."
 - "Okay. How do you see yourself contributing to our team culture?"
+- "Excellent. What excites you most about working as a {job_title}?"
 
 Generate a brief response with 1-2 word acknowledgment followed by your HR question:"""
 

@@ -2,8 +2,13 @@ import datetime
 from bson import ObjectId
 import sys
 import os
+import logging
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from services.cv_scoring_service import CVScoringService
+from controllers.cv_controller import CVController
+from services.background_processor import get_background_processor
+
+logger = logging.getLogger(__name__)
 
 class ApplicationController:
     def __init__(self, db_collections):
@@ -11,36 +16,50 @@ class ApplicationController:
         self.jobs_collection = db_collections['jobs']
         self.users_collection = db_collections['users']
         self.interviews_collection = db_collections['interviews']
+        self.db_collections = db_collections  # Store for background tasks
         
         # Initialize CV scoring service
         try:
             self.cv_scoring_service = CVScoringService()
         except Exception as e:
-            print(f"Warning: CV scoring service initialization failed: {e}")
+            logger.warning(f"CV scoring service initialization failed: {e}")
             self.cv_scoring_service = None
         
-    def apply_for_job(self, job_id, user_id, application_data, user_profile):
-        """Submit job application"""
+        # Initialize CV controller for accessing CV PDFs
+        try:
+            self.cv_controller = CVController(db_collections)
+        except Exception as e:
+            logger.warning(f"CV controller initialization failed: {e}")
+            self.cv_controller = None
+        
+        # Get background processor instance
+        self.background_processor = get_background_processor()
+        
+    def apply_for_job(self, job_id, user_id, application_data, user_profile, cv_id=None):
+        """
+        Submit job application with INSTANT SUBMISSION + Background CV Scoring
+        
+        Flow:
+        1. Validate job and CV requirements
+        2. Save application IMMEDIATELY with status='pending', is_visible=False
+        3. Queue CV scoring task in background
+        4. Return success to user instantly
+        5. Background worker processes CV scoring and updates application
+        
+        Args:
+            job_id: Job ID to apply for
+            user_id: User ID applying
+            application_data: Application data (cover letter, etc.)
+            user_profile: User profile data
+            cv_id: Optional CV ID to use (if not provided, uses primary CV or manual entry)
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
         # Check if job exists
         job = self.jobs_collection.find_one({'_id': ObjectId(job_id)})
         if not job:
             return {'error': 'Job not found'}, 404
-        
-        # Check if CV details are completed (mandatory requirement)
-        cv_details = user_profile.get('cv_details')
-        if not cv_details:
-            return {
-                'error': 'CV details are required before applying for jobs. Please complete your CV details first.',
-                'redirect': '/profile/cv-details'
-            }, 400
-        
-        # Validate required CV sections
-        validation_errors = self._validate_cv_completion(cv_details)
-        if validation_errors:
-            return {
-                'error': 'Please complete the following required CV sections before applying:\n' + '\n'.join(validation_errors),
-                'redirect': '/profile/cv-details'
-            }, 400
         
         # Check if already applied
         existing_application = self.applications_collection.find_one({
@@ -50,46 +69,101 @@ class ApplicationController:
         if existing_application:
             return {'error': 'You have already applied for this job'}, 400
         
-        # Calculate actual CV score using AI
-        cv_score = 75.0  # fallback score
-        cv_score_breakdown = None
+        # Get CV content (PDF or manual entry)
+        cv_text = None
+        cv_source = None  # Track where CV came from
+        selected_cv = None  # Store CV metadata for snapshot
         
-        if self.cv_scoring_service and cv_details:
-            try:
-                scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
-                cv_score = scoring_result.get('total_score', 75.0)
-                cv_score_breakdown = scoring_result.get('score_breakdown')
-            except Exception as e:
-                print(f"Error calculating CV score: {e}")
-                cv_score = 75.0
+        # Priority order: Selected CV → Primary CV → Manual CV details
+        if cv_id:
+            # User explicitly selected a CV PDF
+            if self.cv_controller:
+                selected_cv = self.cv_controller.get_cv_by_id(user_id, cv_id)
+                if selected_cv:
+                    cv_text = selected_cv.get('extracted_text', '')
+                    cv_source = 'cv_pdf_selected'
+                    logger.info(f"Using selected CV PDF: {cv_id}")
+                else:
+                    return {'error': f'CV with ID {cv_id} not found'}, 404
+            else:
+                return {'error': 'CV management system not available'}, 500
         
-        # Determine application status based on CV score vs minimum threshold
-        minimum_cv_score = job.get('minimum_cv_score', 50.0)  # Default to 50 if not set
+        elif user_profile.get('cv_uploads'):
+            # No CV selected, try primary CV
+            if self.cv_controller:
+                primary_cv = self.cv_controller.get_primary_cv(user_id)
+                if primary_cv:
+                    selected_cv = primary_cv
+                    cv_text = primary_cv.get('extracted_text', '')
+                    cv_source = 'cv_pdf_primary'
+                    cv_id = primary_cv.get('cv_id')
+                    logger.info(f"Using primary CV PDF: {cv_id}")
         
-        if cv_score >= minimum_cv_score:
-            application_status = 'shortlisted'
-            status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
-        else:
-            application_status = 'rejected'
-            status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
+        # Fallback to manual CV details if no PDF CV found
+        cv_details = user_profile.get('cv_details')
+        if not cv_text:
+            if not cv_details:
+                return {
+                    'error': 'CV is required before applying for jobs. Please upload a CV PDF or complete your CV details.',
+                    'redirect': '/profile/cv-details'
+                }, 400
+            
+            # Validate required CV sections for manual entry
+            validation_errors = self._validate_cv_completion(cv_details)
+            if validation_errors:
+                return {
+                    'error': 'Please complete the following required CV sections before applying:\n' + '\n'.join(validation_errors),
+                    'redirect': '/profile/cv-details'
+                }, 400
+            
+            cv_source = 'cv_manual_entry'
+            logger.info("Using manual CV details")
         
+        # Create CV snapshot (preserve CV content at application time)
+        cv_snapshot = None
+        if selected_cv:
+            cv_snapshot = {
+                'cv_id': selected_cv.get('cv_id'),
+                'filename': selected_cv.get('filename'),
+                'text': cv_text,
+                'upload_date': selected_cv.get('upload_date'),
+                'source': cv_source,
+                'metadata': selected_cv.get('metadata', {})
+            }
+        elif cv_text:
+            # Manual entry formatted as text
+            cv_snapshot = {
+                'text': cv_text,
+                'source': cv_source
+            }
+        
+        # Create JD snapshot (preserve JD content at application time)
+        jd_text = job.get('jd_extracted_text') or job.get('description', '')
+        jd_snapshot = {
+            'text': jd_text,
+            'job_title': job.get('title', ''),
+            'company': job.get('company', ''),
+            'has_pdf': bool(job.get('jd_pdf_path'))
+        }
+        
+        # Create application document with PENDING status
+        # Application will be invisible until CV scoring completes
         application_doc = {
             'job_id': job_id,
             'student_id': user_id,
             'student_name': user_profile.get('name', ''),
             'student_email': user_profile.get('email', ''),
             'cover_letter': application_data.get('cover_letter', ''),
-            'status': application_status,  # Auto-determined status
-            'status_reason': status_reason,  # Reason for the status
+            'status': 'pending',  # Will be updated after CV scoring
+            'status_reason': 'Application submitted, CV scoring in progress',
             'applied_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
             'job_title': job.get('title', ''),
             'recruiter_id': job.get('created_by', ''),
-            # AI-calculated CV score and comparison data
-            'cv_score': cv_score,
-            'cv_score_breakdown': cv_score_breakdown,
-            'minimum_cv_score_required': minimum_cv_score,  # Store the threshold used
-            'auto_processed': True,  # Flag to indicate automatic processing
+            # Placeholder scores - will be updated by background worker
+            'cv_score': None,
+            'cv_score_breakdown': None,
+            'minimum_cv_score_required': job.get('minimum_cv_score', 50.0),
             'interview_score': None,
             'student_profile': {
                 'bio': user_profile.get('bio', ''),
@@ -98,35 +172,62 @@ class ApplicationController:
                 'education': user_profile.get('education', ''),
                 'phone': user_profile.get('phone', ''),
                 'location': user_profile.get('location', '')
-            }
+            },
+            # CV and JD snapshots
+            'cv_id': cv_id,
+            'cv_snapshot': cv_snapshot,
+            'jd_snapshot': jd_snapshot,
+            'cv_source': cv_source,
+            # Background processing flags
+            'processing_status': 'pending',  # Will be: pending → processing → completed
+            'is_visible': False,  # Hidden until CV scoring completes
+            'cv_score_calculated_at': None,
+            'processing_error': None,
+            'auto_processed': True
         }
         
-        # Insert application
+        # Insert application IMMEDIATELY - no waiting for CV scoring!
         result = self.applications_collection.insert_one(application_doc)
+        application_id = str(result.inserted_id)
+        application_doc['_id'] = application_id
         
-        # Update job statistics based on the determined status
-        job_update = {'applicants': 1}
-        if application_status == 'shortlisted':
-            # For legacy compatibility, we'll use 'selected' counter for shortlisted
-            job_update['selected'] = 1
-        elif application_status == 'rejected':
-            job_update['rejected'] = 1
-        else:
-            job_update['pending'] = 1  # Fallback
-        
+        # Update job applicant count immediately
         self.jobs_collection.update_one(
             {'_id': ObjectId(job_id)},
-            {'$inc': job_update}
+            {'$inc': {'applicants': 1}}
         )
         
-        application_doc['_id'] = str(result.inserted_id)
+        # Enqueue CV scoring task for background processing
+        logger.info(f"Enqueueing CV scoring task for application {application_id}")
         
+        cv_data = {
+            'cv_text': cv_text,
+            'cv_details': cv_details,
+            'cv_source': cv_source
+        }
+        
+        jd_data = {
+            'jd_text': jd_text,
+            'job': job,
+            'job_id': job_id,
+            'minimum_cv_score': job.get('minimum_cv_score', 50.0)
+        }
+        
+        # Queue the scoring task (non-blocking)
+        self.background_processor.enqueue_cv_scoring(
+            application_id=application_id,
+            cv_data=cv_data,
+            jd_data=jd_data,
+            db_collections=self.db_collections,
+            cv_scoring_service=self.cv_scoring_service
+        )
+        
+        # Return success IMMEDIATELY!
         return {
-            'message': f'Application submitted and automatically {application_status}',
-            'application': application_doc,
-            'cv_score': cv_score,
-            'minimum_cv_score_required': minimum_cv_score,
-            'status_reason': status_reason
+            'message': 'Application submitted successfully! CV scoring is being processed.',
+            'application_id': application_id,
+            'processing_status': 'pending',
+            'info': 'Your application will appear in your dashboard once CV scoring is complete (usually within 30-60 seconds).'
         }, 201
         
     def withdraw_application(self, job_id, user_id):
@@ -161,8 +262,11 @@ class ApplicationController:
     def get_applications(self, user_id, user_type):
         """Retrieve applications based on user type"""
         if user_type in ['candidate', 'student']:
-            # Students see their own applications
-            applications = list(self.applications_collection.find({'student_id': user_id}))
+            # Students see their own applications - ONLY VISIBLE ONES (CV scoring completed)
+            applications = list(self.applications_collection.find({
+                'student_id': user_id,
+                'is_visible': True  # Only show applications where CV scoring is complete
+            }))
             
             # Convert ObjectId to string and fetch job details
             for app in applications:
@@ -224,11 +328,14 @@ class ApplicationController:
             return applications, 200
             
         elif user_type == 'recruiter':
-            # Recruiters see applications for their jobs
+            # Recruiters see applications for their jobs - ONLY VISIBLE ONES (CV scoring completed)
             recruiter_jobs = list(self.jobs_collection.find({'created_by': user_id}, {'_id': 1}))
             job_ids = [str(job['_id']) for job in recruiter_jobs]
             
-            applications = list(self.applications_collection.find({'job_id': {'$in': job_ids}}))
+            applications = list(self.applications_collection.find({
+                'job_id': {'$in': job_ids},
+                'is_visible': True  # Only show applications where CV scoring is complete
+            }))
             
             # Convert ObjectId to string and add job details
             for app in applications:

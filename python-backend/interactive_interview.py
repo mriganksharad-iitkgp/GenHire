@@ -152,16 +152,6 @@ def interactive_interview():
         print("\n🔧 Initializing AI interviewer...")
         llm = LLMFactory.create(llm_config)
         qg = PromptBasedQuestionGenerator(llm)
-        try:
-            bank_items = qg.question_bank if isinstance(qg.question_bank, list) else (qg.question_bank.get("questions", []) if qg.question_bank else [])
-            bank_count = len(bank_items)
-            bank_file = os.path.basename(qg.question_bank_path) if getattr(qg, "question_bank_path", None) else "—"
-            if bank_count > 0:
-                print(f"📚 Question Bank: loaded {bank_count} items from {bank_file}")
-            else:
-                print(f"📚 Question Bank: not loaded or empty (path: {bank_file})")
-        except Exception:
-            print("📚 Question Bank: status unavailable")
 
         # Initialize session manager for answer evaluation
         interview_config = InterviewConfig(min_questions=5, max_questions=15)
@@ -180,6 +170,12 @@ def interactive_interview():
 
         # Initialize both systems
         context = qg.initialize_conversation(resume_sections, job_description)
+        try:
+            bank_items = qg.question_bank if isinstance(qg.question_bank, list) else (qg.question_bank.get("questions", []) if qg.question_bank else [])
+            bank_count = len(bank_items)
+            print(f"📚 Question Bank: active items for role '{context.job_role}': {bank_count}")
+        except Exception:
+            print("📚 Question Bank: status unavailable")
 
         # Create a session with session manager for evaluation
         session_result = session_manager.create_session(

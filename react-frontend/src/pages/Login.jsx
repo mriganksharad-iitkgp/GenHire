@@ -118,7 +118,7 @@ const Login = () => {
 		<div className={styles.loginContainer}>
 			<div className={styles.loginCard}>
 				<div className={styles.logoSection}>
-					<h1>CompanyXYZ Portal</h1>
+					<h1>SmartHire Portal</h1>
 					<p>
 						Welcome! Please select your role and log in to access your dashboard.
 					</p>
@@ -207,7 +207,7 @@ const Login = () => {
 
 				<div className={styles.registerSection}>
 					<p>
-						New to CompanyXYZ?{" "}
+						New to SmartHire?{" "}
 						<a href="/register">Create an account</a>
 					</p>
 				</div>

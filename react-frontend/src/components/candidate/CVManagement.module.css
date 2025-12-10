@@ -1,0 +1,340 @@
+/* CV Management Component Styles */
+
+.cvManagement {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.cvCount {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Messages */
+.error {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #c62828;
+}
+
+.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #2e7d32;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+/* Upload Section */
+.uploadSection {
+  border: 2px dashed #ddd;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 24px;
+  background: #fafafa;
+}
+
+.uploadButton {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.uploadButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.uploadButton:active {
+  transform: translateY(0);
+}
+
+.uploadButton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.uploadHint {
+  margin: 12px 0 0 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* CV List */
+.cvList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.emptyState p {
+  margin: 8px 0;
+  font-size: 1.1rem;
+}
+
+.emptyHint {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+/* CV Card */
+.cvCard {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.cvCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #667eea;
+}
+
+.cvHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cvTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.cvIcon {
+  font-size: 1.5rem;
+}
+
+.cvFilename {
+  font-weight: 600;
+  color: #333;
+  font-size: 1.05rem;
+  word-break: break-word;
+}
+
+.primaryBadge {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #333;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cvActions {
+  display: flex;
+  gap: 8px;
+}
+
+.actionButton {
+  background: #f5f5f5;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s ease;
+}
+
+.actionButton:hover {
+  background: #e0e0e0;
+  transform: scale(1.1);
+}
+
+.deleteButton:hover {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.cvMeta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 8px;
+}
+
+.cvMeta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.primaryNote {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff9e6;
+  border-left: 3px solid #ffd700;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #856404;
+}
+
+/* Preview Modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modalContent {
+  background: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modalHeader h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.previewMeta {
+  margin-bottom: 16px;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.previewText {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #333;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cvManagement {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cvHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cvActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .cvMeta {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modalContent {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}

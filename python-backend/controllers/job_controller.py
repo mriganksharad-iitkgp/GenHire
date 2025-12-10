@@ -1,10 +1,28 @@
 import datetime
+import os
+import uuid
+import logging
 from bson import ObjectId
+from werkzeug.utils import secure_filename
+from services.pdf_parser_service import get_pdf_parser
+
+logger = logging.getLogger(__name__)
 
 class JobController:
     def __init__(self, db_collections):
         self.jobs_collection = db_collections['jobs']
         self.applications_collection = db_collections['applications']
+        self.upload_folder = 'uploads/jds'
+        
+        # Ensure upload directory exists
+        os.makedirs(self.upload_folder, exist_ok=True)
+        
+        # Initialize PDF parser
+        try:
+            self.pdf_parser = get_pdf_parser()
+        except Exception as e:
+            logger.warning(f"PDF parser initialization failed: {e}")
+            self.pdf_parser = None
         
     def get_jobs(self, user_type, user_id):
         """Retrieve jobs based on user type and permissions"""
@@ -35,8 +53,19 @@ class JobController:
                 job.pop('created_by', None)
             return jobs, 200
         
-    def create_job(self, recruiter_id, job_data, recruiter_profile):
-        """Create new job posting"""
+    def create_job(self, recruiter_id, job_data, recruiter_profile, jd_file=None):
+        """
+        Create new job posting
+        
+        Args:
+            recruiter_id: ID of recruiter creating the job
+            job_data: Job data dictionary
+            recruiter_profile: Recruiter's profile data
+            jd_file: Optional JD PDF file (Phase 4)
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
         required_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description']
         
         for field in required_fields:
@@ -82,6 +111,42 @@ class JobController:
         # Get company information from recruiter's profile
         company_name = recruiter_profile.get('company_name') or job_data.get('company') or 'TechCorp Solutions'
         company_logo = recruiter_profile.get('company_logo') or job_data.get('logo') or None
+        
+        # Handle JD PDF upload (Phase 4)
+        jd_pdf_path = None
+        jd_extracted_text = None
+        jd_upload_date = None
+        
+        if jd_file and jd_file.filename:
+            try:
+                # Generate unique filename
+                job_id = str(uuid.uuid4())
+                file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
+                
+                # Validate file type
+                if file_extension not in ['pdf', 'txt']:
+                    logger.warning(f"Invalid JD file type: {file_extension}")
+                else:
+                    jd_filename = f"jd_{job_id}.{file_extension}"
+                    jd_pdf_path = os.path.join(self.upload_folder, jd_filename)
+                    
+                    # Save file
+                    jd_file.save(jd_pdf_path)
+                    jd_upload_date = datetime.datetime.utcnow()
+                    
+                    # Extract text from JD PDF/TXT
+                    if self.pdf_parser:
+                        try:
+                            jd_extracted_text = self.pdf_parser.extract_text(jd_pdf_path)
+                            logger.info(f"Extracted {len(jd_extracted_text)} characters from JD: {jd_filename}")
+                        except Exception as e:
+                            logger.error(f"Failed to extract text from JD: {e}")
+                            # Continue with job creation without extracted text
+                    else:
+                        logger.warning("PDF parser not available, JD text not extracted")
+            except Exception as e:
+                logger.error(f"Error processing JD file: {e}")
+                # Continue with job creation without JD file
 
         job_document = {
             'title': job_data['title'],
@@ -98,7 +163,7 @@ class JobController:
             'requirements': normalize_list_field(job_data.get('requirements', []), separator='\n'),
             'benefits': normalize_list_field(job_data.get('benefits', []), separator='\n'),
             'status': status,
-            'minimum_cv_score': minimum_cv_score,  # Add minimum CV score field
+            'minimum_cv_score': minimum_cv_score,
             'created_by': recruiter_id,
             'created_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
@@ -107,7 +172,11 @@ class JobController:
             'interviewed': 0,
             'selected': 0,
             'rejected': 0,
-            'pending': 0
+            'pending': 0,
+            # JD PDF fields (Phase 4)
+            'jd_pdf_path': jd_pdf_path,
+            'jd_extracted_text': jd_extracted_text,
+            'jd_upload_date': jd_upload_date
         }
         
         result = self.jobs_collection.insert_one(job_document)

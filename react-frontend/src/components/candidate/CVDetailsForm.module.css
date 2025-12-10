@@ -74,6 +74,7 @@
 
 .closeButton:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg) scale(1.1);
 }
 
 .cvForm {

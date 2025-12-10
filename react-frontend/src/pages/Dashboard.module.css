@@ -531,6 +531,28 @@ body.dark .viewButton,
   box-shadow: var(--shadow-lg);
 }
 
+.applyButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.applyButton:disabled:hover {
+  background: linear-gradient(135deg, var(--success-500), var(--success-600));
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.applyButton i.fa-spinner {
+  margin-right: 8px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .appliedButton {
   background: var(--gray-400) !important;
   color: white !important;

@@ -6,6 +6,8 @@ from bson import ObjectId
 from interview.api import InterviewAPI
 from interview.config.settings import LLMProvider
 import logging
+from services.pdf_parser_service import get_pdf_parser
+from controllers.cv_controller import CVController
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,20 @@ class PracticeController:
         os.makedirs(self.cv_folder, exist_ok=True)
         os.makedirs(self.jd_folder, exist_ok=True)
         
+        # Initialize PDF parser
+        try:
+            self.pdf_parser = get_pdf_parser()
+        except Exception as e:
+            logger.warning(f"PDF parser initialization failed: {e}")
+            self.pdf_parser = None
+        
+        # Initialize CV controller for accessing CV PDFs
+        try:
+            self.cv_controller = CVController(collections)
+        except Exception as e:
+            logger.warning(f"CV controller initialization failed: {e}")
+            self.cv_controller = None
+        
         # Initialize Interview API
         try:
             api_key = os.getenv('GROQ_API_KEY')
@@ -59,8 +75,20 @@ class PracticeController:
             logger.error(f"Failed to initialize Interview API: {e}")
             self.interview_api = None
     
-    def start_practice(self, user_id, jd_file, role, difficulty):
-        """Start a practice interview session"""
+    def start_practice(self, user_id, jd_file, role, difficulty, cv_id=None):
+        """
+        Start a practice interview session
+        
+        Args:
+            user_id: User ID
+            jd_file: Optional uploaded JD file
+            role: Role type (software-engineer, custom, etc.)
+            difficulty: Interview difficulty
+            cv_id: Optional CV ID to use (if not provided, uses primary CV or manual entry)
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
         try:
             if not self.interview_api:
                 return {'error': 'Interview system not available'}, 500
@@ -69,30 +97,66 @@ class PracticeController:
             if not role:
                 return {'error': 'Role selection is required'}, 400
             
-            # Get candidate's CV from profile instead of upload
+            # Get candidate's profile
             user = self.collections['users'].find_one({'_id': ObjectId(user_id)})
             if not user:
                 return {'error': 'User not found'}, 404
             
-            # Use candidate's CV details (manual entry) just like real interviews
+            # Get CV content (PDF or manual entry)
+            cv_text = None
+            cv_source = None
+            selected_cv = None
+            
+            # Priority order: Selected CV → Primary CV → Manual CV details
+            if cv_id:
+                # User explicitly selected a CV PDF
+                if self.cv_controller:
+                    selected_cv = self.cv_controller.get_cv_by_id(user_id, cv_id)
+                    if selected_cv:
+                        cv_text = selected_cv.get('extracted_text', '')
+                        cv_source = 'cv_pdf_selected'
+                        logger.info(f"Practice interview using selected CV PDF: {cv_id}")
+                    else:
+                        return {'error': f'CV with ID {cv_id} not found'}, 404
+                else:
+                    return {'error': 'CV management system not available'}, 500
+            
+            elif user.get('cv_uploads'):
+                # No CV selected, try primary CV
+                if self.cv_controller:
+                    primary_cv = self.cv_controller.get_primary_cv(user_id)
+                    if primary_cv:
+                        selected_cv = primary_cv
+                        cv_text = primary_cv.get('extracted_text', '')
+                        cv_source = 'cv_pdf_primary'
+                        logger.info(f"Practice interview using primary CV PDF: {primary_cv.get('cv_id')}")
+            
+            # Fallback to manual CV details if no PDF CV found
             cv_details = user.get('cv_details')
-            if not cv_details:
-                return {'error': 'Please complete your CV details in profile first before practicing'}, 400
-            
-            # Import CV service to format CV details
-            from services.cv_scoring_service import CVScoringService
-            try:
-                cv_service = CVScoringService()
-            except Exception as e:
-                logger.warning(f"CVScoringService not available, using fallback: {e}")
-                cv_service = None
-            
-            # Format CV details to text (same as real interview)
-            if cv_service:
-                cv_text = cv_service.format_cv_details(cv_details)
-            else:
-                # Fallback formatter
-                cv_text = self._format_cv_from_details(cv_details)
+            if not cv_text:
+                if not cv_details:
+                    return {
+                        'error': 'CV is required for practice interviews. Please upload a CV PDF or complete your CV details.',
+                        'redirect': '/profile/cv-details'
+                    }, 400
+                
+                # Import CV service to format CV details
+                from services.cv_scoring_service import CVScoringService
+                try:
+                    cv_service = CVScoringService()
+                except Exception as e:
+                    logger.warning(f"CVScoringService not available, using fallback: {e}")
+                    cv_service = None
+                
+                # Format CV details to text (same as real interview)
+                if cv_service:
+                    cv_text = cv_service.format_cv_details(cv_details)
+                else:
+                    # Fallback formatter
+                    cv_text = self._format_cv_from_details(cv_details)
+                
+                cv_source = 'cv_manual_entry'
+                logger.info("Practice interview using manual CV details")
             
             # Determine JD path and format based on role
             jd_text = None
@@ -104,18 +168,35 @@ class PracticeController:
                 jd_filename = secure_filename(f"practice_{user_id}_{uuid.uuid4().hex[:8]}_{jd_file.filename}")
                 jd_path = os.path.join(self.jd_folder, jd_filename)
                 jd_file.save(jd_path)
-                # Read JD text from file
-                with open(jd_path, 'r', encoding='utf-8') as f:
-                    jd_text = f.read()
+                
+                # Extract text from file (PDF or TXT) using PDF parser
+                try:
+                    if self.pdf_parser:
+                        jd_text = self.pdf_parser.extract_text(jd_path)
+                        logger.info(f"Extracted {len(jd_text)} characters from uploaded JD: {jd_filename}")
+                    else:
+                        # Fallback: try reading as text
+                        with open(jd_path, 'r', encoding='utf-8') as f:
+                            jd_text = f.read()
+                except Exception as e:
+                    logger.error(f"Failed to extract text from uploaded JD: {e}")
+                    return {'error': f'Failed to process job description file: {str(e)}'}, 400
             else:
                 # Use predefined JD for the role
                 predefined_jd = self.ROLE_JD_MAP.get(role)
                 if predefined_jd:
                     jd_file_path = os.path.join('question_bank', predefined_jd)
                     if os.path.exists(jd_file_path):
-                        # Read JD text from predefined file
-                        with open(jd_file_path, 'r', encoding='utf-8') as f:
-                            jd_text = f.read()
+                        # Read JD text from predefined file (usually .txt)
+                        try:
+                            if self.pdf_parser:
+                                jd_text = self.pdf_parser.extract_text(jd_file_path)
+                            else:
+                                with open(jd_file_path, 'r', encoding='utf-8') as f:
+                                    jd_text = f.read()
+                        except Exception as e:
+                            logger.error(f"Failed to read predefined JD: {e}")
+                            jd_text = self._create_generic_jd_text(role)
                     else:
                         # Create generic JD text
                         jd_text = self._create_generic_jd_text(role)
@@ -140,31 +221,42 @@ class PracticeController:
             # Calculate CV score BEFORE starting interview (using CVScoringService - same as real applications)
             cv_score = 75.0  # Default fallback score
             try:
-                if cv_service:
-                    # Create job data structure from JD text for scoring
-                    job_data = {
-                        'title': self.role_names.get(role, role.replace('-', ' ').title()),
-                        'description': jd_text,
-                        'requirements': jd_text,  # Full JD text contains requirements
-                        'role': role
-                    }
-                    
-                    # Use same CV scoring as real applications
-                    scoring_result = cv_service.calculate_cv_score(cv_details, job_data)
-                    cv_score = scoring_result.get('total_score', 75.0)
-                    logger.info(f"CV score calculated using AI: {cv_score}%")
+                # Import CV service for scoring
+                from services.cv_scoring_service import CVScoringService
+                try:
+                    cv_service_for_scoring = CVScoringService()
+                except Exception as e:
+                    logger.warning(f"CVScoringService not available: {e}")
+                    cv_service_for_scoring = None
+                
+                if cv_service_for_scoring:
+                    # Use CVScoringService for both PDF and profile CVs
+                    if cv_details:
+                        # Method 1: Use structured CV details (manual entry) with formatted JD
+                        logger.info("Calculating CV score using AI with structured CV details")
+                        job_data = {
+                            'title': self.role_names.get(role, role.replace('-', ' ').title()),
+                            'description': jd_text,
+                            'requirements': jd_text,
+                            'role': role
+                        }
+                        scoring_result = cv_service_for_scoring.calculate_cv_score(cv_details, job_data)
+                        cv_score = scoring_result.get('total_score', 75.0)
+                        logger.info(f"CV score calculated using AI with structured data: {cv_score}%")
+                    else:
+                        # Method 2: Use raw text (PDF CV) with AI-based text scoring
+                        logger.info("Calculating CV score using AI with text-based analysis")
+                        if cv_text and jd_text and len(cv_text.strip()) > 0 and len(jd_text.strip()) > 0:
+                            scoring_result = cv_service_for_scoring.calculate_cv_score_from_text(cv_text, jd_text)
+                            cv_score = scoring_result.get('total_score', 75.0)
+                            logger.info(f"CV score calculated using AI text analysis: {cv_score}%")
+                        else:
+                            logger.warning("CV or JD text is empty, using default score")
+                            cv_score = 75.0
                 else:
-                    logger.warning("CVScoringService not available, using fallback scoring")
-                    # Fallback: Simple keyword-based similarity
-                    from sklearn.feature_extraction.text import TfidfVectorizer
-                    from sklearn.metrics.pairwise import cosine_similarity
-                    
-                    vectorizer = TfidfVectorizer()
-                    tfidf_matrix = vectorizer.fit_transform([cv_text, jd_text])
-                    # Convert sparse matrix to dense for indexing
-                    similarity_matrix = cosine_similarity(tfidf_matrix)
-                    cv_score = float(similarity_matrix[0, 1] * 100)  # Convert to 0-100 scale
-                    logger.info(f"CV score calculated using fallback: {cv_score:.1f}%")
+                    logger.warning("CVScoringService not available, using default score")
+                    cv_score = 75.0
+                        
             except Exception as e:
                 logger.error(f"CV scoring failed, using default: {e}")
                 import traceback

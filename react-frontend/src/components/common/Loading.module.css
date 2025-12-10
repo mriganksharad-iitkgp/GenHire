@@ -1,0 +1,251 @@
+/* ===================================
+   LOADING SPINNER
+   =================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: 200px;
+}
+
+.fullScreenContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+}
+
+:global(.dark) .fullScreenContainer {
+  background: rgba(15, 23, 42, 0.95);
+}
+
+/* Spinner Styles */
+.spinner {
+  position: relative;
+  display: inline-block;
+}
+
+.spinner.small {
+  width: 30px;
+  height: 30px;
+}
+
+.spinner.medium {
+  width: 50px;
+  height: 50px;
+}
+
+.spinner.large {
+  width: 70px;
+  height: 70px;
+}
+
+.spinnerRing {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner.primary .spinnerRing {
+  border-top-color: #667eea;
+}
+
+.spinner.secondary .spinnerRing {
+  border-top-color: #10b981;
+}
+
+.spinner.danger .spinnerRing {
+  border-top-color: #ef4444;
+}
+
+.spinnerRing:nth-child(1) {
+  animation-delay: -0.45s;
+}
+
+.spinnerRing:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.spinnerRing:nth-child(3) {
+  animation-delay: -0.15s;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingText {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+:global(.dark) .loadingText {
+  color: #9ca3af;
+}
+
+/* ===================================
+   SKELETON LOADER
+   =================================== */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+:global(.dark) .skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e293b 25%,
+    #334155 50%,
+    #1e293b 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* Skeleton Card */
+.skeletonCard {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+:global(.dark) .skeletonCard {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.skeletonHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.skeletonContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonFooter {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+/* ===================================
+   INLINE SPINNER (for buttons)
+   =================================== */
+
+.inlineSpinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.spinnerDot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.inlineSpinner.small .spinnerDot {
+  width: 4px;
+  height: 4px;
+}
+
+.inlineSpinner.medium .spinnerDot {
+  width: 6px;
+  height: 6px;
+}
+
+.inlineSpinner.large .spinnerDot {
+  width: 8px;
+  height: 8px;
+}
+
+.spinnerDot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.spinnerDot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===================================
+   RESPONSIVE
+   =================================== */
+
+@media (max-width: 768px) {
+  .container {
+    padding: 30px 15px;
+    min-height: 150px;
+  }
+  
+  .spinner.large {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .loadingText {
+    font-size: 13px;
+  }
+  
+  .skeletonCard {
+    padding: 16px;
+  }
+}

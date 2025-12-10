@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import datetime
 
 @dataclass
@@ -12,8 +12,9 @@ class User:
     title: Optional[str] = None
     about: Optional[str] = None
     skills: List[str] = None
-    cv_path: Optional[str] = None
-    cv_details: Optional[dict] = None
+    cv_path: Optional[str] = None  # Legacy: single CV path (kept for backward compatibility)
+    cv_details: Optional[dict] = None  # Manual CV entry (kept for backward compatibility)
+    cv_uploads: List[Dict[str, Any]] = None  # NEW: Multiple CV PDFs with metadata
     profile_photo: Optional[str] = None
     created_at: datetime.datetime = None
     updated_at: datetime.datetime = None
@@ -29,6 +30,8 @@ class User:
     def __post_init__(self):
         if self.skills is None:
             self.skills = []
+        if self.cv_uploads is None:
+            self.cv_uploads = []
         if self.created_at is None:
             self.created_at = datetime.datetime.utcnow()
         if self.updated_at is None:
@@ -47,6 +50,7 @@ class User:
             'skills': self.skills,
             'cv_path': self.cv_path,
             'cv_details': self.cv_details,
+            'cv_uploads': self.cv_uploads,
             'profile_photo': self.profile_photo,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
@@ -72,6 +76,7 @@ class User:
             skills=data.get('skills', []),
             cv_path=data.get('cv_path'),
             cv_details=data.get('cv_details'),
+            cv_uploads=data.get('cv_uploads', []),
             profile_photo=data.get('profile_photo'),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
