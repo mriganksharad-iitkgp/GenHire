@@ -137,6 +137,8 @@ class PromptBasedQuestionGenerator:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         question_bank_dir = os.path.join(current_dir, "..", "..", "question_bank", "technical_question_bank")
         self.question_bank_path = os.path.join(question_bank_dir, "ai_ml_interview_questions.json")
+        self.question_bank_dir = question_bank_dir
+        self.question_bank_paths = []
         self.question_bank = None
         self.question_embeddings = None
         self._load_question_bank()
@@ -389,43 +391,51 @@ class PromptBasedQuestionGenerator:
         return schedule[context.question_count % len(schedule)]
 
     def _load_question_bank(self) -> None:
-        """Load question bank JSON and generate embeddings for RAG."""
-        if not self.question_bank_path:
+        if not getattr(self, "question_bank_dir", None):
             self.question_bank = None
             self.question_embeddings = None
             return
+        aggregated: List[Dict[str, Any]] = []
+        paths: List[str] = []
         try:
-            with open(self.question_bank_path, "r", encoding="utf-8") as f:
-                self.question_bank = json.load(f)
-                
-            # Generate embeddings for each question
-            if self.question_bank:
-                self.question_embeddings = []
-                items = self.question_bank if isinstance(self.question_bank, list) else self.question_bank.get("questions", [])
-                for idx, item in enumerate(items):
-                    try:
-                        # Create a combined text for embedding that includes topic and question
-                        topic = item.get("topic", "").lower()
-                        question = item.get("question", "")
-                        difficulty = item.get("difficulty", "").lower()
-                        combined_text = f"{topic} {question} {difficulty}"
-                        
-                        # Generate and store embedding
-                        embedding = self._get_embedding(combined_text)
-                        self.question_embeddings.append({
-                            "question": question,
-                            "topic": topic,
-                            "difficulty": difficulty,
-                            "embedding": embedding,
-                            "index": idx
-                        })
-                    except Exception as emb_error:
-                        print(f"Warning: Could not generate embedding for question: {emb_error}")
-                        continue
-        except Exception as e:
-            print(f"Error loading question bank: {e}")
-            self.question_bank = None
-            self.question_embeddings = None
+            for fname in os.listdir(self.question_bank_dir):
+                if fname.lower().endswith(".json"):
+                    paths.append(os.path.join(self.question_bank_dir, fname))
+        except Exception:
+            if self.question_bank_path:
+                paths = [self.question_bank_path]
+        self.question_bank_paths = paths
+        for p in paths:
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        aggregated.extend(data)
+                    elif isinstance(data, dict):
+                        aggregated.extend(data.get("questions", []))
+            except Exception:
+                continue
+        self.question_bank = aggregated if aggregated else None
+        self.question_embeddings = [] if aggregated else None
+        if not aggregated:
+            return
+        for idx, item in enumerate(aggregated):
+            try:
+                topic = item.get("topic", "").lower()
+                question = item.get("question", "")
+                difficulty = item.get("difficulty", "").lower()
+                role = item.get("role", "").lower()
+                combined_text = f"{topic} {question} {difficulty} {role}"
+                embedding = self._get_embedding(combined_text)
+                self.question_embeddings.append({
+                    "question": question,
+                    "topic": topic,
+                    "difficulty": difficulty,
+                    "embedding": embedding,
+                    "index": idx
+                })
+            except Exception:
+                continue
 
     # Helper methods for extraction and fallbacks
 
@@ -565,6 +575,8 @@ class PromptBasedQuestionGenerator:
         blob = " ".join(jd_keywords or []).lower()
         def has(*words):
             return any(w in title or w in blob for w in words)
+        if has("data analyst", "data analysis"):
+            return "data_analyst"
         if has("business analyst", "business analysis", "ba"):
             return "business_analyst"
         if has("devops", "site reliability", "sre", "platform engineer"):
@@ -580,6 +592,9 @@ class PromptBasedQuestionGenerator:
     def _role_topic_whitelist(self, job_role: str) -> List[str]:
         role = (job_role or "software_engineer").lower()
         mapping = {
+            "data_analyst": [
+                "sql", "excel", "power bi", "tableau", "dashboard", "kpi", "report", "metric", "analysis", "data", "python", "pandas"
+            ],
             "business_analyst": [
                 "requirement", "sql", "excel", "power bi", "tableau", "dashboard", "kpi",
                 "stakeholder", "user story", "process", "metric", "report", "visualization", "business", "analysis"
@@ -689,48 +704,44 @@ class PromptBasedQuestionGenerator:
         return base_question
 
     def _get_question_from_bank(self, context: ConversationContext, topic: str, difficulty: str) -> Optional[str]:
-        """Retrieve a question from the bank using RAG (semantic search)."""
         bank = self.question_bank
         if not bank or not self.question_embeddings:
             return None
-            
-        # Create a query embedding from the topic and difficulty
-        query_text = f"{topic} {difficulty}"
+        cv = ", ".join(context.cv_keywords or [])
+        jd = ", ".join(context.jd_keywords or [])
+        query_text = f"{topic} {difficulty} {cv} {jd} {context.job_title or ''} {context.job_role or ''}"
         query_embedding = self._get_embedding(query_text)
-        
-        # Find the most similar questions using cosine similarity
-        similarities = []
+        similarities: List[Tuple[float, int]] = []
         for i, emb_data in enumerate(self.question_embeddings):
-            emb = emb_data["embedding"]
-            # Calculate cosine similarity
-            similarity = np.dot(query_embedding, emb)
+            similarity = float(np.dot(query_embedding, emb_data["embedding"]))
             similarities.append((similarity, i))
-        
-        # Sort by similarity (highest first)
         similarities.sort(reverse=True)
-        
-        # Get top candidates and filter near-duplicates and off-role items
-        top_candidates = []
-        for sim, idx in similarities[:10]:
+        primary: List[Tuple[float, Dict[str, Any]]] = []
+        for sim, idx in similarities[:15]:
             item_idx = self.question_embeddings[idx].get("index", idx)
             item = bank[item_idx] if isinstance(bank, list) else bank.get("questions", [])[item_idx]
-            
-            # Check if difficulty matches (exact match required for difficulty)
-            if item.get("difficulty", "").lower() == difficulty.lower():
-                qtext = item.get("question", "")
-                itopic = (item.get("topic", "") or "").lower()
-                irole = (item.get("role", "") or "").lower()
-                if (
-                    not self._is_near_duplicate(context, qtext)
-                    and self._role_matches(irole, context.job_role)
-                    and self._is_topic_on_role(itopic, context.job_role)
-                ):
-                    top_candidates.append((sim, item))
-        
-        # Return the highest similarity question that matches the difficulty
-        if top_candidates:
-            return top_candidates[0][1].get("question")
-            
+            if (item.get("difficulty", "") or "").lower() != (difficulty or "").lower():
+                continue
+            qtext = item.get("question", "")
+            itopic = (item.get("topic", "") or "").lower()
+            irole = (item.get("role", "") or "").lower()
+            if not self._is_near_duplicate(context, qtext) and self._role_matches(irole, context.job_role) and self._is_topic_on_role(itopic, context.job_role):
+                primary.append((sim, item))
+        if primary:
+            primary.sort(reverse=True, key=lambda x: x[0])
+            return primary[0][1].get("question")
+        secondary: List[Tuple[float, Dict[str, Any]]] = []
+        for sim, idx in similarities[:15]:
+            item_idx = self.question_embeddings[idx].get("index", idx)
+            item = bank[item_idx] if isinstance(bank, list) else bank.get("questions", [])[item_idx]
+            if (item.get("difficulty", "") or "").lower() != (difficulty or "").lower():
+                continue
+            qtext = item.get("question", "")
+            if not self._is_near_duplicate(context, qtext) and sim >= 0.12:
+                secondary.append((sim, item))
+        if secondary:
+            secondary.sort(reverse=True, key=lambda x: x[0])
+            return secondary[0][1].get("question")
         return None
 
     def _user_indicates_repetition(self, last_answer: Optional[str]) -> bool:

@@ -15,6 +15,8 @@ INSTRUCTIONS:
 3. Keep it conversational and friendly
 4. Ask questions that help assess cultural fit, motivation, and soft skills
 5. Avoid repeating questions that have already been covered
+6. Modify the questions to the match the role of the interview
+7. Don't ask questions that doesn't make sense for the candidate even if it's relavent to the role
 
 EXAMPLES:
 - "Good. Now, what motivates you to work in this field?"
