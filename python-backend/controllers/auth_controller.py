@@ -31,6 +31,7 @@ class AuthController:
         if password != confirm_password:
             return {'error': 'Passwords do not match'}, 400
         
+        # Only allow candidate and recruiter registration (admins created manually)
         if user_type not in ['candidate', 'recruiter']:
             return {'error': 'Invalid user type'}, 400
         
@@ -40,6 +41,11 @@ class AuthController:
         
         # Generate verification token
         verification_token = secrets.token_urlsafe(32)
+        
+        # Determine verification status:
+        # - Candidates are auto-verified (is_verified: True)
+        # - Recruiters need admin approval (is_verified: False)
+        is_verified = True if user_type == 'candidate' else False
         
         # Create new user
         user_doc = {
@@ -52,18 +58,27 @@ class AuthController:
             'verification_token_expires': datetime.datetime.utcnow() + datetime.timedelta(hours=24) if self.require_email_verification else None,
             'created_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
-            'auth_provider': 'local'  # Track auth method
+            'auth_provider': 'local',  # Track auth method
+            # Verification and permission fields
+            'is_verified': is_verified,
+            'verified_by': None,
+            'verified_at': datetime.datetime.utcnow() if is_verified else None,
+            'permissions': []
         }
         
-        # Add default company information for recruiters
+        # Add company information for recruiters (accept both camelCase and snake_case)
         if user_type == 'recruiter':
             user_doc.update({
-                'company_name': user_data.get('company_name', 'TechCorp Solutions'),
-                'company_logo': user_data.get('company_logo', None),
-                'company_description': user_data.get('company_description', 'A leading technology company focused on innovation.'),
-                'company_website': user_data.get('company_website', None),
-                'company_size': user_data.get('company_size', None),
-                'company_industry': user_data.get('company_industry', 'Technology')
+                'company_name': user_data.get('companyName') or user_data.get('company_name', ''),
+                'company_logo': user_data.get('companyLogo') or user_data.get('company_logo', None),
+                'company_description': user_data.get('companyDescription') or user_data.get('company_description', ''),
+                'company_website': user_data.get('companyWebsite') or user_data.get('company_website', None),
+                'company_size': user_data.get('companySize') or user_data.get('company_size', None),
+                'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry', ''),
+                'company_location': user_data.get('companyLocation') or user_data.get('company_location', ''),
+                # Additional onboarding fields
+                'reason_for_joining': user_data.get('reasonForJoining') or user_data.get('reason_for_joining', ''),
+                'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
             })
         
         user_id = self.users_collection.insert_one(user_doc).inserted_id
@@ -82,17 +97,22 @@ class AuthController:
         response_message = 'User registered successfully'
         if self.require_email_verification:
             response_message += '. Please check your email to verify your HR Tech account.'
+        if user_type == 'recruiter':
+            response_message += ' Your recruiter account is pending admin verification.'
         
         return {
             'message': response_message,
             'token': token,
             'email_verification_required': self.require_email_verification,
+            'account_verification_required': not is_verified,
             'user': {
                 'id': str(user_id),
                 'name': name,
                 'email': email,
                 'user_type': user_type,
-                'email_verified': user_doc['email_verified']
+                'email_verified': user_doc['email_verified'],
+                'is_verified': is_verified,
+                'permissions': []
             }
         }, 201
         
@@ -101,6 +121,8 @@ class AuthController:
         if not email or not password:
             return {'error': 'Email and password are required'}, 400
         
+        # Support candidate and recruiter login
+        # Admins login as candidates (they have admin permissions but login via candidate tab)
         if user_type not in ['candidate', 'recruiter']:
             return {'error': 'Invalid user type'}, 400
         
@@ -111,7 +133,12 @@ class AuthController:
         
         # Check if user type matches
         stored_user_type = user.get('user_type', 'candidate')
-        if stored_user_type != user_type:
+        
+        # Allow admins to login as candidates (since admins are promoted candidates)
+        if stored_user_type == 'admin' and user_type == 'candidate':
+            # Admin logging in as candidate is allowed
+            pass
+        elif stored_user_type != user_type:
             return {'error': f'Please login as {stored_user_type}'}, 401
         
         # Check if email verification is required and if email is verified
@@ -122,6 +149,9 @@ class AuthController:
                     'error': 'Please verify your email before logging in to your HR Tech account',
                     'email_verification_required': True
                 }, 403
+        
+        # Get verification status (relevant for recruiters)
+        is_verified = user.get('is_verified', True)
         
         # Generate token
         token = self.generate_token(user['_id'])
@@ -134,7 +164,9 @@ class AuthController:
                 'name': user['name'],
                 'email': user['email'],
                 'user_type': stored_user_type,
-                'email_verified': user.get('email_verified', False)
+                'email_verified': user.get('email_verified', False),
+                'is_verified': is_verified,
+                'permissions': user.get('permissions', [])
             }
         }, 200
         
@@ -174,7 +206,9 @@ class AuthController:
             'email': user['email'],
             'user_type': user.get('user_type', 'candidate'),
             'email_verified': user.get('email_verified', False),
-            'auth_provider': user.get('auth_provider', 'local')
+            'auth_provider': user.get('auth_provider', 'local'),
+            'is_verified': user.get('is_verified', True),
+            'permissions': user.get('permissions', [])
         }
     
     def verify_email(self, token):
@@ -333,30 +367,32 @@ class AuthController:
         
         return {'message': 'Password reset successfully'}, 200
     
-    def google_oauth_login(self, token, user_type='candidate'):
+    def google_oauth_login(self, token, user_type='candidate', user_data=None):
         """Authenticate or create user using Google OAuth token"""
         if not self.google_client_id:
             return {'error': 'Google OAuth not configured'}, 500
+
+        user_data = user_data or {}
         
         try:
             # Verify the token with Google
             idinfo = id_token.verify_oauth2_token(
-                token, 
-                google_requests.Request(), 
+                token,
+                google_requests.Request(),
                 self.google_client_id
             )
-            
+
             # Get user info from token
             email = idinfo.get('email')
             name = idinfo.get('name')
             google_id = idinfo.get('sub')
-            
+
             if not email:
                 return {'error': 'Email not provided by Google'}, 400
-            
+
             # Check if user exists
             user = self.users_collection.find_one({'email': email})
-            
+
             if user:
                 # Update existing user if they signed up with local auth
                 if user.get('auth_provider') != 'google':
@@ -371,10 +407,10 @@ class AuthController:
                             }
                         }
                     )
-                
+
                 # Generate token
                 jwt_token = self.generate_token(user['_id'])
-                
+
                 return {
                     'message': 'Logged in successfully with Google',
                     'token': jwt_token,
@@ -384,10 +420,16 @@ class AuthController:
                         'email': user['email'],
                         'user_type': user.get('user_type', 'candidate'),
                         'email_verified': True,
-                        'auth_provider': 'google'
+                        'auth_provider': 'google',
+                        'is_verified': user.get('is_verified', True),
+                        'permissions': user.get('permissions', [])
                     }
                 }, 200
             else:
+                # Determine verification status for new users
+                # Candidates are auto-verified, recruiters need admin approval
+                is_verified = True if user_type == 'candidate' else False
+
                 # Create new user with Google OAuth
                 user_doc = {
                     'name': name,
@@ -398,18 +440,26 @@ class AuthController:
                     'auth_provider': 'google',
                     'google_id': google_id,
                     'created_at': datetime.datetime.utcnow(),
-                    'updated_at': datetime.datetime.utcnow()
+                    'updated_at': datetime.datetime.utcnow(),
+                    # Verification and permission fields
+                    'is_verified': is_verified,
+                    'verified_by': None,
+                    'verified_at': datetime.datetime.utcnow() if is_verified else None,
+                    'permissions': []
                 }
-                
-                # Add default company information for recruiters
+
+                # Add company information for recruiters (from onboarding form)
                 if user_type == 'recruiter':
                     user_doc.update({
-                        'company_name': 'TechCorp Solutions',
-                        'company_logo': None,
-                        'company_description': 'A leading technology company focused on innovation.',
-                        'company_website': None,
-                        'company_size': None,
-                        'company_industry': 'Technology'
+                        'company_name': user_data.get('companyName') or user_data.get('company_name', ''),
+                        'company_logo': user_data.get('companyLogo') or user_data.get('company_logo', None),
+                        'company_description': user_data.get('companyDescription') or user_data.get('company_description', ''),
+                        'company_website': user_data.get('companyWebsite') or user_data.get('company_website', None),
+                        'company_size': user_data.get('companySize') or user_data.get('company_size', None),
+                        'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry', ''),
+                        'company_location': user_data.get('companyLocation') or user_data.get('company_location', ''),
+                        'reason_for_joining': user_data.get('reasonForJoining') or user_data.get('reason_for_joining', ''),
+                        'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
                     })
                 
                 user_id = self.users_collection.insert_one(user_doc).inserted_id
@@ -417,16 +467,23 @@ class AuthController:
                 # Generate token
                 jwt_token = self.generate_token(user_id)
                 
+                message = 'Account created and logged in successfully with Google'
+                if user_type == 'recruiter':
+                    message += '. Your recruiter account is pending admin verification.'
+                
                 return {
-                    'message': 'Account created and logged in successfully with Google',
+                    'message': message,
                     'token': jwt_token,
+                    'account_verification_required': not is_verified,
                     'user': {
                         'id': str(user_id),
                         'name': name,
                         'email': email,
                         'user_type': user_type,
                         'email_verified': True,
-                        'auth_provider': 'google'
+                        'auth_provider': 'google',
+                        'is_verified': is_verified,
+                        'permissions': []
                     }
                 }, 201
                 

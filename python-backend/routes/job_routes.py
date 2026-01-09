@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 import datetime
 from controllers.job_controller import JobController
-from middleware.auth_middleware import token_required
+from middleware.auth_middleware import token_required, verified_required
 from config.database import db_config
 
 job_bp = Blueprint('jobs', __name__, url_prefix='/api')
@@ -25,9 +25,10 @@ def get_jobs(current_user):
 @job_bp.route('/jobs', methods=['POST'])
 @cross_origin()
 @token_required
+@verified_required
 def create_job(current_user):
     """
-    Create a new job posting (recruiters only)
+    Create a new job posting (verified recruiters only)
     
     Accepts either:
     - JSON data (application/json) - traditional job creation
@@ -37,7 +38,7 @@ def create_job(current_user):
         jd_file: file - Optional JD PDF/TXT file
         ... other job fields as form fields ...
     """
-    if current_user.get('user_type') != 'recruiter':
+    if current_user.get('user_type') not in ['recruiter', 'admin']:
         return jsonify({'error': 'Unauthorized. Only recruiters can create jobs.'}), 403
     
     recruiter_id = str(current_user['_id'])
@@ -74,9 +75,10 @@ def get_job_details(current_user, job_id):
 @job_bp.route('/jobs/<job_id>', methods=['PUT'])
 @cross_origin()
 @token_required
+@verified_required
 def update_job(current_user, job_id):
-    """Update a job posting (recruiters only)"""
-    if current_user.get('user_type') != 'recruiter':
+    """Update a job posting (verified recruiters only)"""
+    if current_user.get('user_type') not in ['recruiter', 'admin']:
         return jsonify({'error': 'Unauthorized. Only recruiters can update jobs.'}), 403
     
     data = request.get_json()
@@ -88,9 +90,10 @@ def update_job(current_user, job_id):
 @job_bp.route('/jobs/<job_id>', methods=['DELETE'])
 @cross_origin()
 @token_required
+@verified_required
 def delete_job(current_user, job_id):
-    """Delete a job posting (recruiters only)"""
-    if current_user.get('user_type') != 'recruiter':
+    """Delete a job posting (verified recruiters only)"""
+    if current_user.get('user_type') not in ['recruiter', 'admin']:
         return jsonify({'error': 'Unauthorized. Only recruiters can delete jobs.'}), 403
     
     recruiter_id = str(current_user['_id'])

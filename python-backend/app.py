@@ -41,8 +41,10 @@ from routes.application_routes import application_bp
 from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
+from routes.admin_routes import admin_bp, init_admin_routes
 from utils.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
+from controllers.admin_controller import AdminController
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
 try:
@@ -126,6 +128,12 @@ app.register_blueprint(practice_bp)
 # Register CV routes (requires collections, so created after database initialization)
 cv_bp = create_cv_routes(collections)
 app.register_blueprint(cv_bp, url_prefix='/api/cv')
+
+# Initialize and register admin routes
+admin_controller = AdminController(collections)
+init_admin_routes(admin_controller)
+app.register_blueprint(admin_bp, url_prefix='/api/admin')
+logger.info("✓ Admin routes registered at /api/admin")
 
 # Define a dictionary to hold a detector instance for each session
 proctoring_detectors = {}

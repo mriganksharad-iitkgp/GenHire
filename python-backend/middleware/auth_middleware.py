@@ -5,7 +5,9 @@ import os
 from bson import ObjectId
 from config.database import db_config
 
+
 def token_required(f):
+    """Decorator to require valid JWT token for a route"""
     @wraps(f)
     def decorated(*args, **kwargs):
         # Support Authorization header or token passed via query parameter (for new-tab file views)
@@ -34,5 +36,113 @@ def token_required(f):
         except pyjwt.InvalidTokenError:
             return jsonify({'message': 'Token is invalid!'}), 401
 
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    """Decorator to require admin user type (must be used after token_required)"""
+    @wraps(f)
+    def decorated(current_user, *args, **kwargs):
+        user_type = current_user.get('user_type', 'candidate')
+        
+        if user_type != 'admin':
+            return jsonify({
+                'message': 'Admin access required!',
+                'error': 'unauthorized'
+            }), 403
+        
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+
+def verified_required(f):
+    """Decorator to require verified recruiter status (must be used after token_required)
+    
+    This is for routes that require a verified recruiter, like posting jobs.
+    Candidates and admins pass through automatically.
+    """
+    @wraps(f)
+    def decorated(current_user, *args, **kwargs):
+        user_type = current_user.get('user_type', 'candidate')
+        
+        # Admins and candidates pass through
+        if user_type in ['admin', 'candidate']:
+            return f(current_user, *args, **kwargs)
+        
+        # For recruiters, check verification status
+        if user_type == 'recruiter':
+            is_verified = current_user.get('is_verified', False)
+            if not is_verified:
+                return jsonify({
+                    'message': 'Your recruiter account is pending verification. Please wait for admin approval.',
+                    'error': 'verification_required',
+                    'is_verified': False
+                }), 403
+        
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+
+def permission_required(permission):
+    """Decorator factory to require specific permission (must be used after token_required)
+    
+    Usage:
+        @token_required
+        @permission_required('users.write')
+        def my_route(current_user):
+            ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated(current_user, *args, **kwargs):
+            user_permissions = current_user.get('permissions', [])
+            
+            # Super admin has all permissions
+            if '*' in user_permissions:
+                return f(current_user, *args, **kwargs)
+            
+            # Check if user has the specific permission
+            if permission not in user_permissions:
+                return jsonify({
+                    'message': f'Permission denied. Required: {permission}',
+                    'error': 'permission_denied',
+                    'required_permission': permission
+                }), 403
+            
+            return f(current_user, *args, **kwargs)
+        return decorated
+    return decorator
+
+
+def recruiter_required(f):
+    """Decorator to require recruiter or admin user type (must be used after token_required)"""
+    @wraps(f)
+    def decorated(current_user, *args, **kwargs):
+        user_type = current_user.get('user_type', 'candidate')
+        
+        if user_type not in ['recruiter', 'admin']:
+            return jsonify({
+                'message': 'Recruiter access required!',
+                'error': 'unauthorized'
+            }), 403
+        
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+
+def candidate_required(f):
+    """Decorator to require candidate user type (must be used after token_required)"""
+    @wraps(f)
+    def decorated(current_user, *args, **kwargs):
+        user_type = current_user.get('user_type', 'candidate')
+        
+        # Admins can also access candidate routes for testing/support
+        if user_type not in ['candidate', 'admin']:
+            return jsonify({
+                'message': 'Candidate access required!',
+                'error': 'unauthorized'
+            }), 403
+        
         return f(current_user, *args, **kwargs)
     return decorated

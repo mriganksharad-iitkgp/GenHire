@@ -1,35 +1,147 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
+/**
+ * Authentication hook for managing user sessions
+ * @param {string|null} requiredType - Required user type ('candidate', 'recruiter', 'admin', or null for any)
+ * @returns {Object} Authentication state and helpers
+ */
 export default function useAuth(requiredType = "recruiter") {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [isVerified, setIsVerified] = useState(true);
+  const [permissions, setPermissions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("companyxyz-token");
-    const userData = localStorage.getItem("companyxyz-user");
+    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    
     if (!token || !userData) {
       navigate("/login");
       return;
     }
+    
     try {
       const parsed = JSON.parse(userData);
-      if (requiredType && parsed.userType !== requiredType) {
-        navigate("/");
+      const userType = parsed.userType || parsed.user_type || 'candidate';
+      
+      // Check if required type matches (if specified)
+      if (requiredType && userType !== requiredType) {
+        // Redirect based on actual user type
+        if (userType === 'admin') {
+          navigate("/admin");
+        } else if (userType === 'recruiter') {
+          navigate("/recruiter-dashboard");
+        } else {
+          navigate("/");
+        }
         return;
       }
-      setUser(parsed);
-      localStorage.setItem("recruiterName", parsed.name || "Recruiter");
-    } catch (_) {
+      
+      // Set user data
+      setUser({
+        ...parsed,
+        userType: userType
+      });
+      
+      // Set verification status (relevant for recruiters)
+      // Check both isVerified (frontend convention) and is_verified (backend convention)
+      const verified = parsed.isVerified !== false && parsed.is_verified !== false;
+      setIsVerified(verified);
+      
+      // Set permissions
+      setPermissions(parsed.permissions || []);
+      
+      // Store display name for convenience
+      if (userType === 'recruiter') {
+        localStorage.setItem("recruiterName", parsed.name || "Recruiter");
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error parsing user data:', error);
       navigate("/login");
     }
   }, [navigate, requiredType]);
 
-  const logout = () => {
-    localStorage.removeItem("companyxyz-token");
-    localStorage.removeItem("companyxyz-user");
-    navigate("/login");
-  };
+  /**
+   * Check if user has a specific permission
+   * @param {string} permission - Permission to check
+   * @returns {boolean} Whether user has the permission
+   */
+  const hasPermission = useCallback((permission) => {
+    // Super admin has all permissions
+    if (permissions.includes('*')) {
+      return true;
+    }
+    return permissions.includes(permission);
+  }, [permissions]);
 
-  return { user, logout };
+  /**
+   * Check if user is an admin
+   * @returns {boolean}
+   */
+  const isAdmin = useCallback(() => {
+    return user?.userType === 'admin' || user?.user_type === 'admin';
+  }, [user]);
+
+  /**
+   * Check if user is a recruiter
+   * @returns {boolean}
+   */
+  const isRecruiter = useCallback(() => {
+    return user?.userType === 'recruiter' || user?.user_type === 'recruiter';
+  }, [user]);
+
+  /**
+   * Check if user is a candidate
+   * @returns {boolean}
+   */
+  const isCandidate = useCallback(() => {
+    return user?.userType === 'candidate' || user?.user_type === 'candidate';
+  }, [user]);
+
+  /**
+   * Logout user and redirect to login page
+   */
+  const logout = useCallback(() => {
+    localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    localStorage.removeItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    localStorage.removeItem("recruiterName");
+    navigate("/login");
+  }, [navigate]);
+
+  /**
+   * Refresh user data from localStorage (useful after profile updates)
+   */
+  const refreshUser = useCallback(() => {
+    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        setUser({
+          ...parsed,
+          userType: parsed.userType || parsed.user_type || 'candidate'
+        });
+        setIsVerified(parsed.isVerified !== false && parsed.is_verified !== false);
+        setPermissions(parsed.permissions || []);
+      } catch (error) {
+        console.error('Error refreshing user data:', error);
+      }
+    }
+  }, []);
+
+  return { 
+    user, 
+    logout,
+    isVerified,
+    permissions,
+    hasPermission,
+    isAdmin,
+    isRecruiter,
+    isCandidate,
+    isLoading,
+    refreshUser
+  };
 }

@@ -22,6 +22,22 @@ const RecruiterDashboard = () => {
 	const { user, logout } = useAuth('recruiter');
 	const [isEditingProfile, setIsEditingProfile] = useState(false);
 	const [toasts, setToasts] = useState([]);
+	
+	// Check verification status from localStorage
+	const [isVerified, setIsVerified] = useState(true);
+	
+	useEffect(() => {
+		const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY);
+		if (userData) {
+			try {
+				const parsed = JSON.parse(userData);
+				// Check both isVerified (frontend) and is_verified (backend)
+				setIsVerified(parsed.isVerified !== false && parsed.is_verified !== false);
+			} catch (e) {
+				console.error('Error parsing user data:', e);
+			}
+		}
+	}, []);
 
 	// Toast helper (declared early so hooks can use it)
 	const showToast = useCallback((message, type = 'info') => {
@@ -444,6 +460,21 @@ const RecruiterDashboard = () => {
 			{/* Use shared Navbar component */}
 			<Navbar userType="recruiter" />
 
+			{/* Verification Pending Banner */}
+			{!isVerified && (
+				<div className={styles.verificationBanner}>
+					<div className={styles.bannerContent}>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: "24px", height: "24px", flexShrink: 0 }}>
+							<path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+						</svg>
+						<div>
+							<strong>Account Pending Verification</strong>
+							<p>Your recruiter account is being reviewed by an administrator. You can view your profile and existing data, but job posting features are disabled until verification is complete.</p>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Toast notifications */}
 			{toasts.map(toast => (
 				<Toast
@@ -526,11 +557,21 @@ const RecruiterDashboard = () => {
 							<SectionHeader 
 								title="Job Postings Management"
 								actions={(
-									<button className={styles.primaryButton} onClick={handleCreateNewJob}>
+									<button 
+										className={`${styles.primaryButton} ${!isVerified ? styles.disabledButton : ''}`} 
+										onClick={isVerified ? handleCreateNewJob : () => showToast('Your account must be verified to create job postings', 'warning')}
+										disabled={!isVerified}
+									>
 										<i className="fa fa-plus"></i> Create New Job
+										{!isVerified && <span className={styles.lockedIcon}>🔒</span>}
 									</button>
 								)}
 							/>
+							{!isVerified && (
+								<div className={styles.limitedAccessNotice}>
+									<p>Job posting features are disabled until your account is verified. You can still view existing job postings.</p>
+								</div>
+							)}
 							<JobsGrid 
 								jobs={jobPostings}
 								getStatusColor={getStatusColor}
@@ -538,7 +579,7 @@ const RecruiterDashboard = () => {
 								getCandidatesForJob={getCandidatesForJob}
 								onViewDetails={handleViewJobDetails}
 								onViewCandidates={handleViewJobCandidates}
-								onEdit={handleEditJob}
+								onEdit={isVerified ? handleEditJob : () => showToast('Your account must be verified to edit job postings', 'warning')}
 							/>
 						</div>
 					)}

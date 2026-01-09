@@ -8,7 +8,7 @@ const Login = () => {
 	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState("");
-	const [userType, setUserType] = useState("candidate"); // 'candidate' or 'recruiter'
+	const [userType, setUserType] = useState("candidate"); // 'candidate', 'recruiter', or 'admin'
 	const navigate = useNavigate();
 
 	const handleSubmit = async (e) => {
@@ -43,18 +43,23 @@ const Login = () => {
 				return;
 			}
 
-			// Store token and user data with user type
+			// Store token and user data with user type, verification status, and permissions
 			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
 			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
 				...data.user,
-				userType: userType
+				userType: data.user.user_type || userType,
+				isVerified: data.user.is_verified,
+				permissions: data.user.permissions || []
 			}));
 
 			console.log('Token stored:', data.token); // Debug log
 			console.log('User data stored:', data.user); // Debug log
 
 			// Navigate based on user type
-			if (userType === "recruiter") {
+			if (data.user.user_type === "admin" || userType === "admin") {
+				console.log('Navigating to admin dashboard'); // Debug log
+				navigate("/admin");
+			} else if (data.user.user_type === "recruiter" || userType === "recruiter") {
 				console.log('Navigating to recruiter dashboard'); // Debug log
 				navigate("/recruiter-dashboard");
 			} else {
@@ -90,15 +95,19 @@ const Login = () => {
 				throw new Error(data.error || "Google login failed");
 			}
 
-			// Store token and user data
+			// Store token and user data with verification status and permissions
 			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
 			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
 				...data.user,
-				userType: data.user.user_type
+				userType: data.user.user_type,
+				isVerified: data.user.is_verified,
+				permissions: data.user.permissions || []
 			}));
 
 			// Navigate based on user type
-			if (data.user.user_type === "recruiter") {
+			if (data.user.user_type === "admin") {
+				navigate("/admin");
+			} else if (data.user.user_type === "recruiter") {
 				navigate("/recruiter-dashboard");
 			} else {
 				navigate("/");
@@ -112,6 +121,16 @@ const Login = () => {
 
 	const handleGoogleError = () => {
 		setError("Google login failed. Please try again.");
+	};
+
+	// Get button text based on user type
+	const getLoginButtonText = () => {
+		if (isLoading) return "Logging in...";
+		switch (userType) {
+			case "admin": return "Log In as Admin";
+			case "recruiter": return "Log In as Recruiter";
+			default: return "Log In as Candidate";
+		}
 	};
 
 	return (
@@ -131,7 +150,9 @@ const Login = () => {
 						className={`${styles.tabButton} ${userType === "candidate" ? styles.activeTab : ""}`}
 						onClick={() => setUserType("candidate")}
 					>
-						<i className="fa fa-user"></i>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: "16px", height: "16px" }}>
+							<path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
+						</svg>
 						Candidate
 					</button>
 					<button
@@ -139,8 +160,21 @@ const Login = () => {
 						className={`${styles.tabButton} ${userType === "recruiter" ? styles.activeTab : ""}`}
 						onClick={() => setUserType("recruiter")}
 					>
-						<i className="fa fa-briefcase"></i>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: "16px", height: "16px" }}>
+							<path fillRule="evenodd" d="M6 3.75A2.75 2.75 0 018.75 1h2.5A2.75 2.75 0 0114 3.75v.443c.572.055 1.14.122 1.706.2C17.053 4.582 18 5.75 18 7.07v3.469c0 1.126-.694 2.191-1.83 2.54-1.952.599-4.024.921-6.17.921s-4.219-.322-6.17-.921C2.694 12.73 2 11.665 2 10.539V7.07c0-1.321.947-2.489 2.294-2.676A41.047 41.047 0 016 4.193V3.75zm6.5 0v.325a41.622 41.622 0 00-5 0V3.75c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25zM10 10a1 1 0 00-1 1v.01a1 1 0 001 1h.01a1 1 0 001-1V11a1 1 0 00-1-1H10z" clipRule="evenodd" />
+							<path d="M3 15.055v-.684c.126.053.255.1.39.142 2.092.642 4.313.987 6.61.987 2.297 0 4.518-.345 6.61-.987.135-.041.264-.089.39-.142v.684c0 1.347-.985 2.53-2.363 2.686a41.454 41.454 0 01-9.274 0C3.985 17.585 3 16.402 3 15.055z" />
+						</svg>
 						Recruiter
+					</button>
+					<button
+						type="button"
+						className={`${styles.tabButton} ${userType === "admin" ? styles.activeTab : ""}`}
+						onClick={() => setUserType("admin")}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: "16px", height: "16px" }}>
+							<path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+						</svg>
+						Admin
 					</button>
 				</div>
 
@@ -182,35 +216,48 @@ const Login = () => {
 						className={styles.loginButton}
 						disabled={isLoading}
 					>
-						{isLoading ? "Logging in..." : `Log In as ${userType === "candidate" ? "Candidate" : "Recruiter"}`}
+						{getLoginButtonText()}
 					</button>
 				</form>
 
-				<div style={{ margin: "1.5rem 0", textAlign: "center", color: "#666" }}>
-					<div style={{ display: "flex", alignItems: "center", margin: "1rem 0" }}>
-						<div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
-						<span style={{ padding: "0 1rem", fontSize: "0.9rem" }}>OR</span>
-						<div style={{ flex: 1, height: "1px", backgroundColor: "#ddd" }}></div>
+				{/* Only show Google OAuth for candidates and recruiters */}
+				{userType !== "admin" && (
+					<div className={styles.oauthSection}>
+						<div className={styles.divider}>
+							<span>or continue with</span>
+						</div>
+						<div className={styles.googleButtonWrapper}>
+							<GoogleLogin
+								onSuccess={handleGoogleSuccess}
+								onError={handleGoogleError}
+								theme="outline"
+								size="large"
+								text="continue_with"
+								width="100%"
+							/>
+						</div>
 					</div>
+				)}
 
-					<div style={{ display: "flex", justifyContent: "center" }}>
-						<GoogleLogin
-							onSuccess={handleGoogleSuccess}
-							onError={handleGoogleError}
-							theme="outline"
-							size="large"
-							text="continue_with"
-							width="300"
-						/>
+				{/* Show note for admin login */}
+				{userType === "admin" && (
+					<div className={styles.adminNotice}>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+						</svg>
+						<span>Admin accounts are created by system administrators.</span>
 					</div>
-				</div>
+				)}
 
-				<div className={styles.registerSection}>
-					<p>
-						New to SmartHire?{" "}
-						<a href="/register">Create an account</a>
-					</p>
-				</div>
+				{/* Only show register link for non-admin */}
+				{userType !== "admin" && (
+					<div className={styles.registerSection}>
+						<p>
+							New to SmartHire?{" "}
+							<Link to="/register">Create an account</Link>
+						</p>
+					</div>
+				)}
 			</div>
 		</div>
 	);

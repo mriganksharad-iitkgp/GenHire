@@ -4949,3 +4949,113 @@ div.candidateActions select.statusSelect {
 	appearance: none !important;
 	position: relative !important;
 }
+
+/* ===================================
+   VERIFICATION BANNER STYLES
+   =================================== */
+
+.verificationBanner {
+	background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+	border-bottom: 1px solid #f59e0b;
+	padding: 1rem 2rem;
+	position: sticky;
+	top: 64px;
+	z-index: 90;
+}
+
+.bannerContent {
+	max-width: 1400px;
+	margin: 0 auto;
+	display: flex;
+	align-items: flex-start;
+	gap: 1rem;
+	color: #92400e;
+}
+
+.bannerContent svg {
+	color: #d97706;
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+.bannerContent strong {
+	display: block;
+	font-size: 1rem;
+	margin-bottom: 0.25rem;
+	color: #78350f;
+}
+
+.bannerContent p {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.5;
+	color: #92400e;
+}
+
+/* Limited Access Notice in Jobs Tab */
+.limitedAccessNotice {
+	background: #fef3c7;
+	border: 1px solid #fcd34d;
+	border-radius: 8px;
+	padding: 1rem 1.25rem;
+	margin-bottom: 1.5rem;
+}
+
+.limitedAccessNotice p {
+	margin: 0;
+	color: #92400e;
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+/* Disabled Button State */
+.disabledButton {
+	opacity: 0.6;
+	cursor: not-allowed !important;
+	position: relative;
+}
+
+.disabledButton:hover {
+	transform: none !important;
+	box-shadow: none !important;
+}
+
+.lockedIcon {
+	margin-left: 0.5rem;
+	font-size: 0.85rem;
+}
+
+/* Dark Mode for Verification Banner */
+body.dark .verificationBanner,
+:global(.dark) .verificationBanner {
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+	border-bottom-color: rgba(245, 158, 11, 0.3);
+}
+
+body.dark .bannerContent,
+:global(.dark) .bannerContent {
+	color: #fcd34d;
+}
+
+body.dark .bannerContent strong,
+:global(.dark) .bannerContent strong {
+	color: #fde68a;
+}
+
+body.dark .bannerContent p,
+:global(.dark) .bannerContent p {
+	color: #fcd34d;
+}
+
+body.dark .limitedAccessNotice,
+:global(.dark) .limitedAccessNotice {
+	background: rgba(245, 158, 11, 0.1);
+	border-color: rgba(245, 158, 11, 0.3);
+}
+
+body.dark .limitedAccessNotice p,
+:global(.dark) .limitedAccessNotice p {
+	color: #fcd34d;
+}

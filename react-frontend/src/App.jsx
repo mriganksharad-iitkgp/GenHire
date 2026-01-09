@@ -13,7 +13,9 @@ import Dashboard from "./pages/Dashboard";
 import Interview from "./pages/Interview";
 import JobDetails from "./pages/JobDetails";
 import Register from "./pages/Register";
+import RecruiterOnboarding from "./pages/RecruiterOnboarding";
 import RecruiterDashboard from "./pages/RecruiterDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import ApplicationView from "./pages/ApplicationView";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -33,10 +35,12 @@ function App() {
 				<Routes>
 					<Route path="/login" element={<Login />} />
 					<Route path="/register" element={<Register />} />
+					<Route path="/recruiter-signup" element={<RecruiterOnboarding />} />
 					<Route path="/verify-email" element={<VerifyEmail />} />
 					<Route path="/forgot-password" element={<ForgotPassword />} />
 					<Route path="/reset-password" element={<ResetPassword />} />
 					<Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
+					<Route path="/admin" element={<AdminDashboard />} />
 					<Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
 					<Route
 						path="/"

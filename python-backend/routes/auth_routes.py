@@ -99,9 +99,10 @@ def google_oauth():
     data = request.get_json()
     token = data.get('token')
     user_type = data.get('userType', 'candidate')
-    
+
     if not token:
         return jsonify({'error': 'Google token is required'}), 400
-    
-    result, status_code = auth_controller.google_oauth_login(token, user_type)
+
+    # Pass additional user data for recruiter onboarding
+    result, status_code = auth_controller.google_oauth_login(token, user_type, data)
     return jsonify(result), status_code
