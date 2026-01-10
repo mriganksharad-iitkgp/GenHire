@@ -121,28 +121,32 @@ class AuthController:
         if not email or not password:
             return {'error': 'Email and password are required'}, 400
         
-        # Support candidate and recruiter login
-        # Admins login as candidates (they have admin permissions but login via candidate tab)
-        if user_type not in ['candidate', 'recruiter']:
-            return {'error': 'Invalid user type'}, 400
+        # Support candidate, recruiter, and admin login
+        if user_type not in ['candidate', 'recruiter', 'admin']:
+            return {'error': 'Invalid credentials'}, 401
         
         user = self.users_collection.find_one({'email': email})
         
         if not user or not check_password_hash(user['password'], password):
-            return {'error': 'Invalid credentials'}, 401
+            return {'error': 'Invalid email or password'}, 401
         
         # Check if user type matches
         stored_user_type = user.get('user_type', 'candidate')
         
-        # Allow admins to login as candidates (since admins are promoted candidates)
-        if stored_user_type == 'admin' and user_type == 'candidate':
-            # Admin logging in as candidate is allowed
-            pass
-        elif stored_user_type != user_type:
-            return {'error': f'Please login as {stored_user_type}'}, 401
+        # Strict user type matching - no cross-login allowed
+        # Return generic error to avoid leaking user type information
+        if stored_user_type != user_type:
+            return {'error': 'Invalid email or password'}, 401
+        
+        # Admin-specific checks
+        if user_type == 'admin':
+            # Ensure admin has proper permissions
+            if not user.get('permissions') or not user.get('is_verified'):
+                return {'error': 'Invalid email or password'}, 401
         
         # Check if email verification is required and if email is verified
-        if self.require_email_verification and not user.get('email_verified', False):
+        # Skip email verification for admins (they are created as verified)
+        if user_type != 'admin' and self.require_email_verification and not user.get('email_verified', False):
             # Allow OAuth users to login without verification
             if user.get('auth_provider') != 'google':
                 return {
@@ -150,7 +154,7 @@ class AuthController:
                     'email_verification_required': True
                 }, 403
         
-        # Get verification status (relevant for recruiters)
+        # Get verification status (relevant for recruiters and admins)
         is_verified = user.get('is_verified', True)
         
         # Generate token

@@ -1,22 +1,51 @@
 #!/usr/bin/env python3
 """
-Script to create or promote a user to Super Admin
-Usage: python create_super_admin.py [email]
-If no email provided, defaults to roshan643yadav@gmail.com
+Script to create a new Super Admin user
+Usage: python create_super_admin.py
+The script will prompt for email and password interactively.
 """
 
 import os
 import sys
 import datetime
+import re
+import getpass
 from pymongo import MongoClient
+from werkzeug.security import generate_password_hash
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-def create_super_admin(email: str = "roshan643yadav@gmail.com"):
+def validate_password(password: str) -> tuple[bool, str]:
     """
-    Find a user by email and promote them to super admin
+    Validate password meets security requirements:
+    - Minimum 8 characters
+    - At least 1 uppercase letter
+    - At least 1 lowercase letter
+    - At least 1 digit
+    - At least 1 special character
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one digit"
+    
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one special character (!@#$%^&*(),.?\":{}|<>)"
+    
+    return True, "Password is valid"
+
+def create_super_admin(email: str = None, password: str = None, name: str = None):
+    """
+    Create a new super admin user with provided credentials
     """
     # Get MongoDB connection details
     mongodb_uri = os.getenv('MONGODB_URI')
@@ -26,7 +55,40 @@ def create_super_admin(email: str = "roshan643yadav@gmail.com"):
         print("[ERROR] MONGODB_URI not found in .env file")
         return False
     
-    print(f"[INFO] Connecting to MongoDB...")
+    # Prompt for inputs if not provided
+    if not email:
+        email = input("Enter admin email: ").strip()
+    
+    if not email:
+        print("[ERROR] Email is required")
+        return False
+    
+    # Validate email format
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        print("[ERROR] Invalid email format")
+        return False
+    
+    if not password:
+        password = getpass.getpass("Enter admin password: ")
+        confirm_password = getpass.getpass("Confirm password: ")
+        
+        if password != confirm_password:
+            print("[ERROR] Passwords do not match")
+            return False
+    
+    # Validate password
+    is_valid, message = validate_password(password)
+    if not is_valid:
+        print(f"[ERROR] {message}")
+        return False
+    
+    if not name:
+        name = input("Enter admin name: ").strip()
+        if not name:
+            name = "Super Admin"
+    
+    print(f"\n[INFO] Connecting to MongoDB...")
     print(f"       Database: {database_name}")
     
     try:
@@ -39,61 +101,59 @@ def create_super_admin(email: str = "roshan643yadav@gmail.com"):
         client.admin.command('ping')
         print("[OK] Connected to MongoDB successfully")
         
-        # Find the user
-        print(f"\n[INFO] Searching for user: {email}")
-        user = users_collection.find_one({'email': email})
+        # Check if email already exists
+        print(f"\n[INFO] Checking if email already exists: {email}")
+        existing_user = users_collection.find_one({'email': email})
         
-        if not user:
-            print(f"[ERROR] User with email '{email}' not found")
-            print("\n[INFO] Available users in database:")
-            all_users = list(users_collection.find({}, {'email': 1, 'name': 1, 'user_type': 1}))
-            for u in all_users[:10]:  # Show first 10 users
-                print(f"   - {u.get('email')} ({u.get('name')}) - {u.get('user_type')}")
-            if len(all_users) > 10:
-                print(f"   ... and {len(all_users) - 10} more users")
-            return False
+        if existing_user:
+            existing_type = existing_user.get('user_type', 'unknown')
+            print(f"[ERROR] Email already exists as {existing_type}")
+            print(f"        Name: {existing_user.get('name')}")
+            print(f"        Email: {existing_user.get('email')}")
+            
+            if existing_type in ['candidate', 'recruiter']:
+                print(f"\n[ERROR] Cannot create admin with same email as existing {existing_type}")
+                print("[INFO] Please use a different email address for admin account")
+                return False
+            elif existing_type == 'admin':
+                print("[INFO] User is already an admin")
+                return False
         
-        print(f"[OK] Found user: {user.get('name')} ({user.get('email')})")
-        print(f"     Current user_type: {user.get('user_type')}")
-        print(f"     Current is_verified: {user.get('is_verified', 'not set')}")
-        print(f"     Current permissions: {user.get('permissions', [])}")
+        # Create new admin user
+        print(f"\n[INFO] Creating Super Admin account...")
         
-        # Update user to super admin
-        print(f"\n[INFO] Promoting user to Super Admin...")
+        admin_doc = {
+            'name': name,
+            'email': email,
+            'password': generate_password_hash(password),
+            'user_type': 'admin',
+            'is_verified': True,
+            'email_verified': True,
+            'permissions': ['*'],  # Super admin has all permissions
+            'verified_by': 'system',
+            'verified_at': datetime.datetime.utcnow(),
+            'rejection_reason': None,
+            'auth_provider': 'local',
+            'created_at': datetime.datetime.utcnow(),
+            'updated_at': datetime.datetime.utcnow()
+        }
         
-        update_result = users_collection.update_one(
-            {'_id': user['_id']},
-            {
-                '$set': {
-                    'user_type': 'admin',
-                    'is_verified': True,
-                    'permissions': ['*'],  # Super admin has all permissions
-                    'verified_by': 'system',
-                    'verified_at': datetime.datetime.utcnow(),
-                    'updated_at': datetime.datetime.utcnow()
-                }
-            }
-        )
+        result = users_collection.insert_one(admin_doc)
         
-        if update_result.modified_count > 0:
-            print("[OK] User successfully promoted to Super Admin!")
-            print("\n[INFO] Updated user details:")
-            updated_user = users_collection.find_one({'_id': user['_id']})
-            print(f"       Name: {updated_user.get('name')}")
-            print(f"       Email: {updated_user.get('email')}")
-            print(f"       User Type: {updated_user.get('user_type')}")
-            print(f"       Is Verified: {updated_user.get('is_verified')}")
-            print(f"       Permissions: {updated_user.get('permissions')}")
-            print(f"\n[SUCCESS] You can now login as admin at /login and select 'Admin' tab")
+        if result.inserted_id:
+            print("[OK] Super Admin created successfully!")
+            print("\n[INFO] Admin details:")
+            print(f"       Name: {name}")
+            print(f"       Email: {email}")
+            print(f"       User Type: admin")
+            print(f"       Permissions: ['*'] (All permissions)")
+            print(f"\n[SUCCESS] You can now login at /login using the 'Admin' tab")
+            print(f"          Email: {email}")
+            print(f"          Password: [the password you entered]")
             return True
         else:
-            # Check if already an admin
-            if user.get('user_type') == 'admin' and user.get('permissions') == ['*']:
-                print("[INFO] User is already a Super Admin!")
-                return True
-            else:
-                print("[WARN] No changes made. User may already have these settings.")
-                return False
+            print("[ERROR] Failed to create admin user")
+            return False
                 
     except Exception as e:
         print(f"[ERROR] {str(e)}")
@@ -104,6 +164,22 @@ def create_super_admin(email: str = "roshan643yadav@gmail.com"):
             print("\n[INFO] MongoDB connection closed")
 
 if __name__ == "__main__":
-    email = sys.argv[1] if len(sys.argv) > 1 else "roshan643yadav@gmail.com"
-    success = create_super_admin(email)
+    print("=" * 60)
+    print("Super Admin Creation Tool")
+    print("=" * 60)
+    print("\nPassword Requirements:")
+    print("  - Minimum 8 characters")
+    print("  - At least 1 uppercase letter")
+    print("  - At least 1 lowercase letter")
+    print("  - At least 1 digit")
+    print("  - At least 1 special character (!@#$%^&*(),.?\":{}|<>)")
+    print("=" * 60)
+    print()
+    
+    # Check for command line arguments
+    email = sys.argv[1] if len(sys.argv) > 1 else None
+    password = sys.argv[2] if len(sys.argv) > 2 else None
+    name = sys.argv[3] if len(sys.argv) > 3 else None
+    
+    success = create_super_admin(email, password, name)
     sys.exit(0 if success else 1)

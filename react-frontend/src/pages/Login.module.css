@@ -237,6 +237,52 @@
 }
 
 /* ===========================================
+   Password Input Wrapper & Toggle
+   =========================================== */
+.passwordInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInputWrapper input {
+  padding-right: 3rem; /* Make room for the eye icon */
+  width: 100%;
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--auth-text-muted);
+  transition: color 0.2s ease;
+  border-radius: var(--auth-radius-sm);
+}
+
+.passwordToggle:hover {
+  color: var(--auth-text-secondary);
+  background: var(--auth-bg-tertiary);
+}
+
+.passwordToggle:focus {
+  outline: 2px solid var(--auth-primary);
+  outline-offset: 2px;
+}
+
+.passwordToggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ===========================================
    Forgot Password Link
    =========================================== */
 .forgotPassword {
