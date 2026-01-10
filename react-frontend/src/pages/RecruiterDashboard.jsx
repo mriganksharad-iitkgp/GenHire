@@ -17,9 +17,6 @@ import {
   CandidatesList,
   ProfileForm,
   RecentActivity,
-  SubscriptionBanner,
-  UpgradePlanModal,
-  useSubscription,
 } from "../components/recruiter";
 import styles from "./RecruiterDashboard.module.css";
 import useAuth from "../hooks/useAuth";
@@ -36,14 +33,6 @@ const RecruiterDashboard = () => {
   const { user } = useAuth("recruiter");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [toasts, setToasts] = useState([]);
-
-  // Use decoupled subscription hook
-  const {
-    subscription,
-    loading: subscriptionLoading,
-    update: setSubscription,
-  } = useSubscription();
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
   // Check verification status from localStorage
   const [isVerified, setIsVerified] = useState(true);
@@ -132,19 +121,6 @@ const RecruiterDashboard = () => {
     } catch (error) {
       console.error("Error loading company profile:", error);
     }
-  };
-
-  const handleOpenUpgradeModal = () => {
-    setIsUpgradeModalOpen(true);
-  };
-
-  const handleCloseUpgradeModal = () => {
-    setIsUpgradeModalOpen(false);
-  };
-
-  const handleSubscriptionUpdate = (newSubscription) => {
-    setSubscription(newSubscription);
-    showToast("Subscription updated successfully!", "success");
   };
 
   // provided by useJobs
@@ -645,13 +621,6 @@ const RecruiterDashboard = () => {
               </p>
             </div>
 
-            {/* Subscription Banner */}
-            <SubscriptionBanner
-              subscription={subscription}
-              loading={subscriptionLoading}
-              onUpgrade={handleOpenUpgradeModal}
-            />
-
             <OverviewMetrics
               jobPostingsCount={
                 jobPostings.filter(
@@ -774,14 +743,6 @@ const RecruiterDashboard = () => {
           </div>
         )}
       </div>
-
-      {/* Upgrade Plan Modal - can be triggered from SubscriptionBanner */}
-      <UpgradePlanModal
-        isOpen={isUpgradeModalOpen}
-        onClose={handleCloseUpgradeModal}
-        currentSubscription={subscription}
-        onSubscriptionUpdate={handleSubscriptionUpdate}
-      />
     </div>
   );
 };
