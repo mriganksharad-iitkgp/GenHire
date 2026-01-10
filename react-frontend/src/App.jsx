@@ -1,9 +1,9 @@
 import React from "react";
 import {
-	BrowserRouter as Router,
-	Routes,
-	Route,
-	Navigate,
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
 } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { CandidateDataProvider } from "./contexts/CandidateDataContext";
@@ -27,71 +27,73 @@ import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
 import "./App.css";
 
-
 function App() {
-	return (
-		<GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
-			<CandidateDataProvider>
-				<Router>
-				<Routes>
-					<Route path="/login" element={<Login />} />
-					<Route path="/register" element={<Register />} />
-					<Route path="/recruiter-signup" element={<RecruiterOnboarding />} />
-					<Route path="/verify-email" element={<VerifyEmail />} />
-					<Route path="/forgot-password" element={<ForgotPassword />} />
-					<Route path="/reset-password" element={<ResetPassword />} />
-					<Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
-					<Route path="/subscription" element={<SubscriptionPlans />} />
-					<Route path="/admin" element={<AdminDashboard />} />
-					<Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
-					<Route
-						path="/"
-						element={
-							<Layout>
-								<Dashboard />
-							</Layout>
-						}
-					/>
-					<Route
-						path="/profile"
-						element={
-							<Layout>
-								<Profile />
-							</Layout>
-						}
-					/>
-					<Route
-						path="/practice"
-						element={
-							<Layout>
-								<Practice />
-							</Layout>
-						}
-					/>
-					<Route path="/interview/:interviewId" element={<Interview />} />
-					<Route
-						path="/job/:jobId"
-						element={
-							<Layout>
-								<JobDetails />
-							</Layout>
-						}
-					/>
-					<Route
-						path="/application/:applicationId"
-						element={
-							<Layout>
-								<ApplicationView />
-							</Layout>
-						}
-					/>
-					<Route path="/404" element={<NotFound />} />
-					<Route path="*" element={<Navigate to="/404" />} />
-				</Routes>
-			</Router>
-			</CandidateDataProvider>
-		</GoogleOAuthProvider>
-	);
+  return (
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+      <CandidateDataProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/recruiter-signup" element={<RecruiterOnboarding />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route
+              path="/recruiter-dashboard"
+              element={<RecruiterDashboard />}
+            />
+            <Route path="/subscription" element={<SubscriptionPlans />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
+            <Route
+              path="/"
+              element={
+                <Layout>
+                  <Dashboard />
+                </Layout>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Layout>
+                  <Profile />
+                </Layout>
+              }
+            />
+            <Route
+              path="/practice"
+              element={
+                <Layout>
+                  <Practice />
+                </Layout>
+              }
+            />
+            <Route path="/interview/:interviewId" element={<Interview />} />
+            <Route
+              path="/job/:jobId"
+              element={
+                <Layout>
+                  <JobDetails />
+                </Layout>
+              }
+            />
+            <Route
+              path="/application/:applicationId"
+              element={
+                <Layout>
+                  <ApplicationView />
+                </Layout>
+              }
+            />
+            <Route path="/404" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/404" />} />
+          </Routes>
+        </Router>
+      </CandidateDataProvider>
+    </GoogleOAuthProvider>
+  );
 }
 
 export default App;
