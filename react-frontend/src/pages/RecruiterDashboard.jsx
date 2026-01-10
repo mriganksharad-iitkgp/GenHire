@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Toast from "../components/Toast";
 import JobCreationModal from "../components/JobCreationModal";
@@ -7,636 +7,783 @@ import JobDetailsModal from "../components/JobDetailsModal";
 import JobEditModal from "../components/JobEditModal";
 import CVViewer from "../components/CVViewer";
 import InterviewReportModal from "../components/InterviewReportModal";
-import ProctoringResultModal from "../components/ProctoringResultModal"; // Import the new modal
-import { Tabs, SectionHeader, OverviewMetrics, JobsGrid, CandidatesFilters, CandidatesList, ProfileForm, RecentActivity } from "../components/recruiter";
+import ProctoringResultModal from "../components/ProctoringResultModal";
+import {
+  Tabs,
+  SectionHeader,
+  OverviewMetrics,
+  JobsGrid,
+  CandidatesFilters,
+  CandidatesList,
+  ProfileForm,
+  RecentActivity,
+  SubscriptionBanner,
+  UpgradePlanModal,
+  useSubscription,
+} from "../components/recruiter";
 import styles from "./RecruiterDashboard.module.css";
 import useAuth from "../hooks/useAuth";
 import useJobs from "../hooks/useJobs";
 import useApplications from "../hooks/useApplications";
-import { getProfile, updateCompanyProfile as apiUpdateCompanyProfile } from "../services/api";
+import {
+  getProfile,
+  updateCompanyProfile as apiUpdateCompanyProfile,
+} from "../services/api";
 
 const RecruiterDashboard = () => {
-	const navigate = useNavigate();
-	const [searchParams, setSearchParams] = useSearchParams();
-	const [activeTab, setActiveTab] = useState("overview");
-	const { user, logout } = useAuth('recruiter');
-	const [isEditingProfile, setIsEditingProfile] = useState(false);
-	const [toasts, setToasts] = useState([]);
-	
-	// Check verification status from localStorage
-	const [isVerified, setIsVerified] = useState(true);
-	
-	useEffect(() => {
-		const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY);
-		if (userData) {
-			try {
-				const parsed = JSON.parse(userData);
-				// Check both isVerified (frontend) and is_verified (backend)
-				setIsVerified(parsed.isVerified !== false && parsed.is_verified !== false);
-			} catch (e) {
-				console.error('Error parsing user data:', e);
-			}
-		}
-	}, []);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState("overview");
+  const { user } = useAuth("recruiter");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [toasts, setToasts] = useState([]);
 
-	// Toast helper (declared early so hooks can use it)
-	const showToast = useCallback((message, type = 'info') => {
-		const id = Date.now();
-		const newToast = { id, message, type };
-		setToasts(prev => [...prev, newToast]);
-	}, []);
-	const [isJobModalOpen, setIsJobModalOpen] = useState(false);
-	const [isCVViewerOpen, setIsCVViewerOpen] = useState(false);
-	const [selectedCandidate, setSelectedCandidate] = useState(null);
-	const [selectedJob, setSelectedJob] = useState(null);
-	const [isJobDetailsModalOpen, setIsJobDetailsModalOpen] = useState(false);
-	const [isJobEditModalOpen, setIsJobEditModalOpen] = useState(false);
-	const [isReportOpen, setIsReportOpen] = useState(false);
-	const [isProctoringModalOpen, setIsProctoringModalOpen] = useState(false); // State for the new modal
-	const [reportData, setReportData] = useState(null);
-	const [reportScores, setReportScores] = useState({ cv: null, interview: null });
-	const [selectedPosition, setSelectedPosition] = useState("");
-	const [selectedStatus, setSelectedStatus] = useState("");
-	const [companyProfile, setCompanyProfile] = useState({
-		companyName: "TechCorp Solutions",
-		industry: "Technology",
-		location: "San Francisco, CA",
-		size: "100-500 employees",
-		website: "https://techcorp.com",
-		description: "Leading technology solutions provider focused on AI and machine learning innovations."
-	});
+  // Use decoupled subscription hook
+  const {
+    subscription,
+    loading: subscriptionLoading,
+    update: setSubscription,
+  } = useSubscription();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
-	// Jobs and applications via hooks
-	const { jobs: jobPostings, load: loadJobs, create: saveJobPosting, update: updateJobPosting, remove: deleteJobPosting } = useJobs(showToast);
-	const { applications, load: loadApplications, updateStatus: updateApplicationStatus, fetchInterviewReport } = useApplications(showToast);
+  // Check verification status from localStorage
+  const [isVerified, setIsVerified] = useState(true);
 
-	// Load company profile once; hooks load jobs/applications themselves
-	useEffect(() => {
-		loadCompanyProfile();
-	}, []);
+  useEffect(() => {
+    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY);
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        // Check both isVerified (frontend) and is_verified (backend)
+        setIsVerified(
+          parsed.isVerified !== false && parsed.is_verified !== false
+        );
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+      }
+    }
+  }, []);
 
-	const loadCompanyProfile = async () => {
-		try {
-			const profileData = await getProfile();
-			if (profileData?.user_type === 'recruiter') {
-				setCompanyProfile({
-					companyName: profileData.company_name || "TechCorp Solutions",
-					industry: profileData.company_industry || "Technology",
-					location: profileData.location || "San Francisco, CA",
-					size: profileData.company_size || "100-500 employees",
-					website: profileData.company_website || "https://techcorp.com",
-					description: profileData.company_description || "Leading technology solutions provider focused on AI and machine learning innovations."
-				});
-			}
-		} catch (error) {
-			console.error('Error loading company profile:', error);
-		}
-	};
+  // Toast helper (declared early so hooks can use it)
+  const showToast = useCallback((message, type = "info") => {
+    const id = Date.now();
+    const newToast = { id, message, type };
+    setToasts((prev) => [...prev, newToast]);
+  }, []);
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+  const [isCVViewerOpen, setIsCVViewerOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [isJobDetailsModalOpen, setIsJobDetailsModalOpen] = useState(false);
+  const [isJobEditModalOpen, setIsJobEditModalOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isProctoringModalOpen, setIsProctoringModalOpen] = useState(false); // State for the new modal
+  const [reportData, setReportData] = useState(null);
+  const [reportScores, setReportScores] = useState({
+    cv: null,
+    interview: null,
+  });
+  const [selectedPosition, setSelectedPosition] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [companyProfile, setCompanyProfile] = useState({
+    companyName: "TechCorp Solutions",
+    industry: "Technology",
+    location: "San Francisco, CA",
+    size: "100-500 employees",
+    website: "https://techcorp.com",
+    description:
+      "Leading technology solutions provider focused on AI and machine learning innovations.",
+  });
 
-	// provided by useJobs
+  // Jobs and applications via hooks
+  const {
+    jobs: jobPostings,
+    load: loadJobs,
+    create: saveJobPosting,
+    update: updateJobPosting,
+    remove: deleteJobPosting,
+  } = useJobs(showToast);
+  const {
+    applications,
+    load: loadApplications,
+    updateStatus: updateApplicationStatus,
+    fetchInterviewReport,
+  } = useApplications(showToast);
 
-	// provided by useApplications
+  // Load company profile once; hooks load jobs/applications themselves
+  useEffect(() => {
+    loadCompanyProfile();
+  }, []);
 
-	// provided by useApplications
+  const loadCompanyProfile = async () => {
+    try {
+      const profileData = await getProfile();
+      if (profileData?.user_type === "recruiter") {
+        setCompanyProfile({
+          companyName: profileData.company_name || "TechCorp Solutions",
+          industry: profileData.company_industry || "Technology",
+          location: profileData.location || "San Francisco, CA",
+          size: profileData.company_size || "100-500 employees",
+          website: profileData.company_website || "https://techcorp.com",
+          description:
+            profileData.company_description ||
+            "Leading technology solutions provider focused on AI and machine learning innovations.",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading company profile:", error);
+    }
+  };
 
-	// Sample candidate data (keeping some mock data for reference)
-	const [candidates, setCandidates] = useState([
-		{
-			id: 1,
-			name: "John Doe",
-			email: "john.doe@email.com",
-			phone: "+1 (555) 123-4567",
-			jobId: 1,
-			jobTitle: "Senior Business Development Manager",
-			appliedDate: "2025-08-05",
-			status: "Interviewed",
-			cvMatchScore: 92,
-			interviewScore: 85,
-			interviewDate: "2025-08-08",
-			experience: "6 years",
-			location: "San Francisco, CA",
-			skills: ["Sales Strategy", "Client Acquisition", "Market Research"],
-			cvUrl: "/uploads/cv/john_doe_cv.pdf"
-		},
-		{
-			id: 2,
-			name: "Jane Smith",
-			email: "jane.smith@email.com",
-			phone: "+1 (555) 987-6543",
-			jobId: 1,
-			jobTitle: "Senior Business Development Manager",
-			appliedDate: "2025-08-06",
-			status: "Selected",
-			cvMatchScore: 88,
-			interviewScore: 91,
-			interviewDate: "2025-08-09",
-			experience: "7 years",
-			location: "San Francisco, CA",
-			skills: ["Sales Strategy", "Negotiation", "Team Leadership"],
-			cvUrl: "/uploads/cv/jane_smith_cv.pdf"
-		},
-		{
-			id: 3,
-			name: "Mike Johnson",
-			email: "mike.johnson@email.com",
-			phone: "+1 (555) 456-7890",
-			jobId: 2,
-			jobTitle: "Strategic Partnerships Manager",
-			appliedDate: "2025-08-07",
-			status: "Pending Interview",
-			cvMatchScore: 76,
-			interviewScore: null,
-			interviewDate: null,
-			experience: "4 years",
-			location: "New York, NY",
-			skills: ["Partnership Development", "Contract Negotiation"],
-			cvUrl: "/uploads/cv/mike_johnson_cv.pdf"
-		},
-		{
-			id: 4,
-			name: "Sarah Wilson",
-			email: "sarah.wilson@email.com",
-			phone: "+1 (555) 321-0987",
-			jobId: 1,
-			jobTitle: "Senior Business Development Manager",
-			appliedDate: "2025-08-08",
-			status: "Rejected",
-			cvMatchScore: 65,
-			interviewScore: 58,
-			interviewDate: "2025-08-09",
-			experience: "3 years",
-			location: "Los Angeles, CA",
-			skills: ["Sales", "Customer Relations"],
-			cvUrl: "/uploads/cv/sarah_wilson_cv.pdf"
-		}
-	]);
+  const handleOpenUpgradeModal = () => {
+    setIsUpgradeModalOpen(true);
+  };
 
-	useEffect(() => {
-		// Check URL parameters for active tab
-		const tabParam = searchParams.get("tab");
-		if (tabParam && ["overview", "jobs", "candidates", "profile"].includes(tabParam)) {
-			setActiveTab(tabParam);
-		}
-	}, [searchParams]);
+  const handleCloseUpgradeModal = () => {
+    setIsUpgradeModalOpen(false);
+  };
 
-	// replaced by useJobs
+  const handleSubscriptionUpdate = (newSubscription) => {
+    setSubscription(newSubscription);
+    showToast("Subscription updated successfully!", "success");
+  };
 
-	// provided by useJobs
+  // provided by useJobs
 
-	// provided by useJobs
+  // provided by useApplications
 
-	// provided by useJobs
+  // provided by useApplications
 
-	const getStatusColor = (status) => {
-		const s = String(status || '').toLowerCase();
-		switch (s) {
-			case "active": return "#27ae60";
-			case "draft": return "#f39c12";
-			case "paused": return "#f59e0b";
-			case "closed": return "#e74c3c";
-			case "scheduled": return "#3498db";
-			case "selected": return "#27ae60";
-			case "rejected": return "#e74c3c";
-			case "interviewed": return "#9b59b6";
-			case "pending":
-			case "pending interview": return "#f39c12";
-			case "reviewed": return "#3498db";
-			case "shortlisted": return "#8e44ad";
-			default: return "#95a5a6";
-		}
-	};
+  // Sample candidate data (keeping some mock data for reference)
+  const [candidates, setCandidates] = useState([
+    {
+      id: 1,
+      name: "John Doe",
+      email: "john.doe@email.com",
+      phone: "+1 (555) 123-4567",
+      jobId: 1,
+      jobTitle: "Senior Business Development Manager",
+      appliedDate: "2025-08-05",
+      status: "Interviewed",
+      cvMatchScore: 92,
+      interviewScore: 85,
+      interviewDate: "2025-08-08",
+      experience: "6 years",
+      location: "San Francisco, CA",
+      skills: ["Sales Strategy", "Client Acquisition", "Market Research"],
+      cvUrl: "/uploads/cv/john_doe_cv.pdf",
+    },
+    {
+      id: 2,
+      name: "Jane Smith",
+      email: "jane.smith@email.com",
+      phone: "+1 (555) 987-6543",
+      jobId: 1,
+      jobTitle: "Senior Business Development Manager",
+      appliedDate: "2025-08-06",
+      status: "Selected",
+      cvMatchScore: 88,
+      interviewScore: 91,
+      interviewDate: "2025-08-09",
+      experience: "7 years",
+      location: "San Francisco, CA",
+      skills: ["Sales Strategy", "Negotiation", "Team Leadership"],
+      cvUrl: "/uploads/cv/jane_smith_cv.pdf",
+    },
+    {
+      id: 3,
+      name: "Mike Johnson",
+      email: "mike.johnson@email.com",
+      phone: "+1 (555) 456-7890",
+      jobId: 2,
+      jobTitle: "Strategic Partnerships Manager",
+      appliedDate: "2025-08-07",
+      status: "Pending Interview",
+      cvMatchScore: 76,
+      interviewScore: null,
+      interviewDate: null,
+      experience: "4 years",
+      location: "New York, NY",
+      skills: ["Partnership Development", "Contract Negotiation"],
+      cvUrl: "/uploads/cv/mike_johnson_cv.pdf",
+    },
+    {
+      id: 4,
+      name: "Sarah Wilson",
+      email: "sarah.wilson@email.com",
+      phone: "+1 (555) 321-0987",
+      jobId: 1,
+      jobTitle: "Senior Business Development Manager",
+      appliedDate: "2025-08-08",
+      status: "Rejected",
+      cvMatchScore: 65,
+      interviewScore: 58,
+      interviewDate: "2025-08-09",
+      experience: "3 years",
+      location: "Los Angeles, CA",
+      skills: ["Sales", "Customer Relations"],
+      cvUrl: "/uploads/cv/sarah_wilson_cv.pdf",
+    },
+  ]);
 
-	const displayStatus = (status) => {
-		const s = String(status || '').toLowerCase();
-		const map = {
-			active: 'Active',
-			published: 'Published',
-			closed: 'Closed',
-			draft: 'Draft',
-			paused: 'Paused',
-			scheduled: 'Scheduled',
-			pending: 'Pending',
-			reviewed: 'Reviewed',
-			shortlisted: 'Shortlisted',
-			interviewed: 'Interviewed',
-			selected: 'Selected',
-			rejected: 'Rejected'
-		};
-		return map[s] || (s ? (s.charAt(0).toUpperCase() + s.slice(1)) : '');
-	};
+  useEffect(() => {
+    // Check URL parameters for active tab
+    const tabParam = searchParams.get("tab");
+    if (
+      tabParam &&
+      ["overview", "jobs", "candidates", "profile"].includes(tabParam)
+    ) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
-	const handleLogout = () => {
-		logout();
-	};
+  // replaced by useJobs
 
-	const getCandidatesForJob = (jobId) => {
-		// applications from backend contain job_id as string matching job._id
-		const jId = String(jobId || '');
-		return applications.filter(app => String(app.job_id) === jId);
-	};
+  // provided by useJobs
 
-	// Filter applications based on selected position and status
-	const getFilteredCandidates = () => {
-		let filtered = applications;
+  // provided by useJobs
 
-		if (selectedPosition) {
-			filtered = filtered.filter(app => app.job_details?.title === selectedPosition);
-		}
+  // provided by useJobs
 
-		if (selectedStatus) {
-			// Direct status matching with proper case handling
-			const normalizedSelectedStatus = selectedStatus.toLowerCase();
-			filtered = filtered.filter(app => {
-				const appStatus = String(app.status || '').toLowerCase();
-				return appStatus === normalizedSelectedStatus;
-			});
-		}
+  const getStatusColor = (status) => {
+    const s = String(status || "").toLowerCase();
+    switch (s) {
+      case "active":
+        return "#27ae60";
+      case "draft":
+        return "#f39c12";
+      case "paused":
+        return "#f59e0b";
+      case "closed":
+        return "#e74c3c";
+      case "scheduled":
+        return "#3498db";
+      case "selected":
+        return "#27ae60";
+      case "rejected":
+        return "#e74c3c";
+      case "interviewed":
+        return "#9b59b6";
+      case "pending":
+      case "pending interview":
+        return "#f39c12";
+      case "reviewed":
+        return "#3498db";
+      case "shortlisted":
+        return "#8e44ad";
+      default:
+        return "#95a5a6";
+    }
+  };
 
-		return filtered;
-	};
+  const displayStatus = (status) => {
+    const s = String(status || "").toLowerCase();
+    const map = {
+      active: "Active",
+      published: "Published",
+      closed: "Closed",
+      draft: "Draft",
+      paused: "Paused",
+      scheduled: "Scheduled",
+      pending: "Pending",
+      reviewed: "Reviewed",
+      shortlisted: "Shortlisted",
+      interviewed: "Interviewed",
+      selected: "Selected",
+      rejected: "Rejected",
+    };
+    return map[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+  };
 
-	const viewInterviewReport = async (applicationId) => {
-		const report = await fetchInterviewReport(applicationId);
-		if (!report) return;
-		setReportData(report);
-		const app = applications.find(a => a._id === applicationId);
-		const cv = typeof app?.cv_score === 'number' ? Math.round(app.cv_score) : (typeof app?.similarity_score === 'number' ? Math.round(app.similarity_score * 100) : null);
-		const interview = typeof app?.interview_score === 'number' ? Math.round(app.interview_score) : (typeof report.final_score === 'number' ? Math.round(report.final_score) : null);
-		setReportScores({ cv, interview });
-		setIsReportOpen(true);
-	};
-	const viewProctoringReport = async (applicationId) => {
-		const report = await fetchInterviewReport(applicationId);
-		if (!report) return;
-		setReportData(report);
-		setIsProctoringModalOpen(true);
-	};
-	// Handle filter changes
-	const handlePositionFilter = (e) => {
-		setSelectedPosition(e.target.value);
-	};
+  const getCandidatesForJob = (jobId) => {
+    // applications from backend contain job_id as string matching job._id
+    const jId = String(jobId || "");
+    return applications.filter((app) => String(app.job_id) === jId);
+  };
 
-	const handleStatusFilter = (e) => {
-		setSelectedStatus(e.target.value);
-	};
+  // Filter applications based on selected position and status
+  const getFilteredCandidates = () => {
+    let filtered = applications;
 
-	const handleClearFilters = () => {
-		setSelectedPosition("");
-		setSelectedStatus("");
-		showToast("Filters cleared", "info");
-	};
+    if (selectedPosition) {
+      filtered = filtered.filter(
+        (app) => app.job_details?.title === selectedPosition
+      );
+    }
 
-	// Ensure job stats refresh after application status changes
-	const handleUpdateApplicationStatus = async (applicationId, newStatus) => {
-		const ok = await updateApplicationStatus(applicationId, newStatus);
-		if (ok) {
-			// refresh both jobs and applications to keep data in sync
-			loadJobs();
-			loadApplications();
-			showToast(`Application status updated to ${newStatus}`, "success");
-		}
-	};
+    if (selectedStatus) {
+      // Direct status matching with proper case handling
+      const normalizedSelectedStatus = selectedStatus.toLowerCase();
+      filtered = filtered.filter((app) => {
+        const appStatus = String(app.status || "").toLowerCase();
+        return appStatus === normalizedSelectedStatus;
+      });
+    }
 
-	// Handle tab changes with URL updates
-	const handleTabChange = (tab) => {
-		setActiveTab(tab);
-		setSearchParams({ tab });
-	};
+    return filtered;
+  };
 
-	// showToast defined earlier for hooks
+  const viewInterviewReport = async (applicationId) => {
+    const report = await fetchInterviewReport(applicationId);
+    if (!report) return;
+    setReportData(report);
+    const app = applications.find((a) => a._id === applicationId);
+    const cv =
+      typeof app?.cv_score === "number"
+        ? Math.round(app.cv_score)
+        : typeof app?.similarity_score === "number"
+        ? Math.round(app.similarity_score * 100)
+        : null;
+    const interview =
+      typeof app?.interview_score === "number"
+        ? Math.round(app.interview_score)
+        : typeof report.final_score === "number"
+        ? Math.round(report.final_score)
+        : null;
+    setReportScores({ cv, interview });
+    setIsReportOpen(true);
+  };
+  const viewProctoringReport = async (applicationId) => {
+    const report = await fetchInterviewReport(applicationId);
+    if (!report) return;
+    setReportData(report);
+    setIsProctoringModalOpen(true);
+  };
+  // Handle filter changes
+  const handlePositionFilter = (e) => {
+    setSelectedPosition(e.target.value);
+  };
 
-	const removeToast = (id) => {
-		setToasts(prev => prev.filter(toast => toast.id !== id));
-	};
+  const handleStatusFilter = (e) => {
+    setSelectedStatus(e.target.value);
+  };
 
-	// Function to handle creating a new job
-	const handleCreateNewJob = () => {
-		setIsJobModalOpen(true);
-	};
+  const handleClearFilters = () => {
+    setSelectedPosition("");
+    setSelectedStatus("");
+    showToast("Filters cleared", "info");
+  };
 
-	const handleJobModalClose = () => {
-		setIsJobModalOpen(false);
-	};
+  // Ensure job stats refresh after application status changes
+  const handleUpdateApplicationStatus = async (applicationId, newStatus) => {
+    const ok = await updateApplicationStatus(applicationId, newStatus);
+    if (ok) {
+      // refresh both jobs and applications to keep data in sync
+      loadJobs();
+      loadApplications();
+      showToast(`Application status updated to ${newStatus}`, "success");
+    }
+  };
 
-	const handleJobCreate = async (newJob) => {
-		// Save to backend
-		const success = await saveJobPosting(newJob);
-		if (success) {
-			console.log("New job created:", newJob);
-		}
-	};
+  // Handle tab changes with URL updates
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
-	// Function to handle candidate actions
-	const handleViewCV = (candidate) => {
-		setSelectedCandidate(candidate);
-		setIsCVViewerOpen(true);
-		showToast(`Opening CV for ${candidate.name}`, "info");
-		console.log("Viewing CV for:", candidate);
-	};
+  // showToast defined earlier for hooks
 
-	const handleCloseCVViewer = () => {
-		setIsCVViewerOpen(false);
-		setSelectedCandidate(null);
-	};
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
-	const handleSelectCandidate = (candidate) => {
-		// Update candidate status to selected
-		setCandidates(prev => prev.map(c => 
-			c.id === candidate.id ? { ...c, status: "Selected" } : c
-		));
-		showToast(`${candidate.name} has been selected!`, "success");
-	};
+  // Function to handle creating a new job
+  const handleCreateNewJob = () => {
+    setIsJobModalOpen(true);
+  };
 
-	const handleRejectCandidate = (candidate) => {
-		// Update candidate status to rejected
-		setCandidates(prev => prev.map(c => 
-			c.id === candidate.id ? { ...c, status: "Rejected" } : c
-		));
-		showToast(`${candidate.name} has been rejected`, "warning");
-	};
+  const handleJobModalClose = () => {
+    setIsJobModalOpen(false);
+  };
 
-	const handleScheduleInterview = (candidate) => {
-		showToast(`Interview scheduling for ${candidate.name}`, "info");
-		console.log("Scheduling interview for:", candidate);
-	};
+  const handleJobCreate = async (newJob) => {
+    // Save to backend
+    const success = await saveJobPosting(newJob);
+    if (success) {
+      console.log("New job created:", newJob);
+    }
+  };
 
-	// Function to handle job actions
-	const handleViewJobDetails = (job) => {
-		setSelectedJob(job);
-		setIsJobDetailsModalOpen(true);
-		showToast(`Viewing details for ${job.title}`, "info");
-	};
+  // Function to handle candidate actions
+  const handleViewCV = (candidate) => {
+    setSelectedCandidate(candidate);
+    setIsCVViewerOpen(true);
+    showToast(`Opening CV for ${candidate.name}`, "info");
+    console.log("Viewing CV for:", candidate);
+  };
 
-	const handleViewJobCandidates = (job) => {
-		const jobCandidates = getCandidatesForJob(job._id || job.id);
-		// Switch to candidates tab and filter by this job
-		setActiveTab("candidates");
-		setSelectedPosition(job.title);
-		// Update URL to reflect the change
-		searchParams.set('tab', 'candidates');
-		setSearchParams(searchParams);
-		showToast(`Showing ${jobCandidates.length} candidates for ${job.title}`, "info");
-	};
+  const handleCloseCVViewer = () => {
+    setIsCVViewerOpen(false);
+    setSelectedCandidate(null);
+  };
 
-	const handleEditJob = (job) => {
-		setSelectedJob(job);
-		setIsJobEditModalOpen(true);
-		showToast(`Opening editor for ${job.title}`, "info");
-	};
+  const handleSelectCandidate = (candidate) => {
+    // Update candidate status to selected
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === candidate.id ? { ...c, status: "Selected" } : c
+      )
+    );
+    showToast(`${candidate.name} has been selected!`, "success");
+  };
 
-	// Company Profile handlers
-	const handleEditProfile = () => {
-		setIsEditingProfile(true);
-		showToast("Profile editing enabled", "info");
-		console.log("Enabling profile editing...");
-	};
+  const handleRejectCandidate = (candidate) => {
+    // Update candidate status to rejected
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === candidate.id ? { ...c, status: "Rejected" } : c
+      )
+    );
+    showToast(`${candidate.name} has been rejected`, "warning");
+  };
 
-	const handleSaveProfile = async () => {
-		try {
-			await apiUpdateCompanyProfile({
-				company_name: companyProfile.companyName,
-				company_industry: companyProfile.industry,
-				company_size: companyProfile.size,
-				company_website: companyProfile.website,
-				company_description: companyProfile.description
-			});
-			setIsEditingProfile(false);
-			showToast("Company profile saved successfully!", "success");
-		} catch (error) {
-			console.error("Error saving company profile:", error);
-			showToast("Failed to save company profile", "error");
-		}
-	};
+  const handleScheduleInterview = (candidate) => {
+    showToast(`Interview scheduling for ${candidate.name}`, "info");
+    console.log("Scheduling interview for:", candidate);
+  };
 
-	const handleCancelEdit = () => {
-		setIsEditingProfile(false);
-		showToast("Changes cancelled", "warning");
-		console.log("Cancelling profile edit...");
-	};
+  // Function to handle job actions
+  const handleViewJobDetails = (job) => {
+    setSelectedJob(job);
+    setIsJobDetailsModalOpen(true);
+    showToast(`Viewing details for ${job.title}`, "info");
+  };
 
-	// Job modal handlers
-	const handleCloseJobDetails = () => {
-		setIsJobDetailsModalOpen(false);
-		setSelectedJob(null);
-	};
+  const handleViewJobCandidates = (job) => {
+    const jobCandidates = getCandidatesForJob(job._id || job.id);
+    // Switch to candidates tab and filter by this job
+    setActiveTab("candidates");
+    setSelectedPosition(job.title);
+    // Update URL to reflect the change
+    searchParams.set("tab", "candidates");
+    setSearchParams(searchParams);
+    showToast(
+      `Showing ${jobCandidates.length} candidates for ${job.title}`,
+      "info"
+    );
+  };
 
-	const handleCloseJobEdit = () => {
-		setIsJobEditModalOpen(false);
-		setSelectedJob(null);
-	};
+  const handleEditJob = (job) => {
+    setSelectedJob(job);
+    setIsJobEditModalOpen(true);
+    showToast(`Opening editor for ${job.title}`, "info");
+  };
 
-	const handleJobUpdate = async (updatedJob) => {
-		// Try multiple sources for the job ID
-		const id = updatedJob._id || updatedJob.id || selectedJob?._id || selectedJob?.id;
-		if (!id) {
-			showToast("Error: Job ID not found", "error");
-			console.error('Job ID missing from:', { updatedJob, selectedJob });
-			return;
-		}
-		const ok = await updateJobPosting(id, updatedJob);
-		if (ok) {
-			showToast(`${updatedJob.title} has been updated successfully!`, "success");
-		}
-	};
+  // Company Profile handlers
+  const handleEditProfile = () => {
+    setIsEditingProfile(true);
+    showToast("Profile editing enabled", "info");
+    console.log("Enabling profile editing...");
+  };
 
-	const handleEditFromDetails = (job) => {
-		// Close the details modal and open the edit modal
-		setIsJobDetailsModalOpen(false);
-		setIsJobEditModalOpen(true);
-		setSelectedJob(job);
-		showToast(`Opening editor for ${job.title}`, "info");
-	};
+  const handleSaveProfile = async () => {
+    try {
+      await apiUpdateCompanyProfile({
+        company_name: companyProfile.companyName,
+        company_industry: companyProfile.industry,
+        company_size: companyProfile.size,
+        company_website: companyProfile.website,
+        company_description: companyProfile.description,
+      });
+      setIsEditingProfile(false);
+      showToast("Company profile saved successfully!", "success");
+    } catch (error) {
+      console.error("Error saving company profile:", error);
+      showToast("Failed to save company profile", "error");
+    }
+  };
 
-	if (!user) {
-		return (
-			<div className={styles.loadingContainer}>
-				<div className={styles.loadingSpinner}>Loading...</div>
-			</div>
-		);
-	}
+  const handleCancelEdit = () => {
+    setIsEditingProfile(false);
+    showToast("Changes cancelled", "warning");
+    console.log("Cancelling profile edit...");
+  };
 
-	return (
-		<div className={styles.dashboardContainer}>
-			{/* Use shared Navbar component */}
-			<Navbar userType="recruiter" />
+  // Job modal handlers
+  const handleCloseJobDetails = () => {
+    setIsJobDetailsModalOpen(false);
+    setSelectedJob(null);
+  };
 
-			{/* Verification Pending Banner */}
-			{!isVerified && (
-				<div className={styles.verificationBanner}>
-					<div className={styles.bannerContent}>
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: "24px", height: "24px", flexShrink: 0 }}>
-							<path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
-						</svg>
-						<div>
-							<strong>Account Pending Verification</strong>
-							<p>Your recruiter account is being reviewed by an administrator. You can view your profile and existing data, but job posting features are disabled until verification is complete.</p>
-						</div>
-					</div>
-				</div>
-			)}
+  const handleCloseJobEdit = () => {
+    setIsJobEditModalOpen(false);
+    setSelectedJob(null);
+  };
 
-			{/* Toast notifications */}
-			{toasts.map(toast => (
-				<Toast
-					key={toast.id}
-					message={toast.message}
-					type={toast.type}
-					onClose={() => removeToast(toast.id)}
-				/>
-			))}
+  const handleJobUpdate = async (updatedJob) => {
+    // Try multiple sources for the job ID
+    const id =
+      updatedJob._id || updatedJob.id || selectedJob?._id || selectedJob?.id;
+    if (!id) {
+      showToast("Error: Job ID not found", "error");
+      console.error("Job ID missing from:", { updatedJob, selectedJob });
+      return;
+    }
+    const ok = await updateJobPosting(id, updatedJob);
+    if (ok) {
+      showToast(
+        `${updatedJob.title} has been updated successfully!`,
+        "success"
+      );
+    }
+  };
 
-			{/* Job Creation Modal */}
-			<JobCreationModal
-				isOpen={isJobModalOpen}
-				onClose={handleJobModalClose}
-				onJobCreate={handleJobCreate}
-			/>
+  const handleEditFromDetails = (job) => {
+    // Close the details modal and open the edit modal
+    setIsJobDetailsModalOpen(false);
+    setIsJobEditModalOpen(true);
+    setSelectedJob(job);
+    showToast(`Opening editor for ${job.title}`, "info");
+  };
 
-			{/* Job Details Modal */}
-			<JobDetailsModal
-				isOpen={isJobDetailsModalOpen}
-				onClose={handleCloseJobDetails}
-				job={selectedJob}
-				onEdit={handleEditFromDetails}
-			/>
+  if (!user) {
+    return (
+      <div className={styles.loadingContainer}>
+        <div className={styles.loadingSpinner}>Loading...</div>
+      </div>
+    );
+  }
 
-			{/* Job Edit Modal */}
-			<JobEditModal
-				isOpen={isJobEditModalOpen}
-				onClose={handleCloseJobEdit}
-				jobData={selectedJob}
-				onJobUpdate={handleJobUpdate}
-			/>
+  return (
+    <div className={styles.dashboardContainer}>
+      {/* Use shared Navbar component */}
+      <Navbar userType="recruiter" />
 
-			{/* CV Viewer Modal */}
-			<CVViewer
-				isOpen={isCVViewerOpen}
-				onClose={handleCloseCVViewer}
-				candidate={selectedCandidate}
-			/>
+      {/* Verification Pending Banner */}
+      {!isVerified && (
+        <div className={styles.verificationBanner}>
+          <div className={styles.bannerContent}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              style={{ width: "24px", height: "24px", flexShrink: 0 }}
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div>
+              <strong>Account Pending Verification</strong>
+              <p>
+                Your recruiter account is being reviewed by an administrator.
+                You can view your profile and existing data, but job posting
+                features are disabled until verification is complete.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
-			{/* Interview Report Modal */}
-			<InterviewReportModal
-				isOpen={isReportOpen}
-				onClose={() => setIsReportOpen(false)}
-				report={reportData}
-				cvScore={reportScores.cv}
-				interviewScore={reportScores.interview}
-			/>
-			{/* Proctoring Result Modal */}
-			<ProctoringResultModal
-				isOpen={isProctoringModalOpen}
-				onClose={() => setIsProctoringModalOpen(false)}
-				report={reportData}
-			/>
-			{/* Navigation Tabs */}
-			<Tabs activeTab={activeTab} onChange={handleTabChange} />
+      {/* Toast notifications */}
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
 
-			<div className={styles.mainContent}>
+      {/* Job Creation Modal */}
+      <JobCreationModal
+        isOpen={isJobModalOpen}
+        onClose={handleJobModalClose}
+        onJobCreate={handleJobCreate}
+      />
 
-				{/* Tab Content */}
-				{activeTab === "overview" && (
-					<div className={styles.overviewSection}>
-						<div className={styles.welcomeSection}>
-							<h2>Dashboard Overview</h2>
-							<p>Manage your job postings, track candidates, and monitor recruitment progress</p>
-						</div>
-						<OverviewMetrics 
-							jobPostingsCount={jobPostings.filter(job => String(job.status || '').toLowerCase() === "active").length}
-							applicationsCount={applications.length}
-							applications={applications}
-						/>
+      {/* Job Details Modal */}
+      <JobDetailsModal
+        isOpen={isJobDetailsModalOpen}
+        onClose={handleCloseJobDetails}
+        job={selectedJob}
+        onEdit={handleEditFromDetails}
+      />
 
-						{/* Recent Activity */}
-						<RecentActivity applications={applications} />
-					</div>
-				)}
+      {/* Job Edit Modal */}
+      <JobEditModal
+        isOpen={isJobEditModalOpen}
+        onClose={handleCloseJobEdit}
+        jobData={selectedJob}
+        onJobUpdate={handleJobUpdate}
+      />
 
-				{activeTab === "jobs" && (
-						<div className={styles.jobsContent}>
-							<SectionHeader 
-								title="Job Postings Management"
-								actions={(
-									<button 
-										className={`${styles.primaryButton} ${!isVerified ? styles.disabledButton : ''}`} 
-										onClick={isVerified ? handleCreateNewJob : () => showToast('Your account must be verified to create job postings', 'warning')}
-										disabled={!isVerified}
-									>
-										<i className="fa fa-plus"></i> Create New Job
-										{!isVerified && <span className={styles.lockedIcon}>🔒</span>}
-									</button>
-								)}
-							/>
-							{!isVerified && (
-								<div className={styles.limitedAccessNotice}>
-									<p>Job posting features are disabled until your account is verified. You can still view existing job postings.</p>
-								</div>
-							)}
-							<JobsGrid 
-								jobs={jobPostings}
-								getStatusColor={getStatusColor}
-								displayStatus={displayStatus}
-								getCandidatesForJob={getCandidatesForJob}
-								onViewDetails={handleViewJobDetails}
-								onViewCandidates={handleViewJobCandidates}
-								onEdit={isVerified ? handleEditJob : () => showToast('Your account must be verified to edit job postings', 'warning')}
-							/>
-						</div>
-					)}
+      {/* CV Viewer Modal */}
+      <CVViewer
+        isOpen={isCVViewerOpen}
+        onClose={handleCloseCVViewer}
+        candidate={selectedCandidate}
+      />
 
-					{activeTab === "candidates" && (
-						<div className={styles.candidatesContent}>
-							<SectionHeader title="Candidate Management" />
-							<CandidatesFilters 
-								jobPostings={jobPostings}
-								selectedPosition={selectedPosition}
-								selectedStatus={selectedStatus}
-								onPositionChange={(v) => setSelectedPosition(v)}
-								onStatusChange={(v) => setSelectedStatus(v)}
-								onClear={handleClearFilters}
-							/>
-							<CandidatesList 
-								applications={getFilteredCandidates()}
-								totalCount={applications.length}
-								selectedPosition={selectedPosition}
-								selectedStatus={selectedStatus}
-								onClear={handleClearFilters}
-								displayStatus={displayStatus}
-								updateApplicationStatus={handleUpdateApplicationStatus}
-								viewInterviewReport={viewInterviewReport}
-								viewProctoringReport={viewProctoringReport}
-							/>
-						</div>
-					)}
+      {/* Interview Report Modal */}
+      <InterviewReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        report={reportData}
+        cvScore={reportScores.cv}
+        interviewScore={reportScores.interview}
+      />
+      {/* Proctoring Result Modal */}
+      <ProctoringResultModal
+        isOpen={isProctoringModalOpen}
+        onClose={() => setIsProctoringModalOpen(false)}
+        report={reportData}
+      />
+      {/* Navigation Tabs */}
+      <Tabs activeTab={activeTab} onChange={handleTabChange} />
 
-					{activeTab === "profile" && (
-                        <div className={styles.profileContent}>
-                            <SectionHeader 
-                                title="Company Profile"
-                                actions={(
-                                    !isEditingProfile ? (
-                                        <button className={styles.primaryButton} onClick={handleEditProfile}>
-                                            <i className="fa fa-edit"></i> Edit Profile
-                                        </button>
-                                    ) : (
-                                        <span style={{ color: "#4a90e2", fontWeight: 500 }}>
-                                            <i className="fa fa-edit"></i> Editing Mode
-                                        </span>
-                                    )
-                                )}
-                            />
-                            <ProfileForm 
-                                companyProfile={companyProfile}
-                                isEditing={isEditingProfile}
-                                onChange={setCompanyProfile}
-                                onSave={handleSaveProfile}
-                                onCancel={handleCancelEdit}
-                            />
-                        </div>
-                    )}
-				</div>
-		</div>
-	);
+      <div className={styles.mainContent}>
+        {/* Tab Content */}
+        {activeTab === "overview" && (
+          <div className={styles.overviewSection}>
+            <div className={styles.welcomeSection}>
+              <h2>Dashboard Overview</h2>
+              <p>
+                Manage your job postings, track candidates, and monitor
+                recruitment progress
+              </p>
+            </div>
+
+            {/* Subscription Banner */}
+            <SubscriptionBanner
+              subscription={subscription}
+              loading={subscriptionLoading}
+              onUpgrade={handleOpenUpgradeModal}
+            />
+
+            <OverviewMetrics
+              jobPostingsCount={
+                jobPostings.filter(
+                  (job) => String(job.status || "").toLowerCase() === "active"
+                ).length
+              }
+              applicationsCount={applications.length}
+              applications={applications}
+            />
+
+            {/* Recent Activity */}
+            <RecentActivity applications={applications} />
+          </div>
+        )}
+
+        {activeTab === "jobs" && (
+          <div className={styles.jobsContent}>
+            <SectionHeader
+              title="Job Postings Management"
+              actions={
+                <button
+                  className={`${styles.primaryButton} ${
+                    !isVerified ? styles.disabledButton : ""
+                  }`}
+                  onClick={
+                    isVerified
+                      ? handleCreateNewJob
+                      : () =>
+                          showToast(
+                            "Your account must be verified to create job postings",
+                            "warning"
+                          )
+                  }
+                  disabled={!isVerified}
+                >
+                  <i className="fa fa-plus"></i> Create New Job
+                  {!isVerified && <span className={styles.lockedIcon}>🔒</span>}
+                </button>
+              }
+            />
+            {!isVerified && (
+              <div className={styles.limitedAccessNotice}>
+                <p>
+                  Job posting features are disabled until your account is
+                  verified. You can still view existing job postings.
+                </p>
+              </div>
+            )}
+            <JobsGrid
+              jobs={jobPostings}
+              getStatusColor={getStatusColor}
+              displayStatus={displayStatus}
+              getCandidatesForJob={getCandidatesForJob}
+              onViewDetails={handleViewJobDetails}
+              onViewCandidates={handleViewJobCandidates}
+              onEdit={
+                isVerified
+                  ? handleEditJob
+                  : () =>
+                      showToast(
+                        "Your account must be verified to edit job postings",
+                        "warning"
+                      )
+              }
+            />
+          </div>
+        )}
+
+        {activeTab === "candidates" && (
+          <div className={styles.candidatesContent}>
+            <SectionHeader title="Candidate Management" />
+            <CandidatesFilters
+              jobPostings={jobPostings}
+              selectedPosition={selectedPosition}
+              selectedStatus={selectedStatus}
+              onPositionChange={(v) => setSelectedPosition(v)}
+              onStatusChange={(v) => setSelectedStatus(v)}
+              onClear={handleClearFilters}
+            />
+            <CandidatesList
+              applications={getFilteredCandidates()}
+              totalCount={applications.length}
+              selectedPosition={selectedPosition}
+              selectedStatus={selectedStatus}
+              onClear={handleClearFilters}
+              displayStatus={displayStatus}
+              updateApplicationStatus={handleUpdateApplicationStatus}
+              viewInterviewReport={viewInterviewReport}
+              viewProctoringReport={viewProctoringReport}
+            />
+          </div>
+        )}
+
+        {activeTab === "profile" && (
+          <div className={styles.profileContent}>
+            <SectionHeader
+              title="Company Profile"
+              actions={
+                !isEditingProfile ? (
+                  <button
+                    className={styles.primaryButton}
+                    onClick={handleEditProfile}
+                  >
+                    <i className="fa fa-edit"></i> Edit Profile
+                  </button>
+                ) : (
+                  <span style={{ color: "#4a90e2", fontWeight: 500 }}>
+                    <i className="fa fa-edit"></i> Editing Mode
+                  </span>
+                )
+              }
+            />
+            <ProfileForm
+              companyProfile={companyProfile}
+              isEditing={isEditingProfile}
+              onChange={setCompanyProfile}
+              onSave={handleSaveProfile}
+              onCancel={handleCancelEdit}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Upgrade Plan Modal - can be triggered from SubscriptionBanner */}
+      <UpgradePlanModal
+        isOpen={isUpgradeModalOpen}
+        onClose={handleCloseUpgradeModal}
+        currentSubscription={subscription}
+        onSubscriptionUpdate={handleSubscriptionUpdate}
+      />
+    </div>
+  );
 };
 
 export default RecruiterDashboard;

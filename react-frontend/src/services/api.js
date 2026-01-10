@@ -4,7 +4,9 @@
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
 
 function authHeaders() {
-  const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+  const token = localStorage.getItem(
+    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"
+  );
   return {
     Authorization: `Bearer ${token}`,
   };
@@ -73,9 +75,9 @@ export const updateCvDetails = (payload) =>
 // File uploads (candidate)
 export const uploadCV = (file) => {
   const formData = new FormData();
-  formData.append("cv_file", file);  // Changed from 'cv' to 'cv_file' for new CV management system
-  formData.append("is_primary", "false");  // Don't set as primary automatically
-  return request("/cv/upload", { method: "POST", body: formData });  // New endpoint
+  formData.append("cv_file", file); // Changed from 'cv' to 'cv_file' for new CV management system
+  formData.append("is_primary", "false"); // Don't set as primary automatically
+  return request("/cv/upload", { method: "POST", body: formData }); // New endpoint
 };
 
 export const uploadPhoto = (file) => {
@@ -126,8 +128,9 @@ export const startInterview = (applicationId) =>
       application_id: applicationId,
       cv_path: "uploads/cv/Data Science_resume_juanjosecarin.pdf",
       jd_path: "uploads/jd/Data_Scientist_Job_Description.pdf",
-      reference_paths: ["uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf"
-        , "uploads/reference/Machine Learning For Absolute Beginners.pdf"
+      reference_paths: [
+        "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
+        "uploads/reference/Machine Learning For Absolute Beginners.pdf",
       ],
     }),
   });

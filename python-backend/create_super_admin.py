@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-def create_super_admin(email: str = "roshan643yadav@gmail.com"):
+def create_super_admin(email: str = "nikhil1@gmail.com"):
     """
     Find a user by email and promote them to super admin
     """
@@ -104,6 +104,6 @@ def create_super_admin(email: str = "roshan643yadav@gmail.com"):
             print("\n[INFO] MongoDB connection closed")
 
 if __name__ == "__main__":
-    email = sys.argv[1] if len(sys.argv) > 1 else "roshan643yadav@gmail.com"
+    email = sys.argv[1] if len(sys.argv) > 1 else "nikhil1@gmail.com"
     success = create_super_admin(email)
     sys.exit(0 if success else 1)
