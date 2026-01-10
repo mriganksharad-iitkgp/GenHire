@@ -1,0 +1,376 @@
+/* ===================================
+   UPGRADE BUTTON (NAVBAR) STYLES
+   Modern, Compact Design for Navbar
+   =================================== */
+
+.upgradeButton {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.875rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 140px;
+}
+
+.upgradeButton:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.upgradeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Button Content */
+.buttonContent {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+/* Icon Wrapper */
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  flex-shrink: 0;
+}
+
+.iconWrapper svg {
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+}
+
+/* Text Wrapper */
+.textWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.planName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.statusText {
+  font-size: 0.7rem;
+  color: #64748b;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+/* Upgrade Badge */
+.upgradeBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  flex-shrink: 0;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.upgradeBadge svg {
+  width: 12px;
+  height: 12px;
+  color: white;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0);
+  }
+}
+
+/* Loading State */
+.loading {
+  pointer-events: none;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Free Tier State */
+.freeTier {
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+  border-color: #fde047;
+}
+
+.freeTier:hover {
+  background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);
+  border-color: #facc15;
+}
+
+.freeTier .iconWrapper {
+  background: linear-gradient(135deg, #fde047 0%, #facc15 100%);
+}
+
+.freeTier .iconWrapper svg {
+  color: #854d0e;
+}
+
+.freeTier .upgradeBadge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* Paid Tier State */
+.paidTier {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+
+.paidTier:hover {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: #4ade80;
+}
+
+.paidTier .iconWrapper {
+  background: linear-gradient(135deg, #86efac 0%, #4ade80 100%);
+}
+
+.paidTier .iconWrapper svg {
+  color: #166534;
+}
+
+.paidTier .statusText {
+  color: #166534;
+}
+
+/* Warning State (Low Usage) */
+.warning {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+}
+
+.warning:hover {
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+  border-color: #fb923c;
+}
+
+.warning .iconWrapper {
+  background: linear-gradient(135deg, #fdba74 0%, #fb923c 100%);
+}
+
+.warning .iconWrapper svg {
+  color: #9a3412;
+}
+
+.warning .statusText {
+  color: #c2410c;
+}
+
+.warning .upgradeBadge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  animation: pulseWarning 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseWarning {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+    transform: scale(1.05);
+  }
+}
+
+/* Critical State (Out of Interviews) */
+.critical {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+}
+
+.critical:hover {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #f87171;
+}
+
+.critical .iconWrapper {
+  background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%);
+}
+
+.critical .iconWrapper svg {
+  color: #991b1b;
+}
+
+.critical .statusText {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.critical .upgradeBadge {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  animation: pulseCritical 1s ease-in-out infinite;
+}
+
+@keyframes pulseCritical {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    transform: scale(1.1);
+  }
+}
+
+/* Dark Mode */
+:global(.dark) .upgradeButton {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+}
+
+:global(.dark) .upgradeButton:hover {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  border-color: #475569;
+}
+
+:global(.dark) .iconWrapper {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%);
+}
+
+:global(.dark) .iconWrapper svg {
+  color: #94a3b8;
+}
+
+:global(.dark) .planName {
+  color: #f1f5f9;
+}
+
+:global(.dark) .statusText {
+  color: #94a3b8;
+}
+
+:global(.dark) .freeTier {
+  background: linear-gradient(135deg, #422006 0%, #1c1917 100%);
+  border-color: #854d0e;
+}
+
+:global(.dark) .freeTier:hover {
+  background: linear-gradient(135deg, #4a2f1b 0%, #292524 100%);
+}
+
+:global(.dark) .freeTier .iconWrapper {
+  background: linear-gradient(135deg, #a16207 0%, #ca8a04 100%);
+}
+
+:global(.dark) .paidTier {
+  background: linear-gradient(135deg, #052e16 0%, #0f172a 100%);
+  border-color: #166534;
+}
+
+:global(.dark) .paidTier:hover {
+  background: linear-gradient(135deg, #14532d 0%, #1e293b 100%);
+}
+
+:global(.dark) .paidTier .iconWrapper {
+  background: linear-gradient(135deg, #166534 0%, #22c55e 100%);
+}
+
+:global(.dark) .paidTier .statusText {
+  color: #4ade80;
+}
+
+:global(.dark) .warning {
+  background: linear-gradient(135deg, #431407 0%, #1c1917 100%);
+  border-color: #c2410c;
+}
+
+:global(.dark) .warning:hover {
+  background: linear-gradient(135deg, #7c2d12 0%, #292524 100%);
+}
+
+:global(.dark) .warning .statusText {
+  color: #fb923c;
+}
+
+:global(.dark) .critical {
+  background: linear-gradient(135deg, #450a0a 0%, #1c1917 100%);
+  border-color: #dc2626;
+}
+
+:global(.dark) .critical:hover {
+  background: linear-gradient(135deg, #7f1d1d 0%, #292524 100%);
+}
+
+:global(.dark) .critical .statusText {
+  color: #f87171;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .upgradeButton {
+    min-width: auto;
+    padding: 0.5rem;
+  }
+
+  .textWrapper {
+    display: none;
+  }
+
+  .iconWrapper {
+    width: 32px;
+    height: 32px;
+  }
+
+  .iconWrapper svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .upgradeBadge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .upgradeBadge svg {
+    width: 10px;
+    height: 10px;
+  }
+}

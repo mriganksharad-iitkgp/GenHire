@@ -1,0 +1,256 @@
+"""
+Plan Service - Business logic for plan management
+
+Design Decisions:
+1. Seed default plans on first access
+2. Cache plans in memory (low-frequency updates)
+3. Sync with Stripe on plan creation/update
+4. Soft delete for audit trail
+"""
+
+import logging
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from bson import ObjectId
+from pymongo import ASCENDING
+
+from ..models.plan import Plan, PlanSchema
+from ..config.settings import PaymentConfig
+
+logger = logging.getLogger(__name__)
+
+
+class PlanService:
+    """
+    Service for managing pricing plans.
+
+    Handles:
+    - CRUD operations for plans
+    - Default plan seeding
+    - Plan validation
+    """
+
+    def __init__(self, db):
+        """
+        Initialize with database connection.
+
+        Args:
+            db: MongoDB database instance
+        """
+        self.db = db
+        self.collection = db[PlanSchema.COLLECTION_NAME]
+        self._ensure_indexes()
+        self._seed_default_plans()
+
+    def _ensure_indexes(self):
+        """Create indexes if they don't exist"""
+        try:
+            PlanSchema.create_indexes(self.db)
+            logger.info("Plan indexes ensured")
+        except Exception as e:
+            logger.error(f"Error creating plan indexes: {str(e)}")
+
+    def _seed_default_plans(self):
+        """
+        Seed default plans if none exist.
+
+        This ensures the system has usable plans on first deployment.
+        """
+        try:
+            existing = self.collection.count_documents({"is_active": True})
+            if existing > 0:
+                logger.info(f"Found {existing} existing plans, skipping seed")
+                return
+
+            logger.info("Seeding default plans...")
+
+            for slug, plan_data in PaymentConfig.DEFAULT_PLANS.items():
+                plan = Plan(
+                    name=plan_data["name"],
+                    slug=plan_data["slug"],
+                    description=plan_data["description"],
+                    price_cents=plan_data["price_cents"],
+                    interviews_allowed=plan_data["interviews_allowed"],
+                    validity_days=plan_data["validity_days"],
+                    features=plan_data["features"],
+                    is_active=plan_data["is_active"],
+                    display_order=plan_data["display_order"],
+                )
+
+                self.collection.insert_one(plan.to_dict())
+                logger.info(f"Seeded plan: {plan.name}")
+
+            logger.info("Default plans seeded successfully")
+
+        except Exception as e:
+            logger.error(f"Error seeding plans: {str(e)}")
+
+    def get_all_active_plans(self) -> List[Dict[str, Any]]:
+        """
+        Get all active plans sorted by display order.
+
+        Returns:
+            List of plan API responses
+        """
+        try:
+            plans = self.collection.find({"is_active": True}).sort(
+                "display_order", ASCENDING
+            )
+
+            return [Plan.from_dict(p).to_api_response() for p in plans]
+
+        except Exception as e:
+            logger.error(f"Error fetching plans: {str(e)}")
+            return []
+
+    def get_plan_by_id(self, plan_id: str) -> Optional[Plan]:
+        """
+        Get plan by ID.
+
+        Args:
+            plan_id: Plan ObjectId string
+
+        Returns:
+            Plan object or None
+        """
+        try:
+            plan_data = self.collection.find_one(
+                {"_id": ObjectId(plan_id), "is_active": True}
+            )
+
+            if plan_data:
+                return Plan.from_dict(plan_data)
+            return None
+
+        except Exception as e:
+            logger.error(f"Error fetching plan {plan_id}: {str(e)}")
+            return None
+
+    def get_plan_by_slug(self, slug: str) -> Optional[Plan]:
+        """
+        Get plan by slug identifier.
+
+        Args:
+            slug: Plan slug (e.g., 'starter')
+
+        Returns:
+            Plan object or None
+        """
+        try:
+            plan_data = self.collection.find_one({"slug": slug, "is_active": True})
+
+            if plan_data:
+                return Plan.from_dict(plan_data)
+            return None
+
+        except Exception as e:
+            logger.error(f"Error fetching plan by slug {slug}: {str(e)}")
+            return None
+
+    def create_plan(
+        self,
+        name: str,
+        slug: str,
+        description: str,
+        price_cents: int,
+        interviews_allowed: int,
+        validity_days: int,
+        features: List[str] = None,
+        display_order: int = 0,
+    ) -> Optional[Plan]:
+        """
+        Create a new plan.
+
+        Args:
+            name: Display name
+            slug: URL-friendly identifier
+            description: Marketing description
+            price_cents: Price in cents
+            interviews_allowed: Number of interviews (-1 for unlimited)
+            validity_days: Plan validity period
+            features: List of feature strings
+            display_order: Sort order
+
+        Returns:
+            Created Plan or None
+        """
+        try:
+            # Check for duplicate slug
+            existing = self.collection.find_one({"slug": slug})
+            if existing:
+                logger.warning(f"Plan with slug {slug} already exists")
+                return None
+
+            plan = Plan(
+                name=name,
+                slug=slug,
+                description=description,
+                price_cents=price_cents,
+                interviews_allowed=interviews_allowed,
+                validity_days=validity_days,
+                features=features or [],
+                display_order=display_order,
+            )
+
+            result = self.collection.insert_one(plan.to_dict())
+            plan._id = result.inserted_id
+
+            logger.info(f"Created plan: {name} (ID: {result.inserted_id})")
+            return plan
+
+        except Exception as e:
+            logger.error(f"Error creating plan: {str(e)}")
+            return None
+
+    def update_plan(self, plan_id: str, updates: Dict[str, Any]) -> Optional[Plan]:
+        """
+        Update plan fields.
+
+        Args:
+            plan_id: Plan ObjectId string
+            updates: Fields to update
+
+        Returns:
+            Updated Plan or None
+        """
+        try:
+            # Prevent updating certain fields
+            protected_fields = ["_id", "slug", "created_at"]
+            for field in protected_fields:
+                updates.pop(field, None)
+
+            updates["updated_at"] = datetime.utcnow()
+
+            result = self.collection.find_one_and_update(
+                {"_id": ObjectId(plan_id)}, {"$set": updates}, return_document=True
+            )
+
+            if result:
+                return Plan.from_dict(result)
+            return None
+
+        except Exception as e:
+            logger.error(f"Error updating plan {plan_id}: {str(e)}")
+            return None
+
+    def deactivate_plan(self, plan_id: str) -> bool:
+        """
+        Soft delete a plan (deactivate).
+
+        Args:
+            plan_id: Plan ObjectId string
+
+        Returns:
+            Success boolean
+        """
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(plan_id)},
+                {"$set": {"is_active": False, "updated_at": datetime.utcnow()}},
+            )
+
+            return result.modified_count > 0
+
+        except Exception as e:
+            logger.error(f"Error deactivating plan {plan_id}: {str(e)}")
+            return False

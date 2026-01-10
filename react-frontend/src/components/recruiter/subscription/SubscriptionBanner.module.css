@@ -1,0 +1,383 @@
+/* ===================================
+   SUBSCRIPTION BANNER STYLES
+   Modern, Clean Design
+   =================================== */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.banner.compact {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Plan Type Variants */
+.banner.freeTier {
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+  border-color: #fde047;
+}
+
+.banner.paidTier {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+
+.banner.lowUsage {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+}
+
+.banner.outOfInterviews {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+}
+
+/* Loading State */
+.banner.loading {
+  background: #f8fafc;
+  min-height: 80px;
+}
+
+.loadingPulse {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.loadingBar {
+  height: 12px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 6px;
+  width: 80%;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Plan Info Section */
+.planInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.planHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.planBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.planBadge svg {
+  width: 20px;
+  height: 20px;
+  color: #3b82f6;
+}
+
+.freeTier .planBadge svg {
+  color: #eab308;
+}
+
+.paidTier .planBadge svg {
+  color: #22c55e;
+}
+
+.planName {
+  font-weight: 600;
+}
+
+.expiryDate {
+  font-size: 0.8rem;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* Usage Section */
+.usageSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.usageInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.usageLabel {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.usageValue {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.usageValue strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.lowUsage .usageValue strong {
+  color: #f59e0b;
+}
+
+.outOfInterviews .usageValue strong {
+  color: #ef4444;
+}
+
+.usageDivider {
+  color: #94a3b8;
+  margin: 0 2px;
+}
+
+.infinityIcon {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  color: #22c55e;
+}
+
+/* Progress Bar */
+.progressBar {
+  width: 100%;
+  max-width: 200px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.lowUsage .progressFill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.outOfInterviews .progressFill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+/* CTA Section */
+.ctaSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.ctaText {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+  text-align: right;
+}
+
+.ctaText svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.lowUsage .ctaText svg {
+  color: #f59e0b;
+}
+
+.outOfInterviews .ctaText svg {
+  color: #ef4444;
+}
+
+/* Upgrade Button */
+.upgradeButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.upgradeButton:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.upgradeButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.outOfInterviews .upgradeButton {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.outOfInterviews .upgradeButton:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* Compact Mode Adjustments */
+.compact .planInfo {
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.compact .planHeader {
+  flex: none;
+}
+
+.compact .usageSection {
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+}
+
+.compact .progressBar {
+  max-width: 120px;
+}
+
+.compact .ctaSection {
+  flex-direction: row;
+  align-items: center;
+}
+
+.compact .ctaText {
+  display: none;
+}
+
+/* Dark Mode */
+:global(.dark) .banner {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+}
+
+:global(.dark) .banner.freeTier {
+  background: linear-gradient(135deg, #422006 0%, #1c1917 100%);
+  border-color: #854d0e;
+}
+
+:global(.dark) .banner.paidTier {
+  background: linear-gradient(135deg, #052e16 0%, #0f172a 100%);
+  border-color: #166534;
+}
+
+:global(.dark) .banner.lowUsage {
+  background: linear-gradient(135deg, #431407 0%, #1c1917 100%);
+  border-color: #c2410c;
+}
+
+:global(.dark) .banner.outOfInterviews {
+  background: linear-gradient(135deg, #450a0a 0%, #1c1917 100%);
+  border-color: #dc2626;
+}
+
+:global(.dark) .planBadge,
+:global(.dark) .usageValue {
+  color: #f1f5f9;
+}
+
+:global(.dark) .expiryDate {
+  background: rgba(0, 0, 0, 0.3);
+  color: #94a3b8;
+}
+
+:global(.dark) .progressBar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .ctaSection {
+    align-items: stretch;
+  }
+
+  .ctaText {
+    text-align: center;
+    justify-content: center;
+  }
+
+  .upgradeButton {
+    justify-content: center;
+  }
+
+  .compact .planInfo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compact .ctaText {
+    display: flex;
+  }
+}
