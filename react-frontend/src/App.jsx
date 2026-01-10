@@ -15,6 +15,7 @@ import JobDetails from "./pages/JobDetails";
 import Register from "./pages/Register";
 import RecruiterOnboarding from "./pages/RecruiterOnboarding";
 import RecruiterDashboard from "./pages/RecruiterDashboard";
+import SubscriptionPlans from "./pages/SubscriptionPlans";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import ApplicationView from "./pages/ApplicationView";
@@ -40,6 +41,7 @@ function App() {
 					<Route path="/forgot-password" element={<ForgotPassword />} />
 					<Route path="/reset-password" element={<ResetPassword />} />
 					<Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
+					<Route path="/subscription" element={<SubscriptionPlans />} />
 					<Route path="/admin" element={<AdminDashboard />} />
 					<Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
 					<Route
