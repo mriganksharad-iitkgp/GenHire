@@ -614,7 +614,7 @@ class PracticeController:
         try:
             sessions = list(self.collections['practice_sessions'].find(
                 {'user_id': user_id, 'is_practice': True}
-            ).sort('created_at', -1).limit(20))
+            ).sort('created_at', -1).limit(100))
             
             # Convert ObjectId to string and format dates
             history = []

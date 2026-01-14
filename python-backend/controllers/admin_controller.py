@@ -9,6 +9,7 @@ class AdminController:
         self.jobs_collection = db_collections['jobs']
         self.applications_collection = db_collections['applications']
         self.interviews_collection = db_collections.get('interviews')  # May not exist
+        self.practice_sessions_collection = db_collections.get('practice_sessions')  # For practice history
     
     def get_dashboard_stats(self, current_user):
         """Get platform statistics for admin dashboard"""
@@ -1262,13 +1263,10 @@ class AdminController:
             if candidate.get('user_type') != 'candidate':
                 return {'error': 'User is not a candidate'}, 400
             
-            # Get practice sessions collection
-            from config.database import db_instance
-            practice_sessions = db_instance.db['practice_sessions']
-            
-            sessions = list(practice_sessions.find(
+            # Get practice sessions - same query as candidate portal
+            sessions = list(self.practice_sessions_collection.find(
                 {'user_id': str(candidate_id), 'is_practice': True}
-            ).sort('created_at', -1).limit(50))
+            ).sort('created_at', -1).limit(100))
             
             # Convert ObjectId to string and format dates
             history = []
@@ -1299,21 +1297,73 @@ class AdminController:
     def get_application_report(self, current_user, application_id):
         """Get interview report for an application (admin access)"""
         try:
-            app_doc = self.applications_collection.find_one({'_id': ObjectId(application_id)})
+            print(f"[Admin] Getting application report for: {application_id}")
+            
+            try:
+                app_doc = self.applications_collection.find_one({'_id': ObjectId(application_id)})
+            except Exception as e:
+                print(f"[Admin] Invalid application ID format: {e}")
+                return {'error': 'Invalid application ID'}, 400
+                
             if not app_doc:
+                print(f"[Admin] Application not found: {application_id}")
                 return {'error': 'Application not found'}, 404
             
-            if not self.interviews_collection:
-                return {'error': 'Interviews collection not available'}, 500
+            print(f"[Admin] Found application, interview_score: {app_doc.get('interview_score')}")
             
-            # Find the completed interview report
-            report = self.interviews_collection.find_one(
-                {'application_id': application_id, 'status': 'completed'},
-                sort=[('updated_at', -1)]
-            )
+            # Try multiple approaches to find the interview report
+            report = None
+            
+            # Approach 1: Query with string application_id (most common)
+            try:
+                cursor = self.interviews_collection.find(
+                    {'application_id': application_id, 'status': 'completed'}
+                ).sort('updated_at', -1).limit(1)
+                reports = list(cursor)
+                if reports:
+                    report = reports[0]
+                    print(f"[Admin] Found report with string ID query")
+            except Exception as e:
+                print(f"[Admin] Error in string ID query: {e}")
+            
+            # Approach 2: Try without status filter
+            if not report:
+                try:
+                    cursor = self.interviews_collection.find(
+                        {'application_id': application_id}
+                    ).sort('updated_at', -1).limit(1)
+                    reports = list(cursor)
+                    if reports:
+                        report = reports[0]
+                        print(f"[Admin] Found report without status filter, status: {report.get('status')}")
+                except Exception as e:
+                    print(f"[Admin] Error in no-status query: {e}")
+            
+            # Approach 3: Try with user_id from application
+            if not report and app_doc.get('student_id'):
+                try:
+                    cursor = self.interviews_collection.find(
+                        {'user_id': app_doc.get('student_id')}
+                    ).sort('updated_at', -1).limit(1)
+                    reports = list(cursor)
+                    if reports:
+                        report = reports[0]
+                        print(f"[Admin] Found report by user_id")
+                except Exception as e:
+                    print(f"[Admin] Error in user_id query: {e}")
             
             if not report:
+                print(f"[Admin] No interview report found for application: {application_id}")
+                # Debug: show sample interviews
+                try:
+                    sample = list(self.interviews_collection.find().limit(3))
+                    for s in sample:
+                        print(f"[Admin] Sample interview: app_id={s.get('application_id')}, status={s.get('status')}, user_id={s.get('user_id')}")
+                except Exception as e:
+                    print(f"[Admin] Error getting sample: {e}")
                 return {'error': 'Interview report not found'}, 404
+            
+            print(f"[Admin] Found report with session_id: {report.get('session_id')}, status: {report.get('status')}")
             
             # Return complete report with transcript
             payload = {
@@ -1329,47 +1379,47 @@ class AdminController:
             
         except Exception as e:
             import traceback
-            print(f"Error getting application report: {str(e)}")
+            print(f"[Admin] Error getting application report: {str(e)}")
             print(traceback.format_exc())
-            return {'error': 'Failed to get interview report'}, 500
+            return {'error': f'Failed to get interview report: {str(e)}'}, 500
 
     def get_practice_report(self, current_user, session_id):
         """Get practice interview report (admin access)"""
         try:
-            from config.database import db_instance
-            practice_sessions = db_instance.db['practice_sessions']
-            
             # Find the practice session
-            session = practice_sessions.find_one({
+            session = self.practice_sessions_collection.find_one({
                 'session_id': session_id
             })
             
             if not session:
                 # Try with ObjectId
                 try:
-                    session = practice_sessions.find_one({'_id': ObjectId(session_id)})
+                    session = self.practice_sessions_collection.find_one({'_id': ObjectId(session_id)})
                 except:
                     pass
             
             if not session:
                 return {'error': 'Practice session not found'}, 404
             
-            # Get cv_score from session
+            # Get cv_score from session (convert to percentage)
             cv_score = session.get('cv_score', session.get('similarity_score', 0))
+            if isinstance(cv_score, float) and cv_score <= 1:
+                cv_score = int(cv_score * 100)  # Convert 0-1 to 0-100
             
-            # Get interview score and evaluation from result
-            result = session.get('result', {})
-            if not isinstance(result, dict):
-                result = {}
+            # Get evaluation - check multiple locations where it might be stored
+            evaluation = session.get('evaluation', {})
+            if not evaluation:
+                # Try result.final_evaluation (old format)
+                result = session.get('result', {})
+                if isinstance(result, dict):
+                    evaluation = result.get('final_evaluation', result.get('evaluation', {}))
+            if not isinstance(evaluation, dict):
+                evaluation = {}
             
-            final_evaluation = result.get('final_evaluation', {})
-            if not isinstance(final_evaluation, dict):
-                final_evaluation = {}
-            
-            # Calculate interview score
+            # Get interview score
             interview_score = session.get('interview_score', 0)
-            if not interview_score and final_evaluation:
-                quantitative = final_evaluation.get('quantitative', final_evaluation.get('quantitative_scores', {}))
+            if not interview_score and evaluation:
+                quantitative = evaluation.get('quantitative', evaluation.get('quantitative_scores', {}))
                 if isinstance(quantitative, dict):
                     scores = [v for k, v in quantitative.items() if isinstance(v, (int, float))]
                     if scores:
@@ -1394,7 +1444,7 @@ class AdminController:
                 'cv_score': cv_score,
                 'interview_score': interview_score,
                 'proctoring_score': session.get('proctoring_score', 100),
-                'evaluation': final_evaluation,
+                'evaluation': evaluation,
                 'transcript': transcript,
                 'role': session.get('role'),
                 'difficulty': session.get('difficulty'),
@@ -1402,6 +1452,8 @@ class AdminController:
                 'created_at': session.get('created_at').isoformat() if session.get('created_at') else None,
                 'completed_at': session.get('completed_at').isoformat() if session.get('completed_at') else None
             }
+            
+            print(f"[Admin] Practice report for {session_id}: CV={cv_score}%, Interview={interview_score}%, Evaluation keys={list(evaluation.keys()) if evaluation else 'None'}")
             
             return report, 200
             

@@ -7,6 +7,9 @@ import InterviewReportModal from "../../components/InterviewReportModal";
 import CVDetailsModal from "../../components/candidate/CVDetailsModal";
 import CVDetailsForm from "../../components/candidate/CVDetailsForm";
 import PracticeDetailsModal from "../../components/PracticeDetailsModal";
+import PracticeHistoryList from "../../components/shared/PracticeHistoryList";
+import ApplicationHistoryList from "../../components/shared/ApplicationHistoryList";
+import JDDetailsModal from "../../components/JDDetailsModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "../../services/adminApi";
 
@@ -54,6 +57,10 @@ const CandidateDetail = () => {
   const [selectedPractice, setSelectedPractice] = useState(null);
   const [practiceModalOpen, setPracticeModalOpen] = useState(false);
   const [practiceReportModal, setPracticeReportModal] = useState({ open: false, report: null });
+  
+  // JD Details Modal for practice sessions
+  const [showJdDetailsModal, setShowJdDetailsModal] = useState(false);
+  const [selectedJdSession, setSelectedJdSession] = useState(null);
   
   // Filters for applications
   const [appFilters, setAppFilters] = useState({
@@ -168,6 +175,72 @@ const CandidateDetail = () => {
     }
   };
 
+  // Handle application status change
+  const handleApplicationStatusChange = async (appId, newStatus) => {
+    try {
+      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const response = await fetch(`http://localhost:5000/api/admin/applications/${appId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update status");
+      }
+      
+      showNotification(`Application status updated to ${newStatus}`);
+      fetchCandidateDetails();
+    } catch (error) {
+      console.error("Error updating application status:", error);
+      showNotification(error.message || "Failed to update status", "error");
+    }
+  };
+
+  // Handle viewing CV for an application
+  const handleViewApplicationCV = async (app) => {
+    setCvLoading(true);
+    try {
+      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      // Try to get the CV used in application first
+      let url = `http://localhost:5000/api/admin/cv/${candidateId}`;
+      if (app.cv_id) {
+        url = `http://localhost:5000/api/cv/${app.cv_id}/preview`;
+      }
+      
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        // If CV file not available, show CV details modal
+        if (candidate?.cv_details) {
+          setShowCVDetailsModal(true);
+          return;
+        }
+        throw new Error("Failed to fetch CV");
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch (error) {
+      console.error("Error viewing CV:", error);
+      // Fall back to CV details modal
+      if (candidate?.cv_details) {
+        setShowCVDetailsModal(true);
+      } else {
+        showNotification("No CV available", "info");
+      }
+    } finally {
+      setCvLoading(false);
+    }
+  };
+
   const handleViewCV = async () => {
     setCvLoading(true);
     try {
@@ -215,12 +288,18 @@ const CandidateDetail = () => {
     setPracticeLoading(true);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      console.log(`[Admin] Fetching practice history for candidate: ${candidateId}`);
       const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidateId}/practice-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log(`[Admin] Practice history response status: ${response.status}`);
       if (response.ok) {
         const data = await response.json();
+        console.log(`[Admin] Practice history data:`, data);
         setPracticeHistory(data.sessions || []);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`[Admin] Practice history error:`, errorData);
       }
     } catch (error) {
       console.error("Error fetching practice history:", error);
@@ -231,13 +310,22 @@ const CandidateDetail = () => {
 
   // View interview report for an application
   const handleViewReport = async (app) => {
+    console.log("[Admin] handleViewReport called with app:", app);
+    console.log("[Admin] Application ID:", app.id);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`http://localhost:5000/api/admin/applications/${app.id}/report`, {
+      const url = `http://localhost:5000/api/admin/applications/${app.id}/report`;
+      console.log("[Admin] Fetching report from:", url);
+      
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
+      console.log("[Admin] Response status:", response.status);
+      
       if (response.ok) {
         const report = await response.json();
+        console.log("[Admin] Report received:", report);
         setReportModal({
           open: true,
           report: report,
@@ -245,10 +333,12 @@ const CandidateDetail = () => {
           interviewScore: app.interview_score
         });
       } else {
-        showNotification("Failed to load interview report", "error");
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[Admin] Report fetch failed:", response.status, errorData);
+        showNotification(errorData.error || "Failed to load interview report", "error");
       }
     } catch (error) {
-      console.error("Error fetching report:", error);
+      console.error("[Admin] Error fetching report:", error);
       showNotification("Error loading interview report", "error");
     }
   };
@@ -270,6 +360,56 @@ const CandidateDetail = () => {
       console.error("Error fetching practice report:", error);
       showNotification("Error loading practice report", "error");
     }
+  };
+
+  // View practice report by session ID (for PracticeHistoryList component)
+  const handleViewPracticeReportById = async (sessionId) => {
+    try {
+      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const response = await fetch(`http://localhost:5000/api/admin/practice/${sessionId}/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const report = await response.json();
+        setPracticeReportModal({ open: true, report });
+      } else {
+        showNotification("Failed to load practice report", "error");
+      }
+    } catch (error) {
+      console.error("Error fetching practice report:", error);
+      showNotification("Error loading practice report", "error");
+    }
+  };
+
+  // Handle viewing CV for practice session
+  const handleViewPracticeCV = async (session) => {
+    if (session.cv_id) {
+      try {
+        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+        const url = `http://localhost:5000/api/cv/${session.cv_id}/preview`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to load CV');
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+      } catch (err) {
+        console.error('Error opening CV:', err);
+        showNotification('Failed to open CV', 'error');
+      }
+    } else if (candidate?.cv_details) {
+      // Show manual CV details modal
+      setShowCVDetailsModal(true);
+    } else {
+      showNotification('No CV available for this session', 'info');
+    }
+  };
+
+  // Handle viewing JD for practice session
+  const handleViewPracticeJD = (session) => {
+    setSelectedJdSession(session);
+    setShowJdDetailsModal(true);
   };
 
   // Filter and sort applications
@@ -1041,264 +1181,37 @@ const CandidateDetail = () => {
           </div>
         )}
 
-        {/* Applications */}
+        {/* Applications - Using same design as candidate portal with admin features */}
         <div className={styles.infoCard}>
-          <div className={styles.infoCardHeader}>
-            <h2 className={styles.infoCardTitle}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-              </svg>
-              Application History ({applications.length})
-            </h2>
-          </div>
-          
-          {/* Filters */}
-          {applications.length > 0 && (
-            <div style={{ padding: "1rem", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-              <input
-                type="text"
-                placeholder="Search by job title or company..."
-                value={appFilters.search}
-                onChange={(e) => { setAppFilters(f => ({ ...f, search: e.target.value })); setAppPage(1); }}
-                style={{ padding: "0.5rem 0.75rem", border: "1px solid #d1d5db", borderRadius: "6px", minWidth: "200px", flex: 1 }}
-              />
-              <select
-                value={appFilters.status}
-                onChange={(e) => { setAppFilters(f => ({ ...f, status: e.target.value })); setAppPage(1); }}
-                style={{ padding: "0.5rem 0.75rem", border: "1px solid #d1d5db", borderRadius: "6px", background: "white" }}
-              >
-                <option value="">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="shortlisted">Shortlisted</option>
-                <option value="interviewed">Interviewed</option>
-                <option value="selected">Selected</option>
-                <option value="rejected">Rejected</option>
-              </select>
-              <select
-                value={`${appFilters.sortBy}-${appFilters.sortOrder}`}
-                onChange={(e) => {
-                  const [sortBy, sortOrder] = e.target.value.split("-");
-                  setAppFilters(f => ({ ...f, sortBy, sortOrder }));
-                }}
-                style={{ padding: "0.5rem 0.75rem", border: "1px solid #d1d5db", borderRadius: "6px", background: "white" }}
-              >
-                <option value="applied_at-desc">Newest First</option>
-                <option value="applied_at-asc">Oldest First</option>
-                <option value="cv_score-desc">Highest CV Score</option>
-                <option value="cv_score-asc">Lowest CV Score</option>
-                <option value="interview_score-desc">Highest Interview Score</option>
-              </select>
-              {(appFilters.search || appFilters.status) && (
-                <button
-                  onClick={() => setAppFilters({ search: "", status: "", sortBy: "applied_at", sortOrder: "desc" })}
-                  style={{ padding: "0.5rem 0.75rem", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "6px", cursor: "pointer", fontSize: "0.875rem" }}
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          )}
-          
-          <div style={{ overflow: "auto" }}>
-            {applications.length === 0 ? (
-              <div style={{ padding: "2rem", textAlign: "center", color: "var(--admin-text-secondary)" }}>
-                No applications yet
-              </div>
-            ) : filteredApps.length === 0 ? (
-              <div style={{ padding: "2rem", textAlign: "center", color: "var(--admin-text-secondary)" }}>
-                No applications match the current filters
-              </div>
-            ) : (
-              <>
-                <table className={styles.dataTable}>
-                  <thead>
-                    <tr>
-                      <th>Job Title</th>
-                      <th>Company</th>
-                      <th>Status</th>
-                      <th>CV Score</th>
-                      <th>Interview Score</th>
-                      <th>Applied</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedApps.map((app) => (
-                      <tr 
-                        key={app.id} 
-                        onClick={() => handleOpenApplication(app.id)}
-                        style={{ cursor: "pointer" }}
-                        className={styles.clickableRow}
-                    >
-                      <td style={{ fontWeight: 500 }}>{app.job_title}</td>
-                      <td>{app.company || "Unknown"}</td>
-                      <td>
-                        <span className={`${styles.tableBadge} ${styles[app.status]}`}>
-                          {app.status}
-                        </span>
-                      </td>
-                      <td>{app.cv_score ? `${app.cv_score}%` : "N/A"}</td>
-                      <td>{app.interview_score ? `${app.interview_score}%` : "N/A"}</td>
-                      <td>{formatDate(app.applied_at)}</td>
-                      <td>
-                        <div style={{ display: "flex", gap: "0.5rem" }} onClick={(e) => e.stopPropagation()}>
-                          <button
-                            className={styles.actionButton}
-                            title="View Details"
-                            onClick={() => handleOpenApplication(app.id)}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                              <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                          </button>
-                          {app.interview_score && (
-                            <button
-                              className={styles.actionButton}
-                              title="View Interview Report"
-                              style={{ color: "#6366f1" }}
-                              onClick={() => handleViewReport(app)}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                                <polyline points="10 9 9 9 8 9"></polyline>
-                              </svg>
-                            </button>
-                          )}
-                          <button
-                            className={`${styles.actionButton} ${styles.danger}`}
-                            title="Delete Application"
-                            onClick={() => setDeleteAppModal({ open: true, app })}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  </tbody>
-                </table>
-                {/* Pagination */}
-                {totalAppPages > 1 && (
-                  <div className={styles.pagination}>
-                    <button
-                      className={styles.paginationButton}
-                      onClick={() => setAppPage(p => Math.max(1, p - 1))}
-                      disabled={appPage === 1}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "16px", height: "16px" }}>
-                        <polyline points="15 18 9 12 15 6"></polyline>
-                      </svg>
-                      Previous
-                    </button>
-                    <span className={styles.paginationInfo}>
-                      Page {appPage} of {totalAppPages} ({filteredApps.length} {filteredApps.length !== applications.length ? `of ${applications.length}` : ""} total)
-                    </span>
-                    <button
-                      className={styles.paginationButton}
-                      onClick={() => setAppPage(p => Math.min(totalAppPages, p + 1))}
-                      disabled={appPage === totalAppPages}
-                    >
-                      Next
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "16px", height: "16px" }}>
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                      </svg>
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+          <div className={styles.infoCardBody}>
+            <ApplicationHistoryList
+              applications={applications}
+              isLoading={loading}
+              onViewDetails={handleOpenApplication}
+              onViewCV={handleViewApplicationCV}
+              onViewReport={handleViewReport}
+              onDeleteApplication={(app) => setDeleteAppModal({ open: true, app })}
+              onStatusChange={handleApplicationStatusChange}
+              itemsPerPage={8}
+              showTitle={true}
+              isAdmin={true}
+            />
           </div>
         </div>
 
-        {/* Practice History */}
+        {/* Practice History - Using same design as candidate portal */}
         <div className={styles.infoCard}>
-          <div className={styles.infoCardHeader}>
-            <h2 className={styles.infoCardTitle}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-              Practice History ({practiceHistory.length})
-            </h2>
-          </div>
           <div className={styles.infoCardBody}>
-            {practiceLoading ? (
-              <div style={{ textAlign: "center", padding: "1rem" }}>Loading practice history...</div>
-            ) : practiceHistory.length === 0 ? (
-              <div style={{ padding: "1rem", textAlign: "center", color: "var(--admin-text-secondary)" }}>
-                No practice sessions yet
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {practiceHistory.slice(0, 5).map((session) => (
-                  <div key={session.session_id} style={{
-                    padding: "1rem",
-                    background: "#f8fafc",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.5rem"
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{session.role || "Practice Interview"}</div>
-                      <div style={{ fontSize: "0.825rem", color: "#64748b" }}>
-                        {formatDate(session.created_at)} • 
-                        {session.status === "ended" ? (
-                          <span style={{ color: "#10b981" }}> Completed</span>
-                        ) : (
-                          <span style={{ color: "#f59e0b" }}> {session.status}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                      {session.cv_score && (
-                        <span style={{ fontSize: "0.825rem", color: "#3b82f6" }}>CV: {Math.round(session.cv_score)}%</span>
-                      )}
-                      {session.interview_score && (
-                        <span style={{ fontSize: "0.825rem", color: "#10b981" }}>Interview: {Math.round(session.interview_score)}%</span>
-                      )}
-                      {session.proctoring_score && (
-                        <span style={{ fontSize: "0.825rem", color: "#f59e0b" }}>Proctoring: {Math.round(session.proctoring_score)}%</span>
-                      )}
-                      <button
-                        onClick={() => { setSelectedPractice(session); setPracticeModalOpen(true); }}
-                        className={styles.actionButton}
-                        title="View Details"
-                        style={{ padding: "0.375rem 0.75rem", fontSize: "0.825rem" }}
-                      >
-                        Details
-                      </button>
-                      {session.status === "ended" && (
-                        <button
-                          onClick={() => handleViewPracticeReport(session)}
-                          className={styles.actionButton}
-                          title="View Report"
-                          style={{ padding: "0.375rem 0.75rem", fontSize: "0.825rem", background: "#6366f1", color: "white" }}
-                        >
-                          Report
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {practiceHistory.length > 5 && (
-                  <div style={{ textAlign: "center", color: "#64748b", fontSize: "0.875rem" }}>
-                    +{practiceHistory.length - 5} more practice sessions
-                  </div>
-                )}
-              </div>
-            )}
+            <PracticeHistoryList
+              sessions={practiceHistory}
+              isLoading={practiceLoading}
+              onViewReport={handleViewPracticeReportById}
+              onViewCV={handleViewPracticeCV}
+              onViewJD={handleViewPracticeJD}
+              itemsPerPage={5}
+              showTitle={true}
+              isAdmin={true}
+            />
           </div>
         </div>
 
@@ -1357,6 +1270,35 @@ const CandidateDetail = () => {
           isOpen={practiceModalOpen}
           onClose={() => { setPracticeModalOpen(false); setSelectedPractice(null); }}
           session={selectedPractice}
+          getRoleName={(roleId) => {
+            const roles = {
+              'software-engineer': 'Software Engineer',
+              'data-scientist': 'Data Scientist',
+              'product-manager': 'Product Manager',
+              'business-analyst': 'Business Analyst',
+              'fullstack-developer': 'Full Stack Developer',
+              'devops-engineer': 'DevOps Engineer'
+            };
+            return roles[roleId] || roleId;
+          }}
+          getRoleIcon={(roleId) => {
+            const icons = {
+              'software-engineer': 'fa-code',
+              'data-scientist': 'fa-line-chart',
+              'product-manager': 'fa-tasks',
+              'business-analyst': 'fa-briefcase',
+              'fullstack-developer': 'fa-laptop',
+              'devops-engineer': 'fa-server'
+            };
+            return icons[roleId] || 'fa-briefcase';
+          }}
+        />
+
+        {/* JD Details Modal for Practice Sessions */}
+        <JDDetailsModal
+          isOpen={showJdDetailsModal}
+          onClose={() => setShowJdDetailsModal(false)}
+          session={selectedJdSession}
           getRoleName={(roleId) => {
             const roles = {
               'software-engineer': 'Software Engineer',
