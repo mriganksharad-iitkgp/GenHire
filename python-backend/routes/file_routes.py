@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 from controllers.file_controller import FileController
-from middleware.auth_middleware import token_required
+from middleware.auth_middleware import token_required, admin_required
 from config.database import db_config
 from bson import ObjectId
 
@@ -85,3 +85,22 @@ def view_photo(current_user):
     """View user's profile photo"""
     user_id = current_user['_id']
     return file_controller.view_photo(user_id)
+
+
+# Admin routes for viewing files by user ID
+@file_bp.route('/admin/cv/<user_id>', methods=['GET'])
+@cross_origin()
+@token_required
+@admin_required
+def admin_view_cv(current_user, user_id):
+    """Admin: View any user's CV by user ID"""
+    return file_controller.view_cv_by_id(user_id)
+
+
+@file_bp.route('/admin/photo/<user_id>', methods=['GET'])
+@cross_origin()
+@token_required
+@admin_required
+def admin_view_photo(current_user, user_id):
+    """Admin: View any user's profile photo by user ID"""
+    return file_controller.view_photo_by_id(user_id)

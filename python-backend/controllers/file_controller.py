@@ -1,7 +1,8 @@
 import os
 from werkzeug.utils import secure_filename
 import uuid
-from flask import send_file
+from flask import send_file, jsonify
+from bson import ObjectId
 
 class FileController:
     def __init__(self, db_collections):
@@ -156,3 +157,33 @@ class FileController:
             return {'error': 'Photo not found'}, 404
         
         return send_file(photo_path)
+
+    def view_cv_by_id(self, user_id):
+        """View CV for a specific user by ID (admin use)"""
+        try:
+            user = self.users_collection.find_one({'_id': ObjectId(user_id)})
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
+            cv_path = user.get('cv_path')
+            if not cv_path or not os.path.exists(cv_path):
+                return jsonify({'error': 'CV not found'}), 404
+            
+            return send_file(cv_path)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    def view_photo_by_id(self, user_id):
+        """View profile photo for a specific user by ID (admin use)"""
+        try:
+            user = self.users_collection.find_one({'_id': ObjectId(user_id)})
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
+            photo_path = user.get('profile_photo')
+            if not photo_path or not os.path.exists(photo_path):
+                return jsonify({'error': 'Photo not found'}), 404
+            
+            return send_file(photo_path)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
