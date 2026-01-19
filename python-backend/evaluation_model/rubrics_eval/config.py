@@ -11,13 +11,13 @@ class Config:
 
     # OpenAI Configuration
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    RUBRIC_GENERATION_MODEL: str = "gpt-4o"
-    EVALUATION_MODEL: str = "gpt-4o-mini"
-    ANSWER_GENERATION_MODEL: str = "gpt-4o"
+    RUBRIC_GENERATION_MODEL: str = "gpt-5.2"
+    EVALUATION_MODEL: str = "gpt-5-mini"
+    ANSWER_GENERATION_MODEL: str = "gpt-5.2"
 
     # Temperature settings
-    RUBRIC_GENERATION_TEMPERATURE: float = 0.0
-    EVALUATION_TEMPERATURE: float = 0.0
+    RUBRIC_GENERATION_TEMPERATURE: float = 1.0
+    EVALUATION_TEMPERATURE: float = 1.0
     ANSWER_GENERATION_TEMPERATURE: float = 0.7
 
     # LangChain Configuration
