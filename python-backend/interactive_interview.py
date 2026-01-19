@@ -40,7 +40,6 @@ def get_candidate_response():
     response = input(">> ")
     return response.strip()
 
-
 def display_answer_evaluation(evaluation_result):
     """Display the evaluation result for the candidate's answer."""
     if not evaluation_result:
@@ -126,8 +125,8 @@ def interactive_interview():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\Beginner_DataAnalyst_CV.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Beginner_DataAnalyst_JD.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Senior-AI-Engineer-JD.pdf"
     reference_paths = []
 
     # Check if files exist
@@ -170,12 +169,6 @@ def interactive_interview():
 
         # Initialize both systems
         context = qg.initialize_conversation(resume_sections, job_description)
-        try:
-            bank_items = qg.question_bank if isinstance(qg.question_bank, list) else (qg.question_bank.get("questions", []) if qg.question_bank else [])
-            bank_count = len(bank_items)
-            print(f"📚 Question Bank: active items for role '{context.job_role}': {bank_count}")
-        except Exception:
-            print("📚 Question Bank: status unavailable")
 
         # Create a session with session manager for evaluation
         session_result = session_manager.create_session(
@@ -236,20 +229,6 @@ def interactive_interview():
 
                 # Display the question
                 print_interviewer_message(current_question)
-                try:
-                    src = getattr(metadata, "source", "unknown")
-                    diff = getattr(metadata, "difficulty_level", "—")
-                    if src == "bank":
-                        src_label = "✅ Using Question Bank"
-                    elif src == "prompt":
-                        src_label = "🧠 LLM-generated"
-                    elif src == "fallback":
-                        src_label = "🔁 Fallback variant"
-                    else:
-                        src_label = f"🔎 Source: {src}"
-                    print(f"{src_label} • Difficulty: {diff}")
-                except Exception:
-                    pass
 
                 # Show current phase info
                 phase_emojis = {
@@ -420,8 +399,8 @@ def demo_mode():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\Beginner_DataAnalyst_CV.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Beginner_DataAnalyst_JD.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\AI_JD.pdf"
 
     try:
         document_loader = DocumentLoader(cv_path, jd_path, [])

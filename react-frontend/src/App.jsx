@@ -27,6 +27,16 @@ import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancle";
+
+// Admin Pages
+import AdminOverview from "./pages/admin/AdminOverview";
+import ManageCandidates from "./pages/admin/ManageCandidates";
+import ManageRecruiters from "./pages/admin/ManageRecruiters";
+import ManageAdmins from "./pages/admin/ManageAdmins";
+import CandidateDetail from "./pages/admin/CandidateDetail";
+import RecruiterDetail from "./pages/admin/RecruiterDetail";
+import Verification from "./pages/admin/Verification";
+
 import "./App.css";
 
 function App() {
@@ -52,6 +62,18 @@ function App() {
             <Route path="/payment/cancel" element={<PaymentCancel />} />
 
             <Route path="/admin" element={<AdminDashboard />} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminOverview />} />
+            <Route path="/admin/overview" element={<AdminOverview />} />
+            <Route path="/admin/candidates" element={<ManageCandidates />} />
+            <Route path="/admin/candidates/:candidateId" element={<CandidateDetail />} />
+            <Route path="/admin/recruiters" element={<ManageRecruiters />} />
+            <Route path="/admin/recruiters/:recruiterId" element={<RecruiterDetail />} />
+            <Route path="/admin/admins" element={<ManageAdmins />} />
+            <Route path="/admin/verification" element={<Verification />} />
+            <Route path="/admin/old" element={<AdminDashboard />} />
+            
             <Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
             <Route
               path="/"
