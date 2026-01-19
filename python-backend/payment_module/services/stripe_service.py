@@ -15,6 +15,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 import uuid
+import time
 
 from ..config.settings import PaymentConfig
 
@@ -106,9 +107,7 @@ class StripeService:
                     "plan_name": plan_name,
                     "idempotency_key": idempotency_key,
                 },
-                expires_at=int(
-                    (datetime.utcnow().timestamp()) + 30 * 60
-                ),  # 30 min expiry
+                #expires_at=int(time.time()) + 1800,  # 30 min expiry
                 idempotency_key=idempotency_key,
             )
 

@@ -25,6 +25,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Practice from "./pages/Practice";
 import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentCancel from "./pages/PaymentCancle";
 import "./App.css";
 
 function App() {
@@ -44,6 +46,11 @@ function App() {
               element={<RecruiterDashboard />}
             />
             <Route path="/subscription" element={<SubscriptionPlans />} />
+
+            {/* Payment Routes */}
+            <Route path="/payment/success" element={<PaymentSuccess />} />
+            <Route path="/payment/cancel" element={<PaymentCancel />} />
+
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
             <Route

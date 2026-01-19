@@ -56,11 +56,11 @@ class PaymentConfig:
             "slug": "free",
             "description": "Starter free tier with limited interviews and a small account credit",
             "price_cents": 0,  # Free plan
-            "interviews_allowed": 5,
+            "interviews_allowed": 2,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
             "features": [
-                "5 AI-powered interviews",
-                "One-time $5 account credit",
+                "2 AI-powered interviews",
+                "One-time $2 account credit",
                 "Basic access to features",
             ],
             "is_active": True,

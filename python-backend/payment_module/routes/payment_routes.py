@@ -14,6 +14,7 @@ from flask import Blueprint, request, jsonify, g
 from bson import ObjectId
 import jwt
 import os
+from middleware.auth_middleware import token_required, recruiter_required
 
 logger = logging.getLogger(__name__)
 
@@ -50,74 +51,6 @@ def init_payment_routes(db):
 
     logger.info("Payment routes initialized")
 
-
-def require_auth(f):
-    """
-    Decorator to require authentication.
-
-    Extracts user from JWT token and passes to handler.
-    Integrates with existing auth middleware pattern.
-    """
-
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # Get token from header
-        auth_header = request.headers.get("Authorization")
-
-        if not auth_header:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Authorization header required",
-                        "error_code": "missing_auth",
-                    }
-                ),
-                401,
-            )
-
-        try:
-            # Parse Bearer token
-            parts = auth_header.split()
-            if len(parts) != 2 or parts[0].lower() != "bearer":
-                raise ValueError("Invalid authorization format")
-
-            token = parts[1]
-
-            # Decode JWT
-            secret = os.getenv("JWT_SECRET", "your-jwt-secret")
-            payload = jwt.decode(token, secret, algorithms=["HS256"])
-
-            # Add user data to request context
-            g.user_data = payload
-
-            return f(*args, **kwargs)
-
-        except jwt.ExpiredSignatureError:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Token expired",
-                        "error_code": "token_expired",
-                    }
-                ),
-                401,
-            )
-
-        except (jwt.InvalidTokenError, ValueError) as e:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Invalid token",
-                        "error_code": "invalid_token",
-                    }
-                ),
-                401,
-            )
-
-    return decorated
 
 
 # =============================================================================
@@ -176,8 +109,8 @@ def get_plan_by_slug(slug):
 
 
 @payment_bp.route("/payments/initiate", methods=["POST"])
-@require_auth
-def initiate_payment():
+@token_required
+def initiate_payment(current_user):
     """
     POST /api/payment/payments/initiate
 
@@ -198,13 +131,13 @@ def initiate_payment():
         }
     }
     """
-    response, status_code = _payment_controller.initiate_payment(g.user_data)
+    response, status_code = _payment_controller.initiate_payment(current_user)
     return jsonify(response), status_code
 
 
 @payment_bp.route("/payments/<payment_id>", methods=["GET"])
-@require_auth
-def get_payment(payment_id):
+@token_required
+def get_payment(current_user, payment_id):
     """
     GET /api/payment/payments/<payment_id>
 
@@ -212,27 +145,27 @@ def get_payment(payment_id):
     Requires authentication.
     """
     response, status_code = _payment_controller.get_payment_status(
-        payment_id, g.user_data
+        payment_id, current_user
     )
     return jsonify(response), status_code
 
 
 @payment_bp.route("/payments/history", methods=["GET"])
-@require_auth
-def get_payment_history():
+@token_required
+def get_payment_history(current_user):
     """
     GET /api/payment/payments/history
 
     Get payment history for authenticated user.
     Optional: ?limit=20
     """
-    response, status_code = _payment_controller.get_payment_history(g.user_data)
+    response, status_code = _payment_controller.get_payment_history(current_user)
     return jsonify(response), status_code
 
 
 @payment_bp.route("/payments/<payment_id>/refund", methods=["POST"])
-@require_auth
-def request_refund(payment_id):
+@token_required
+def request_refund(current_user, payment_id):
     """
     POST /api/payment/payments/<payment_id>/refund
 
@@ -244,7 +177,7 @@ def request_refund(payment_id):
         "amount_cents": 1000  // Optional, for partial refund
     }
     """
-    response, status_code = _payment_controller.request_refund(payment_id, g.user_data)
+    response, status_code = _payment_controller.request_refund(payment_id, current_user)
     return jsonify(response), status_code
 
 
@@ -254,8 +187,8 @@ def request_refund(payment_id):
 
 
 @payment_bp.route("/subscriptions/me", methods=["GET"])
-@require_auth
-def get_current_subscription():
+@token_required
+def get_current_subscription(current_user):
     """
     GET /api/payment/subscriptions/me
 
@@ -277,14 +210,14 @@ def get_current_subscription():
     }
     """
     response, status_code = _subscription_controller.get_current_subscription(
-        g.user_data
+        current_user
     )
     return jsonify(response), status_code
 
 
 @payment_bp.route("/subscriptions/history", methods=["GET"])
-@require_auth
-def get_subscription_history():
+@token_required
+def get_subscription_history(current_user):
     """
     GET /api/payment/subscriptions/history
 
@@ -292,14 +225,14 @@ def get_subscription_history():
     Optional: ?limit=10
     """
     response, status_code = _subscription_controller.get_subscription_history(
-        g.user_data
+        current_user
     )
     return jsonify(response), status_code
 
 
 @payment_bp.route("/subscriptions/check", methods=["GET"])
-@require_auth
-def check_subscription():
+@token_required
+def check_subscription(current_user):
     """
     GET /api/payment/subscriptions/check
 
@@ -316,14 +249,14 @@ def check_subscription():
     }
     """
     response, status_code = _subscription_controller.check_subscription_validity(
-        g.user_data
+        current_user
     )
     return jsonify(response), status_code
 
 
 @payment_bp.route("/subscriptions/cancel", methods=["POST"])
-@require_auth
-def cancel_subscription():
+@token_required
+def cancel_subscription(current_user):
     """
     POST /api/payment/subscriptions/cancel
 
@@ -334,7 +267,7 @@ def cancel_subscription():
         "reason": "user_requested"
     }
     """
-    response, status_code = _subscription_controller.cancel_subscription(g.user_data)
+    response, status_code = _subscription_controller.cancel_subscription(current_user)
     return jsonify(response), status_code
 
 
@@ -344,7 +277,7 @@ def cancel_subscription():
 
 
 @payment_bp.route("/interviews/use", methods=["POST"])
-@require_auth
+@token_required
 def use_interview():
     """
     POST /api/payment/interviews/use

@@ -177,15 +177,6 @@ const SubscriptionPlans = () => {
           </div>
         </div>
 
-        {/* Current Plan Banner - Using the existing component */}
-        <div className={styles.bannerWrapper}>
-          <SubscriptionBanner
-            subscription={subscription}
-            loading={subscriptionLoading}
-            onUpgrade={() => {}} // Already on upgrade page
-          />
-        </div>
-
         {/* Tab Navigation */}
         <div className={styles.tabNav}>
           <button
