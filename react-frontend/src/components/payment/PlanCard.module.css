@@ -1,0 +1,230 @@
+/* PlanCard Component Styles */
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.card.current {
+  border-color: #6366f1;
+  background: linear-gradient(135deg, #f0f0ff 0%, #fff 100%);
+}
+
+.card.popular {
+  border-color: #6366f1;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+}
+
+body.dark .card,
+:global(.dark) .card {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+body.dark .card.current,
+:global(.dark) .card.current {
+  background: linear-gradient(135deg, #312e81 0%, #1f2937 100%);
+  border-color: #6366f1;
+}
+
+/* Popular Badge */
+.popularBadge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  padding: 0.375rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Header */
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+body.dark .header h3,
+:global(.dark) .header h3 {
+  color: #f9fafb;
+}
+
+.description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+body.dark .description,
+:global(.dark) .description {
+  color: #9ca3af;
+}
+
+/* Price */
+.price {
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.amount {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1f2937;
+}
+
+body.dark .amount,
+:global(.dark) .amount {
+  color: #f9fafb;
+}
+
+.period {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+body.dark .period,
+:global(.dark) .period {
+  color: #9ca3af;
+}
+
+/* Features List */
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+  flex-grow: 1;
+}
+
+.features li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+}
+
+.features li svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.included {
+  color: #1f2937;
+}
+
+.included svg {
+  color: #10b981;
+}
+
+.notIncluded {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+.notIncluded svg {
+  color: #d1d5db;
+}
+
+body.dark .included,
+:global(.dark) .included {
+  color: #f3f4f6;
+}
+
+body.dark .notIncluded,
+:global(.dark) .notIncluded {
+  color: #6b7280;
+}
+
+body.dark .notIncluded svg,
+:global(.dark) .notIncluded svg {
+  color: #4b5563;
+}
+
+/* Button */
+.button {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.currentButton {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.currentButton:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+body.dark .currentButton,
+:global(.dark) .currentButton {
+  background: #374151;
+  color: #9ca3af;
+}
+
+/* Spinner */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

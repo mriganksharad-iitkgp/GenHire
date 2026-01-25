@@ -2,12 +2,12 @@
 
 ## Overview
 
-A production-ready payment service for a hiring/recruitment platform built with Flask, MongoDB, and Stripe.
+A production-ready payment service for a hiring/recruitment platform built with Flask, MongoDB, and Razorpay.
 
 ## Features
 
 - **Plan Management**: Starter, Growth, Enterprise plans with interview limits
-- **Stripe Checkout**: PCI-compliant payment processing
+- **Razorpay Checkout**: PCI-compliant payment processing
 - **Webhook Handling**: Secure signature verification
 - **Interview Tracking**: Atomic decrement with race condition prevention
 - **Refund Support**: Full and partial refunds
@@ -19,11 +19,11 @@ payment_module/
 ├── config/
 │   └── settings.py          # Configuration and default plans
 ├── models/
-│   ├── plan.py              # Plan schema with Stripe IDs
+│   ├── plan.py              # Plan schema
 │   ├── subscription.py      # Subscription lifecycle management
 │   └── payment.py           # Payment transaction records
 ├── services/
-│   ├── stripe_service.py    # Stripe API wrapper
+│   ├── razorpay_service.py  # Razorpay API wrapper
 │   ├── plan_service.py      # Plan CRUD operations
 │   ├── subscription_service.py  # Subscription management
 │   └── payment_service.py   # Payment orchestration
@@ -43,14 +43,14 @@ payment_module/
 ### 1. Install Dependencies
 
 ```bash
-pip install stripe pymongo flask pyjwt python-dotenv
+pip install razorpay pymongo flask pyjwt python-dotenv
 ```
 
 ### 2. Configure Environment
 
 ```bash
 cp payment_module/env.example .env
-# Edit .env with your Stripe keys
+# Edit .env with your Razorpay keys
 ```
 
 ### 3. Register Blueprint
@@ -71,18 +71,14 @@ init_payment_routes(db)
 app.register_blueprint(payment_bp)
 ```
 
-### 4. Set Up Stripe Webhooks
+### 4. Set Up Razorpay Webhooks
 
-For local development:
+In Razorpay Dashboard:
 
-```bash
-stripe listen --forward-to localhost:5000/api/payment/webhooks/stripe
-```
-
-For production, add webhook endpoint in Stripe Dashboard:
-
-- URL: `https://yourdomain.com/api/payment/webhooks/stripe`
-- Events: `checkout.session.completed`, `checkout.session.expired`, `payment_intent.payment_failed`, `charge.refunded`
+- Go to Settings -> Webhooks
+- Add webhook endpoint: `https://yourdomain.com/api/payment/webhooks/razorpay`
+- Select events: `payment.captured`, `payment.failed`, `refund.created`, `order.paid`
+- Copy the webhook secret to your `.env`
 
 ## API Reference
 
@@ -130,8 +126,40 @@ Response:
 {
     "success": true,
     "data": {
-        "checkout_url": "https://checkout.stripe.com/c/pay/...",
-        "session_id": "cs_test_..."
+        "order_id": "order_...",
+        "amount": 10000,
+        "currency": "INR",
+        "key_id": "rzp_...",
+        "payment_id": "...",
+        "prefill": {
+            "name": "John Doe",
+            "email": "john@example.com"
+        }
+    }
+}
+```
+
+#### Verify Payment
+
+After frontend checkout, verify the payment:
+
+```
+POST /api/payment/payments/verify
+Authorization: Bearer <token>
+
+Request:
+{
+    "razorpay_order_id": "order_...",
+    "razorpay_payment_id": "pay_...",
+    "razorpay_signature": "..."
+}
+
+Response:
+{
+    "success": true,
+    "data": {
+        "message": "Payment verified",
+        "payment_id": "..."
     }
 }
 ```
@@ -190,11 +218,11 @@ Error (402 Payment Required):
 }
 ```
 
-### Webhooks (Stripe)
+### Webhooks (Razorpay)
 
 ```
-POST /api/payment/webhooks/stripe
-Headers: Stripe-Signature: <signature>
+POST /api/payment/webhooks/razorpay
+Headers: X-Razorpay-Signature: <signature>
 
 Always returns 200 to acknowledge receipt.
 ```
@@ -217,15 +245,15 @@ Always returns 200 to acknowledge receipt.
          ▼
 ┌─────────────────┐
 │  3. Backend     │
-│  creates Stripe │
-│  checkout       │
+│  creates        │
+│  Razorpay order │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  4. Employer    │
-│  redirected to  │
-│  Stripe checkout│
+│  4. Frontend    │
+│  opens Razorpay │
+│  checkout modal │
 └────────┬────────┘
          │
          ▼
@@ -236,8 +264,9 @@ Always returns 200 to acknowledge receipt.
          │
          ▼
 ┌─────────────────┐
-│  6. Stripe      │
-│  sends webhook  │
+│  6. Frontend    │
+│  POST /payments │
+│  /verify        │
 └────────┬────────┘
          │
          ▼
@@ -261,6 +290,64 @@ Always returns 200 to acknowledge receipt.
 └─────────────────┘
 ```
 
+## Frontend Integration
+
+### React Example
+
+```javascript
+import React from "react";
+
+const PaymentButton = ({ planId }) => {
+  const handlePayment = async () => {
+    // 1. Initiate payment
+    const response = await fetch("/api/payment/payments/initiate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ plan_id: planId }),
+    });
+
+    const { data } = await response.json();
+
+    // 2. Open Razorpay checkout
+    const options = {
+      key: data.key_id,
+      amount: data.amount,
+      currency: data.currency,
+      order_id: data.order_id,
+      name: "Your Company",
+      description: "Plan Purchase",
+      prefill: data.prefill,
+      handler: async function (response) {
+        // 3. Verify payment
+        await fetch("/api/payment/payments/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          }),
+        });
+
+        // 4. Redirect to success page
+        window.location.href = "/payment/success";
+      },
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.open();
+  };
+
+  return <button onClick={handlePayment}>Subscribe</button>;
+};
+```
+
 ## Data Models
 
 ### Plan
@@ -271,12 +358,10 @@ Always returns 200 to acknowledge receipt.
     "name": "Starter",
     "slug": "starter",
     "description": "...",
-    "price_cents": 4900,
+    "price_paise": 99900,  // Amount in paise (₹999.00)
     "interviews_allowed": 5,  // -1 for unlimited
     "validity_days": 30,
     "features": ["..."],
-    "stripe_product_id": "prod_...",
-    "stripe_price_id": "price_...",
     "is_active": true,
     "display_order": 1,
     "created_at": ISODate,
@@ -299,7 +384,7 @@ Always returns 200 to acknowledge receipt.
     "started_at": ISODate,
     "expires_at": ISODate,
     "payment_id": ObjectId,
-    "stripe_session_id": "cs_...",
+    "razorpay_order_id": "order_...",
     "created_at": ISODate,
     "updated_at": ISODate
 }
@@ -313,14 +398,14 @@ Always returns 200 to acknowledge receipt.
     "employer_id": ObjectId,
     "subscription_id": ObjectId,
     "plan_id": ObjectId,
-    "amount_cents": 4900,
-    "currency": "usd",
+    "amount_paise": 4900,
+    "currency": "inr",
     "status": "succeeded",  // pending, processing, succeeded, failed, refunded
-    "stripe_session_id": "cs_...",
-    "stripe_payment_intent_id": "pi_...",
-    "stripe_charge_id": "ch_...",
+    "razorpay_order_id": "order_...",
+    "razorpay_payment_id": "pay_...",
+    "razorpay_signature": "...",
     "idempotency_key": "pay_...",
-    "refund_amount_cents": 0,
+    "refund_amount_paise": 0,
     "created_at": ISODate,
     "completed_at": ISODate
 }
@@ -328,46 +413,45 @@ Always returns 200 to acknowledge receipt.
 
 ## Security Considerations
 
-1. **Webhook Verification**: Always verify Stripe signatures
-2. **Never Trust Frontend**: Payment success must come from webhook
-3. **Idempotency**: All operations are idempotent to handle retries
-4. **Atomic Operations**: Interview decrement uses MongoDB atomic `$inc`
-5. **No Sensitive Data**: API responses exclude internal IDs and full Stripe responses
+1. **Webhook Verification**: Always verify Razorpay signatures
+2. **Payment Verification**: Use `/payments/verify` endpoint after frontend checkout
+3. **Never Trust Frontend**: Payment success must come from signature verification
+4. **Idempotency**: All operations are idempotent to handle retries
+5. **Atomic Operations**: Interview decrement uses MongoDB atomic `$inc`
+6. **No Sensitive Data**: API responses exclude internal IDs and full Razorpay responses
 
 ## Testing
 
+### Test Mode
+
+Use test mode keys from Razorpay Dashboard (keys starting with `rzp_test_`)
+
 ### Test Cards
 
-- Success: `4242 4242 4242 4242`
-- Decline: `4000 0000 0000 0002`
-- Requires Auth: `4000 0025 0000 3155`
+- Success: `4111 1111 1111 1111` (any future expiry, any CVV)
+- UPI: `success@razorpay` for test UPI payments
 
-### Stripe CLI
+### Test Webhooks
 
-```bash
-# Forward webhooks to local server
-stripe listen --forward-to localhost:5000/api/payment/webhooks/stripe
-
-# Trigger test events
-stripe trigger checkout.session.completed
-```
+Use Razorpay's test mode to trigger webhook events from the dashboard.
 
 ## Error Codes
 
-| Code                    | Description                    | HTTP Status |
-| ----------------------- | ------------------------------ | ----------- |
-| `invalid_plan`          | Plan not found or inactive     | 400         |
-| `no_subscription`       | No active subscription         | 402         |
-| `limit_exceeded`        | Interview limit reached        | 402         |
-| `subscription_inactive` | Subscription expired/cancelled | 400         |
-| `invalid_signature`     | Webhook signature invalid      | 400         |
-| `not_refundable`        | Payment cannot be refunded     | 400         |
+| Code                    | Description                       | HTTP Status |
+| ----------------------- | --------------------------------- | ----------- |
+| `invalid_plan`          | Plan not found or inactive        | 400         |
+| `no_subscription`       | No active subscription            | 402         |
+| `limit_exceeded`        | Interview limit reached           | 402         |
+| `subscription_inactive` | Subscription expired/cancelled    | 400         |
+| `invalid_signature`     | Webhook/payment signature invalid | 400         |
+| `not_refundable`        | Payment cannot be refunded        | 400         |
+| `verification_failed`   | Payment verification failed       | 400         |
 
 ## Production Checklist
 
-- [ ] Use live Stripe keys
-- [ ] Set proper webhook URL in Stripe Dashboard
-- [ ] Enable Stripe Radar for fraud protection
+- [ ] Use live Razorpay keys
+- [ ] Set proper webhook URL in Razorpay Dashboard
+- [ ] Enable Razorpay fraud protection
 - [ ] Set up monitoring for webhook failures
 - [ ] Configure proper CORS for production domain
 - [ ] Enable HTTPS

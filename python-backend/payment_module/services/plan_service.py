@@ -69,7 +69,7 @@ class PlanService:
                     name=plan_data["name"],
                     slug=plan_data["slug"],
                     description=plan_data["description"],
-                    price_cents=plan_data["price_cents"],
+                    price_paise=plan_data["price_paise"],
                     interviews_allowed=plan_data["interviews_allowed"],
                     validity_days=plan_data["validity_days"],
                     features=plan_data["features"],
@@ -152,7 +152,7 @@ class PlanService:
         name: str,
         slug: str,
         description: str,
-        price_cents: int,
+        price_paise: int,
         interviews_allowed: int,
         validity_days: int,
         features: List[str] = None,
@@ -165,7 +165,7 @@ class PlanService:
             name: Display name
             slug: URL-friendly identifier
             description: Marketing description
-            price_cents: Price in cents
+            price_paise: Price in paise (100 paise = 1 INR)
             interviews_allowed: Number of interviews (-1 for unlimited)
             validity_days: Plan validity period
             features: List of feature strings
@@ -185,7 +185,7 @@ class PlanService:
                 name=name,
                 slug=slug,
                 description=description,
-                price_cents=price_cents,
+                price_paise=price_paise,
                 interviews_allowed=interviews_allowed,
                 validity_days=validity_days,
                 features=features or [],

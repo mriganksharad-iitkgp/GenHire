@@ -1,9 +1,9 @@
 """
-Webhook Controller - Handles Stripe webhook events
+Webhook Controller - Handles Razorpay webhook events
 
 Design Decisions:
 1. Raw body parsing for signature verification
-2. Always returns 200 to Stripe (acknowledge receipt)
+2. Always returns 200 to Razorpay (acknowledge receipt)
 3. Idempotent processing (duplicate events are OK)
 4. Detailed logging for debugging
 """
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class WebhookController:
     """
-    Controller for Stripe webhook endpoint.
+    Controller for Razorpay webhook endpoint.
 
     CRITICAL SECURITY:
     - Always verify webhook signatures
@@ -36,9 +36,9 @@ class WebhookController:
         """
         self.payment_service = PaymentService(db)
 
-    def handle_stripe_webhook(self) -> Tuple[dict, int]:
+    def handle_razorpay_webhook(self) -> Tuple[dict, int]:
         """
-        Process incoming Stripe webhook.
+        Process incoming Razorpay webhook.
 
         Important: Must use raw request body for signature verification.
 
@@ -49,8 +49,8 @@ class WebhookController:
             # Get raw body for signature verification
             payload = request.get_data()
 
-            # Get Stripe signature header
-            signature = request.headers.get("Stripe-Signature")
+            # Get Razorpay signature header
+            signature = request.headers.get("X-Razorpay-Signature")
 
             if not signature:
                 logger.warning("Webhook received without signature")
@@ -61,8 +61,8 @@ class WebhookController:
                 payload=payload, signature=signature
             )
 
-            # Always return 200 to Stripe to acknowledge receipt
-            # Even if processing failed, we don't want Stripe to retry
+            # Always return 200 to Razorpay to acknowledge receipt
+            # Even if processing failed, we don't want Razorpay to retry
             # unless it's a signature issue
             if result.get("error_code") == "invalid_signature":
                 logger.error("Invalid webhook signature")
@@ -83,7 +83,7 @@ class WebhookController:
 
         except Exception as e:
             logger.error(f"Webhook error: {str(e)}")
-            # Still return 200 to prevent Stripe retries for internal errors
+            # Still return 200 to prevent Razorpay retries for internal errors
             # We'll have logs to debug
             return {
                 "success": True,

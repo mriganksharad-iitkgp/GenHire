@@ -10,6 +10,7 @@ export {
   cancelSubscription,
   // Payments
   initiatePayment,
+  verifyPayment,
   getPaymentHistory,
   // Interviews
   useInterview,

@@ -49,7 +49,7 @@ class Subscription:
         started_at: When plan became active
         expires_at: When plan validity ends
         payment_id: Reference to successful payment
-        stripe_session_id: Stripe checkout session ID
+        razorpay_order_id: Razorpay order ID
         metadata: Additional data (e.g., promo codes applied)
         created_at: Record creation time
         updated_at: Last modification time
@@ -65,7 +65,7 @@ class Subscription:
     started_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     payment_id: Optional[ObjectId] = None
-    stripe_session_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -111,7 +111,7 @@ class Subscription:
             "started_at": self.started_at,
             "expires_at": self.expires_at,
             "payment_id": self.payment_id,
-            "stripe_session_id": self.stripe_session_id,
+            "razorpay_order_id": self.razorpay_order_id,
             "metadata": self.metadata,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -122,12 +122,17 @@ class Subscription:
 
     def to_api_response(self) -> Dict[str, Any]:
         """Convert to API response format"""
+        # Support both old (price_cents) and new (price_paise) field names
+        price_in_smallest = self.plan_snapshot.get(
+            "price_paise", self.plan_snapshot.get("price_cents", 0)
+        )
         return {
             "id": str(self._id) if self._id else None,
             "plan": {
                 "name": self.plan_snapshot.get("name"),
                 "slug": self.plan_snapshot.get("slug"),
-                "price": self.plan_snapshot.get("price_cents", 0) / 100,
+                "price": price_in_smallest / 100,
+                "currency": "INR",
             },
             "status": (
                 self.status.value
@@ -163,7 +168,7 @@ class Subscription:
             started_at=data.get("started_at"),
             expires_at=data.get("expires_at"),
             payment_id=data.get("payment_id"),
-            stripe_session_id=data.get("stripe_session_id"),
+            razorpay_order_id=data.get("razorpay_order_id"),
             metadata=data.get("metadata", {}),
             created_at=data.get("created_at", datetime.utcnow()),
             updated_at=data.get("updated_at", datetime.utcnow()),
@@ -179,7 +184,7 @@ class SubscriptionSchema:
     1. employer_id: Fast lookup of employer's subscriptions
     2. (employer_id, status): Find active subscription for employer
     3. expires_at: Background job to expire subscriptions
-    4. stripe_session_id (unique, sparse): Webhook idempotency
+    4. razorpay_order_id (unique, sparse): Webhook idempotency
     5. (status, expires_at): Bulk status updates
     """
 
@@ -193,10 +198,10 @@ class SubscriptionSchema:
         },
         {"keys": [("expires_at", 1)], "name": "idx_subscription_expires"},
         {
-            "keys": [("stripe_session_id", 1)],
+            "keys": [("razorpay_order_id", 1)],
             "unique": True,
             "sparse": True,
-            "name": "idx_subscription_stripe_session",
+            "name": "idx_subscription_razorpay_order",
         },
         {
             "keys": [("status", 1), ("expires_at", 1)],

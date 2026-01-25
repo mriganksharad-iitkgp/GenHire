@@ -52,7 +52,6 @@ def init_payment_routes(db):
     logger.info("Payment routes initialized")
 
 
-
 # =============================================================================
 # PLAN ROUTES (Public)
 # =============================================================================
@@ -126,12 +125,44 @@ def initiate_payment(current_user):
     {
         "success": true,
         "data": {
-            "checkout_url": "https://checkout.stripe.com/...",
-            "session_id": "cs_..."
+            "order_id": "order_...",
+            "amount": 10000,
+            "currency": "INR",
+            "key_id": "rzp_...",
+            "payment_id": "..."
         }
     }
     """
     response, status_code = _payment_controller.initiate_payment(current_user)
+    return jsonify(response), status_code
+
+
+@payment_bp.route("/payments/verify", methods=["POST"])
+@token_required
+def verify_payment(current_user):
+    """
+    POST /api/payment/payments/verify
+
+    Verify Razorpay payment after frontend checkout.
+    Requires authentication.
+
+    Request:
+    {
+        "razorpay_order_id": "order_...",
+        "razorpay_payment_id": "pay_...",
+        "razorpay_signature": "..."
+    }
+
+    Response:
+    {
+        "success": true,
+        "data": {
+            "message": "Payment verified",
+            "payment_id": "..."
+        }
+    }
+    """
+    response, status_code = _payment_controller.verify_payment(current_user)
     return jsonify(response), status_code
 
 
@@ -174,7 +205,7 @@ def request_refund(current_user, payment_id):
     Optional Request:
     {
         "reason": "requested_by_customer",
-        "amount_cents": 1000  // Optional, for partial refund
+        "amount_paise": 1000  // Optional, for partial refund
     }
     """
     response, status_code = _payment_controller.request_refund(payment_id, current_user)
@@ -307,24 +338,24 @@ def use_interview():
 
 
 # =============================================================================
-# WEBHOOK ROUTES (Stripe - No Auth)
+# WEBHOOK ROUTES (Razorpay - No Auth)
 # =============================================================================
 
 
-@payment_bp.route("/webhooks/stripe", methods=["POST"])
-def stripe_webhook():
+@payment_bp.route("/webhooks/razorpay", methods=["POST"])
+def razorpay_webhook():
     """
-    POST /api/payment/webhooks/stripe
+    POST /api/payment/webhooks/razorpay
 
-    Handle Stripe webhook events.
-    NO AUTH - Stripe verifies via signature.
+    Handle Razorpay webhook events.
+    NO AUTH - Razorpay verifies via signature.
 
     Headers Required:
-    - Stripe-Signature: webhook signature
+    - X-Razorpay-Signature: webhook signature
 
     Always returns 200 to acknowledge receipt.
     """
-    response, status_code = _webhook_controller.handle_stripe_webhook()
+    response, status_code = _webhook_controller.handle_razorpay_webhook()
     return jsonify(response), status_code
 
 

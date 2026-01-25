@@ -32,28 +32,28 @@ def cents_to_dollars(cents: int) -> float:
     return cents / 100
 
 
-def dollars_to_cents(dollars: float) -> int:
-    """Convert dollars to cents"""
-    return int(dollars * 100)
+def rupees_to_paise(rupees: float) -> int:
+    """Convert rupees to paise"""
+    return int(rupees * 100)
 
 
-def format_currency(cents: int, currency: str = "USD") -> str:
+def format_currency(paise: int, currency: str = "INR") -> str:
     """
-    Format cents as currency string.
+    Format paise/cents as currency string.
 
     Args:
-        cents: Amount in cents
+        paise: Amount in smallest currency unit (paise for INR)
         currency: Currency code
 
     Returns:
-        Formatted string (e.g., "$49.00")
+        Formatted string (e.g., "₹999.00")
     """
-    dollars = cents / 100
+    amount = paise / 100
 
     currency_symbols = {"USD": "$", "EUR": "€", "GBP": "£", "INR": "₹"}
 
-    symbol = currency_symbols.get(currency.upper(), "$")
-    return f"{symbol}{dollars:.2f}"
+    symbol = currency_symbols.get(currency.upper(), "₹")
+    return f"{symbol}{amount:.2f}"
 
 
 def is_valid_object_id(id_string: str) -> bool:

@@ -1,0 +1,189 @@
+/* PaymentHistory Component Styles */
+
+.container {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+body.dark .container,
+:global(.dark) .container {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+/* Table Styles */
+.table {
+  width: 100%;
+}
+
+.header,
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 1fr;
+  padding: 1rem 1.5rem;
+  gap: 1rem;
+  align-items: center;
+}
+
+.header {
+  background: #f9fafb;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+body.dark .header,
+:global(.dark) .header {
+  background: #111827;
+  color: #9ca3af;
+  border-color: #374151;
+}
+
+.row {
+  font-size: 0.875rem;
+  color: #1f2937;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.2s ease;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: #f9fafb;
+}
+
+body.dark .row,
+:global(.dark) .row {
+  color: #f3f4f6;
+  border-color: #374151;
+}
+
+body.dark .row:hover,
+:global(.dark) .row:hover {
+  background: #111827;
+}
+
+/* Status Badge */
+.status {
+  display: inline-flex;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status.succeeded,
+.status.completed,
+.status.paid {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status.pending,
+.status.processing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status.failed,
+.status.cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status.refunded {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+body.dark .status.succeeded,
+body.dark .status.completed,
+body.dark .status.paid,
+:global(.dark) .status.succeeded,
+:global(.dark) .status.completed,
+:global(.dark) .status.paid {
+  background: #065f46;
+  color: #d1fae5;
+}
+
+body.dark .status.pending,
+body.dark .status.processing,
+:global(.dark) .status.pending,
+:global(.dark) .status.processing {
+  background: #78350f;
+  color: #fef3c7;
+}
+
+body.dark .status.failed,
+body.dark .status.cancelled,
+:global(.dark) .status.failed,
+:global(.dark) .status.cancelled {
+  background: #991b1b;
+  color: #fee2e2;
+}
+
+body.dark .status.refunded,
+:global(.dark) .status.refunded {
+  background: #3730a3;
+  color: #e0e7ff;
+}
+
+/* Empty State */
+.empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #6b7280;
+}
+
+.empty svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 1.5rem;
+  opacity: 0.4;
+}
+
+.empty h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty p {
+  font-size: 0.875rem;
+  margin: 0;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+body.dark .empty,
+:global(.dark) .empty {
+  color: #9ca3af;
+}
+
+body.dark .empty h3,
+:global(.dark) .empty h3 {
+  color: #f9fafb;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .header,
+  .row {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .header span:nth-child(2),
+  .row span:nth-child(2) {
+    display: none;
+  }
+}

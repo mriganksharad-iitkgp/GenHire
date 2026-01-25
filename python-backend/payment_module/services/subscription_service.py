@@ -53,18 +53,18 @@ class SubscriptionService:
             logger.error(f"Error creating subscription indexes: {str(e)}")
 
     def create_pending_subscription(
-        self, employer_id: str, plan: Plan, stripe_session_id: str
+        self, employer_id: str, plan: Plan, razorpay_order_id: str
     ) -> Optional[Subscription]:
         """
         Create a pending subscription when checkout is initiated.
 
         The subscription remains pending until payment is confirmed
-        via webhook.
+        via webhook or verification.
 
         Args:
             employer_id: User ID
             plan: Plan being purchased
-            stripe_session_id: Stripe checkout session ID
+            razorpay_order_id: Razorpay order ID
 
         Returns:
             Created Subscription or None
@@ -74,7 +74,7 @@ class SubscriptionService:
             plan_snapshot = {
                 "name": plan.name,
                 "slug": plan.slug,
-                "price_cents": plan.price_cents,
+                "price_paise": plan.price_paise,
                 "interviews_allowed": plan.interviews_allowed,
                 "validity_days": plan.validity_days,
                 "features": plan.features,
@@ -87,7 +87,7 @@ class SubscriptionService:
                 status=SubscriptionStatus.PENDING,
                 interviews_allowed=plan.interviews_allowed,
                 interviews_remaining=plan.interviews_allowed,
-                stripe_session_id=stripe_session_id,
+                razorpay_order_id=razorpay_order_id,
             )
 
             result = self.collection.insert_one(subscription.to_dict())
@@ -103,15 +103,15 @@ class SubscriptionService:
             return None
 
     def activate_subscription(
-        self, stripe_session_id: str, payment_id: ObjectId
+        self, razorpay_order_id: str, payment_id: ObjectId
     ) -> Optional[Subscription]:
         """
         Activate subscription after successful payment.
 
-        Called by webhook handler after payment confirmation.
+        Called by webhook handler or payment verification after payment confirmation.
 
         Args:
-            stripe_session_id: Stripe session ID
+            razorpay_order_id: Razorpay order ID
             payment_id: Internal payment record ID
 
         Returns:
@@ -121,15 +121,13 @@ class SubscriptionService:
             # Find the pending subscription
             sub_data = self.collection.find_one(
                 {
-                    "stripe_session_id": stripe_session_id,
+                    "razorpay_order_id": razorpay_order_id,
                     "status": SubscriptionStatus.PENDING.value,
                 }
             )
 
             if not sub_data:
-                logger.warning(
-                    f"No pending subscription for session {stripe_session_id}"
-                )
+                logger.warning(f"No pending subscription for order {razorpay_order_id}")
                 return None
 
             subscription = Subscription.from_dict(sub_data)
@@ -233,23 +231,23 @@ class SubscriptionService:
             logger.error(f"Error fetching subscription for {employer_id}: {str(e)}")
             return None
 
-    def get_subscription_by_session(
-        self, stripe_session_id: str
+    def get_subscription_by_order(
+        self, razorpay_order_id: str
     ) -> Optional[Subscription]:
         """
-        Get subscription by Stripe session ID.
+        Get subscription by Razorpay order ID.
 
         Used for webhook processing.
 
         Args:
-            stripe_session_id: Stripe session ID
+            razorpay_order_id: Razorpay order ID
 
         Returns:
             Subscription or None
         """
         try:
             sub_data = self.collection.find_one(
-                {"stripe_session_id": stripe_session_id}
+                {"razorpay_order_id": razorpay_order_id}
             )
 
             if sub_data:
@@ -257,7 +255,7 @@ class SubscriptionService:
             return None
 
         except Exception as e:
-            logger.error(f"Error fetching subscription by session: {str(e)}")
+            logger.error(f"Error fetching subscription by order: {str(e)}")
             return None
 
     def use_interview(self, employer_id: str) -> Dict[str, Any]:
