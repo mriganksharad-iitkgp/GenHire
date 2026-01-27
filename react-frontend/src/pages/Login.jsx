@@ -65,7 +65,7 @@ const Login = () => {
 				navigate("/recruiter-dashboard");
 			} else {
 				console.log('Navigating to candidate dashboard'); // Debug log
-				navigate("/");
+				navigate("/dashboard");
 			}
 		} catch (error) {
 			setError(error.message);
@@ -111,7 +111,7 @@ const Login = () => {
 			} else if (data.user.user_type === "recruiter") {
 				navigate("/recruiter-dashboard");
 			} else {
-				navigate("/");
+				navigate("/dashboard");
 			}
 		} catch (error) {
 			setError(error.message);

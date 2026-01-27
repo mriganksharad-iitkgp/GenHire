@@ -1,7 +1,10 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "../../pages/RecruiterDashboard.module.css";
 
 export const Tabs = ({ activeTab, onChange }) => {
+  const navigate = useNavigate();
+  
   return (
     <div className={styles.tabNavigation}>
       <div className={styles.tabList}>
@@ -36,6 +39,14 @@ export const Tabs = ({ activeTab, onChange }) => {
           onClick={() => onChange("profile")}
         >
           <i className="fa fa-building"></i> Company Profile
+        </button>
+        <button
+          className={`${styles.tabButton} ${
+            activeTab === "cost-statistics" ? styles.active : ""
+          }`}
+          onClick={() => navigate("/recruiter/cost-statistics")}
+        >
+          <i className="fa fa-chart-pie"></i> Cost Statistics
         </button>
       </div>
     </div>

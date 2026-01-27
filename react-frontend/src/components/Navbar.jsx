@@ -148,6 +148,16 @@ const Navbar = ({ userType = "candidate" }) => {
               >
                 Dashboard
               </Link>
+              <Link
+                to="/recruiter/cost-statistics"
+                className={`${styles.navLink} ${
+                  location.pathname === "/recruiter/cost-statistics"
+                    ? styles.active
+                    : ""
+                }`}
+              >
+                Cost Statistics
+              </Link>
             </>
           ) : (
             <>

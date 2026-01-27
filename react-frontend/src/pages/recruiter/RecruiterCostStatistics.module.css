@@ -1,0 +1,760 @@
+/* Recruiter Cost Statistics Styles */
+.pageWrapper {
+  padding-top: 70px; /* Account for fixed navbar */
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.costStatistics {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* Loading State */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+}
+
+.loadingSpinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingContainer p {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+/* Page Header */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 2rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.headerContent h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.headerContent p {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.summaryBadges {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.summaryBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  background: #f1f5f9;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.summaryBadge strong {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.headerActions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.periodSelect {
+  padding: 0.625rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  color: #1e293b;
+  font-size: 0.95rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 140px;
+}
+
+.periodSelect:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.downloadBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.downloadBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* Sections */
+.section {
+  padding: 0 2rem 2rem;
+}
+
+.section:first-of-type {
+  padding-top: 2rem;
+}
+
+.sectionHeader {
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.25rem;
+}
+
+.sectionHeader p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Credit Bar */
+.creditBarContainer {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  border: 1px solid #e2e8f0;
+}
+
+.creditBarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.creditBarTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.creditBarTitle h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.creditPercentage {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.creditBarValues {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.usedValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.separator {
+  color: #94a3b8;
+  font-size: 1.25rem;
+}
+
+.totalValue {
+  font-size: 1.25rem;
+  color: #64748b;
+}
+
+.creditBarTrack {
+  height: 16px;
+  background: #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.creditBarFill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 1s ease;
+}
+
+.creditBarHint {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* Gauge Charts */
+.gaugesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.gaugeCard {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.gaugeCard:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.gaugeHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.gaugeIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.gaugeHeader h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.gaugeContainer {
+  position: relative;
+  height: 120px;
+  margin-bottom: 1rem;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.gaugeSvg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.gaugeValue {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.gaugePercentage {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.gaugeLabel {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.gaugeStats {
+  display: flex;
+  justify-content: space-between;
+}
+
+.gaugeStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gaugeStatLabel {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gaugeStatValue {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Service Cards */
+.serviceCardsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.serviceCard {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.serviceCard:hover {
+  border-color: #c7d2fe;
+}
+
+.serviceCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.serviceInfo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.serviceIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.serviceInfo h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem;
+}
+
+.serviceInfo p {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.servicePercentage {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.serviceBarTrack {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.serviceBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.serviceStats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+/* Job Breakdown */
+.jobBreakdownCard {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.chartLegend {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.legendEntry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.legendColor {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.jobsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.jobRow {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.jobInfo {
+  min-width: 180px;
+}
+
+.jobInfo h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem;
+}
+
+.jobInfo span {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.jobBarContainer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.jobBarTrack {
+  flex: 1;
+  height: 20px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  display: flex;
+  overflow: hidden;
+}
+
+.jobBarSegment {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.jobBarSegment:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.jobBarSegment:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.jobTotal {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Activity Card */
+.activityCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.activityList {
+  padding: 0;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+}
+
+.activityItem:hover {
+  background: #f8fafc;
+}
+
+.activityIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.activityDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.activityMain {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.activityAction {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.activityJob {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.activityJob::before {
+  content: '•';
+  margin-right: 0.5rem;
+}
+
+.activityTime {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.activityCredits {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.creditAmount {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.creditService {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.viewAllBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem;
+  background: #f8fafc;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #6366f1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewAllBtn:hover {
+  background: #e0e7ff;
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.emptyState .emptyIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.emptyState h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.emptyState p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  max-width: 280px;
+}
+
+/* Tips Card */
+.tipsCard {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 16px;
+}
+
+.tipsIcon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.tipsContent h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 0.75rem;
+}
+
+.tipsContent ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.tipsContent li {
+  font-size: 0.9rem;
+  color: #78350f;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.tipsContent li:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .gaugesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .headerActions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .periodSelect, .downloadBtn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .section {
+    padding: 0 1rem 1.5rem;
+  }
+  
+  .section:first-of-type {
+    padding-top: 1.5rem;
+  }
+  
+  .gaugesGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .creditBarHeader {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .jobRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .jobInfo {
+    min-width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .jobBarContainer {
+    width: 100%;
+  }
+  
+  .activityItem {
+    flex-wrap: wrap;
+  }
+  
+  .activityCredits {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    padding-left: 56px;
+  }
+  
+  .tipsCard {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
