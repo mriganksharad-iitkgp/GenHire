@@ -1,0 +1,607 @@
+/* Cost Statistics Page Styles */
+.costStatistics {
+  padding: 0;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+/* Loading State */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+}
+
+.loadingSpinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingContainer p {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+/* Page Header */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.headerContent h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.25rem;
+}
+
+.headerContent p {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.periodSelect {
+  padding: 0.625rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  color: #1e293b;
+  font-size: 0.95rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 140px;
+}
+
+.periodSelect:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.exportBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exportBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* Overview Cards */
+.overviewCards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.overviewCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.overviewCard:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.overviewIcon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overviewInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.overviewLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.overviewValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Sections */
+.section {
+  padding: 0 2rem 2rem;
+}
+
+.sectionHeader {
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.25rem;
+}
+
+.sectionHeader p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Pie Charts Grid */
+.pieChartsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.pieChartCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.pieChartCard:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.pieChartHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.pieChartIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.pieChartHeader h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.pieChartContainer {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 1.5rem;
+}
+
+.pieChart {
+  width: 100%;
+  height: 100%;
+}
+
+.pieChartCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pieChartPercentage {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.pieChartLabel {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.pieChartLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Horizontal Bars */
+.horizontalBarsCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.horizontalBarContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.horizontalBarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.horizontalBarLabel {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.horizontalBarValue {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.horizontalBarTrack {
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.horizontalBarFill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 1s ease;
+}
+
+.horizontalBarSublabel {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* Table Card */
+.tableCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.recruitersTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.recruitersTable th {
+  text-align: left;
+  padding: 1rem 1.5rem;
+  background: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.recruitersTable td {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.recruitersTable tr:last-child td {
+  border-bottom: none;
+}
+
+.recruitersTable tr:hover td {
+  background: #f8fafc;
+}
+
+.recruiterCell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tableAvatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.tableName {
+  display: block;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.tableEmail {
+  display: block;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.deptBadge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #e0e7ff;
+  color: #6366f1;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.usageCell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.usageBar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 100px;
+}
+
+.usageFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.usagePercent {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #1e293b;
+  min-width: 40px;
+}
+
+/* Stacked Chart */
+.stackedChartCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 2rem;
+}
+
+.chartLegend {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.legendEntry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.legendColor {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.stackedBarsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stackedBarRow {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.stackedBarInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 200px;
+}
+
+.recruiterAvatar {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.recruiterDetails {
+  display: flex;
+  flex-direction: column;
+}
+
+.recruiterName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.recruiterDept {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.stackedBarContainer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stackedBarTrack {
+  flex: 1;
+  height: 24px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  display: flex;
+  overflow: hidden;
+}
+
+.stackedBarSegment {
+  height: 100%;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.stackedBarSegment:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.stackedBarSegment:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.stackedBarTotal {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .overviewCards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .pieChartsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .headerActions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .periodSelect, .exportBtn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .overviewCards {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+  
+  .section {
+    padding: 0 1rem 1.5rem;
+  }
+  
+  .pieChartsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .recruitersTable {
+    display: block;
+    overflow-x: auto;
+  }
+  
+  .stackedBarRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .stackedBarInfo {
+    min-width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .stackedBarContainer {
+    width: 100%;
+  }
+}

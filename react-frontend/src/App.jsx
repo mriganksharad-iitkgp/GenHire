@@ -36,6 +36,13 @@ import ManageAdmins from "./pages/admin/ManageAdmins";
 import CandidateDetail from "./pages/admin/CandidateDetail";
 import RecruiterDetail from "./pages/admin/RecruiterDetail";
 import Verification from "./pages/admin/Verification";
+import CostStatistics from "./pages/admin/CostStatistics";
+
+// Recruiter Pages
+import RecruiterCostStatistics from "./pages/recruiter/RecruiterCostStatistics";
+
+// Landing Page
+import LandingPage from "./pages/LandingPage";
 
 import "./App.css";
 
@@ -60,10 +67,8 @@ function App() {
             {/* Payment Routes */}
             <Route path="/payment/success" element={<PaymentSuccess />} />
             <Route path="/payment/cancel" element={<PaymentCancel />} />
-
-            <Route path="/admin" element={<AdminDashboard />} />
             
-            {/* Admin Routes */}
+            {/* Admin Routes - New Admin Portal */}
             <Route path="/admin" element={<AdminOverview />} />
             <Route path="/admin/overview" element={<AdminOverview />} />
             <Route path="/admin/candidates" element={<ManageCandidates />} />
@@ -72,11 +77,18 @@ function App() {
             <Route path="/admin/recruiters/:recruiterId" element={<RecruiterDetail />} />
             <Route path="/admin/admins" element={<ManageAdmins />} />
             <Route path="/admin/verification" element={<Verification />} />
+            <Route path="/admin/cost-statistics" element={<CostStatistics />} />
             <Route path="/admin/old" element={<AdminDashboard />} />
+            
+            {/* Recruiter Cost Statistics */}
+            <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />
+            
+            {/* Landing Page - Public Home */}
+            <Route path="/" element={<LandingPage />} />
             
             <Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
             <Route
-              path="/"
+              path="/dashboard"
               element={
                 <Layout>
                   <Dashboard />
