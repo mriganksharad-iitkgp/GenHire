@@ -2,47 +2,47 @@
 
 ## Current Project Structure Issues
 
-| Issue | Problem | Solution |
-|-------|---------|----------|
-| **Monolithic app.py** | Heavy ML imports block startup | Separate API and ML workers |
-| **Local file storage** | `uploads/` not portable | Use R2/S3 object storage |
-| **Mixed dependencies** | GPU libs (torch, YOLO) with API libs | Multi-container setup |
-| **No health checks** | Hard to monitor | Add `/health` endpoint |
-| **Secrets in code** | `.env` not production-ready | Use Docker secrets/env |
+| Issue                  | Problem                              | Solution                    |
+| ---------------------- | ------------------------------------ | --------------------------- |
+| **Monolithic app.py**  | Heavy ML imports block startup       | Separate API and ML workers |
+| **Local file storage** | `uploads/` not portable              | Use R2/S3 object storage    |
+| **Mixed dependencies** | GPU libs (torch, YOLO) with API libs | Multi-container setup       |
+| **No health checks**   | Hard to monitor                      | Add `/health` endpoint      |
+| **Secrets in code**    | `.env` not production-ready          | Use Docker secrets/env      |
 
 ---
 
 ## Recommended Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DOCKER COMPOSE / KUBERNETES                  │
-│                                                                 │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   API SERVICE   │  │   ML WORKER     │  │   REDIS         │ │
-│  │   (Flask)       │  │   (GPU)         │  │   (Queue)       │ │
-│  │                 │  │                 │  │                 │ │
-│  │ - auth routes   │  │ - YOLO          │  │ - job queue     │ │
-│  │ - job routes    │  │ - pyannote      │  │ - session cache │ │
-│  │ - profile       │  │ - mediapipe     │  │                 │ │
-│  │ - SocketIO      │  │ - CV scoring    │  │                 │ │
-│  └────────┬────────┘  └────────┬────────┘  └─────────────────┘ │
-│           │                    │                                │
-│           └────────────────────┘                                │
-│                       │                                         │
-│                       ▼                                         │
-│           ┌─────────────────────┐                              │
-│           │   MESSAGE QUEUE     │                              │
-│           │   (Redis/RabbitMQ)  │                              │
-│           └─────────────────────┘                              │
-└─────────────────────────────────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ MongoDB Atlas│ │ Cloudflare R2│ │ External APIs│
-│              │ │ (uploads)    │ │ (Groq, etc.) │
-└──────────────┘ └──────────────┘ └──────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                    DOCKER COMPOSE / KUBERNETES                    │
+│                                                                    │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────────┐ │
+│  │   API SERVICE   │  │   ML WORKER     │  │     REDIS         │ │
+│  │   (Flask)       │  │   (GPU)         │  │   (Session Cache) │ │
+│  │                 │  │                 │  │                   │ │
+│  │ - auth routes   │  │ - YOLO          │  │ - session cache   │ │
+│  │ - job routes    │  │ - pyannote      │  │                   │ │
+│  │ - profile       │  │ - mediapipe     │  │                   │ │
+│  │ - SocketIO      │  │ - CV scoring    │  │                   │ │
+│  └────────┬────────┘  └────────┬────────┘  └────────────────────┘ │
+│           │                    │                                   │
+│           └────────────────────┘                                   │
+│                       │                                            │
+│                       ▼                                            │
+│           ┌────────────────────────────┐                           │
+│           │   MESSAGE QUEUE            │                           │
+│           │   (RabbitMQ + Celery)      │                           │
+│           └────────────────────────────┘                           │
+└────────────────────────────────────────────────────────────────────┘
+                                  │
+                  ┌───────────────┼───────────────┐
+                  ▼               ▼               ▼
+          ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+          │ MongoDB Atlas│ │ Cloudflare R2│ │ External APIs│
+          │              │ │ (uploads)    │ │ (Groq, etc.) │
+          └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ---
@@ -132,7 +132,8 @@ RUN pip install --no-cache-dir -r ml.txt
 COPY workers/ ./workers/
 COPY shared/ ./shared/
 
-CMD ["python", "-m", "workers.recording_worker"]
+# Use Celery to run the worker (recommended for production)
+CMD ["celery", "-A", "workers.recording_worker", "worker", "--loglevel=info"]
 ```
 
 ---
@@ -141,7 +142,7 @@ CMD ["python", "-m", "workers.recording_worker"]
 
 ```yaml
 # filepath: python-backend/docker/docker-compose.yml
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -337,11 +338,11 @@ def start_recording_analysis(current_user):
     file = request.files.get('file')
     if not file:
         return jsonify({'error': 'No file provided'}), 400
-    
+
     # Upload to R2
     key = f"recordings/{current_user['_id']}/{secure_filename(file.filename)}"
     storage.upload_file(file, key)
-    
+
     # Create job record
     job = db.recordings.insert_one({
         'user_id': current_user['_id'],
@@ -349,10 +350,10 @@ def start_recording_analysis(current_user):
         'status': 'queued',
         'created_at': datetime.utcnow()
     })
-    
+
     # Queue ML task
     analyze_recording.delay(key, str(job.inserted_id))
-    
+
     return jsonify({
         'job_id': str(job.inserted_id),
         'status': 'queued'
@@ -459,12 +460,12 @@ docker-compose up --scale ml-worker=3
 
 ## Summary
 
-| Component | Container | Resources |
-|-----------|-----------|-----------|
-| **Flask API** | `Dockerfile.api` | 2 vCPU, 4GB RAM |
+| Component     | Container           | Resources            |
+| ------------- | ------------------- | -------------------- |
+| **Flask API** | `Dockerfile.api`    | 2 vCPU, 4GB RAM      |
 | **ML Worker** | `Dockerfile.worker` | 4 vCPU, 8GB RAM, GPU |
-| **Redis** | Official image | 1 vCPU, 2GB RAM |
-| **Storage** | Cloudflare R2 | External |
-| **Database** | MongoDB Atlas | External |
+| **Redis**     | Official image      | 1 vCPU, 2GB RAM      |
+| **Storage**   | Cloudflare R2       | External             |
+| **Database**  | MongoDB Atlas       | External             |
 
 **Key takeaway:** Separate API and ML workloads into different containers for independent scaling and resource allocation.
