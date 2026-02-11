@@ -1,8 +1,8 @@
 """Payment module services"""
 
-from .stripe_service import StripeService
+from .razorpay_service import RazorpayService
 from .payment_service import PaymentService
 from .subscription_service import SubscriptionService
 from .plan_service import PlanService
 
-__all__ = ["StripeService", "PaymentService", "SubscriptionService", "PlanService"]
+__all__ = ["RazorpayService", "PaymentService", "SubscriptionService", "PlanService"]

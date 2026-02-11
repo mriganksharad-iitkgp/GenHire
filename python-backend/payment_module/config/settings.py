@@ -21,12 +21,12 @@ class PaymentConfig:
     All sensitive data loaded from environment variables.
     """
 
-    # Stripe Configuration
-    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-    STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
-    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+    # Razorpay Configuration
+    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+    RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
 
-    # URLs for Stripe Checkout redirects
+    # URLs for Razorpay redirects
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
     PAYMENT_SUCCESS_URL = os.getenv(
         "PAYMENT_SUCCESS_URL", f"{FRONTEND_URL}/payment/success"
@@ -40,27 +40,27 @@ class PaymentConfig:
     DATABASE_NAME = os.getenv("DATABASE_NAME", "hrtech")
 
     # Payment Module Settings
-    CURRENCY = os.getenv("PAYMENT_CURRENCY", "usd")
+    CURRENCY = os.getenv("PAYMENT_CURRENCY", "INR")
 
     # Interview settings
     UNLIMITED_INTERVIEWS = -1  # Sentinel value for unlimited plans
 
     # Default Plans Configuration
     # These are seeded if no plans exist in the database
-    # Only two plans are provided by default: Free Tier and Enterprise
-    # - Free Tier: 5 free interviews + one-time $5 account credit
-    # - Enterprise: 1 month validity, 100 interviews + $100 account credit
+    # Prices in paise (1 INR = 100 paise)
+    # - Free Tier: 2 free interviews + one-time ₹200 account credit
+    # - Enterprise: 1 month validity, 100 interviews + ₹10,000 account credit
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
         "free": {
             "name": "Free Tier",
             "slug": "free",
             "description": "Starter free tier with limited interviews and a small account credit",
-            "price_cents": 0,  # Free plan
-            "interviews_allowed": 5,
+            "price_paise": 0,  # Free plan
+            "interviews_allowed": 2,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
             "features": [
-                "5 AI-powered interviews",
-                "One-time $5 account credit",
+                "2 AI-powered interviews",
+                "One-time ₹200 account credit",
                 "Basic access to features",
             ],
             "is_active": True,
@@ -70,12 +70,12 @@ class PaymentConfig:
             "name": "Enterprise",
             "slug": "enterprise",
             "description": "Enterprise plan with 1 month validity, 100 interviews and account credit",
-            "price_cents": 10000,  # $100.00
+            "price_paise": 999900,  # ₹9,999.00
             "interviews_allowed": 100,
             "validity_days": 30,  # 1 month validity
             "features": [
                 "100 AI-powered interviews",
-                "Includes $100 account credit",
+                "Includes ₹10,000 account credit",
                 "Priority support and integrations",
             ],
             "is_active": True,
@@ -86,7 +86,7 @@ class PaymentConfig:
     @classmethod
     def validate(cls) -> bool:
         """Validate that all required configuration is present"""
-        required = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "MONGODB_URI"]
+        required = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "MONGODB_URI"]
 
         missing = [key for key in required if not getattr(cls, key)]
 
@@ -97,5 +97,5 @@ class PaymentConfig:
 
     @classmethod
     def is_test_mode(cls) -> bool:
-        """Check if Stripe is in test mode"""
-        return cls.STRIPE_SECRET_KEY and cls.STRIPE_SECRET_KEY.startswith("sk_test_")
+        """Check if Razorpay is in test mode"""
+        return cls.RAZORPAY_KEY_ID and cls.RAZORPAY_KEY_ID.startswith("rzp_test_")

@@ -5,7 +5,7 @@ const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
 
 function authHeaders() {
   const token = localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"
+    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
   );
   return {
     Authorization: `Bearer ${token}`,
@@ -74,11 +74,18 @@ export const cancelSubscription = (reason) =>
 // PAYMENTS
 // =============================================================================
 
-/** Initiate payment for a plan (starts Stripe checkout) */
+/** Initiate payment for a plan (creates Razorpay order) */
 export const initiatePayment = (planId) =>
   request("/payment/payments/initiate", {
     method: "POST",
     body: JSON.stringify({ plan_id: planId }),
+  });
+
+/** Verify Razorpay payment after checkout */
+export const verifyPayment = (paymentData) =>
+  request("/payment/payments/verify", {
+    method: "POST",
+    body: JSON.stringify(paymentData),
   });
 
 /** Get payment history */

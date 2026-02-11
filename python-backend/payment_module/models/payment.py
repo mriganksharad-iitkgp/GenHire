@@ -2,9 +2,9 @@
 Payment Model - Records all payment transactions
 
 Design Decisions:
-1. Idempotency key for safe retries (Stripe best practice)
-2. Store full Stripe response for debugging/disputes
-3. Amount in cents (consistent with Plan model)
+1. Idempotency key for safe retries (Razorpay best practice)
+2. Store full Razorpay response for debugging/disputes
+3. Amount in paise (smallest currency unit for INR)
 4. Reference to subscription for linking
 5. Support refunds with separate records
 6. Payment status separate from subscription status
@@ -49,16 +49,15 @@ class Payment:
         employer_id: Reference to users collection
         subscription_id: Reference to subscriptions collection
         plan_id: Reference to plans collection
-        amount_cents: Payment amount in cents
-        currency: ISO currency code (e.g., 'usd')
+        amount_paise: Payment amount in paise (smallest currency unit)
+        currency: ISO currency code (e.g., 'inr')
         status: Current payment status
-        stripe_session_id: Stripe Checkout Session ID
-        stripe_payment_intent_id: Stripe PaymentIntent ID
-        stripe_charge_id: Stripe Charge ID (for refunds)
-        stripe_customer_id: Stripe Customer ID
+        razorpay_order_id: Razorpay Order ID
+        razorpay_payment_id: Razorpay Payment ID
+        razorpay_signature: Razorpay Payment Signature
         idempotency_key: Unique key for safe retries
-        stripe_response: Full Stripe API response (for debugging)
-        refund_amount_cents: Amount refunded (if any)
+        razorpay_response: Full Razorpay API response (for debugging)
+        refund_amount_paise: Amount refunded (if any)
         refund_reason: Reason for refund
         failure_reason: Why payment failed (if applicable)
         metadata: Additional payment data
@@ -69,17 +68,16 @@ class Payment:
 
     employer_id: ObjectId
     plan_id: ObjectId
-    amount_cents: int
-    currency: str = "usd"
+    amount_paise: int
+    currency: str = "inr"
     status: PaymentStatus = PaymentStatus.PENDING
     subscription_id: Optional[ObjectId] = None
-    stripe_session_id: Optional[str] = None
-    stripe_payment_intent_id: Optional[str] = None
-    stripe_charge_id: Optional[str] = None
-    stripe_customer_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
     idempotency_key: Optional[str] = None
-    stripe_response: Optional[Dict[str, Any]] = None
-    refund_amount_cents: int = 0
+    razorpay_response: Optional[Dict[str, Any]] = None
+    refund_amount_paise: int = 0
     refund_reason: Optional[str] = None
     failure_reason: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -89,14 +87,14 @@ class Payment:
     _id: Optional[ObjectId] = None
 
     @property
-    def amount_dollars(self) -> float:
-        """Convert cents to dollars"""
-        return self.amount_cents / 100
+    def amount_rupees(self) -> float:
+        """Convert paise to rupees"""
+        return self.amount_paise / 100
 
     @property
-    def refund_amount_dollars(self) -> float:
-        """Convert refund cents to dollars"""
-        return self.refund_amount_cents / 100
+    def refund_amount_rupees(self) -> float:
+        """Convert refund paise to rupees"""
+        return self.refund_amount_paise / 100
 
     @property
     def is_successful(self) -> bool:
@@ -107,7 +105,8 @@ class Payment:
     def is_refundable(self) -> bool:
         """Check if payment can be refunded"""
         return (
-            self.status == PaymentStatus.SUCCEEDED and self.stripe_charge_id is not None
+            self.status == PaymentStatus.SUCCEEDED
+            and self.razorpay_payment_id is not None
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -116,20 +115,19 @@ class Payment:
             "employer_id": self.employer_id,
             "subscription_id": self.subscription_id,
             "plan_id": self.plan_id,
-            "amount_cents": self.amount_cents,
+            "amount_paise": self.amount_paise,
             "currency": self.currency,
             "status": (
                 self.status.value
                 if isinstance(self.status, PaymentStatus)
                 else self.status
             ),
-            "stripe_session_id": self.stripe_session_id,
-            "stripe_payment_intent_id": self.stripe_payment_intent_id,
-            "stripe_charge_id": self.stripe_charge_id,
-            "stripe_customer_id": self.stripe_customer_id,
+            "razorpay_order_id": self.razorpay_order_id,
+            "razorpay_payment_id": self.razorpay_payment_id,
+            "razorpay_signature": self.razorpay_signature,
             "idempotency_key": self.idempotency_key,
-            "stripe_response": self.stripe_response,
-            "refund_amount_cents": self.refund_amount_cents,
+            "razorpay_response": self.razorpay_response,
+            "refund_amount_paise": self.refund_amount_paise,
             "refund_reason": self.refund_reason,
             "failure_reason": self.failure_reason,
             "metadata": self.metadata,
@@ -148,7 +146,7 @@ class Payment:
             "subscription_id": (
                 str(self.subscription_id) if self.subscription_id else None
             ),
-            "amount": self.amount_dollars,
+            "amount": self.amount_rupees,
             "currency": self.currency,
             "status": (
                 self.status.value
@@ -156,7 +154,7 @@ class Payment:
                 else self.status
             ),
             "refund_amount": (
-                self.refund_amount_dollars if self.refund_amount_cents > 0 else None
+                self.refund_amount_rupees if self.refund_amount_paise > 0 else None
             ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "completed_at": (
@@ -175,16 +173,15 @@ class Payment:
             employer_id=data.get("employer_id"),
             subscription_id=data.get("subscription_id"),
             plan_id=data.get("plan_id"),
-            amount_cents=data.get("amount_cents", 0),
-            currency=data.get("currency", "usd"),
+            amount_paise=data.get("amount_paise", 0),
+            currency=data.get("currency", "inr"),
             status=status,
-            stripe_session_id=data.get("stripe_session_id"),
-            stripe_payment_intent_id=data.get("stripe_payment_intent_id"),
-            stripe_charge_id=data.get("stripe_charge_id"),
-            stripe_customer_id=data.get("stripe_customer_id"),
+            razorpay_order_id=data.get("razorpay_order_id"),
+            razorpay_payment_id=data.get("razorpay_payment_id"),
+            razorpay_signature=data.get("razorpay_signature"),
             idempotency_key=data.get("idempotency_key"),
-            stripe_response=data.get("stripe_response"),
-            refund_amount_cents=data.get("refund_amount_cents", 0),
+            razorpay_response=data.get("razorpay_response"),
+            refund_amount_paise=data.get("refund_amount_paise", 0),
             refund_reason=data.get("refund_reason"),
             failure_reason=data.get("failure_reason"),
             metadata=data.get("metadata", {}),
@@ -202,11 +199,10 @@ class PaymentSchema:
     Indexes:
     1. employer_id: List employer's payments
     2. subscription_id: Find payments for subscription
-    3. stripe_session_id (unique, sparse): Webhook idempotency
-    4. stripe_payment_intent_id (unique, sparse): PI lookup
+    3. razorpay_order_id (unique, sparse): Webhook idempotency
+    4. razorpay_payment_id (unique, sparse): Payment lookup
     5. idempotency_key (unique, sparse): Retry safety
     6. (status, created_at): Analytics and reporting
-    7. stripe_charge_id: Refund processing
     """
 
     COLLECTION_NAME = "payments"
@@ -215,31 +211,26 @@ class PaymentSchema:
         {"keys": [("employer_id", 1)], "name": "idx_payment_employer"},
         {"keys": [("subscription_id", 1)], "name": "idx_payment_subscription"},
         {
-            "keys": [("stripe_session_id", 1)],
+            "keys": [("razorpay_order_id", 1)],
             "unique": True,
-            "sparse": True,
-            "name": "idx_payment_stripe_session",
+            "partialFilterExpression": {"razorpay_order_id": {"$type": "string"}},
+            "name": "idx_payment_razorpay_order",
         },
         {
-            "keys": [("stripe_payment_intent_id", 1)],
+            "keys": [("razorpay_payment_id", 1)],
             "unique": True,
-            "sparse": True,
-            "name": "idx_payment_stripe_intent",
+            "partialFilterExpression": {"razorpay_payment_id": {"$type": "string"}},
+            "name": "idx_payment_razorpay_payment",
         },
         {
             "keys": [("idempotency_key", 1)],
             "unique": True,
-            "sparse": True,
+            "partialFilterExpression": {"idempotency_key": {"$type": "string"}},
             "name": "idx_payment_idempotency",
         },
         {
             "keys": [("status", 1), ("created_at", -1)],
             "name": "idx_payment_status_created",
-        },
-        {
-            "keys": [("stripe_charge_id", 1)],
-            "sparse": True,
-            "name": "idx_payment_stripe_charge",
         },
         {"keys": [("plan_id", 1)], "name": "idx_payment_plan"},
     ]

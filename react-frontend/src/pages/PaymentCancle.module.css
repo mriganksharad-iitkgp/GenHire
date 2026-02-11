@@ -1,0 +1,291 @@
+.container {
+  min-height: 100vh;
+  background: linear-gradient(to bottom right, #fef2f2, #fff7ed, #fffbeb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated Background Elements */
+.backgroundElements {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob1 {
+  position: absolute;
+  top: -10rem;
+  right: -10rem;
+  width: 20rem;
+  height: 20rem;
+  background-color: #fecaca;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: blur(24px);
+  opacity: 0.7;
+  animation: pulse 4s ease-in-out infinite;
+}
+
+.blob2 {
+  position: absolute;
+  bottom: -10rem;
+  left: -10rem;
+  width: 20rem;
+  height: 20rem;
+  background-color: #fed7aa;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: blur(24px);
+  opacity: 0.7;
+  animation: pulse 4s ease-in-out infinite 1s;
+}
+
+.blob3 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24rem;
+  height: 24rem;
+  background-color: #fde68a;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: blur(24px);
+  opacity: 0.5;
+  animation: pulse 4s ease-in-out infinite 0.5s;
+}
+
+/* Main Card */
+.card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  padding: 2rem;
+  max-width: 32rem;
+  width: 100%;
+  text-align: center;
+  transition: transform 0.5s ease;
+}
+
+.card:hover {
+  transform: scale(1.02);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: 3rem;
+  }
+}
+
+/* Cancel Icon */
+.iconWrapper {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.iconPing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconPulseCircle {
+  width: 8rem;
+  height: 8rem;
+  background-color: #fee2e2;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+.iconCircle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconBackground {
+  width: 6rem;
+  height: 6rem;
+  background: linear-gradient(to bottom right, #f87171, #f97316);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 15px -3px rgba(254, 202, 202, 0.5);
+}
+
+.icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  color: white;
+}
+
+/* Typography */
+.title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: 2.25rem;
+  }
+}
+
+.subtitle {
+  color: #4b5563;
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}
+
+.description {
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+/* Info Box */
+.infoBox {
+  background: linear-gradient(to right, #fffbeb, #fff7ed);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+  border: 1px solid #fef3c7;
+}
+
+.infoContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.infoIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.infoTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.25rem;
+}
+
+.infoList {
+  font-size: 0.875rem;
+  color: #4b5563;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.infoList li {
+  margin-bottom: 0.25rem;
+}
+
+/* Buttons */
+.buttonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .buttonGroup {
+    flex-direction: row;
+  }
+}
+
+.primaryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(to right, #f97316, #ef4444);
+  color: white;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 10px 15px -3px rgba(254, 215, 170, 0.4);
+  transition: all 0.2s ease;
+}
+
+.primaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 20px -3px rgba(254, 215, 170, 0.5);
+}
+
+.secondaryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  color: #374151;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondaryButton:hover {
+  border-color: #fdba74;
+  background-color: #fff7ed;
+  transform: translateY(-2px);
+}
+
+.buttonIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Footer */
+.footer {
+  margin-top: 2rem;
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.supportLink {
+  color: #f97316;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.supportLink:hover {
+  color: #ea580c;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.5;
+  }
+}

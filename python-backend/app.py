@@ -56,6 +56,16 @@ except Exception as e:
     RecordingAnalyzer = None
     RECORDING_ANALYZER_AVAILABLE = False
 
+
+# Import payment module
+try:
+    from payment_module.routes import payment_bp, init_payment_routes
+    PAYMENT_MODULE_AVAILABLE = True
+    print("✓ Payment module loaded successfully")
+except ImportError as e:
+    print(f"⚠ Payment module not available: {e}")
+    PAYMENT_MODULE_AVAILABLE = False
+
 # Load environment variables
 load_dotenv()
 
@@ -241,6 +251,16 @@ def _format_job_from_doc(job: dict) -> str:
         if isinstance(vals, list) and vals:
             parts.append("\n".join([str(x) for x in vals]))
     return "\n".join(parts)
+
+
+# Initialize payment module
+if PAYMENT_MODULE_AVAILABLE:
+    try:
+        init_payment_routes(db)
+        app.register_blueprint(payment_bp)
+        print("✓ Payment routes registered at /api/payment")
+    except Exception as e:
+        print(f"⚠ Failed to initialize payment module: {e}")
 
 
 # Interview System API Routes

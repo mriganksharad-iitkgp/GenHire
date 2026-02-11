@@ -17,6 +17,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
     if (path.includes("/admin/recruiters")) return "recruiters";
     if (path.includes("/admin/admins")) return "admins";
     if (path.includes("/admin/verification")) return "verification";
+    if (path.includes("/admin/cost-statistics")) return "cost-statistics";
     if (path.includes("/admin/jobs")) return "jobs";
     return "overview";
   };
@@ -99,6 +100,17 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      ),
+    },
+    {
+      id: "cost-statistics",
+      label: "Cost Statistics",
+      path: "/admin/cost-statistics",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="12" y1="1" x2="12" y2="23"></line>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
         </svg>
       ),
     },

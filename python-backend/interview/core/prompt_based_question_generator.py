@@ -294,7 +294,16 @@ class PromptBasedQuestionGenerator:
                 context.fallback_usage_by_topic[next_topic] = 0
 
         # Build context about previous answers
-        cv_keywords_str = ", ".join(context.cv_keywords) if context.cv_keywords else "technical skills"
+        jd_list = list(context.jd_keywords or [])
+        cv_list = list(context.cv_keywords or [])
+        merged_keywords: List[str] = []
+        for kw in jd_list:
+            if kw and kw not in merged_keywords:
+                merged_keywords.append(kw)
+        for kw in cv_list:
+            if kw and kw not in merged_keywords:
+                merged_keywords.append(kw)
+        cv_keywords_str = ", ".join(merged_keywords) if merged_keywords else "technical skills"
         previous_context = ""
         score = 0.5  # Default score
         
@@ -802,9 +811,26 @@ class PromptBasedQuestionGenerator:
             return None
         cv = ", ".join(context.cv_keywords or [])
         jd = ", ".join(context.jd_keywords or [])
-        query_text = f"{topic} {difficulty} {cv} {jd} {context.job_title or ''} {context.job_role or ''}"
-        query_embedding = self._get_embedding(query_text)
+        base_ctx = f"{topic} {difficulty} {context.job_title or ''} {context.job_role or ''}"
+        jd_embedding = None
+        cv_embedding = None
+        if jd:
+            jd_embedding = self._get_embedding(f"{base_ctx} {jd}")
+        if cv:
+            cv_embedding = self._get_embedding(f"{base_ctx} {cv}")
+        if jd_embedding is not None and cv_embedding is not None:
+            query_embedding = 0.7 * jd_embedding + 0.3 * cv_embedding
+        elif jd_embedding is not None:
+            query_embedding = jd_embedding
+        elif cv_embedding is not None:
+            query_embedding = cv_embedding
+        else:
+            query_embedding = self._get_embedding(base_ctx)
+        norm = float(np.linalg.norm(query_embedding))
+        if norm > 0.0:
+            query_embedding = query_embedding / norm
         similarities: List[Tuple[float, int]] = []
+        allowed_topics = [t.lower() for t in (context.jd_keywords or []) + (context.cv_keywords or []) if t]
         for i, emb_data in enumerate(self.question_embeddings):
             similarity = float(np.dot(query_embedding, emb_data["embedding"]))
             similarities.append((similarity, i))
@@ -818,6 +844,9 @@ class PromptBasedQuestionGenerator:
             qtext = item.get("question", "")
             itopic = (item.get("topic", "") or "").lower()
             irole = (item.get("role", "") or "").lower()
+            if allowed_topics:
+                if not any(at in itopic or itopic in at for at in allowed_topics):
+                    continue
             if not self._is_near_duplicate(context, qtext) and self._role_matches(irole, context.job_role) and self._is_topic_on_role(itopic, context.job_role):
                 primary.append((sim, item))
         if primary:
@@ -830,6 +859,10 @@ class PromptBasedQuestionGenerator:
             if (item.get("difficulty", "") or "").lower() != (difficulty or "").lower():
                 continue
             qtext = item.get("question", "")
+            if allowed_topics:
+                itopic = (item.get("topic", "") or "").lower()
+                if not any(at in itopic or itopic in at for at in allowed_topics):
+                    continue
             if not self._is_near_duplicate(context, qtext) and sim >= 0.12:
                 secondary.append((sim, item))
         if secondary:
