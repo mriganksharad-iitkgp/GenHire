@@ -42,13 +42,13 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
-from utils.cheating_detection import ProctoringGazeDetector
+from gpu_intensive_task.cheating_detection import ProctoringGazeDetector
 from services.cv_scoring_service import CVScoringService
 from controllers.admin_controller import AdminController
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
 try:
-    from services.recording_analysis_service import RecordingAnalyzer
+    from gpu_intensive_task.recording_analysis_service import RecordingAnalyzer
     RECORDING_ANALYZER_AVAILABLE = True
     print("✓ RecordingAnalyzer loaded successfully")
 except Exception as e:
