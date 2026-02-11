@@ -135,7 +135,7 @@ export default function Chat({ interviewId }) {
     const currentSessionId = sessionIdRef.current;
     if (!currentSessionId || (socketRef.current && socketRef.current.connected))
       return;
-    const socket = io("http://localhost:5000");
+    const socket = io(process.env.REACT_APP_API_URL);
     socketRef.current = socket;
     socket.on("connect", () => {
       console.log("✅ WebSocket connected.");

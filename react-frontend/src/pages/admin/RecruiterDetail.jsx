@@ -17,64 +17,75 @@ const RecruiterDetail = () => {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
-  
+
   // Pagination for jobs
   const [jobPage, setJobPage] = useState(1);
   const jobsPerPage = 10;
-  
+
   // Delete modal
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  
+
   // Verify action
   const [verifyLoading, setVerifyLoading] = useState(false);
-  
+
   // Job detail modal
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [jobModalOpen, setJobModalOpen] = useState(false);
-  
+
   // Job delete modal
-  const [deleteJobModal, setDeleteJobModal] = useState({ open: false, job: null });
+  const [deleteJobModal, setDeleteJobModal] = useState({
+    open: false,
+    job: null,
+  });
   const [deleteJobLoading, setDeleteJobLoading] = useState(false);
-  
+
   // Job edit modal
   const [jobEditModal, setJobEditModal] = useState({ open: false, job: null });
-  
+
   // Job filters
   const [jobFilters, setJobFilters] = useState({
     search: "",
     status: "",
     sortBy: "created_at",
-    sortOrder: "desc"
+    sortOrder: "desc",
   });
-  
+
   // Notifications
-  const [notification, setNotification] = useState({ show: false, message: "", type: "success" });
+  const [notification, setNotification] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: "", type: "success" }), 4000);
+    setTimeout(
+      () => setNotification({ show: false, message: "", type: "success" }),
+      4000,
+    );
   }, []);
 
   // Filter and sort jobs
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
-    
+
     // Search filter
     if (jobFilters.search.trim()) {
       const searchLower = jobFilters.search.toLowerCase();
-      result = result.filter(job => 
-        job.title?.toLowerCase().includes(searchLower) ||
-        job.department?.toLowerCase().includes(searchLower) ||
-        job.location?.toLowerCase().includes(searchLower)
+      result = result.filter(
+        (job) =>
+          job.title?.toLowerCase().includes(searchLower) ||
+          job.department?.toLowerCase().includes(searchLower) ||
+          job.location?.toLowerCase().includes(searchLower),
       );
     }
-    
+
     // Status filter
     if (jobFilters.status) {
-      result = result.filter(job => job.status === jobFilters.status);
+      result = result.filter((job) => job.status === jobFilters.status);
     }
-    
+
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
@@ -94,7 +105,7 @@ const RecruiterDetail = () => {
       }
       return jobFilters.sortOrder === "desc" ? -comparison : comparison;
     });
-    
+
     return result;
   }, [jobs, jobFilters]);
 
@@ -102,7 +113,7 @@ const RecruiterDetail = () => {
   const totalJobPages = Math.ceil(filteredJobs.length / jobsPerPage);
   const paginatedJobs = filteredJobs.slice(
     (jobPage - 1) * jobsPerPage,
-    jobPage * jobsPerPage
+    jobPage * jobsPerPage,
   );
 
   const fetchRecruiterDetails = useCallback(async () => {
@@ -125,7 +136,10 @@ const RecruiterDetail = () => {
       });
     } catch (error) {
       console.error("Error fetching recruiter:", error);
-      showNotification(error.message || "Failed to fetch recruiter details", "error");
+      showNotification(
+        error.message || "Failed to fetch recruiter details",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -212,11 +226,14 @@ const RecruiterDetail = () => {
   const handleEditJob = async (job) => {
     // Fetch full job details for editing
     try {
-      const response = await fetch(`http://localhost:5000/api/jobs/${job.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/jobs/${job.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
       if (response.ok) {
         const jobDetails = await response.json();
         setJobEditModal({ open: true, job: jobDetails });
@@ -258,14 +275,23 @@ const RecruiterDetail = () => {
         <div className={styles.pageContainer}>
           <div className={styles.emptyState}>
             <div className={styles.emptyStateIcon}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
             </div>
             <h3>Recruiter not found</h3>
-            <p>The recruiter you're looking for doesn't exist or has been deleted.</p>
+            <p>
+              The recruiter you're looking for doesn't exist or has been
+              deleted.
+            </p>
           </div>
         </div>
       </AdminLayout>
@@ -277,8 +303,16 @@ const RecruiterDetail = () => {
       <div className={styles.pageContainer}>
         {/* Notification */}
         {notification.show && (
-          <div className={`${styles.notification} ${styles[notification.type]}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div
+            className={`${styles.notification} ${styles[notification.type]}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               {notification.type === "success" ? (
                 <>
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -293,13 +327,28 @@ const RecruiterDetail = () => {
               )}
             </svg>
             <span>{notification.message}</span>
-            <button onClick={() => setNotification({ show: false, message: "", type: "success" })}>×</button>
+            <button
+              onClick={() =>
+                setNotification({ show: false, message: "", type: "success" })
+              }
+            >
+              ×
+            </button>
           </div>
         )}
 
         {/* Back Button */}
-        <button className={styles.backButton} onClick={() => navigate("/admin/recruiters")}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <button
+          className={styles.backButton}
+          onClick={() => navigate("/admin/recruiters")}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
           Back to Recruiters
@@ -314,11 +363,17 @@ const RecruiterDetail = () => {
             <h1 className={styles.detailName}>{recruiter.name}</h1>
             <p className={styles.detailEmail}>{recruiter.email}</p>
             {recruiter.company_name && (
-              <p className={styles.detailEmail} style={{ fontStyle: "italic" }}>{recruiter.company_name}</p>
+              <p className={styles.detailEmail} style={{ fontStyle: "italic" }}>
+                {recruiter.company_name}
+              </p>
             )}
             <div className={styles.detailBadges}>
-              <span className={`${styles.detailBadge} ${styles.recruiter}`}>Recruiter</span>
-              <span className={`${styles.detailBadge} ${recruiter.is_verified ? styles.verified : styles.pending}`}>
+              <span className={`${styles.detailBadge} ${styles.recruiter}`}>
+                Recruiter
+              </span>
+              <span
+                className={`${styles.detailBadge} ${recruiter.is_verified ? styles.verified : styles.pending}`}
+              >
                 {recruiter.is_verified ? "Verified" : "Pending Verification"}
               </span>
             </div>
@@ -386,15 +441,21 @@ const RecruiterDetail = () => {
               <span className={styles.miniStatLabel}>Active Jobs</span>
             </div>
             <div className={styles.miniStatCard}>
-              <span className={styles.miniStatValue}>{stats.total_applications}</span>
+              <span className={styles.miniStatValue}>
+                {stats.total_applications}
+              </span>
               <span className={styles.miniStatLabel}>Total Applications</span>
             </div>
             <div className={styles.miniStatCard}>
-              <span className={styles.miniStatValue}>{stats.total_selected}</span>
+              <span className={styles.miniStatValue}>
+                {stats.total_selected}
+              </span>
               <span className={styles.miniStatLabel}>Hired</span>
             </div>
             <div className={styles.miniStatCard}>
-              <span className={styles.miniStatValue}>{stats.conversion_rate}%</span>
+              <span className={styles.miniStatValue}>
+                {stats.conversion_rate}%
+              </span>
               <span className={styles.miniStatLabel}>Conversion Rate</span>
             </div>
           </div>
@@ -404,7 +465,13 @@ const RecruiterDetail = () => {
         <div className={styles.infoCard}>
           <div className={styles.infoCardHeader}>
             <h2 className={styles.infoCardTitle}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
               </svg>
@@ -419,7 +486,9 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.name}
-                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({ ...editData, name: e.target.value })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
@@ -429,7 +498,9 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.company_name}
-                    onChange={(e) => setEditData({ ...editData, company_name: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({ ...editData, company_name: e.target.value })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
@@ -439,7 +510,12 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.company_industry}
-                    onChange={(e) => setEditData({ ...editData, company_industry: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        company_industry: e.target.value,
+                      })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
@@ -449,7 +525,9 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.company_size}
-                    onChange={(e) => setEditData({ ...editData, company_size: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({ ...editData, company_size: e.target.value })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
@@ -459,7 +537,12 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.company_website}
-                    onChange={(e) => setEditData({ ...editData, company_website: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        company_website: e.target.value,
+                      })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
@@ -469,18 +552,37 @@ const RecruiterDetail = () => {
                   <input
                     type="text"
                     value={editData.linkedin_profile}
-                    onChange={(e) => setEditData({ ...editData, linkedin_profile: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        linkedin_profile: e.target.value,
+                      })
+                    }
                     className={styles.searchInput}
                     style={{ padding: "0.5rem" }}
                   />
                 </div>
-                <div className={styles.infoItem} style={{ gridColumn: "1 / -1" }}>
-                  <label className={styles.infoLabel}>Company Description</label>
+                <div
+                  className={styles.infoItem}
+                  style={{ gridColumn: "1 / -1" }}
+                >
+                  <label className={styles.infoLabel}>
+                    Company Description
+                  </label>
                   <textarea
                     value={editData.company_description}
-                    onChange={(e) => setEditData({ ...editData, company_description: e.target.value })}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        company_description: e.target.value,
+                      })
+                    }
                     className={styles.searchInput}
-                    style={{ padding: "0.5rem", minHeight: "100px", resize: "vertical" }}
+                    style={{
+                      padding: "0.5rem",
+                      minHeight: "100px",
+                      resize: "vertical",
+                    }}
                   />
                 </div>
               </div>
@@ -496,44 +598,71 @@ const RecruiterDetail = () => {
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Phone</span>
-                  <span className={styles.infoValue}>{recruiter.phone || "Not provided"}</span>
+                  <span className={styles.infoValue}>
+                    {recruiter.phone || "Not provided"}
+                  </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Company Name</span>
-                  <span className={styles.infoValue}>{recruiter.company_name || "Not provided"}</span>
+                  <span className={styles.infoValue}>
+                    {recruiter.company_name || "Not provided"}
+                  </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Industry</span>
-                  <span className={styles.infoValue}>{recruiter.company_industry || "Not provided"}</span>
+                  <span className={styles.infoValue}>
+                    {recruiter.company_industry || "Not provided"}
+                  </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Company Size</span>
-                  <span className={styles.infoValue}>{recruiter.company_size || "Not provided"}</span>
+                  <span className={styles.infoValue}>
+                    {recruiter.company_size || "Not provided"}
+                  </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Website</span>
                   <span className={styles.infoValue}>
                     {recruiter.company_website ? (
-                      <a href={recruiter.company_website.startsWith("http") ? recruiter.company_website : `https://${recruiter.company_website}`} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={
+                          recruiter.company_website.startsWith("http")
+                            ? recruiter.company_website
+                            : `https://${recruiter.company_website}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         {recruiter.company_website}
                       </a>
-                    ) : "Not provided"}
+                    ) : (
+                      "Not provided"
+                    )}
                   </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Member Since</span>
-                  <span className={styles.infoValue}>{formatDate(recruiter.created_at)}</span>
+                  <span className={styles.infoValue}>
+                    {formatDate(recruiter.created_at)}
+                  </span>
                 </div>
                 {recruiter.verified_at && (
                   <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Verified On</span>
-                    <span className={styles.infoValue}>{formatDate(recruiter.verified_at)}</span>
+                    <span className={styles.infoValue}>
+                      {formatDate(recruiter.verified_at)}
+                    </span>
                   </div>
                 )}
                 {recruiter.company_description && (
-                  <div className={styles.infoItem} style={{ gridColumn: "1 / -1" }}>
+                  <div
+                    className={styles.infoItem}
+                    style={{ gridColumn: "1 / -1" }}
+                  >
                     <span className={styles.infoLabel}>About Company</span>
-                    <span className={styles.infoValue}>{recruiter.company_description}</span>
+                    <span className={styles.infoValue}>
+                      {recruiter.company_description}
+                    </span>
                   </div>
                 )}
               </div>
@@ -545,26 +674,51 @@ const RecruiterDetail = () => {
         <div className={styles.infoCard}>
           <div className={styles.infoCardHeader}>
             <h2 className={styles.infoCardTitle}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
               </svg>
-              Job Postings ({filteredJobs.length}{filteredJobs.length !== jobs.length ? ` of ${jobs.length}` : ""})
+              Job Postings ({filteredJobs.length}
+              {filteredJobs.length !== jobs.length ? ` of ${jobs.length}` : ""})
             </h2>
           </div>
-          
+
           {/* Filters */}
-          <div style={{ padding: "1rem", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <div
+            style={{
+              padding: "1rem",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              gap: "0.75rem",
+              alignItems: "center",
+            }}
+          >
             <input
               type="text"
               placeholder="Search jobs..."
               value={jobFilters.search}
-              onChange={(e) => { setJobFilters({ ...jobFilters, search: e.target.value }); setJobPage(1); }}
+              onChange={(e) => {
+                setJobFilters({ ...jobFilters, search: e.target.value });
+                setJobPage(1);
+              }}
               className={styles.searchInput}
-              style={{ flex: "1", minWidth: "150px", padding: "0.5rem 0.75rem" }}
+              style={{
+                flex: "1",
+                minWidth: "150px",
+                padding: "0.5rem 0.75rem",
+              }}
             />
             <select
               value={jobFilters.status}
-              onChange={(e) => { setJobFilters({ ...jobFilters, status: e.target.value }); setJobPage(1); }}
+              onChange={(e) => {
+                setJobFilters({ ...jobFilters, status: e.target.value });
+                setJobPage(1);
+              }}
               className={styles.searchInput}
               style={{ padding: "0.5rem 0.75rem", width: "120px" }}
             >
@@ -592,19 +746,39 @@ const RecruiterDetail = () => {
             </select>
             {(jobFilters.search || jobFilters.status) && (
               <button
-                onClick={() => { setJobFilters({ search: "", status: "", sortBy: "created_at", sortOrder: "desc" }); setJobPage(1); }}
+                onClick={() => {
+                  setJobFilters({
+                    search: "",
+                    status: "",
+                    sortBy: "created_at",
+                    sortOrder: "desc",
+                  });
+                  setJobPage(1);
+                }}
                 className={styles.alertButton}
-                style={{ background: "#6b7280", fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
+                style={{
+                  background: "#6b7280",
+                  fontSize: "0.8rem",
+                  padding: "0.4rem 0.6rem",
+                }}
               >
                 Clear
               </button>
             )}
           </div>
-          
+
           <div style={{ overflow: "auto" }}>
             {filteredJobs.length === 0 ? (
-              <div style={{ padding: "2rem", textAlign: "center", color: "var(--admin-text-secondary)" }}>
-                {jobs.length === 0 ? "No job postings yet" : "No jobs match your filters"}
+              <div
+                style={{
+                  padding: "2rem",
+                  textAlign: "center",
+                  color: "var(--admin-text-secondary)",
+                }}
+              >
+                {jobs.length === 0
+                  ? "No job postings yet"
+                  : "No jobs match your filters"}
               </div>
             ) : (
               <>
@@ -623,7 +797,7 @@ const RecruiterDetail = () => {
                   </thead>
                   <tbody>
                     {paginatedJobs.map((job) => (
-                      <tr 
+                      <tr
                         key={job.id}
                         onClick={() => handleOpenJob(job.id)}
                         style={{ cursor: "pointer" }}
@@ -632,7 +806,9 @@ const RecruiterDetail = () => {
                         <td style={{ fontWeight: 500 }}>{job.title}</td>
                         <td>{job.department || "N/A"}</td>
                         <td>
-                          <span className={`${styles.tableBadge} ${styles[job.status]}`}>
+                          <span
+                            className={`${styles.tableBadge} ${styles[job.status]}`}
+                          >
                             {job.status}
                           </span>
                         </td>
@@ -641,13 +817,22 @@ const RecruiterDetail = () => {
                         <td>{job.selected || 0}</td>
                         <td>{formatDate(job.created_at)}</td>
                         <td>
-                          <div style={{ display: "flex", gap: "0.5rem" }} onClick={(e) => e.stopPropagation()}>
+                          <div
+                            style={{ display: "flex", gap: "0.5rem" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <button
                               className={styles.actionButton}
                               title="View Details"
                               onClick={() => handleOpenJob(job.id)}
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
                               </svg>
@@ -658,7 +843,13 @@ const RecruiterDetail = () => {
                               onClick={() => handleEditJob(job)}
                               style={{ color: "#6366f1" }}
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                               </svg>
@@ -666,9 +857,17 @@ const RecruiterDetail = () => {
                             <button
                               className={`${styles.actionButton} ${styles.danger}`}
                               title="Delete Job"
-                              onClick={() => setDeleteJobModal({ open: true, job })}
+                              onClick={() =>
+                                setDeleteJobModal({ open: true, job })
+                              }
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                               </svg>
@@ -684,10 +883,17 @@ const RecruiterDetail = () => {
                   <div className={styles.pagination}>
                     <button
                       className={styles.paginationButton}
-                      onClick={() => setJobPage(p => Math.max(1, p - 1))}
+                      onClick={() => setJobPage((p) => Math.max(1, p - 1))}
                       disabled={jobPage === 1}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "16px", height: "16px" }}>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ width: "16px", height: "16px" }}
+                      >
                         <polyline points="15 18 9 12 15 6"></polyline>
                       </svg>
                       Previous
@@ -697,11 +903,20 @@ const RecruiterDetail = () => {
                     </span>
                     <button
                       className={styles.paginationButton}
-                      onClick={() => setJobPage(p => Math.min(totalJobPages, p + 1))}
+                      onClick={() =>
+                        setJobPage((p) => Math.min(totalJobPages, p + 1))
+                      }
                       disabled={jobPage === totalJobPages}
                     >
                       Next
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "16px", height: "16px" }}>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ width: "16px", height: "16px" }}
+                      >
                         <polyline points="9 18 15 12 9 6"></polyline>
                       </svg>
                     </button>

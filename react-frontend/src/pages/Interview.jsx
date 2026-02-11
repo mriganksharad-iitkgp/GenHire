@@ -8,7 +8,7 @@ const Interview = () => {
 	const { interviewId } = useParams();
 	const [showWarning, setShowWarning] = useState(false);
 	const [isInterviewEnding, setIsInterviewEnding] = useState(false);
-	const socket = io("http://localhost:5000"); // Standard app socket for other things? Or was this ONLY for proctoring?
+	const socket = io(process.env.REACT_APP_API_URL); // Standard app socket for other things? Or was this ONLY for proctoring?
 	// It seems this socket was ONLY for gaze_data.
 
 	useEffect(() => {

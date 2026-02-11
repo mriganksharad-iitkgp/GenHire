@@ -3,7 +3,7 @@
  * Handles all CV-related API calls
  */
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = `${process.env.REACT_APP_API_URL}/api`;
 
 class CVService {
   /**
@@ -13,26 +13,26 @@ class CVService {
    * @returns {Promise} Upload response
    */
   async uploadCV(cvFile, isPrimary = false) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const formData = new FormData();
-    formData.append('cv_file', cvFile);
-    formData.append('is_primary', isPrimary.toString());
+    formData.append("cv_file", cvFile);
+    formData.append("is_primary", isPrimary.toString());
 
     const response = await fetch(`${API_BASE_URL}/cv/upload`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: formData
+      body: formData,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to upload CV');
+      throw new Error(error.error || "Failed to upload CV");
     }
 
     return response.json();
@@ -43,21 +43,21 @@ class CVService {
    * @returns {Promise} List of CVs
    */
   async listCVs() {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const response = await fetch(`${API_BASE_URL}/cv/list`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch CVs');
+      throw new Error(error.error || "Failed to fetch CVs");
     }
 
     return response.json();
@@ -69,21 +69,21 @@ class CVService {
    * @returns {Promise} CV details
    */
   async getCV(cvId) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const response = await fetch(`${API_BASE_URL}/cv/${cvId}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch CV');
+      throw new Error(error.error || "Failed to fetch CV");
     }
 
     return response.json();
@@ -95,21 +95,21 @@ class CVService {
    * @returns {Promise} Delete response
    */
   async deleteCV(cvId) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const response = await fetch(`${API_BASE_URL}/cv/${cvId}`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to delete CV');
+      throw new Error(error.error || "Failed to delete CV");
     }
 
     return response.json();
@@ -121,21 +121,21 @@ class CVService {
    * @returns {Promise} Update response
    */
   async setPrimaryCV(cvId) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const response = await fetch(`${API_BASE_URL}/cv/${cvId}/set-primary`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to set primary CV');
+      throw new Error(error.error || "Failed to set primary CV");
     }
 
     return response.json();
@@ -147,21 +147,21 @@ class CVService {
    * @returns {Promise} CV preview
    */
   async previewCV(cvId) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error('No authentication token found');
+      throw new Error("No authentication token found");
     }
 
     const response = await fetch(`${API_BASE_URL}/cv/preview/${cvId}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to preview CV');
+      throw new Error(error.error || "Failed to preview CV");
     }
 
     return response.json();

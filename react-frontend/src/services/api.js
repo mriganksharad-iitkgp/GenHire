@@ -1,11 +1,12 @@
 // Centralized API layer for dashboard (recruiter & candidate)
 // Keeps endpoints and headers in one place, enabling easy swap later
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+const API_BASE =
+  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function authHeaders() {
   const token = localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"
+    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
   );
   return {
     Authorization: `Bearer ${token}`,

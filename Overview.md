@@ -32,6 +32,7 @@ This is a comprehensive HR technology platform that combines modern web technolo
 ## 🛠️ Technology Stack
 
 ### Frontend (`react-frontend/`)
+
 - **Framework**: React 19.0.0 with React Router DOM 7.1.5
 - **Styling**: CSS Modules for component-specific styles
 - **API Communication**: Axios for HTTP requests
@@ -40,6 +41,7 @@ This is a comprehensive HR technology platform that combines modern web technolo
 - **Build Tool**: React Scripts (Create React App)
 
 ### Backend (`python-backend/`)
+
 - **Framework**: Flask 3.1.1 with Flask-SocketIO 5.5.1
 - **Database**: MongoDB with PyMongo 4.13.2
 - **Authentication**: JWT tokens with PyJWT 2.10.1
@@ -55,6 +57,7 @@ This is a comprehensive HR technology platform that combines modern web technolo
 ## 📁 Project Structure
 
 ### Frontend Structure
+
 ```
 react-frontend/
 ├── public/                     # Static assets
@@ -84,6 +87,7 @@ react-frontend/
 ```
 
 ### Backend Structure
+
 ```
 python-backend/
 ├── config/
@@ -118,6 +122,7 @@ python-backend/
 ## 🔄 User Workflows
 
 ### Candidate Journey
+
 1. **Registration/Login** → Create account or authenticate
 2. **Profile Setup** → Upload CV, add personal details, skills
 3. **Job Discovery** → Browse/filter available positions
@@ -126,6 +131,7 @@ python-backend/
 6. **Status Tracking** → Monitor application progress
 
 ### Recruiter Journey
+
 1. **Registration/Login** → Create recruiter account
 2. **Company Profile** → Set up company information
 3. **Job Posting** → Create and manage job listings
@@ -136,6 +142,7 @@ python-backend/
 ## 🤖 AI Interview System
 
 ### Core Features
+
 - **CV-JD Matching**: Cosine similarity analysis between candidate CV and job description
 - **Dynamic Question Generation**: Context-aware questions using LlamaIndex RAG system
 - **Real-time Proctoring**: Computer vision-based monitoring using OpenCV and MediaPipe
@@ -143,6 +150,7 @@ python-backend/
 - **Adaptive Questioning**: Follow-up questions based on previous answers
 
 ### Technical Components
+
 - **LLM Engine**: Groq API with Llama 3.3-70B for natural language processing
 - **Document Processing**: PyPDF extraction and BERT embeddings
 - **Proctoring Engine**: Face detection, movement tracking, attention monitoring
@@ -151,6 +159,7 @@ python-backend/
 ## 🗄️ Database Schema
 
 ### Collections Structure
+
 ```javascript
 // users
 {
@@ -211,6 +220,7 @@ python-backend/
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 16+ and npm
 - Python 3.12+
 - MongoDB instance
@@ -219,6 +229,7 @@ python-backend/
 ### Environment Setup
 
 #### Backend Environment Variables
+
 ```bash
 # .env file in python-backend/
 MONGODB_URI=mongodb://localhost:27017/
@@ -229,15 +240,17 @@ UPLOAD_FOLDER=uploads
 ```
 
 #### Frontend Environment Variables
+
 ```bash
 # .env file in react-frontend/
-REACT_APP_API_URL=http://localhost:5000
+REACT_APP_API_URL=process.env.REACT_APP_API_URL
 REACT_APP_TOKEN_KEY=companyxyz-token
 ```
 
 ### Installation & Running
 
 #### Backend Setup
+
 ```bash
 cd python-backend
 python -m venv .venv
@@ -247,6 +260,7 @@ python app.py
 ```
 
 #### Frontend Setup
+
 ```bash
 cd react-frontend
 npm install
@@ -254,13 +268,15 @@ npm run dev
 ```
 
 ### Access Points
+
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000/api
+- **Backend API**: process.env.REACT_APP_API_URL/api
 - **Socket.IO**: ws://localhost:5000
 
 ## 🔐 Authentication & Security
 
 ### Authentication Flow
+
 1. User credentials validated against MongoDB
 2. JWT token generated with user ID and type
 3. Token stored in localStorage on frontend
@@ -268,6 +284,7 @@ npm run dev
 5. Token includes user permissions (candidate/recruiter)
 
 ### Security Features
+
 - JWT-based stateless authentication
 - CORS middleware for cross-origin protection
 - File upload validation and secure filename handling
@@ -277,7 +294,9 @@ npm run dev
 ## 🧪 Testing & Development
 
 ### API Testing
+
 The backend provides comprehensive REST endpoints:
+
 - `POST /api/auth/login` - Authentication
 - `GET /api/jobs` - Job listings
 - `POST /api/jobs/{id}/apply` - Job application
@@ -285,6 +304,7 @@ The backend provides comprehensive REST endpoints:
 - `GET /api/profile` - User profile data
 
 ### Development Tools
+
 - **Backend**: Flask debug mode with hot reload
 - **Frontend**: React Scripts with hot module replacement
 - **Database**: MongoDB Compass for data inspection
@@ -293,12 +313,14 @@ The backend provides comprehensive REST endpoints:
 ## 🎨 UI/UX Features
 
 ### Design System
+
 - **CSS Modules**: Component-scoped styling
 - **Responsive Design**: Mobile-first approach
 - **Theme Support**: Dark mode compatible
 - **Component Library**: Reusable UI components
 
 ### User Experience
+
 - **Real-time Updates**: Socket.IO for live features
 - **Toast Notifications**: User feedback system
 - **Loading States**: Smooth loading experiences
@@ -307,12 +329,14 @@ The backend provides comprehensive REST endpoints:
 ## 📈 Performance Considerations
 
 ### Frontend Optimizations
+
 - Code splitting with React Router
 - Lazy loading for large components
 - Optimized bundle size with Create React App
 - Efficient state management with hooks
 
 ### Backend Optimizations
+
 - Database indexing on frequently queried fields
 - File streaming for large uploads/downloads
 - Connection pooling for MongoDB
@@ -321,6 +345,7 @@ The backend provides comprehensive REST endpoints:
 ## 🔮 Future Enhancements
 
 ### Planned Features
+
 - **Advanced Analytics**: Interview performance metrics
 - **Video Interviews**: Live video calling integration
 - **Mobile App**: React Native implementation
@@ -329,6 +354,7 @@ The backend provides comprehensive REST endpoints:
 - **Recruitment Pipeline**: Advanced workflow management
 
 ### Technical Improvements
+
 - **Testing Suite**: Unit and integration tests
 - **CI/CD Pipeline**: Automated deployment
 - **Monitoring**: Application performance monitoring
@@ -338,6 +364,7 @@ The backend provides comprehensive REST endpoints:
 ## 🤝 Contributing
 
 ### Development Guidelines
+
 1. **Code Style**: Follow PEP 8 for Python, ESLint for JavaScript
 2. **Commit Messages**: Use conventional commit format
 3. **Branch Strategy**: Feature branches from main
@@ -345,6 +372,7 @@ The backend provides comprehensive REST endpoints:
 5. **Testing**: Add tests for new features
 
 ### Project Structure Conventions
+
 - Keep components small and focused
 - Use TypeScript for new React components
 - Follow RESTful API design principles

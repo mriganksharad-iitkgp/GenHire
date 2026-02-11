@@ -1,7 +1,8 @@
 // Payment & Subscription API Layer
 // Centralized payment endpoints for subscription management
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+const API_BASE =
+  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function authHeaders() {
   const token = localStorage.getItem(

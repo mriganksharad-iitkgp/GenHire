@@ -74,10 +74,10 @@ PyJWT>=2.0.0
 # After starting your server, test with:
 """
 # Get all plans
-curl http://localhost:5000/api/payment/plans
+curl process.env.REACT_APP_API_URL/api/payment/plans
 
 # Health check
-curl http://localhost:5000/api/payment/health
+curl process.env.REACT_APP_API_URL/api/payment/health
 """
 
 # =============================================================================

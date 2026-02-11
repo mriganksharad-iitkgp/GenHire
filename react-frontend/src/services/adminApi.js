@@ -1,10 +1,11 @@
 // Admin API Service - Centralized API layer for admin operations
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+const API_BASE =
+  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function getToken() {
   return localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"
+    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
   );
 }
 
@@ -155,7 +156,7 @@ export const getAvailablePermissions = () => request("/admin/permissions");
 export const getCurrentAdmin = () => {
   try {
     const userData = localStorage.getItem(
-      process.env.REACT_APP_USER_KEY || "companyxyz-user"
+      process.env.REACT_APP_USER_KEY || "companyxyz-user",
     );
     return userData ? JSON.parse(userData) : null;
   } catch {

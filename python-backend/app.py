@@ -47,14 +47,15 @@ from services.cv_scoring_service import CVScoringService
 from controllers.admin_controller import AdminController
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
-try:
-    from gpu_intensive_task.recording_analysis_service import RecordingAnalyzer
-    RECORDING_ANALYZER_AVAILABLE = True
-    print("✓ RecordingAnalyzer loaded successfully")
-except Exception as e:
-    print(f"⚠ Warning: RecordingAnalyzer not available: {str(e)[:100]}")
-    RecordingAnalyzer = None
-    RECORDING_ANALYZER_AVAILABLE = False
+# try:
+#     from gpu_intensive_task.recording_analysis_service import RecordingAnalyzer
+#     RECORDING_ANALYZER_AVAILABLE = True
+#     print("✓ RecordingAnalyzer loaded successfully")
+# except Exception as e:
+#     print(f"⚠ Warning: RecordingAnalyzer not available: {str(e)[:100]}")
+#     RecordingAnalyzer = None
+#     RECORDING_ANALYZER_AVAILABLE = False
+RECORDING_ANALYZER_AVAILABLE = False
 
 
 # Import payment module
@@ -78,10 +79,10 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# Configure CORS to allow all localhost ports
+# Configure CORS to allow all origins
 CORS(app, 
      resources={r"/*": {
-         "origins": ["http://localhost:*", "http://127.0.0.1:*", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+         "origins": "*",
          "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
          "supports_credentials": True,
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],

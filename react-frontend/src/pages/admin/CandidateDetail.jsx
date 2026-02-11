@@ -179,7 +179,7 @@ const CandidateDetail = () => {
   const handleApplicationStatusChange = async (appId, newStatus) => {
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`http://localhost:5000/api/admin/applications/${appId}/status`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/applications/${appId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -207,9 +207,9 @@ const CandidateDetail = () => {
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       // Try to get the CV used in application first
-      let url = `http://localhost:5000/api/admin/cv/${candidateId}`;
+      let url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}`;
       if (app.cv_id) {
-        url = `http://localhost:5000/api/cv/${app.cv_id}/preview`;
+        url = `${process.env.REACT_APP_API_URL}/api/cv/${app.cv_id}/preview`;
       }
       
       const response = await fetch(url, {
@@ -245,7 +245,7 @@ const CandidateDetail = () => {
     setCvLoading(true);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`http://localhost:5000/api/admin/cv/${candidateId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -289,7 +289,7 @@ const CandidateDetail = () => {
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       console.log(`[Admin] Fetching practice history for candidate: ${candidateId}`);
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidateId}/practice-history`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/practice-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       console.log(`[Admin] Practice history response status: ${response.status}`);
@@ -314,7 +314,7 @@ const CandidateDetail = () => {
     console.log("[Admin] Application ID:", app.id);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const url = `http://localhost:5000/api/admin/applications/${app.id}/report`;
+      const url = `${process.env.REACT_APP_API_URL}/api/admin/applications/${app.id}/report`;
       console.log("[Admin] Fetching report from:", url);
       
       const response = await fetch(url, {
@@ -347,7 +347,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReport = async (session) => {
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`http://localhost:5000/api/admin/practice/${session.session_id}/report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${session.session_id}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -366,7 +366,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReportById = async (sessionId) => {
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`http://localhost:5000/api/admin/practice/${sessionId}/report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${sessionId}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -386,7 +386,7 @@ const CandidateDetail = () => {
     if (session.cv_id) {
       try {
         const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-        const url = `http://localhost:5000/api/cv/${session.cv_id}/preview`;
+        const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` }
         });
