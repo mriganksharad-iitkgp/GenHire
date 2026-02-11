@@ -6,6 +6,7 @@ import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
 import Avatar from "../components/Avatar"; // Import the new Avatar component
 import QRCode from "react-qr-code";
+import { proctoringConfig } from "../config/proctoring";
 
 // Removed formatTime function - no longer needed since we removed the 30-second timer
 
@@ -140,9 +141,9 @@ export default function Chat({ interviewId }) {
       console.log("✅ WebSocket connected.");
       socket.emit("start_proctoring", { session_id: currentSessionId });
       console.log("📡 Signaling mobile to START...");
-      socket.emit("control_mobile_recording", { 
-          session_id: currentSessionId, 
-          action: "start" 
+      socket.emit("control_mobile_recording", {
+        session_id: currentSessionId,
+        action: "start"
       });
       socket.on("gaze_data", (data) => {
         setGazeDirection(data.gaze_direction);
@@ -341,9 +342,9 @@ export default function Chat({ interviewId }) {
 
       // Fully reset the video element
       if (videoRef.current) {
-        try { videoRef.current.pause(); } catch (e) {}
+        try { videoRef.current.pause(); } catch (e) { }
         videoRef.current.removeAttribute("src");
-        try { videoRef.current.load(); } catch (e) {}
+        try { videoRef.current.load(); } catch (e) { }
       }
     } catch (e) {
       // no-op
@@ -418,7 +419,7 @@ export default function Chat({ interviewId }) {
       const applicationId = location.state?.applicationId;
 
       const token = localStorage.getItem("companyxyz-token");
-      
+
       // For real interviews (not practice with pre-created session)
       const endpoint = `${process.env.REACT_APP_API_URL}/api/interviews/start`;
 
@@ -505,11 +506,11 @@ export default function Chat({ interviewId }) {
 
   const endInterview = useCallback(async () => {
     if (socketRef.current) {
-        console.log("📡 Signaling mobile to STOP...");
-        socketRef.current.emit("control_mobile_recording", { 
-            session_id: sessionIdRef.current, 
-            action: "stop" 
-        });
+      console.log("📡 Signaling mobile to STOP...");
+      socketRef.current.emit("control_mobile_recording", {
+        session_id: sessionIdRef.current,
+        action: "stop"
+      });
     }
     const currentSessionId = sessionIdRef.current;
     if (
@@ -547,12 +548,12 @@ export default function Chat({ interviewId }) {
 
       const token = localStorage.getItem("companyxyz-token");
       const isPracticeMode = location.state?.isPractice || false;
-      
+
       // Use different endpoint for practice mode
       const endpoint = isPracticeMode
         ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/end`
         : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`;
-      
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -577,7 +578,7 @@ export default function Chat({ interviewId }) {
             response: "Practice interview ended. Generating your feedback...",
           },
         }));
-        
+
         // No need to update application or store interview-just-completed flag
         return;
       }
@@ -659,7 +660,7 @@ export default function Chat({ interviewId }) {
       const currentSessionId = sessionIdRef.current;
       const answer = userAnswer.trim();
       const isPracticeMode = location.state?.isPractice || false;
-      
+
       if (
         !currentQuestion ||
         !currentSessionId ||
@@ -673,12 +674,12 @@ export default function Chat({ interviewId }) {
 
       try {
         const token = localStorage.getItem("companyxyz-token");
-        
+
         // Use different endpoint for practice mode
         const endpoint = isPracticeMode
           ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/answer`
           : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`;
-        
+
         const response = await fetch(endpoint, {
           method: "POST",
           headers: {
@@ -1060,40 +1061,40 @@ export default function Chat({ interviewId }) {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '40px', marginTop: '20px' }}>
 
-            {/* LEFT: QR CODE SECTION */}
-            <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '300px' }}>
-                <h4 style={{ color: '#333', marginBottom: '10px' }}>📱 Step 1: Connect Phone</h4>
-                <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>
-                    Scan to enable 360° environment view. Place phone to show your side profile.
-                </p>
-                <div style={{ background: 'white', padding: '10px', display: 'inline-block' }}>
-                    <QRCode value={mobileUrl} size={140} />
-                </div>
+          {/* LEFT: QR CODE SECTION */}
+          <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '300px' }}>
+            <h4 style={{ color: '#333', marginBottom: '10px' }}>📱 Step 1: Connect Phone</h4>
+            <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>
+              Scan to enable 360° environment view. Place phone to show your side profile.
+            </p>
+            <div style={{ background: 'white', padding: '10px', display: 'inline-block' }}>
+              <QRCode value={mobileUrl} size={140} />
             </div>
+          </div>
 
-            {/* RIGHT: WEBCAM SECTION */}
-            <div style={{ textAlign: 'center' }}>
-                <h4 style={{ color: '#fff', marginBottom: '10px' }}>💻 Step 2: Face Registration</h4>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className={Styles.registrationVideo}
-                  style={{ width: '320px', height: '240px', borderRadius: '8px', border: '2px solid #667eea' }}
-                />
-                <button
-                  onClick={handleFaceRegistration}
-                  className={Styles.registerButton}
-                  style={{ marginTop: '20px' }}
-                >
-                  Start Interview
-                </button>
-            </div>
+          {/* RIGHT: WEBCAM SECTION */}
+          <div style={{ textAlign: 'center' }}>
+            <h4 style={{ color: '#fff', marginBottom: '10px' }}>💻 Step 2: Face Registration</h4>
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className={Styles.registrationVideo}
+              style={{ width: '320px', height: '240px', borderRadius: '8px', border: '2px solid #667eea' }}
+            />
+            <button
+              onClick={handleFaceRegistration}
+              className={Styles.registerButton}
+              style={{ marginTop: '20px' }}
+            >
+              Start Interview
+            </button>
+          </div>
         </div>
       </div>
     );
-}
+  }
 
   // Updated main interview render
   return (
@@ -1118,36 +1119,36 @@ export default function Chat({ interviewId }) {
           )}
         </div>
       )}
-             {" "}
+      {" "}
       {proctoringAlert.active && (
         <div className={Styles.modalOverlay}>
-                     {" "}
+          {" "}
           <div className={Styles.modal}>
-                          <h2>Warning! ({warningCount})</h2>             {" "}
+            <h2>Warning! ({warningCount})</h2>             {" "}
             <p>{proctoringAlert.message}</p>             {" "}
             <button
               onClick={() => setProctoringAlert({ active: false, message: "" })}
             >
               Acknowledge
             </button>
-                       {" "}
+            {" "}
           </div>
-                   {" "}
+          {" "}
         </div>
       )}
-             {" "}
+      {" "}
       <div className={Styles["video-preview"]}>
-                  <video ref={videoRef} autoPlay muted playsInline />       {" "}
+        <video ref={videoRef} autoPlay muted playsInline />       {" "}
       </div>
-             {" "}
+      {" "}
       {(gazeDirection === "Left" || gazeDirection === "Right") && (
         <div className={Styles["gaze-warning"]}>
-                      Please look at the center of the screen          {" "}
+          Please look at the center of the screen          {" "}
         </div>
       )}
-             {" "}
+      {" "}
       <div className={Styles["avatar-container"]}>
-                  <Avatar />       {" "}
+        <Avatar />       {" "}
       </div>
       <div className={Styles["controls-container"]}>
         <div
@@ -1162,12 +1163,12 @@ export default function Chat({ interviewId }) {
             {isSubmittingAnswer
               ? "AI is thinking..."
               : isRecording
-              ? input || "Listening..."
-              : isTimerRunning
-              ? "Ready to speak..."
-              : isSpeaking
-              ? displayedText
-              : currentQuestion || "Waiting for next question..."}
+                ? input || "Listening..."
+                : isTimerRunning
+                  ? "Ready to speak..."
+                  : isSpeaking
+                    ? displayedText
+                    : currentQuestion || "Waiting for next question..."}
           </p>
           {input && input.trim().length > 0 && (
             <div
@@ -1244,10 +1245,10 @@ export default function Chat({ interviewId }) {
           )}
         </button>
       </div>
-             {" "}
+      {" "}
       {interviewStatus === "completed" && evaluation && (
         <div className={Styles["evaluation-overlay"]}>
-                     {" "}
+          {" "}
           <div className={Styles["evaluation-container"]}>
             <div style={{ textAlign: "center", marginBottom: "20px" }}>
               <h2
@@ -1435,10 +1436,10 @@ export default function Chat({ interviewId }) {
                       Questions Answered
                     </div>
                     <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                      {evaluation.quantitative.number_of_questions}             
-                         {" "}
+                      {evaluation.quantitative.number_of_questions}
+                      {" "}
                     </div>
-                                   {" "}
+                    {" "}
                   </div>
                 )}
             </div>
@@ -1469,7 +1470,7 @@ export default function Chat({ interviewId }) {
                     lineHeight: "1.6",
                   }}
                 >
-                                 {" "}
+                  {" "}
                   {(evaluation.qualitative_assessment || "")
                     .split("\n")
                     .map((line, index) => (
@@ -1477,7 +1478,7 @@ export default function Chat({ interviewId }) {
                         {line}
                       </p>
                     ))}
-                               {" "}
+                  {" "}
                 </div>
               </div>
             )}
@@ -1516,12 +1517,12 @@ export default function Chat({ interviewId }) {
                 {location.state?.isPractice ? "Back to Practice" : "Go to Dashboard"}
               </button>
             </div>
-                       {" "}
+            {" "}
           </div>
-                   {" "}
+          {" "}
         </div>
       )}
-           {" "}
+      {" "}
     </div>
   );
 }

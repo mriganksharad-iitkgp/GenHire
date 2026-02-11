@@ -2,14 +2,19 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import Chat from "./Chat";
 import io from "socket.io-client";
+import { proctoringConfig } from "../config/proctoring";
 
 const Interview = () => {
 	const { interviewId } = useParams();
 	const [showWarning, setShowWarning] = useState(false);
 	const [isInterviewEnding, setIsInterviewEnding] = useState(false);
-	const socket = io("http://localhost:5000"); // Replace with your backend URL
+	const socket = io("http://localhost:5000"); // Standard app socket for other things? Or was this ONLY for proctoring?
+	// It seems this socket was ONLY for gaze_data.
 
 	useEffect(() => {
+		if (!proctoringConfig.enabled) return;
+
+		const socket = io(proctoringConfig.serverUrl);
 		socket.on("gaze_data", (data) => {
 			if (data.session_id === interviewId) {
 				if (data.gaze_direction !== "Center") {

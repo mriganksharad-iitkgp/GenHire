@@ -24,7 +24,7 @@ import datetime
 import uuid
 import base64
 from bson import ObjectId
-import cv2
+
 import numpy as np
 import time
 
@@ -42,7 +42,7 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
-from gpu_intensive_task.cheating_detection import ProctoringGazeDetector
+
 from services.cv_scoring_service import CVScoringService
 from controllers.admin_controller import AdminController
 
@@ -146,7 +146,8 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 logger.info("✓ Admin routes registered at /api/admin")
 
 # Define a dictionary to hold a detector instance for each session
-proctoring_detectors = {}
+# Define a dictionary to hold a detector instance for each session
+# proctoring_detectors = {}  # Moved to separate service
 
 # Initialize interview system with proper configuration
 from interview.config.settings import InterviewConfig, LLMConfig, LLMProvider
@@ -167,7 +168,8 @@ interview_manager = InterviewSessionManager(
 # All interview-related routes and Socket.IO handlers remain here
 
 # Add this dictionary for live sessions
-live_sessions = {}
+# Add this dictionary for live sessions
+# live_sessions = {} # Moved to proctoring_server
 
 # Define directories for storing files
 UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
@@ -459,19 +461,37 @@ def end_interview(current_user, session_id):
             "final_score": None
         }
 
-    # Get final proctoring data from the live session
-    session_data = live_sessions.get(session_id, {})
-    manual_infractions = session_data.get("manual_infractions", [])
+    # Get proctoring data from external service
+    proctoring_service_url = os.getenv("PROCTORING_SERVICE_URL", "http://localhost:5001")
+    try:
+        import requests
+        resp = requests.get(f"{proctoring_service_url}/api/session/{session_id}/stats", timeout=2)
+        if resp.status_code == 200:
+            stats = resp.json()
+            proctoring_score = stats.get("proctoring_score", 90)
+            manual_infractions = stats.get("manual_infractions", [])
+            gaze_times = stats.get("gaze_times")
+            gaze_plot_filename = stats.get("gaze_plot_filename")
+            
+            if gaze_plot_filename:
+                gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], gaze_plot_filename)
+            else:
+                gaze_plot_path = None
+        else:
+            print(f"⚠️ Proctoring service returned {resp.status_code}")
+            # Fallback or keep defaults
+            proctoring_score = 90
+            manual_infractions = []
+            gaze_times = None
+            gaze_plot_path = None
+    except Exception as e:
+        print(f"⚠️ Could not contact proctoring service: {e}")
+        proctoring_score = 90
+        manual_infractions = []
+        gaze_times = None
+        gaze_plot_path = None
     
-    # HARDCODED SCORE - To be replaced with actual proctoring model calculations
-    proctoring_score = 90  # Hardcoded proctoring score
-
-    # Get the final gaze data from the in-memory detector
-    detector = proctoring_detectors.get(session_id)
-    gaze_times = detector.gaze_tracker.get_times() if detector else None
-    suspicious_activity_time = (
-        detector.detector.total_suspicious_time if detector else 0
-    )
+    suspicious_activity_time = 0 # Not tracking this explicitly anymore in app.py
 
     # Calculate total interview duration for logging
     interview_duration = 0
@@ -488,21 +508,7 @@ def end_interview(current_user, session_id):
 
     # --- NEW: Generate and save the gaze plot ---
     gaze_plot_path = None
-    if detector:
-        try:
-            # Define a unique filename for the plot
-            plot_filename = f"{session_id}_gaze_plot.png"
-            
-            # Call the method from your detector to generate the plot
-            detector.generate_gaze_plot(
-                output_dir=app.config["PROCTORING_FOLDER"], 
-                filename=plot_filename
-            )
-            
-            # Create the full path to be saved in the database
-            gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], plot_filename)
-        except Exception as e:
-            print(f"Error generating gaze plot for session {session_id}: {e}")
+    # Gaze plot generation is now handled by the external service
 
 
 
@@ -681,7 +687,26 @@ def get_user_interviews(current_user):
 
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
+@app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
+@token_required
 def register_face(current_user, session_id):
+    # This might now be handled by the proctoring service directly, 
+    # OR we just acknowledge it here if the frontend still calls this for status updates.
+    # For now, we'll just update status and let the proctoring service handle the image if the frontend calls it there too.
+    
+    # If the frontend calls THIS endpoint with the image, we might need to forward it or just ignore it 
+    # if the frontend calls the proctoring service separately.
+    # Assuming frontend will be updated to call proctoring service for face reg, 
+    # but we still need to set status to active.
+    
+    # Update the interview status in the database
+    interviews_collection.update_one(
+        {"session_id": session_id, "user_id": str(current_user["_id"])},
+        {"$set": {"status": "active"}},
+    )
+    return jsonify({"message": "Interview activated"}), 200
+
+# def register_face(current_user, session_id):_OLD
     data = request.get_json()
     if "image" not in data:
         return jsonify({"error": "No image data provided"}), 400
@@ -723,78 +748,7 @@ def handle_disconnect():
     # We'll need to handle cleanup differently
     pass
 
-@socketio.on("start_proctoring")
-def handle_start_proctoring(data):
-    from flask import request
-    session_id = data.get("session_id")
-    if session_id and session_id in live_sessions:
-        # Store session info but without relying on sid
-        live_sessions[session_id]["connected"] = True
-        # Initialize the gaze detector for this session
-        proctoring_detectors[session_id] = ProctoringGazeDetector()
-    else:
-        pass
-
-@socketio.on("proctoring_frame")
-def handle_proctoring_frame(data):
-    session_id = data.get("session_id")
-    session_data = live_sessions.get(session_id)
-    detector = proctoring_detectors.get(session_id)
-
-    if not session_data or not detector:
-        return
-
-    header, encoded = data["image"].split(",", 1)
-    frame = cv2.imdecode(
-        np.frombuffer(base64.b64decode(encoded), np.uint8), cv2.IMREAD_COLOR
-    )
-
-    # Pass the frame to your cheating detection logic
-    analysis_result = detector.process_frame(frame)
-
-    # Update the session data in memory with real metrics
-    session_data["gaze_times"] = analysis_result["gaze_times"]
-
-    # Emit the results back to the frontend
-    socketio.emit(
-        "gaze_data",
-        {
-            "session_id": session_id,
-            "is_cheating_alert": analysis_result["is_cheating_alert"],
-            "gaze_direction": analysis_result["gaze_direction"],
-            "gaze_times": analysis_result["gaze_times"],
-        }
-    )
-
-
-# New handler for tab/window switching violations
-@socketio.on("proctoring_violation")
-def handle_proctoring_violation(data):
-    session_id = data.get("session_id")
-    violation_type = data.get("type")
-    session_data = live_sessions.get(session_id)
-    if not session_data:
-        print(f"⚠️ Received proctoring violation for unknown session: {session_id}")
-        return
-
-    # Log the infraction
-    timestamp = datetime.datetime.utcnow().isoformat()
-    infraction = {"type": violation_type, "timestamp": timestamp}
-
-    if "manual_infractions" not in session_data:
-        session_data["manual_infractions"] = []
-
-    session_data["manual_infractions"].append(infraction)
-
-    # Optionally, deduct from the proctoring score for each violation
-    session_data["proctoring_score"] = max(
-        0, session_data.get("proctoring_score", 100) - 5
-    )  # Deduct 5 points
-
-    # print(f"🔴 Tab/Window Switch Violation [Session: {session_id}]: Type: {violation_type} | New Score: {session_data['proctoring_score']:.1f}")
-
-
-# In app.py
+# Socket handlers for proctoring have been moved to proctoring_server.py
 
 @socketio.on("join_mobile_session")
 def handle_mobile_join(data):
