@@ -7,7 +7,7 @@
 | **Monolithic app.py**  | Heavy ML imports block startup        | Separate API and ML workers        |
 | **Real-time scaling**  | MediaPipe CPU bottleneck at 50+ users | GPU acceleration or load balancing |
 | **GPU resource waste** | Separate GPUs for real-time + batch   | Shared GPU with smart scheduling   |
-| **Local file storage** | `uploads/` not portable               | Use R2/S3 object storage           |
+| **Local file storage** | `uploads/` not portable               | Use GCS object storage             |
 | **Mixed dependencies** | GPU libs (torch, YOLO) with API libs  | Multi-container setup              |
 | **No health checks**   | Hard to monitor                       | Add `/health` endpoint             |
 | **Secrets in code**    | `.env` not production-ready           | Use Docker secrets/env             |
@@ -113,8 +113,8 @@ services:
                   ┌───────────────┼───────────────┐
                   ▼               ▼               ▼
           ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-          │ MongoDB Atlas│ │ Cloudflare R2│ │ External APIs│
-          │              │ │ (uploads)    │ │ (Groq, etc.) │
+          │ MongoDB Atlas│ │  GCS Storage │ │ External APIs│
+          │              │ │   (uploads)  │ │ (Groq, etc.) │
           └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
@@ -294,7 +294,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - REDIS_URL=redis://redis:6379
       - GPU_SERVICE_URL=http://gpu-shared:8000
-      - R2_ENDPOINT=${R2_ENDPOINT}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
     depends_on:
       - redis
     restart: unless-stopped
@@ -376,7 +377,7 @@ python-dotenv==1.0.0
 pymongo==4.6.0
 redis==5.0.0
 celery==5.3.0
-boto3==1.34.0          # For R2/S3
+google-cloud-storage==2.10.0          # For GCS
 ```
 
 ### gpu-shared.txt (Combined Proctoring + ML)
@@ -475,36 +476,34 @@ def analyze_recording(self, file_path: str, job_id: str):
         self.retry(exc=e, countdown=60)
 ```
 
-### 3. Replace Local Storage with R2
+### 3. Replace Local Storage with GCS
 
 ```python
 # filepath: python-backend/shared/storage.py
-import boto3
-from botocore.config import Config
+from google.cloud import storage
+import os
 
-class R2Storage:
+class GCSStorage:
     def __init__(self):
-        self.client = boto3.client(
-            's3',
-            endpoint_url=os.getenv('R2_ENDPOINT'),
-            aws_access_key_id=os.getenv('R2_ACCESS_KEY'),
-            aws_secret_access_key=os.getenv('R2_SECRET_KEY'),
-            config=Config(signature_version='s3v4')
-        )
-        self.bucket = os.getenv('R2_BUCKET', 'uploads')
+        self.client = storage.Client()
+        self.bucket_name = os.getenv('GCS_BUCKET_NAME', 'uploads')
+        self.bucket = self.client.bucket(self.bucket_name)
 
     def upload_file(self, file_path: str, key: str) -> str:
-        """Upload file to R2 and return URL."""
-        self.client.upload_file(file_path, self.bucket, key)
-        return f"{os.getenv('R2_PUBLIC_URL')}/{key}"
+        """Upload file to GCS and return public URL."""
+        blob = self.bucket.blob(key)
+        blob.upload_from_filename(file_path)
+        return f"https://storage.googleapis.com/{self.bucket_name}/{key}"
 
     def download_file(self, key: str, local_path: str):
-        """Download file from R2."""
-        self.client.download_file(self.bucket, key, local_path)
+        """Download file from GCS."""
+        blob = self.bucket.blob(key)
+        blob.download_to_filename(local_path)
 
     def delete_file(self, key: str):
-        """Delete file from R2."""
-        self.client.delete_object(Bucket=self.bucket, Key=key)
+        """Delete file from GCS."""
+        blob = self.bucket.blob(key)
+        blob.delete()
 ```
 
 ### 4. Update app.py to Queue ML Tasks
@@ -521,7 +520,7 @@ def start_recording_analysis(current_user):
     if not file:
         return jsonify({'error': 'No file provided'}), 400
 
-    # Upload to R2
+    # Upload to GCS
     key = f"recordings/{current_user['_id']}/{secure_filename(file.filename)}"
     storage.upload_file(file, key)
 
@@ -612,14 +611,14 @@ Dockerfile*
    - Update API to queue tasks
 
 3. **Phase 3: External storage**
-   - Configure R2/S3
+   - Configure GCS
    - Migrate file uploads
    - Update file handling code
 
 4. **Phase 4: Production deployment**
    - Set up container registry (ECR, GCR)
    - Deploy to ECS/GKE/Kubernetes
-   - Configure Cloudflare Tunnel
+   - Configure load balancing and CDN
 
 ---
 

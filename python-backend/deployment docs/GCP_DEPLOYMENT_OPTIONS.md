@@ -98,7 +98,7 @@ class TrafficAwareScheduler:
                     [Cloud Load Balancer]
                               │
                               ▼
-                    [Cloudflare CDN/WAF]
+                    [Cloud CDN/Cloud Armor]
 ```
 
 ### Pros
@@ -389,14 +389,14 @@ gcloud redis instances create interview-queue \
                  └─────────────┘
        │                                         │
        │         ┌─────────────┐                 │
-       └────────▶│   GCS/R2    │◀────────────────┘
+       └────────▶│   GCS       │◀────────────────┘
                  │  (Files)    │
                  └─────────────┘
 ```
 
 ### Data Flow
 
-1. **User uploads file** → API saves to GCS/R2
+1. **User uploads file** → API saves to GCS
 2. **API queues job** → Redis (job_id, file_path)
 3. **GPU worker picks job** → Downloads file, processes
 4. **Worker saves results** → MongoDB + GCS
@@ -411,7 +411,7 @@ gcloud redis instances create interview-queue \
 | Concern               | Solution                                  |
 | --------------------- | ----------------------------------------- |
 | **Service discovery** | Redis URL shared via secrets              |
-| **File sharing**      | GCS/R2 bucket accessible by both          |
+| **File sharing**      | GCS bucket accessible by both             |
 | **Database**          | MongoDB Atlas (external, both can access) |
 | **Authentication**    | JWT tokens validated by API only          |
 | **Latency**           | Async processing, user polls for results  |
