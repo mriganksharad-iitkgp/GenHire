@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import os
 
 class SimpleCheatingDetector:
-    # Paste your SimpleCheatingDetector class here without any changes.
     def __init__(self, duration_threshold=3.5, normal_range=(-0.35, 0.35)):
         self.duration_threshold = duration_threshold
         self.normal_min, self.normal_max = normal_range
@@ -15,20 +14,25 @@ class SimpleCheatingDetector:
         self.alert_triggered = False
         self.total_suspicious_time = 0
 
-    def check_gaze(self, gaze_ratio):
+    # MODIFICATION: Added current_time parameter to support offline video analysis
+    def check_gaze(self, gaze_ratio, current_time=None):
+        if current_time is None:
+            current_time = time.time()
+
         if gaze_ratio is None:
             if self.is_suspicious:
-                self.total_suspicious_time += time.time() - self.suspicious_start_time
+                self.total_suspicious_time += current_time - self.suspicious_start_time
                 self.is_suspicious = False
                 self.suspicious_start_time = None
                 self.alert_triggered = False
             return False
+        
         if not (self.normal_min < gaze_ratio < self.normal_max):
             if not self.is_suspicious:
                 self.is_suspicious = True
-                self.suspicious_start_time = time.time()
+                self.suspicious_start_time = current_time
             else:
-                elapsed_time = time.time() - self.suspicious_start_time
+                elapsed_time = current_time - self.suspicious_start_time
                 if elapsed_time > self.duration_threshold:
                     if not self.alert_triggered:
                         print(f"ALERT: Suspicious gaze held for {elapsed_time:.2f} seconds!")
@@ -36,7 +40,7 @@ class SimpleCheatingDetector:
                     return True
         else:
             if self.is_suspicious:
-                self.total_suspicious_time += time.time() - self.suspicious_start_time
+                self.total_suspicious_time += current_time - self.suspicious_start_time
                 print("Gaze returned to normal.")
                 self.is_suspicious = False
                 self.suspicious_start_time = None
@@ -44,17 +48,30 @@ class SimpleCheatingDetector:
         return False
 
 class GazeTracker:
-    # Paste your GazeTracker class here without any changes.
     def __init__(self):
         self.time_left = 0
         self.time_center = 0
         self.time_right = 0
-        self.last_frame_time = time.time()
+        # MODIFICATION: Initialize to None to handle first frame logic correctly
+        self.last_frame_time = None 
 
-    def update(self, current_gaze):
-        current_time = time.time()
+    # MODIFICATION: Added current_time parameter
+    def update(self, current_gaze, current_time=None):
+        if current_time is None:
+            current_time = time.time()
+            
+        # Handle the very first frame
+        if self.last_frame_time is None:
+            self.last_frame_time = current_time
+            return
+
         delta_time = current_time - self.last_frame_time
+        # Prevent negative time if timestamps are not perfectly sequential
+        if delta_time < 0: 
+            delta_time = 0
+            
         self.last_frame_time = current_time
+        
         if current_gaze == "Left":
             self.time_left += delta_time
         elif current_gaze == "Center":
@@ -70,7 +87,6 @@ class GazeTracker:
         }
 
 def get_gaze_direction(gaze_ratio):
-    # Paste your get_gaze_direction function here without any changes.
     if gaze_ratio is None:
         return "Unknown"
     if gaze_ratio < -0.35:
@@ -97,7 +113,8 @@ class ProctoringGazeDetector:
         
         # Data for plotting
         self.gaze_data = []
-        self.session_start_time = time.time()
+        # MODIFICATION: Initialize to None to capture start time from first processed frame
+        self.session_start_time = None
         
         # Landmark Indices for eye corners and iris
         self.P_LEFT_IRIS = 473
@@ -107,8 +124,18 @@ class ProctoringGazeDetector:
         self.P_RIGHT_EYE_OUTER = 263
         self.P_RIGHT_EYE_INNER = 362
 
-    def process_frame(self, frame_np):
-        """Processes a single NumPy frame and returns detection results."""
+    # MODIFICATION: Added timestamp parameter for offline processing
+    def process_frame(self, frame_np, timestamp=None):
+        """
+        Processes a single NumPy frame and returns detection results.
+        If timestamp is provided (e.g. from video file), it uses that instead of system time.
+        """
+        if timestamp is None:
+            timestamp = time.time()
+            
+        if self.session_start_time is None:
+            self.session_start_time = timestamp
+
         image = cv2.cvtColor(frame_np, cv2.COLOR_BGR2RGB)
         image.flags.writeable = False
         results = self.face_mesh.process(image)
@@ -140,13 +167,19 @@ class ProctoringGazeDetector:
                     gaze_ratio = (left_gaze_ratio + right_gaze_ratio) / 2.0
             
             gaze_direction_text = get_gaze_direction(gaze_ratio)
-            self.gaze_tracker.update(gaze_direction_text)
-            is_cheating_alert = self.detector.check_gaze(gaze_ratio)
+            
+            # MODIFICATION: Pass the explicit timestamp
+            self.gaze_tracker.update(gaze_direction_text, current_time=timestamp)
+            is_cheating_alert = self.detector.check_gaze(gaze_ratio, current_time=timestamp)
+        else:
+            # Ensure time is tracked even if no face is found in this frame
+            self.gaze_tracker.update("Unknown", current_time=timestamp)
         
         # Record data for plotting
-        current_time = time.time() - self.session_start_time
+        # MODIFICATION: Use relative time based on the explicit timestamp
+        relative_time = timestamp - self.session_start_time
         # Use np.nan when gaze is not detected to create gaps in the plot
-        self.gaze_data.append((current_time, gaze_ratio if gaze_ratio is not None else np.nan))
+        self.gaze_data.append((relative_time, gaze_ratio if gaze_ratio is not None else np.nan))
         
         return {
             "is_cheating_alert": is_cheating_alert,

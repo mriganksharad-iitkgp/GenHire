@@ -90,15 +90,22 @@ class RecordingAnalyzer:
         detected_other_objects = set()
         frame_count = 0
         
+        # Add this BEFORE the while loop to calculate the step size
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
+        if video_fps == 0 or video_fps is None: 
+            video_fps = 30 # Fallback if FPS cannot be read
+            
+        target_fps = 5  # <--- SET YOUR DESIRED FPS HERE (e.g., 5)
+        frame_step = max(1, int(video_fps / target_fps))
+
         while cap.isOpened():
             success, frame = cap.read()
             if not success:
                 break
             
-            # Optimization: Process every 30th frame (approx once per second) 
-            # to keep it faster, otherwise it will take too long.
             frame_count += 1
-            if frame_count % 30 != 0:
+            # Use the calculated frame_step instead of hardcoded 30
+            if frame_count % frame_step != 0:
                 continue
 
             results = model(frame, verbose=False)
