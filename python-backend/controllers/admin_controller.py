@@ -10,6 +10,8 @@ class AdminController:
         self.applications_collection = db_collections['applications']
         self.interviews_collection = db_collections.get('interviews')  # May not exist
         self.practice_sessions_collection = db_collections.get('practice_sessions')  # For practice history
+        # Store reference to db for accessing other collections like subscriptions
+        self.db_collections = db_collections
     
     def get_dashboard_stats(self, current_user):
         """Get platform statistics for admin dashboard"""
@@ -1462,3 +1464,92 @@ class AdminController:
             print(f"Error getting practice report: {str(e)}")
             print(traceback.format_exc())
             return {'error': 'Failed to get practice report'}, 500
+
+    def get_cost_statistics(self, current_user, period='month'):
+        """Get cost statistics for all recruiters - Admin only"""
+        try:
+            from services.credit_service import (
+                calculate_recruiter_credits,
+                aggregate_recruiter_statistics
+            )
+            from config.database import db_config
+            
+            # Get database for accessing subscriptions/plans
+            db = db_config.get_db()
+            
+            # Get ALL recruiters (no limit)
+            recruiters = list(self.users_collection.find({'user_type': 'recruiter'}))
+            
+            if not recruiters:
+                return {
+                    'overview': {
+                        'totalBudget': 0,
+                        'totalUsed': 0,
+                        'totalAvailable': 0,
+                        'cloudflare': {'allocated': 0, 'used': 0},
+                        'nlp': {'allocated': 0, 'used': 0},
+                        'llm': {'allocated': 0, 'used': 0},
+                        'totalRecruiters': 0,
+                        'activeRecruiters': 0
+                    },
+                    'recruiters': []
+                }, 200
+            
+            recruiters_data = []
+            
+            for recruiter in recruiters:
+                recruiter_id = str(recruiter['_id'])
+                
+                # Get recruiter's jobs
+                jobs = list(self.jobs_collection.find({'created_by': recruiter_id}))
+                job_ids = [str(job['_id']) for job in jobs]
+                
+                # Get applications count for recruiter's jobs (only visible ones)
+                applications_count = self.applications_collection.count_documents({
+                    'job_id': {'$in': job_ids},
+                    'is_visible': True
+                }) if job_ids else 0
+                
+                # Count interviews completed (applications with status interviewed/selected/rejected)
+                interviews_count = self.applications_collection.count_documents({
+                    'job_id': {'$in': job_ids},
+                    'is_visible': True,
+                    'status': {'$in': ['interviewed', 'selected', 'rejected']}
+                }) if job_ids else 0
+                
+                # Get subscription plan if exists - using db_config for subscriptions
+                plan = None
+                subscription = db.subscriptions.find_one({
+                    'employer_id': recruiter['_id'],
+                    'status': 'active'
+                })
+                
+                if subscription and subscription.get('plan_id'):
+                    plan = db.plans.find_one({'_id': subscription['plan_id']})
+                
+                # Calculate credits using shared service
+                recruiter_stats = calculate_recruiter_credits(
+                    recruiter=recruiter,
+                    jobs=jobs,
+                    applications_count=applications_count,
+                    interviews_count=interviews_count,
+                    plan=plan,
+                    add_variation=False  # Use deterministic calculation
+                )
+                
+                recruiters_data.append(recruiter_stats)
+            
+            # Aggregate overview statistics
+            overview = aggregate_recruiter_statistics(recruiters_data)
+            
+            return {
+                'overview': overview,
+                'recruiters': recruiters_data,
+                'period': period
+            }, 200
+            
+        except Exception as e:
+            import traceback
+            print(f"Error getting admin cost statistics: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get cost statistics'}, 500

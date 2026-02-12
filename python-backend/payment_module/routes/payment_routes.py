@@ -33,6 +33,7 @@ def init_payment_routes(db):
     Initialize payment routes with database connection.
 
     Must be called before routes can handle requests.
+    Payment and webhook controllers are optional (require Razorpay keys).
 
     Args:
         db: MongoDB database instance
@@ -40,16 +41,22 @@ def init_payment_routes(db):
     global _plan_controller, _payment_controller, _subscription_controller, _webhook_controller
 
     from ..controllers.plan_controller import PlanController
-    from ..controllers.payment_controller import PaymentController
     from ..controllers.subscription_controller import SubscriptionController
-    from ..controllers.webhook_controller import WebhookController
 
     _plan_controller = PlanController(db)
-    _payment_controller = PaymentController(db)
     _subscription_controller = SubscriptionController(db)
-    _webhook_controller = WebhookController(db)
 
-    logger.info("Payment routes initialized")
+    # Payment and webhook controllers require Razorpay keys
+    try:
+        from ..controllers.payment_controller import PaymentController
+        from ..controllers.webhook_controller import WebhookController
+        _payment_controller = PaymentController(db)
+        _webhook_controller = WebhookController(db)
+        logger.info("Payment routes initialized (full mode)")
+    except ValueError as e:
+        logger.warning(f"Payment routes initialized (limited mode - no Razorpay): {e}")
+        _payment_controller = None
+        _webhook_controller = None
 
 
 # =============================================================================
@@ -133,6 +140,8 @@ def initiate_payment(current_user):
         }
     }
     """
+    if _payment_controller is None:
+        return jsonify({"success": False, "error": "Payment service not configured"}), 503
     response, status_code = _payment_controller.initiate_payment(current_user)
     return jsonify(response), status_code
 
@@ -162,6 +171,8 @@ def verify_payment(current_user):
         }
     }
     """
+    if _payment_controller is None:
+        return jsonify({"success": False, "error": "Payment service not configured"}), 503
     response, status_code = _payment_controller.verify_payment(current_user)
     return jsonify(response), status_code
 
@@ -175,6 +186,8 @@ def get_payment(current_user, payment_id):
     Get payment status.
     Requires authentication.
     """
+    if _payment_controller is None:
+        return jsonify({"success": False, "error": "Payment service not configured"}), 503
     response, status_code = _payment_controller.get_payment_status(
         payment_id, current_user
     )
@@ -190,6 +203,8 @@ def get_payment_history(current_user):
     Get payment history for authenticated user.
     Optional: ?limit=20
     """
+    if _payment_controller is None:
+        return jsonify({"success": False, "error": "Payment service not configured"}), 503
     response, status_code = _payment_controller.get_payment_history(current_user)
     return jsonify(response), status_code
 
@@ -208,6 +223,8 @@ def request_refund(current_user, payment_id):
         "amount_paise": 1000  // Optional, for partial refund
     }
     """
+    if _payment_controller is None:
+        return jsonify({"success": False, "error": "Payment service not configured"}), 503
     response, status_code = _payment_controller.request_refund(payment_id, current_user)
     return jsonify(response), status_code
 
@@ -355,6 +372,8 @@ def razorpay_webhook():
 
     Always returns 200 to acknowledge receipt.
     """
+    if _webhook_controller is None:
+        return jsonify({"success": False, "error": "Webhook service not configured"}), 503
     response, status_code = _webhook_controller.handle_razorpay_webhook()
     return jsonify(response), status_code
 

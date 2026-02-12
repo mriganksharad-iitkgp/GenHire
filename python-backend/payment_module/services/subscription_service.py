@@ -199,14 +199,16 @@ class SubscriptionService:
         Get the active subscription for an employer.
 
         Handles automatic expiration check.
+        Tries both ObjectId and string formats for employer_id lookup.
 
         Args:
-            employer_id: User ID
+            employer_id: User ID (string)
 
         Returns:
             Active Subscription or None
         """
         try:
+            # Try with ObjectId first (standard format)
             sub_data = self.collection.find_one(
                 {
                     "employer_id": ObjectId(employer_id),
@@ -214,7 +216,17 @@ class SubscriptionService:
                 }
             )
 
+            # If not found, try with string format (for legacy data)
             if not sub_data:
+                sub_data = self.collection.find_one(
+                    {
+                        "employer_id": employer_id,
+                        "status": SubscriptionStatus.ACTIVE.value,
+                    }
+                )
+
+            if not sub_data:
+                logger.debug(f"No active subscription found for employer {employer_id}")
                 return None
 
             subscription = Subscription.from_dict(sub_data)
@@ -223,6 +235,7 @@ class SubscriptionService:
             if subscription.expires_at and datetime.utcnow() > subscription.expires_at:
                 # Mark as expired
                 self._expire_subscription(subscription._id)
+                logger.info(f"Subscription {subscription._id} has expired")
                 return None
 
             return subscription

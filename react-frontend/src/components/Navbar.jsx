@@ -28,7 +28,7 @@ const Navbar = ({ userType = "candidate" }) => {
   // Load user data (profile photo and name)
   const loadUserData = async () => {
     try {
-      const token = localStorage.getItem("companyxyz-token");
+      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       if (!token) return;
 
       // Load profile data
@@ -64,7 +64,7 @@ const Navbar = ({ userType = "candidate" }) => {
   // Load profile photo
   const loadProfilePhoto = async () => {
     try {
-      const token = localStorage.getItem("companyxyz-token");
+      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       if (!token) return;
 
       const response = await fetch(

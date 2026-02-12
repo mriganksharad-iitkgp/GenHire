@@ -164,6 +164,48 @@ const SubscriptionPlans = () => {
   // Combined error state
   const displayError = error || paymentError;
 
+  // Fallback plans when API is unavailable
+  const getFallbackPlans = () => [
+    {
+      id: "free",
+      slug: "free",
+      name: "Free Tier",
+      description: "Starter free tier with limited interviews and a small account credit",
+      price: 0,
+      currency: "INR",
+      interval: "month",
+      features: [
+        { name: "2 AI Interviews", included: true },
+        { name: "Smart CV Matching", included: true },
+        { name: "Candidate Analytics", included: false },
+        { name: "Priority Support", included: false },
+        { name: "Custom Branding", included: false },
+        { name: "API Access", included: false },
+      ],
+      interviews_allowed: 2,
+      is_popular: false,
+    },
+    {
+      id: "enterprise",
+      slug: "enterprise",
+      name: "Enterprise",
+      description: "Enterprise plan with 1 month validity, 100 interviews and account credit",
+      price: 10000,
+      currency: "INR",
+      interval: "month",
+      features: [
+        { name: "100 AI Interviews", included: true },
+        { name: "Smart CV Matching", included: true },
+        { name: "Candidate Analytics", included: true },
+        { name: "Priority Support", included: true },
+        { name: "Custom Branding", included: true },
+        { name: "API Access", included: true },
+      ],
+      interviews_allowed: 100,
+      is_popular: true,
+    },
+  ];
+
   /**
    * Load plans and payment history
    */
@@ -173,15 +215,21 @@ const SubscriptionPlans = () => {
       setError(null);
 
       const [plansRes, historyRes] = await Promise.all([
-        getPlans(),
+        getPlans().catch(() => null),
         getPaymentHistory().catch(() => ({ payments: [] })),
       ]);
 
-      // Normalize plans response
-      const normalizedPlans =
+      // Normalize plans response or use fallback
+      let normalizedPlans =
         plansRes?.data?.plans ||
         plansRes?.plans ||
         (Array.isArray(plansRes) ? plansRes : []);
+      
+      // Use fallback plans if API returned empty or failed
+      if (!normalizedPlans || normalizedPlans.length === 0) {
+        normalizedPlans = getFallbackPlans();
+      }
+      
       setPlans(normalizedPlans);
       console.log("Fetched plans:", normalizedPlans); 
       console.log("Fetched plansres:", plansRes);
@@ -194,6 +242,8 @@ const SubscriptionPlans = () => {
       setPaymentHistory(normalizedHistory);
     } catch (err) {
       console.error("Error loading subscription data:", err);
+      // Use fallback plans even on error
+      setPlans(getFallbackPlans());
       setError("Failed to load subscription data. Please try again.");
     } finally {
       setLoading(false);

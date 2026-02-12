@@ -17,6 +17,12 @@ class DatabaseConfig:
         self.db = self.client[self.database_name]
         return self.db
     
+    def get_db(self):
+        """Get database instance, connecting if needed"""
+        if self.db is None:
+            self.connect()
+        return self.db
+    
     def get_collections(self):
         """Return dictionary of collection objects"""
         if self.db is None:

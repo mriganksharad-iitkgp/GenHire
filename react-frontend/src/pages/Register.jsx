@@ -69,9 +69,9 @@ const Register = () => {
         // Don't auto-login, user must verify email first
       } else {
         // Store token and user data with user type, verification status, and permissions
-        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
         localStorage.setItem(
-          process.env.REACT_APP_USER_KEY,
+          process.env.REACT_APP_USER_KEY || "companyxyz-user",
           JSON.stringify({ 
             ...data.user, 
             userType: data.user.user_type || userType,
@@ -114,9 +114,9 @@ const Register = () => {
       }
 
       // Store token and user data with verification status and permissions
-      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
+      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
       localStorage.setItem(
-        process.env.REACT_APP_USER_KEY,
+        process.env.REACT_APP_USER_KEY || "companyxyz-user",
         JSON.stringify({
           ...data.user,
           userType: data.user.user_type,

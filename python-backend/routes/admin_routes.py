@@ -303,3 +303,13 @@ def get_practice_report(current_user, session_id):
     """Get practice interview report"""
     result, status = admin_controller.get_practice_report(current_user, session_id)
     return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics', methods=['GET'])
+@token_required
+@admin_required
+def get_admin_cost_statistics(current_user):
+    """Get cost statistics for all recruiters - Admin only"""
+    period = request.args.get('period', 'month')
+    result, status = admin_controller.get_cost_statistics(current_user, period)
+    return jsonify(result), status

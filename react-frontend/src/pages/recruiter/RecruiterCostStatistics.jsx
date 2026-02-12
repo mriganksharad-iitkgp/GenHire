@@ -17,7 +17,7 @@ const RecruiterCostStatistics = () => {
       setError(null);
 
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "token");
         if (!token) {
           setError("Please login to view cost statistics");
           setLoading(false);
@@ -79,18 +79,20 @@ const RecruiterCostStatistics = () => {
       },
       credits: {
         allocated: 2000,
-        used: 0,
-        cloudflare: { allocated: 700, used: 0 },
-        nlp: { allocated: 800, used: 0 },
-        llm: { allocated: 500, used: 0 },
+        used: 100,
+        available: 1900,
+        usage_percentage: 5,
+        cloudflare: { allocated: 700, used: 35 },
+        nlp: { allocated: 800, used: 40 },
+        llm: { allocated: 500, used: 25 },
       },
       usageHistory: [
-        { date: weekAgo(5), cloudflare: 0, nlp: 0, llm: 0 },
-        { date: weekAgo(4), cloudflare: 0, nlp: 0, llm: 0 },
-        { date: weekAgo(3), cloudflare: 0, nlp: 0, llm: 0 },
-        { date: weekAgo(2), cloudflare: 0, nlp: 0, llm: 0 },
-        { date: weekAgo(1), cloudflare: 0, nlp: 0, llm: 0 },
-        { date: weekAgo(0), cloudflare: 0, nlp: 0, llm: 0 },
+        { date: weekAgo(5), week: "Week 1", cloudflare: 5, nlp: 5, llm: 3 },
+        { date: weekAgo(4), week: "Week 2", cloudflare: 6, nlp: 7, llm: 4 },
+        { date: weekAgo(3), week: "Week 3", cloudflare: 6, nlp: 8, llm: 5 },
+        { date: weekAgo(2), week: "Week 4", cloudflare: 7, nlp: 8, llm: 5 },
+        { date: weekAgo(1), week: "Week 5", cloudflare: 6, nlp: 7, llm: 4 },
+        { date: weekAgo(0), week: "Week 6", cloudflare: 5, nlp: 5, llm: 4 },
       ],
       recentActivity: [],
       jobBreakdown: [],
@@ -104,6 +106,7 @@ const RecruiterCostStatistics = () => {
   };
 
   const calculatePercentage = (used, total) => {
+    if (!total || total === 0) return 0;
     return Math.round((used / total) * 100);
   };
 
@@ -240,15 +243,18 @@ const RecruiterCostStatistics = () => {
     );
   }
 
-  // Handle empty job breakdown
-  const maxJobCost =
-    costData.jobBreakdown && costData.jobBreakdown.length > 0
-      ? Math.max(
-          ...costData.jobBreakdown.map(
-            (j) => (j.cloudflare || 0) + (j.nlp || 0) + (j.llm || 0),
-          ),
-        )
-      : 100;
+  if (error || !costData) {
+    return (
+      <>
+        <Navbar userType="recruiter" />
+        <div className={styles.pageWrapper}>
+          <div className={styles.errorContainer}>
+            <p>{error || "Please login to view cost statistics"}</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -266,7 +272,7 @@ const RecruiterCostStatistics = () => {
               {costData.summary && (
                 <div className={styles.summaryBadges}>
                   <span className={styles.summaryBadge}>
-                    <strong>{costData.summary.totalJobs}</strong> Jobs
+                    <strong>{costData.summary.activeJobs}</strong> Active Jobs
                   </span>
                   <span className={styles.summaryBadge}>
                     <strong>{costData.summary.totalApplicants}</strong>{" "}
@@ -414,107 +420,6 @@ const RecruiterCostStatistics = () => {
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Job Breakdown */}
-          <div className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <h2>Cost by Job Posting</h2>
-              <p>See how credits are distributed across your job postings</p>
-            </div>
-            <div className={styles.jobBreakdownCard}>
-              {costData.jobBreakdown && costData.jobBreakdown.length > 0 ? (
-                <>
-                  <div className={styles.chartLegend}>
-                    <div className={styles.legendEntry}>
-                      <span
-                        className={styles.legendColor}
-                        style={{ background: "#f59e0b" }}
-                      ></span>
-                      <span>Cloudflare</span>
-                    </div>
-                    <div className={styles.legendEntry}>
-                      <span
-                        className={styles.legendColor}
-                        style={{ background: "#10b981" }}
-                      ></span>
-                      <span>NLP (Gemini)</span>
-                    </div>
-                    <div className={styles.legendEntry}>
-                      <span
-                        className={styles.legendColor}
-                        style={{ background: "#6366f1" }}
-                      ></span>
-                      <span>LLM (ChatGPT)</span>
-                    </div>
-                  </div>
-                  <div className={styles.jobsList}>
-                    {costData.jobBreakdown.map((job) => {
-                      const total =
-                        (job.cloudflare || 0) + (job.nlp || 0) + (job.llm || 0);
-                      const cloudflareWidth =
-                        maxJobCost > 0
-                          ? ((job.cloudflare || 0) / maxJobCost) * 100
-                          : 0;
-                      const nlpWidth =
-                        maxJobCost > 0
-                          ? ((job.nlp || 0) / maxJobCost) * 100
-                          : 0;
-                      const llmWidth =
-                        maxJobCost > 0
-                          ? ((job.llm || 0) / maxJobCost) * 100
-                          : 0;
-
-                      return (
-                        <div key={job.id} className={styles.jobRow}>
-                          <div className={styles.jobInfo}>
-                            <h4>{job.title}</h4>
-                            <span>{job.candidates || 0} candidates</span>
-                          </div>
-                          <div className={styles.jobBarContainer}>
-                            <div className={styles.jobBarTrack}>
-                              <div
-                                className={styles.jobBarSegment}
-                                style={{
-                                  width: `${cloudflareWidth}%`,
-                                  background: "#f59e0b",
-                                }}
-                                title={`Cloudflare: ₹${job.cloudflare || 0}`}
-                              ></div>
-                              <div
-                                className={styles.jobBarSegment}
-                                style={{
-                                  width: `${nlpWidth}%`,
-                                  background: "#10b981",
-                                }}
-                                title={`NLP: ₹${job.nlp || 0}`}
-                              ></div>
-                              <div
-                                className={styles.jobBarSegment}
-                                style={{
-                                  width: `${llmWidth}%`,
-                                  background: "#6366f1",
-                                }}
-                                title={`LLM: ₹${job.llm || 0}`}
-                              ></div>
-                            </div>
-                            <span className={styles.jobTotal}>
-                              ₹{total.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon}>📋</span>
-                  <h4>No Job Postings Yet</h4>
-                  <p>Start by posting a job to track your cost breakdown</p>
-                </div>
-              )}
             </div>
           </div>
 

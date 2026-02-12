@@ -10,11 +10,13 @@ import styles from "./PlanCard.module.css";
  */
 const formatPrice = (price) => {
   if (price === 0) return "Free";
-  return `₹${price.toFixed(2)}`;
+  // Format for Indian Rupees
+  return `₹${price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 /**
  * Get plan features based on plan details
+ * Always use standard features list for consistent display
  */
 const getPlanFeatures = (plan) => {
   const features = [];

@@ -63,6 +63,12 @@ def update_cv_details(current_user):
 def get_recruiter_cost_statistics(current_user):
     """Get cost statistics for the logged in recruiter based on their actual data"""
     try:
+        from services.credit_service import (
+            calculate_recruiter_credits,
+            generate_usage_history,
+            generate_job_breakdown
+        )
+        
         # Verify user is a recruiter
         if current_user.get('user_type') != 'recruiter':
             return jsonify({'success': False, 'message': 'Only recruiters can access cost statistics'}), 403
@@ -70,12 +76,26 @@ def get_recruiter_cost_statistics(current_user):
         recruiter_id = str(current_user['_id'])
         db = db_config.get_db()
         
-        # Get recruiter's jobs
+        # Get recruiter's jobs - query with string ID (consistent with admin portal)
         jobs = list(db.jobs.find({'created_by': recruiter_id}))
         
-        # Get applications for recruiter's jobs
+        # Debug log
+        print(f"[Cost Stats] Recruiter {recruiter_id} has {len(jobs)} jobs")
+        
+        # Get applications for recruiter's jobs (only visible ones - CV scoring complete)
         job_ids = [str(job['_id']) for job in jobs]
-        applications = list(db.applications.find({'job_id': {'$in': job_ids}})) if job_ids else []
+        applications = list(db.applications.find({
+            'job_id': {'$in': job_ids},
+            'is_visible': True
+        })) if job_ids else []
+        applications_count = len(applications)
+        
+        # Count interviews completed (same logic as dashboard OverviewMetrics)
+        # Interviews = applications with status 'interviewed', 'selected', or 'rejected'
+        interviews_count = len([app for app in applications if str(app.get('status', '')).lower() in ['interviewed', 'selected', 'rejected']])
+        
+        # Debug log
+        print(f"[Cost Stats] Applications: {applications_count}, Interviews: {interviews_count}")
         
         # Get recruiter's subscription
         subscription = db.subscriptions.find_one({
@@ -88,83 +108,35 @@ def get_recruiter_cost_statistics(current_user):
         if subscription and subscription.get('plan_id'):
             plan = db.plans.find_one({'_id': subscription['plan_id']})
         
-        # Calculate credits based on plan or default values
-        # Default allocation based on typical plan tiers
-        if plan:
-            plan_name = plan.get('name', 'Starter').lower()
-            if 'enterprise' in plan_name:
-                base_credits = 10000
-            elif 'growth' in plan_name:
-                base_credits = 5000
-            else:
-                base_credits = 2000
-        else:
-            base_credits = 2000  # Default for no subscription
+        # Calculate credits using shared service
+        credits_data = calculate_recruiter_credits(
+            recruiter=current_user,
+            jobs=jobs,
+            applications_count=applications_count,
+            interviews_count=interviews_count,
+            plan=plan,
+            add_variation=True
+        )
         
-        # Calculate service distribution (40% NLP, 35% Cloudflare, 25% LLM)
-        nlp_allocated = int(base_credits * 0.40)
-        cloudflare_allocated = int(base_credits * 0.35)
-        llm_allocated = int(base_credits * 0.25)
+        # Generate usage history
+        usage_history = generate_usage_history(
+            credits_data['breakdown']['cloudflare'],
+            credits_data['breakdown']['nlp'],
+            credits_data['breakdown']['llm'],
+            weeks=6
+        )
         
-        # Calculate usage based on actual activity
-        total_interviews = sum(job.get('interviewed', 0) for job in jobs)
-        total_applicants = sum(job.get('applicants', 0) for job in jobs)
-        
-        # Simulate usage based on activity (each interview ~ 150 credits, CV analysis ~ 25 credits)
-        base_usage_factor = min(0.85, max(0.15, (total_interviews * 150 + total_applicants * 25) / base_credits)) if base_credits > 0 else 0.15
-        
-        # Add some randomness for realistic variation
-        nlp_used = int(nlp_allocated * (base_usage_factor + random.uniform(-0.1, 0.1)))
-        cloudflare_used = int(cloudflare_allocated * (base_usage_factor + random.uniform(-0.1, 0.1)))
-        llm_used = int(llm_allocated * (base_usage_factor + random.uniform(-0.1, 0.1)))
-        
-        # Ensure used doesn't exceed allocated
-        nlp_used = min(nlp_used, nlp_allocated)
-        cloudflare_used = min(cloudflare_used, cloudflare_allocated)
-        llm_used = min(llm_used, llm_allocated)
-        
-        # Generate usage history based on job creation dates
-        usage_history = []
-        today = datetime.utcnow()
-        for i in range(6):
-            week_date = today - timedelta(weeks=5-i)
-            # Gradually increase usage over time
-            factor = (i + 1) / 6
-            usage_history.append({
-                'date': week_date.strftime('%Y-%m-%d'),
-                'cloudflare': int(cloudflare_used * factor / 6 * random.uniform(0.8, 1.2)),
-                'nlp': int(nlp_used * factor / 6 * random.uniform(0.8, 1.2)),
-                'llm': int(llm_used * factor / 6 * random.uniform(0.8, 1.2))
-            })
-        
-        # Generate job breakdown from actual jobs
-        job_breakdown = []
-        for job in jobs[:10]:  # Limit to 10 jobs
-            candidates = job.get('applicants', 0)
-            interviewed = job.get('interviewed', 0)
-            
-            # Calculate per-job costs based on activity
-            job_cloudflare = interviewed * random.randint(25, 40)
-            job_nlp = candidates * random.randint(20, 35)
-            job_llm = interviewed * random.randint(30, 50)
-            
-            job_breakdown.append({
-                'id': str(job['_id']),
-                'title': job.get('title', 'Untitled Job'),
-                'candidates': candidates,
-                'interviewed': interviewed,
-                'cloudflare': job_cloudflare,
-                'nlp': job_nlp,
-                'llm': job_llm
-            })
+        # Generate job breakdown
+        job_breakdown = generate_job_breakdown(jobs, max_jobs=10)
         
         # Generate recent activity based on applications
         recent_activity = []
+        # Fixed credit costs per activity type (deterministic)
         activity_types = [
-            ('CV Analysis', 'nlp', lambda: random.randint(20, 30)),
-            ('Video Interview', 'cloudflare', lambda: random.randint(70, 90)),
-            ('Interview Evaluation', 'llm', lambda: random.randint(35, 50)),
-            ('Job Description Matching', 'nlp', lambda: random.randint(10, 20)),
+            ('CV Analysis', 'nlp', 27),
+            ('Video Interview', 'cloudflare', 80),
+            ('Interview Evaluation', 'llm', 42),
+            ('Job Description Matching', 'nlp', 15),
         ]
         
         sorted_applications = sorted(applications, key=lambda x: x.get('applied_at', datetime.min), reverse=True)[:10]
@@ -176,21 +148,23 @@ def get_recruiter_cost_statistics(current_user):
                 'id': i + 1,
                 'action': activity_type[0],
                 'job': job.get('title', 'Unknown Job') if job else 'Unknown Job',
-                'credits': activity_type[2](),
+                'credits': activity_type[2],
                 'service': activity_type[1],
                 'timestamp': app.get('applied_at', datetime.utcnow()).strftime('%Y-%m-%d %H:%M')
             })
         
-        # If no applications, generate some placeholder activity
+        # If no applications, show placeholder activity based on jobs
+        today = datetime.utcnow()
         if not recent_activity:
-            for i in range(6):
+            for i in range(min(6, max(1, len(jobs)))):
                 activity_type = activity_types[i % len(activity_types)]
-                timestamp = today - timedelta(hours=random.randint(1, 72))
+                # Deterministic timestamp offset based on index
+                timestamp = today - timedelta(hours=(i + 1) * 12)
                 recent_activity.append({
                     'id': i + 1,
                     'action': activity_type[0],
                     'job': jobs[i % len(jobs)].get('title', 'Sample Job') if jobs else 'No Jobs Yet',
-                    'credits': activity_type[2](),
+                    'credits': activity_type[2],
                     'service': activity_type[1],
                     'timestamp': timestamp.strftime('%Y-%m-%d %H:%M')
                 })
@@ -203,27 +177,38 @@ def get_recruiter_cost_statistics(current_user):
                 'joinedDate': current_user.get('created_at', datetime.utcnow()).strftime('%Y-%m-%d') if isinstance(current_user.get('created_at'), datetime) else str(current_user.get('created_at', ''))[:10]
             },
             'plan': {
-                'name': plan.get('name', 'Free Tier') if plan else 'Free Tier',
+                'name': credits_data['plan']['name'],
                 'interviews_allowed': subscription.get('interviews_allowed', 0) if subscription else 0,
                 'interviews_remaining': subscription.get('interviews_remaining', 0) if subscription else 0,
                 'interviews_used': subscription.get('interviews_used', 0) if subscription else 0,
                 'expires_at': subscription.get('expires_at').strftime('%Y-%m-%d') if subscription and subscription.get('expires_at') else None
             },
             'credits': {
-                'allocated': base_credits,
-                'used': nlp_used + cloudflare_used + llm_used,
-                'cloudflare': {'allocated': cloudflare_allocated, 'used': cloudflare_used},
-                'nlp': {'allocated': nlp_allocated, 'used': nlp_used},
-                'llm': {'allocated': llm_allocated, 'used': llm_used}
+                'allocated': credits_data['allocated'],
+                'used': credits_data['used'],
+                'available': credits_data['available'],
+                'usage_percentage': credits_data['usage_percentage'],
+                'cloudflare': {
+                    'allocated': credits_data['allocation']['cloudflare'],
+                    'used': credits_data['breakdown']['cloudflare']
+                },
+                'nlp': {
+                    'allocated': credits_data['allocation']['nlp'],
+                    'used': credits_data['breakdown']['nlp']
+                },
+                'llm': {
+                    'allocated': credits_data['allocation']['llm'],
+                    'used': credits_data['breakdown']['llm']
+                }
             },
             'usageHistory': usage_history,
             'recentActivity': recent_activity,
             'jobBreakdown': job_breakdown,
             'summary': {
-                'totalJobs': len(jobs),
-                'totalApplicants': total_applicants,
-                'totalInterviews': total_interviews,
-                'activeJobs': len([j for j in jobs if j.get('status') == 'active'])
+                'totalJobs': credits_data['activity']['total_jobs'],
+                'totalApplicants': credits_data['activity']['total_applicants'],
+                'totalInterviews': credits_data['activity']['total_interviews'],
+                'activeJobs': credits_data['activity']['active_jobs']
             }
         }
         

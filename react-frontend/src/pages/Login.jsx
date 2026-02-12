@@ -45,8 +45,8 @@ const Login = () => {
 			}
 
 			// Store token and user data with user type, verification status, and permissions
-			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
-			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
+			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
+			localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
 				...data.user,
 				userType: data.user.user_type || userType,
 				isVerified: data.user.is_verified,
@@ -97,8 +97,8 @@ const Login = () => {
 			}
 
 			// Store token and user data with verification status and permissions
-			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY, data.token);
-			localStorage.setItem(process.env.REACT_APP_USER_KEY, JSON.stringify({
+			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
+			localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
 				...data.user,
 				userType: data.user.user_type,
 				isVerified: data.user.is_verified,

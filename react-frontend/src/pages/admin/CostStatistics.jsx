@@ -2,90 +2,57 @@ import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import styles from './CostStatistics.module.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
 const CostStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [costData, setCostData] = useState(null);
-
-  // Mock data for cost statistics
-  const mockCostData = {
-    overview: {
-      totalBudget: 50000,
-      totalUsed: 32450,
-      cloudflare: { allocated: 15000, used: 8750 },
-      nlp: { allocated: 20000, used: 14200 },
-      llm: { allocated: 15000, used: 9500 }
-    },
-    recruiters: [
-      {
-        id: 1,
-        name: 'Sarah Johnson',
-        email: 'sarah.johnson@company.com',
-        department: 'Engineering',
-        allocated: 5000,
-        used: 3850,
-        breakdown: { cloudflare: 1200, nlp: 1650, llm: 1000 }
-      },
-      {
-        id: 2,
-        name: 'Michael Chen',
-        email: 'michael.chen@company.com',
-        department: 'Sales',
-        allocated: 4500,
-        used: 4200,
-        breakdown: { cloudflare: 900, nlp: 2100, llm: 1200 }
-      },
-      {
-        id: 3,
-        name: 'Emily Davis',
-        email: 'emily.davis@company.com',
-        department: 'Marketing',
-        allocated: 3500,
-        used: 2100,
-        breakdown: { cloudflare: 600, nlp: 900, llm: 600 }
-      },
-      {
-        id: 4,
-        name: 'David Wilson',
-        email: 'david.wilson@company.com',
-        department: 'Engineering',
-        allocated: 6000,
-        used: 5450,
-        breakdown: { cloudflare: 1500, nlp: 2450, llm: 1500 }
-      },
-      {
-        id: 5,
-        name: 'Jessica Brown',
-        email: 'jessica.brown@company.com',
-        department: 'HR',
-        allocated: 4000,
-        used: 2850,
-        breakdown: { cloudflare: 750, nlp: 1350, llm: 750 }
-      },
-      {
-        id: 6,
-        name: 'James Taylor',
-        email: 'james.taylor@company.com',
-        department: 'Product',
-        allocated: 5500,
-        used: 4800,
-        breakdown: { cloudflare: 1200, nlp: 2200, llm: 1400 }
-      }
-    ]
-  };
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Simulate API call
     const fetchData = async () => {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setCostData(mockCostData);
-      setLoading(false);
+      setError(null);
+      
+      try {
+        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || 'token');
+        if (!token) {
+          setError('Please login to view cost statistics');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/admin/cost-statistics?period=${selectedPeriod}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setCostData(data);
+        } else {
+          setError(data.error || 'Failed to load cost statistics');
+        }
+      } catch (err) {
+        console.error('Error fetching cost statistics:', err);
+        setError('Failed to load cost statistics. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     };
+    
     fetchData();
   }, [selectedPeriod]);
 
   const calculatePercentage = (used, total) => {
+    if (!total || total === 0) return 0;
     return Math.round((used / total) * 100);
   };
 
@@ -175,21 +142,25 @@ const CostStatistics = () => {
 
   // Stacked Bar for Recruiter comparison
   const RecruiterStackedBar = ({ recruiter, maxValue }) => {
-    const { cloudflare, nlp, llm } = recruiter.breakdown;
+    const cloudflare = recruiter.breakdown?.cloudflare || 0;
+    const nlp = recruiter.breakdown?.nlp || 0;
+    const llm = recruiter.breakdown?.llm || 0;
+    const allocated = recruiter.allocated || maxValue || 1;
     const total = cloudflare + nlp + llm;
-    const cloudflareWidth = (cloudflare / maxValue) * 100;
-    const nlpWidth = (nlp / maxValue) * 100;
-    const llmWidth = (llm / maxValue) * 100;
+    // Calculate width relative to this recruiter's own allocation
+    const cloudflareWidth = allocated > 0 ? (cloudflare / allocated) * 100 : 0;
+    const nlpWidth = allocated > 0 ? (nlp / allocated) * 100 : 0;
+    const llmWidth = allocated > 0 ? (llm / allocated) * 100 : 0;
 
     return (
       <div className={styles.stackedBarRow}>
         <div className={styles.stackedBarInfo}>
           <div className={styles.recruiterAvatar}>
-            {recruiter.name.split(' ').map(n => n[0]).join('')}
+            {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
           </div>
           <div className={styles.recruiterDetails}>
-            <span className={styles.recruiterName}>{recruiter.name}</span>
-            <span className={styles.recruiterDept}>{recruiter.department}</span>
+            <span className={styles.recruiterName}>{recruiter.name || 'Unknown'}</span>
+            <span className={styles.recruiterDept}>{recruiter.department || 'General'}</span>
           </div>
         </div>
         <div className={styles.stackedBarContainer}>
@@ -210,7 +181,7 @@ const CostStatistics = () => {
               title={`LLM (ChatGPT): ₹${llm.toLocaleString()}`}
             ></div>
           </div>
-          <span className={styles.stackedBarTotal}>₹{total.toLocaleString()}</span>
+          <span className={styles.stackedBarTotal}>₹{total.toLocaleString()} / ₹{allocated.toLocaleString()}</span>
         </div>
       </div>
     );
@@ -227,9 +198,39 @@ const CostStatistics = () => {
     );
   }
 
-  const maxRecruiterUsage = Math.max(...costData.recruiters.map(r => 
-    r.breakdown.cloudflare + r.breakdown.nlp + r.breakdown.llm
-  ));
+  if (error) {
+    return (
+      <AdminLayout activeTab="cost-statistics">
+        <div className={styles.loadingContainer}>
+          <p style={{ color: '#ef4444' }}>{error}</p>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!costData || !costData.recruiters) {
+    return (
+      <AdminLayout activeTab="cost-statistics">
+        <div className={styles.loadingContainer}>
+          <p>No cost data available.</p>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Safe access for overview with defaults
+  const overview = costData.overview || {};
+  const totalBudget = overview.totalBudget || 0;
+  const totalUsed = overview.totalUsed || 0;
+  const cloudflare = overview.cloudflare || { used: 0, allocated: 0 };
+  const nlp = overview.nlp || { used: 0, allocated: 0 };
+  const llm = overview.llm || { used: 0, allocated: 0 };
+
+  const maxRecruiterUsage = costData.recruiters.length > 0 
+    ? Math.max(...costData.recruiters.map(r => 
+        (r.breakdown?.cloudflare || 0) + (r.breakdown?.nlp || 0) + (r.breakdown?.llm || 0)
+      ))
+    : 100;
 
   return (
     <AdminLayout activeTab="cost-statistics">
@@ -273,7 +274,7 @@ const CostStatistics = () => {
           </div>
           <div className={styles.overviewInfo}>
             <span className={styles.overviewLabel}>Total Budget</span>
-            <span className={styles.overviewValue}>₹{costData.overview.totalBudget.toLocaleString()}</span>
+            <span className={styles.overviewValue}>₹{totalBudget.toLocaleString()}</span>
           </div>
         </div>
         <div className={styles.overviewCard}>
@@ -284,7 +285,7 @@ const CostStatistics = () => {
           </div>
           <div className={styles.overviewInfo}>
             <span className={styles.overviewLabel}>Total Used</span>
-            <span className={styles.overviewValue}>₹{costData.overview.totalUsed.toLocaleString()}</span>
+            <span className={styles.overviewValue}>₹{totalUsed.toLocaleString()}</span>
           </div>
         </div>
         <div className={styles.overviewCard}>
@@ -296,7 +297,7 @@ const CostStatistics = () => {
           </div>
           <div className={styles.overviewInfo}>
             <span className={styles.overviewLabel}>Available</span>
-            <span className={styles.overviewValue}>₹{(costData.overview.totalBudget - costData.overview.totalUsed).toLocaleString()}</span>
+            <span className={styles.overviewValue}>₹{(totalBudget - totalUsed).toLocaleString()}</span>
           </div>
         </div>
         <div className={styles.overviewCard}>
@@ -308,7 +309,7 @@ const CostStatistics = () => {
           </div>
           <div className={styles.overviewInfo}>
             <span className={styles.overviewLabel}>Utilization</span>
-            <span className={styles.overviewValue}>{calculatePercentage(costData.overview.totalUsed, costData.overview.totalBudget)}%</span>
+            <span className={styles.overviewValue}>{calculatePercentage(totalUsed, totalBudget)}%</span>
           </div>
         </div>
       </div>
@@ -321,22 +322,22 @@ const CostStatistics = () => {
         </div>
         <div className={styles.pieChartsGrid}>
           <PieChart 
-            used={costData.overview.cloudflare.used}
-            total={costData.overview.cloudflare.allocated}
+            used={cloudflare.used}
+            total={cloudflare.allocated}
             color="#f59e0b"
             label="Cloudflare (GPU)"
             icon="☁️"
           />
           <PieChart 
-            used={costData.overview.nlp.used}
-            total={costData.overview.nlp.allocated}
+            used={nlp.used}
+            total={nlp.allocated}
             color="#10b981"
             label="NLP (Gemini)"
             icon="🧠"
           />
           <PieChart 
-            used={costData.overview.llm.used}
-            total={costData.overview.llm.allocated}
+            used={llm.used}
+            total={llm.allocated}
             color="#6366f1"
             label="LLM (ChatGPT)"
             icon="💬"
@@ -353,22 +354,22 @@ const CostStatistics = () => {
         <div className={styles.horizontalBarsCard}>
           <HorizontalBar 
             label="Cloudflare (GPU)"
-            value={costData.overview.cloudflare.used}
-            maxValue={costData.overview.cloudflare.allocated}
+            value={cloudflare.used}
+            maxValue={cloudflare.allocated}
             color="#f59e0b"
             sublabel="Video processing & face verification"
           />
           <HorizontalBar 
             label="NLP (Gemini)"
-            value={costData.overview.nlp.used}
-            maxValue={costData.overview.nlp.allocated}
+            value={nlp.used}
+            maxValue={nlp.allocated}
             color="#10b981"
             sublabel="CV analysis & job matching"
           />
           <HorizontalBar 
             label="LLM (ChatGPT)"
-            value={costData.overview.llm.used}
-            maxValue={costData.overview.llm.allocated}
+            value={llm.used}
+            maxValue={llm.allocated}
             color="#6366f1"
             sublabel="Interview questions & evaluation"
           />
@@ -394,45 +395,49 @@ const CostStatistics = () => {
               </tr>
             </thead>
             <tbody>
-              {costData.recruiters.map((recruiter) => (
+              {costData.recruiters.map((recruiter) => {
+                const allocated = recruiter.allocated || 0;
+                const used = recruiter.used || 0;
+                const percentage = allocated > 0 ? calculatePercentage(used, allocated) : 0;
+                return (
                 <tr key={recruiter.id}>
                   <td>
                     <div className={styles.recruiterCell}>
                       <div className={styles.tableAvatar}>
-                        {recruiter.name.split(' ').map(n => n[0]).join('')}
+                        {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>
-                        <span className={styles.tableName}>{recruiter.name}</span>
-                        <span className={styles.tableEmail}>{recruiter.email}</span>
+                        <span className={styles.tableName}>{recruiter.name || 'Unknown'}</span>
+                        <span className={styles.tableEmail}>{recruiter.email || ''}</span>
                       </div>
                     </div>
                   </td>
-                  <td><span className={styles.deptBadge}>{recruiter.department}</span></td>
-                  <td>₹{recruiter.allocated.toLocaleString()}</td>
-                  <td>₹{recruiter.used.toLocaleString()}</td>
-                  <td>₹{(recruiter.allocated - recruiter.used).toLocaleString()}</td>
+                  <td><span className={styles.deptBadge}>{recruiter.department || 'General'}</span></td>
+                  <td>₹{allocated.toLocaleString()}</td>
+                  <td>₹{used.toLocaleString()}</td>
+                  <td>₹{(allocated - used).toLocaleString()}</td>
                   <td>
                     <div className={styles.usageCell}>
                       <div className={styles.usageBar}>
                         <div 
                           className={styles.usageFill}
                           style={{ 
-                            width: `${calculatePercentage(recruiter.used, recruiter.allocated)}%`,
-                            background: calculatePercentage(recruiter.used, recruiter.allocated) > 90 
+                            width: `${percentage}%`,
+                            background: percentage > 90 
                               ? '#ef4444' 
-                              : calculatePercentage(recruiter.used, recruiter.allocated) > 70 
+                              : percentage > 70 
                                 ? '#f59e0b' 
                                 : '#10b981'
                           }}
                         ></div>
                       </div>
                       <span className={styles.usagePercent}>
-                        {calculatePercentage(recruiter.used, recruiter.allocated)}%
+                        {percentage}%
                       </span>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

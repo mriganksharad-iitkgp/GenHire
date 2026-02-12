@@ -62,9 +62,9 @@ RECORDING_ANALYZER_AVAILABLE = False
 try:
     from payment_module.routes import payment_bp, init_payment_routes
     PAYMENT_MODULE_AVAILABLE = True
-    print("✓ Payment module loaded successfully")
+    print("[OK] Payment module loaded successfully")
 except ImportError as e:
-    print(f"⚠ Payment module not available: {e}")
+    print(f"[WARN] Payment module not available: {e}")
     PAYMENT_MODULE_AVAILABLE = False
 
 # Load environment variables
@@ -126,7 +126,7 @@ jobs_collection = collections["jobs"]
 from services.background_processor import get_background_processor
 background_processor = get_background_processor()
 background_processor.start()
-logger.info("✓ Background processor started for async CV scoring")
+logger.info("[OK] Background processor started for async CV scoring")
 
 # Register blueprints
 app.register_blueprint(auth_bp)
@@ -144,7 +144,7 @@ app.register_blueprint(cv_bp, url_prefix='/api/cv')
 admin_controller = AdminController(collections)
 init_admin_routes(admin_controller)
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
-logger.info("✓ Admin routes registered at /api/admin")
+logger.info("[OK] Admin routes registered at /api/admin")
 
 # Define a dictionary to hold a detector instance for each session
 # Define a dictionary to hold a detector instance for each session
@@ -203,9 +203,9 @@ except Exception as e:
 if RECORDING_ANALYZER_AVAILABLE and RecordingAnalyzer is not None:
     try:
         recording_analyzer = RecordingAnalyzer()
-        print("✓ RecordingAnalyzer initialized successfully")
+        print("[OK] RecordingAnalyzer initialized successfully")
     except Exception as e:
-        print(f"⚠ Warning initializing RecordingAnalyzer: {e}")
+        print(f"[WARN] Warning initializing RecordingAnalyzer: {e}")
         recording_analyzer = None
 else:
     recording_analyzer = None
@@ -261,9 +261,9 @@ if PAYMENT_MODULE_AVAILABLE:
     try:
         init_payment_routes(db)
         app.register_blueprint(payment_bp)
-        print("✓ Payment routes registered at /api/payment")
+        print("[OK] Payment routes registered at /api/payment")
     except Exception as e:
-        print(f"⚠ Failed to initialize payment module: {e}")
+        print(f"[WARN] Failed to initialize payment module: {e}")
 
 # health check route
 @app.route('/health', methods=['GET'])
