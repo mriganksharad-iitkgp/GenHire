@@ -265,6 +265,16 @@ if PAYMENT_MODULE_AVAILABLE:
     except Exception as e:
         print(f"⚠ Failed to initialize payment module: {e}")
 
+# health check route
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+# basic index route
+@app.route("/")
+def index():
+    return "Welcome to the Interview System API. Please use the /api endpoints to interact with the system."
+
 
 # Interview System API Routes
 @app.route("/api/interviews/start", methods=["POST"])
@@ -775,6 +785,7 @@ def handle_mobile_status(data):
 
 if __name__ == "__main__":
     try:
+        app.run(host="0.0.0.0", port=5000, debug=False)
         # Disable reloader to avoid torch deadlock issues on Windows
         socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=False)
     finally:
