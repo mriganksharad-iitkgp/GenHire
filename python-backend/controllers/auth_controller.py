@@ -379,11 +379,12 @@ class AuthController:
         user_data = user_data or {}
         
         try:
-            # Verify the token with Google
+            # Verify the token with Google (allow 10s clock skew for "Token used too early")
             idinfo = id_token.verify_oauth2_token(
                 token,
                 google_requests.Request(),
-                self.google_client_id
+                self.google_client_id,
+                clock_skew_in_seconds=10
             )
 
             # Get user info from token
@@ -492,9 +493,10 @@ class AuthController:
                 }, 201
                 
         except ValueError as e:
-            # Invalid token
-            print(f"Google OAuth error: {str(e)}")
-            return {'error': 'Invalid Google token'}, 401
+            # Invalid token (e.g. wrong audience, expired, or bad signature)
+            err_msg = str(e)
+            print(f"Google OAuth error: {err_msg}")
+            return {'error': 'Invalid Google token', 'detail': err_msg}, 401
         except Exception as e:
             print(f"Google OAuth error: {str(e)}")
             return {'error': 'Failed to authenticate with Google'}, 500
