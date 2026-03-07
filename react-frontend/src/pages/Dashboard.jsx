@@ -56,6 +56,20 @@ const Dashboard = () => {
 		loadApplications();
 	}, []); // Empty dependency array - run only once
 
+	// Poll for application updates when there are pending/processing applications
+	useEffect(() => {
+		const hasPending = applications.some(
+			app => app.processing_status === 'pending' || app.processing_status === 'processing'
+		);
+		if (!hasPending) return;
+
+		const interval = setInterval(() => {
+			loadApplications(true);
+		}, 5000);
+
+		return () => clearInterval(interval);
+	}, [applications]);
+
 	const loadJobs = async (force = false) => {
 		try {
 			const token = localStorage.getItem('companyxyz-token');
@@ -145,10 +159,9 @@ const Dashboard = () => {
 
 		setApplyingJobId(jobId);
 		
-		// Close modal and show success immediately for better UX
+		// Close modal immediately for better UX
 		setShowCVModal(false);
 		setSelectedJobForApplication(null);
-		showToast('Application submitted! CV scoring is being processed...', 'success');
 		
 		try {
 			const token = localStorage.getItem('companyxyz-token');
@@ -169,12 +182,23 @@ const Dashboard = () => {
 			if (response.ok) {
 				// Application successful - backend is processing CV score
 				console.log('Application submitted:', data);
+				showToast('Application submitted! CV scoring is being processed...', 'success');
+				// Optimistically add to local applications so button changes instantly
+				setApplications(prev => [...prev, {
+					job_id: jobId.toString(),
+					status: 'pending',
+					processing_status: 'pending',
+					applied_at: new Date().toISOString()
+				}]);
 				// Invalidate applications cache so next load gets fresh data
 				invalidateApplications();
-				// Don't reload immediately - let user continue browsing
-				// Application will appear after CV scoring completes (30-60s)
 			} else {
 				showToast(data.error || 'Failed to submit application', 'error');
+				// If already applied, force-reload applications so the button state updates
+				if (data.error && data.error.toLowerCase().includes('already applied')) {
+					invalidateApplications();
+					await loadApplications(true);
+				}
 			}
 		} catch (error) {
 			console.error('Error applying for job:', error);

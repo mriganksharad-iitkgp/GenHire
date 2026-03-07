@@ -84,18 +84,26 @@ def get_recruiter_cost_statistics(current_user):
         
         # Get applications for recruiter's jobs (only visible ones - CV scoring complete)
         job_ids = [str(job['_id']) for job in jobs]
-        applications = list(db.applications.find({
+        all_applications = list(db.applications.find({
             'job_id': {'$in': job_ids},
             'is_visible': True
         })) if job_ids else []
-        applications_count = len(applications)
+        applications_count = len(all_applications)
         
-        # Count interviews completed (same logic as dashboard OverviewMetrics)
-        # Interviews = applications with status 'interviewed', 'selected', or 'rejected'
-        interviews_count = len([app for app in applications if str(app.get('status', '')).lower() in ['interviewed', 'selected', 'rejected']])
+        # Count ALL interviews (for summary/overview stats)
+        all_interviews_count = len([app for app in all_applications if str(app.get('status', '')).lower() in ['interviewed', 'selected', 'rejected']])
+        
+        # Count interviews in the LAST 30 DAYS only (for credit/quota calculation)
+        # Use updated_at (when status was changed to interviewed), not applied_at (when candidate applied)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        interviews_count_last_30_days = len([
+            app for app in all_applications
+            if str(app.get('status', '')).lower() in ['interviewed', 'selected', 'rejected']
+            and app.get('updated_at', datetime.min) >= thirty_days_ago
+        ])
         
         # Debug log
-        print(f"[Cost Stats] Applications: {applications_count}, Interviews: {interviews_count}")
+        print(f"[Cost Stats] Applications: {applications_count}, All Interviews: {all_interviews_count}, Last 30 days: {interviews_count_last_30_days}")
         
         # Get recruiter's subscription
         subscription = db.subscriptions.find_one({
@@ -108,23 +116,28 @@ def get_recruiter_cost_statistics(current_user):
         if subscription and subscription.get('plan_id'):
             plan = db.plans.find_one({'_id': subscription['plan_id']})
         
-        # Calculate credits using shared service
+        # Calculate credits using shared service (uses last-30-days interviews for quota)
         credits_data = calculate_recruiter_credits(
             recruiter=current_user,
             jobs=jobs,
             applications_count=applications_count,
-            interviews_count=interviews_count,
+            interviews_count=interviews_count_last_30_days,
             plan=plan,
             add_variation=True
         )
         
-        # Generate usage history
+        # Generate usage history from real interview data
         usage_history = generate_usage_history(
             credits_data['breakdown']['cloudflare'],
             credits_data['breakdown']['nlp'],
             credits_data['breakdown']['llm'],
-            weeks=6
+            weeks=6,
+            db=db,
+            job_ids=job_ids
         )
+        
+        # Use last-30-days interview count for credit quota
+        interviews_used_for_quota = interviews_count_last_30_days
         
         # Generate job breakdown
         job_breakdown = generate_job_breakdown(jobs, max_jobs=10)
@@ -139,7 +152,7 @@ def get_recruiter_cost_statistics(current_user):
             ('Job Description Matching', 'nlp', 15),
         ]
         
-        sorted_applications = sorted(applications, key=lambda x: x.get('applied_at', datetime.min), reverse=True)[:10]
+        sorted_applications = sorted(all_applications, key=lambda x: x.get('applied_at', datetime.min), reverse=True)[:10]
         for i, app in enumerate(sorted_applications):
             activity_type = activity_types[i % len(activity_types)]
             job = next((j for j in jobs if str(j['_id']) == app.get('job_id')), None)
@@ -178,9 +191,9 @@ def get_recruiter_cost_statistics(current_user):
             },
             'plan': {
                 'name': credits_data['plan']['name'],
-                'interviews_allowed': subscription.get('interviews_allowed', 0) if subscription else 0,
-                'interviews_remaining': subscription.get('interviews_remaining', 0) if subscription else 0,
-                'interviews_used': subscription.get('interviews_used', 0) if subscription else 0,
+                'interviews_allowed': (subscription.get('interviews_allowed') or 2) if subscription else 2,
+                'interviews_remaining': max(0, ((subscription.get('interviews_allowed') or 2) - interviews_used_for_quota) if subscription else (2 - interviews_used_for_quota)),
+                'interviews_used': min(interviews_used_for_quota, (subscription.get('interviews_allowed') or 2) if subscription else 2),
                 'expires_at': subscription.get('expires_at').strftime('%Y-%m-%d') if subscription and subscription.get('expires_at') else None
             },
             'credits': {
@@ -207,7 +220,7 @@ def get_recruiter_cost_statistics(current_user):
             'summary': {
                 'totalJobs': credits_data['activity']['total_jobs'],
                 'totalApplicants': credits_data['activity']['total_applicants'],
-                'totalInterviews': credits_data['activity']['total_interviews'],
+                'totalInterviews': interviews_count_last_30_days,
                 'activeJobs': credits_data['activity']['active_jobs']
             }
         }

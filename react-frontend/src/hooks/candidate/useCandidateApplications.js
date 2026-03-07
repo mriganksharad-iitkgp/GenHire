@@ -5,7 +5,7 @@ import { useCandidateData } from "../../contexts/CandidateDataContext";
 // Helper function to map application data
 const mapApplication = (a) => {
   const mappedStatus = (a.status || "pending").replace(/\b\w/g, (c) =>
-    c.toUpperCase()
+    c.toUpperCase(),
   );
 
   return {
@@ -18,12 +18,13 @@ const mapApplication = (a) => {
     position: a.job_title || a.job_details?.title || "",
     appliedDate: a.applied_at,
     status: mappedStatus,
+    processingStatus: a.processing_status || "completed",
     cvScore:
       typeof a.cv_score === "number"
         ? Math.round(a.cv_score)
         : a.similarity_score
-        ? Math.round(a.similarity_score * 100)
-        : null,
+          ? Math.round(a.similarity_score * 100)
+          : null,
     interviewScore:
       typeof a.interview_score === "number"
         ? Math.round(a.interview_score)
@@ -85,7 +86,7 @@ export default function useCandidateApplications(toast) {
         inflightRef.current = false;
       }
     },
-    [loadApplicationsCached]
+    [loadApplicationsCached],
   );
 
   useEffect(() => {
@@ -100,6 +101,21 @@ export default function useCandidateApplications(toast) {
     }
   }, [load, applicationsLoaded, cachedApplications]);
 
+  // Poll for updates when there are pending/processing applications
+  useEffect(() => {
+    const hasPending = applications.some(
+      (a) =>
+        a.processingStatus === "pending" || a.processingStatus === "processing",
+    );
+    if (!hasPending) return;
+
+    const interval = setInterval(() => {
+      load(true); // force reload from API
+    }, 5000); // poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [applications, load]);
+
   const openReport = useCallback(async (app) => {
     try {
       const report = await getInterviewReport(app.id);
@@ -112,7 +128,7 @@ export default function useCandidateApplications(toast) {
 
   const companies = useMemo(
     () => Array.from(new Set(applications.map((a) => a.company))).sort(),
-    [applications]
+    [applications],
   );
 
   return { applications, loading, load, openReport, companies };

@@ -99,6 +99,11 @@ export const createJob = (payload) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+export const generateJobWithAI = (prompt) =>
+  request("/jobs/generate-ai", {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+  });
 export const updateJob = (jobId, payload) =>
   request(`/jobs/${jobId}`, {
     method: "PUT",

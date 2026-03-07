@@ -141,6 +141,14 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
             </svg>
           </button>
           <div className={styles.mobileBrand}>
+            <div className={styles.logoIcon}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 7h-9"></path>
+                <path d="M14 17H5"></path>
+                <circle cx="17" cy="17" r="3"></circle>
+                <circle cx="7" cy="7" r="3"></circle>
+              </svg>
+            </div>
             <h2>SmartHire</h2>
             <span className={styles.adminBadge}>Admin</span>
           </div>
@@ -155,6 +163,14 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
       {/* Sidebar */}
       <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.sidebarHeader}>
+          <div className={styles.logoIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 7h-9"></path>
+              <path d="M14 17H5"></path>
+              <circle cx="17" cy="17" r="3"></circle>
+              <circle cx="7" cy="7" r="3"></circle>
+            </svg>
+          </div>
           <h2>SmartHire</h2>
           <span className={styles.adminBadge}>Admin</span>
         </div>

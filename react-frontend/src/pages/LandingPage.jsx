@@ -514,20 +514,25 @@ const LandingPage = () => {
               <div className={styles.pricingHeader}>
                 <h3>Enterprise</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.amount}>Custom</span>
+                  <span className={styles.currency}>₹</span>
+                  <span className={styles.amount}>10,000</span>
+                  <span className={styles.period}>/month</span>
                 </div>
                 <p>For large organizations</p>
               </div>
               <ul className={styles.pricingFeatures}>
                 <li><span>✓</span> Unlimited interviews</li>
                 <li><span>✓</span> Custom integrations</li>
-                <li><span>✓</span> Dedicated support</li>
-                <li><span>✓</span> SLA guarantee</li>
+                <li><span>✓</span> Dedicated support & SLA</li>
                 <li><span>✓</span> On-premise option</li>
                 <li><span>✓</span> Custom branding</li>
+                <li><span>✓</span> API access</li>
               </ul>
-              <button className={styles.pricingBtn}>
-                Contact Sales
+              <button 
+                className={styles.pricingBtn}
+                onClick={() => navigate("/recruiter-signup")}
+              >
+                Get Started
               </button>
             </div>
           </div>

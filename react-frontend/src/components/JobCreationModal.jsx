@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { generateJobWithAI } from '../services/api';
 import styles from './JobCreationModal.module.css';
 
 // Predefined data for auto-suggestions
@@ -181,6 +182,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
   const [jdFile, setJdFile] = useState(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
   
   const dropdownRefs = {
     department: useRef(null),
@@ -217,6 +221,38 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle AI generation
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    setAiError('');
+    try {
+      const response = await generateJobWithAI(aiPrompt.trim());
+      const ai = response.job_data;
+      setJobData({
+        title: ai.title || '',
+        department: ai.department || '',
+        location: ai.location || 'Remote',
+        type: ai.type || 'Full-time',
+        experience: ai.experience || '',
+        salary: ai.salary || '',
+        deadline: getDefaultDeadline(),
+        skills: Array.isArray(ai.skills) ? ai.skills : [],
+        description: ai.description || '',
+        responsibilities: Array.isArray(ai.responsibilities) ? ai.responsibilities.join('\n') : '',
+        requirements: Array.isArray(ai.requirements) ? ai.requirements.join('\n') : '',
+        benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
+        status: 'draft',
+        minimum_cv_score: ai.minimum_cv_score || 50
+      });
+      setAiPrompt('');
+    } catch (err) {
+      setAiError(err.message || 'Failed to generate. Please try again.');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
 
   // Handle template selection
   const applyTemplate = (templateName) => {
@@ -425,6 +461,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     setActiveDropdown(null);
     setShowTemplates(false);
     setJdFile(null);
+    setAiPrompt('');
+    setAiError('');
   };
 
   const handleCancel = () => {
@@ -508,6 +546,41 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* AI Job Description Generator */}
+          <div className={styles.aiSection}>
+            <div className={styles.aiHeader}>
+              <h3><i className="fa fa-magic"></i> Create with AI</h3>
+              <span className={styles.aiBadge}>Powered by AI</span>
+            </div>
+            <p className={styles.aiSubtext}>
+              Describe the role in a few words and AI will fill the entire form for you instantly.
+            </p>
+            <div className={styles.aiInputRow}>
+              <input
+                type="text"
+                className={styles.aiInput}
+                value={aiPrompt}
+                onChange={(e) => { setAiPrompt(e.target.value); setAiError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAiGenerate(); } }}
+                placeholder='e.g. "Senior React Developer with 5 years experience in Bangalore" or "Entry level data analyst"'
+                disabled={isAiGenerating}
+              />
+              <button
+                type="button"
+                className={styles.aiGenerateButton}
+                onClick={handleAiGenerate}
+                disabled={isAiGenerating || !aiPrompt.trim()}
+              >
+                {isAiGenerating ? (
+                  <><i className="fa fa-spinner fa-spin"></i> Generating...</>
+                ) : (
+                  <><i className="fa fa-magic"></i> Generate JD</>
+                )}
+              </button>
+            </div>
+            {aiError && <p className={styles.aiError}><i className="fa fa-exclamation-circle"></i> {aiError}</p>}
           </div>
 
           <div className={styles.formGrid}>

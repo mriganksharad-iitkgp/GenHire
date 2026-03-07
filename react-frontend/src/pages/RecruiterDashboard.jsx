@@ -74,13 +74,12 @@ const RecruiterDashboard = () => {
   const [selectedPosition, setSelectedPosition] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [companyProfile, setCompanyProfile] = useState({
-    companyName: "TechCorp Solutions",
-    industry: "Technology",
-    location: "San Francisco, CA",
-    size: "100-500 employees",
-    website: "https://techcorp.com",
-    description:
-      "Leading technology solutions provider focused on AI and machine learning innovations.",
+    companyName: "",
+    industry: "",
+    location: "",
+    size: "",
+    website: "",
+    description: "",
   });
 
   // Jobs and applications via hooks
@@ -108,14 +107,12 @@ const RecruiterDashboard = () => {
       const profileData = await getProfile();
       if (profileData?.user_type === "recruiter") {
         setCompanyProfile({
-          companyName: profileData.company_name || "TechCorp Solutions",
-          industry: profileData.company_industry || "Technology",
-          location: profileData.location || "San Francisco, CA",
-          size: profileData.company_size || "100-500 employees",
-          website: profileData.company_website || "https://techcorp.com",
-          description:
-            profileData.company_description ||
-            "Leading technology solutions provider focused on AI and machine learning innovations.",
+          companyName: profileData.company_name || "",
+          industry: profileData.company_industry || "",
+          location: profileData.company_location || profileData.location || "",
+          size: profileData.company_size || "",
+          website: profileData.company_website || "",
+          description: profileData.company_description || "",
         });
       }
     } catch (error) {
@@ -456,6 +453,7 @@ const RecruiterDashboard = () => {
       await apiUpdateCompanyProfile({
         company_name: companyProfile.companyName,
         company_industry: companyProfile.industry,
+        company_location: companyProfile.location,
         company_size: companyProfile.size,
         company_website: companyProfile.website,
         company_description: companyProfile.description,

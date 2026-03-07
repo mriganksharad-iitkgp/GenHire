@@ -235,29 +235,92 @@ def aggregate_recruiter_statistics(recruiters_data):
     }
 
 
-def generate_usage_history(cloudflare_used, nlp_used, llm_used, weeks=6):
+def generate_usage_history(cloudflare_used, nlp_used, llm_used, weeks=6, db=None, job_ids=None):
     """
-    Generate usage history for visualization charts based on real usage.
-    Shows progressive usage over the specified number of weeks (deterministic).
+    Generate usage history for visualization charts.
+    If db and job_ids are provided, uses real per-week interview data from MongoDB.
+    Otherwise falls back to a deterministic estimate.
     """
     today = datetime.utcnow()
     history = []
-    
+
+    # Try to get real weekly data from the database
+    real_weekly = None
+    if db is not None and job_ids:
+        try:
+            start_date = today - timedelta(weeks=weeks)
+            # Query applications that represent interviews (status = interviewed/selected/rejected)
+            pipeline = [
+                {
+                    '$match': {
+                        'job_id': {'$in': job_ids},
+                        'is_visible': True,
+                        'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                        'updated_at': {'$gte': start_date}
+                    }
+                },
+                {
+                    '$group': {
+                        '_id': {
+                            '$subtract': [
+                                {'$week': '$updated_at'},
+                                {'$week': start_date}
+                            ]
+                        },
+                        'count': {'$sum': 1},
+                        'min_date': {'$min': '$updated_at'}
+                    }
+                }
+            ]
+            results = list(db.applications.aggregate(pipeline))
+
+            # Build a week-number to count map
+            # We'll bucket by actual calendar weeks instead
+            week_counts = [0] * weeks
+            for app in db.applications.find({
+                'job_id': {'$in': job_ids},
+                'is_visible': True,
+                'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                'updated_at': {'$gte': start_date}
+            }, {'updated_at': 1}):
+                app_date = app.get('updated_at')
+                if app_date:
+                    delta_days = (today - app_date).days
+                    week_index = weeks - 1 - (delta_days // 7)
+                    if 0 <= week_index < weeks:
+                        week_counts[week_index] += 1
+
+            real_weekly = week_counts
+        except Exception as e:
+            print(f"[Weekly Trend] Error querying real data: {e}")
+            real_weekly = None
+
     for i in range(weeks):
         week_date = today - timedelta(weeks=(weeks - 1 - i))
-        # Progressive factor - usage grows over time (deterministic)
-        factor = (i + 1) / weeks
-        # Small variation based on week number (deterministic, not random)
-        variation = 1.0 + (0.1 * ((i % 3) - 1))  # Creates -0.1, 0, +0.1 pattern
-        
-        history.append({
-            'date': week_date.strftime('%Y-%m-%d'),
-            'week': f'Week {i + 1}',
-            'cloudflare': int(cloudflare_used * factor / weeks * variation),
-            'nlp': int(nlp_used * factor / weeks * variation),
-            'llm': int(llm_used * factor / weeks * variation)
-        })
-    
+
+        if real_weekly is not None:
+            interviews = real_weekly[i]
+            history.append({
+                'date': week_date.strftime('%Y-%m-%d'),
+                'week': f'Week {i + 1}',
+                'interviews': interviews,
+                'cloudflare': int(interviews * ACTIVITY_COSTS.get('interview', 150) * 0.35),
+                'nlp': int(interviews * ACTIVITY_COSTS.get('cv_analysis', 25)),
+                'llm': int(interviews * ACTIVITY_COSTS.get('interview', 150) * 0.65)
+            })
+        else:
+            # Fallback: deterministic estimate
+            factor = (i + 1) / weeks
+            variation = 1.0 + (0.1 * ((i % 3) - 1))
+            history.append({
+                'date': week_date.strftime('%Y-%m-%d'),
+                'week': f'Week {i + 1}',
+                'interviews': 0,
+                'cloudflare': int(cloudflare_used * factor / weeks * variation),
+                'nlp': int(nlp_used * factor / weeks * variation),
+                'llm': int(llm_used * factor / weeks * variation)
+            })
+
     return history
 
 

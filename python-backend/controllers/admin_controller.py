@@ -1537,6 +1537,22 @@ class AdminController:
                     add_variation=False  # Use deterministic calculation
                 )
                 
+                # Add subscription/plan enrollment details
+                if subscription:
+                    started = subscription.get('created_at') or subscription.get('start_date')
+                    expires = subscription.get('expires_at') or subscription.get('end_date')
+                    recruiter_stats['subscription'] = {
+                        'status': subscription.get('status', 'unknown'),
+                        'start_date': started.isoformat() if started else None,
+                        'end_date': expires.isoformat() if expires else None,
+                    }
+                else:
+                    recruiter_stats['subscription'] = {
+                        'status': 'none',
+                        'start_date': None,
+                        'end_date': None,
+                    }
+                
                 recruiters_data.append(recruiter_stats)
             
             # Aggregate overview statistics

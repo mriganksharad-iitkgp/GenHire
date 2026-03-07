@@ -1,10 +1,13 @@
 import datetime
 import os
 import uuid
+import json
+import re
 import logging
 from bson import ObjectId
 from werkzeug.utils import secure_filename
 from services.pdf_parser_service import get_pdf_parser
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
@@ -310,3 +313,87 @@ class JobController:
             },
             'applications': applications
         }, 200
+
+    def generate_jd_with_ai(self, prompt_text):
+        """Generate a complete job description using Groq AI"""
+        try:
+            load_dotenv()
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            if not groq_api_key:
+                return {'error': 'Groq API key not configured'}, 500
+
+            from groq import Groq
+
+            client = Groq(api_key=groq_api_key)
+
+            system_prompt = """You are an expert HR recruiter and job description writer. Based on the user's input, generate a complete, professional job posting.
+
+Return ONLY a valid JSON object (no markdown, no code fences, no explanation) with exactly these fields:
+
+{
+  "title": "Exact job title",
+  "department": "One of: Engineering, Product, Design, Data & Analytics, Marketing, Sales, Customer Success, Operations, Finance, Human Resources, Legal, Security, DevOps, Quality Assurance, Research & Development",
+  "location": "One of: Remote, Bangalore, Karnataka, Mumbai, Maharashtra, Delhi, NCR, Hyderabad, Telangana, Chennai, Tamil Nadu, Pune, Maharashtra, Kolkata, West Bengal, Remote (India), Remote (Global), or any other relevant location",
+  "type": "One of: Full-time, Part-time, Contract, Internship, Freelance, Remote",
+  "experience": "One of: Entry Level (0-1 years), 1-2 years, 2-4 years, 3-5 years, 4-6 years, 5-7 years, 6-8 years, 7+ years, 10+ years",
+  "salary": "Indian salary range format like ₹12,00,000 - ₹18,00,000. Pick from: ₹3,00,000 - ₹5,00,000, ₹5,00,000 - ₹8,00,000, ₹8,00,000 - ₹12,00,000, ₹12,00,000 - ₹18,00,000, ₹18,00,000 - ₹25,00,000, ₹25,00,000 - ₹35,00,000, ₹35,00,000 - ₹50,00,000, ₹50,00,000 - ₹75,00,000, ₹75,00,000 - ₹1,00,00,000, ₹1,00,00,000 - ₹1,50,00,000",
+  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+  "description": "A compelling 2-3 sentence job description paragraph",
+  "responsibilities": ["responsibility1", "responsibility2", "responsibility3", "responsibility4", "responsibility5"],
+  "requirements": ["requirement1", "requirement2", "requirement3", "requirement4", "requirement5"],
+  "benefits": ["benefit1", "benefit2", "benefit3", "benefit4", "benefit5"],
+  "minimum_cv_score": 50
+}
+
+Rules:
+- skills should have 4-8 relevant technical/soft skills
+- responsibilities, requirements, benefits should each have 4-6 items
+- description should be professional, engaging, and 2-3 sentences
+- All values must match the predefined options exactly where specified
+- If the user mentions specific details (salary, location, etc.), use those
+- Return ONLY the JSON object, nothing else"""
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Generate a complete job posting for: {prompt_text}"}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                response_format={"type": "json_object"}
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            
+            # Clean markdown code fences if present
+            if response_text.startswith('```'):
+                response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
+                response_text = re.sub(r'\s*```$', '', response_text)
+
+            job_data = json.loads(response_text)
+
+            # Validate required fields exist
+            required_fields = ['title', 'department', 'location', 'type', 'experience', 
+                             'salary', 'skills', 'description', 'responsibilities', 
+                             'requirements', 'benefits']
+            for field in required_fields:
+                if field not in job_data:
+                    return {'error': f'AI response missing field: {field}'}, 500
+
+            # Ensure array fields are lists
+            for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
+                if not isinstance(job_data[field], list):
+                    job_data[field] = [job_data[field]]
+
+            # Set defaults
+            job_data.setdefault('minimum_cv_score', 50)
+
+            return {'job_data': job_data}, 200
+
+        except json.JSONDecodeError as e:
+            logger.error(f"AI response JSON parse error: {e}")
+            return {'error': 'Failed to parse AI response. Please try again.'}, 500
+        except Exception as e:
+            logger.error(f"AI JD generation error: {e}")
+            return {'error': f'AI generation failed: {str(e)}'}, 500

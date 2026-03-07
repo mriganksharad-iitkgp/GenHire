@@ -48,38 +48,59 @@ class PaymentConfig:
     # Default Plans Configuration
     # These are seeded if no plans exist in the database
     # Prices in paise (1 INR = 100 paise)
-    # - Free Tier: 2 free interviews + one-time ₹200 account credit
-    # - Enterprise: 1 month validity, 100 interviews + ₹10,000 account credit
+    # - Free Tier: 2 free interviews
+    # - Recruiter Pro: ₹4,999/month, 100 interviews
+    # - Enterprise: ₹10,000/month, unlimited interviews
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
         "free": {
             "name": "Free Tier",
             "slug": "free",
-            "description": "Starter free tier with limited interviews and a small account credit",
+            "description": "Starter free tier with limited interviews",
             "price_paise": 0,  # Free plan
             "interviews_allowed": 2,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
             "features": [
                 "2 AI-powered interviews",
-                "One-time ₹200 account credit",
-                "Basic access to features",
+                "Basic candidate analytics",
+                "Smart CV matching",
             ],
             "is_active": True,
             "display_order": 1,
         },
-        "enterprise": {
-            "name": "Enterprise",
-            "slug": "enterprise",
-            "description": "Enterprise plan with 1 month validity, 100 interviews and account credit",
-            "price_paise": 999900,  # ₹9,999.00
+        "professional": {
+            "name": "Recruiter Pro",
+            "slug": "professional",
+            "description": "Professional plan for growing teams with 100 interviews per month",
+            "price_paise": 499900,  # ₹4,999.00
             "interviews_allowed": 100,
             "validity_days": 30,  # 1 month validity
             "features": [
-                "100 AI-powered interviews",
-                "Includes ₹10,000 account credit",
-                "Priority support and integrations",
+                "100 AI-powered interviews/month",
+                "Advanced analytics & reporting",
+                "CV screening & ranking",
+                "Proctoring features",
+                "Priority support",
             ],
             "is_active": True,
             "display_order": 2,
+            "is_popular": True,
+        },
+        "enterprise": {
+            "name": "Enterprise",
+            "slug": "enterprise",
+            "description": "Enterprise plan with unlimited interviews for large organizations",
+            "price_paise": 1000000,  # ₹10,000.00
+            "interviews_allowed": -1,  # Unlimited
+            "validity_days": 30,  # 1 month validity
+            "features": [
+                "Unlimited AI-powered interviews",
+                "Custom integrations",
+                "Dedicated support & SLA guarantee",
+                "Custom branding",
+                "On-premise option",
+            ],
+            "is_active": True,
+            "display_order": 3,
         },
     }
 

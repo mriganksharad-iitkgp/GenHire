@@ -1,12 +1,12 @@
-/* Recruiter Cost Statistics Styles */
+/* Recruiter Usage Dashboard Styles */
 .pageWrapper {
-  padding-top: 70px; /* Account for fixed navbar */
+  padding-top: 70px;
   min-height: 100vh;
   background: #f8fafc;
 }
 
-.costStatistics {
-  max-width: 1400px;
+.usageDashboard {
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -55,27 +55,16 @@
 
 /* Page Header */
 .pageHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
   padding: 2rem;
   background: white;
   border-bottom: 1px solid #e2e8f0;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-}
-
-.headerContent {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .headerContent h1 {
   font-size: 1.75rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0;
+  margin: 0 0 0.25rem;
 }
 
 .headerContent p {
@@ -84,687 +73,406 @@
   margin: 0;
 }
 
-.summaryBadges {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+/* Overview Cards */
+.overviewCards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  padding: 1.5rem 2rem;
 }
 
-.summaryBadge {
+.overviewCard {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 1rem;
-  background: #f1f5f9;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.summaryBadge strong {
-  color: #1e293b;
-  font-weight: 700;
-}
-
-.headerActions {
-  display: flex;
   gap: 1rem;
-  align-items: center;
-}
-
-.periodSelect {
-  padding: 0.625rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  padding: 1.25rem;
   background: white;
-  color: #1e293b;
-  font-size: 0.95rem;
-  cursor: pointer;
-  outline: none;
-  min-width: 140px;
-}
-
-.periodSelect:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.downloadBtn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
 }
 
-.downloadBtn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+.overviewCard:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.overviewIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.overviewInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.overviewLabel {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.overviewValue {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 /* Sections */
 .section {
-  padding: 2rem;
+  padding: 0 2rem 1.5rem;
 }
 
 .sectionHeader {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .sectionHeader h2 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0 0 0.25rem;
 }
 
 .sectionHeader p {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: #64748b;
   margin: 0;
 }
 
-/* Credit Bar */
-.creditBarContainer {
+/* Interview Credits Card */
+.interviewCreditsCard {
+  display: flex;
+  align-items: center;
   background: white;
   border-radius: 16px;
-  padding: 2rem;
   border: 1px solid #e2e8f0;
+  padding: 2rem;
+  gap: 3rem;
 }
 
-.creditBarHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
+.creditsLeft {
+  flex: 1;
 }
 
-.creditBarTitle {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.creditBarTitle h3 {
-  font-size: 1.125rem;
+.creditsLeft h2 {
+  font-size: 1.35rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0;
+  margin: 0 0 0.25rem;
 }
 
-.creditPercentage {
+.creditsSubtitle {
   font-size: 0.9rem;
   color: #64748b;
+  margin: 0 0 1.5rem;
 }
 
-.creditBarValues {
+.creditsNumbers {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 1.25rem;
 }
 
-.usedValue {
+.creditsStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.creditsStatValue {
   font-size: 2rem;
   font-weight: 700;
   color: #1e293b;
 }
 
-.separator {
-  color: #94a3b8;
-  font-size: 1.25rem;
-}
-
-.totalValue {
-  font-size: 1.25rem;
+.creditsStatLabel {
+  font-size: 0.8rem;
   color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.creditBarTrack {
-  height: 16px;
+.creditsDivider {
+  width: 1px;
+  height: 40px;
   background: #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
+}
+
+.renewalInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
   margin-bottom: 1rem;
 }
 
-.creditBarFill {
-  height: 100%;
-  border-radius: 8px;
-  transition: width 1s ease;
-}
-
-.creditBarHint {
-  font-size: 0.9rem;
-  color: #64748b;
-}
-
-/* Gauge Charts */
-.gaugesGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-}
-
-.gaugeCard {
-  background: white;
-  border-radius: 16px;
-  padding: 1.5rem;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
-
-.gaugeCard:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.gaugeHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.gaugeIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-}
-
-.gaugeHeader h3 {
-  font-size: 1rem;
+.renewalInfo span {
+  color: #6366f1;
   font-weight: 600;
-  color: #1e293b;
+}
+
+/* Upgrade Prompt */
+.upgradePrompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 12px;
+  border: 1px solid #fcd34d;
+}
+
+.upgradeText strong {
+  font-size: 0.9rem;
+  color: #92400e;
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.upgradeText p {
+  font-size: 0.8rem;
+  color: #78350f;
   margin: 0;
 }
 
-.gaugeContainer {
+.upgradeBtn {
+  padding: 0.625rem 1.25rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.upgradeBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* Ring Chart */
+.creditsRight {
+  flex-shrink: 0;
+}
+
+.ringContainer {
   position: relative;
-  height: 120px;
-  margin-bottom: 1rem;
+  width: 160px;
+  height: 160px;
 }
 
-.gaugeSvg {
+.ringChart {
   width: 100%;
   height: 100%;
 }
 
-.gaugeSvg svg {
-  width: 100%;
-  height: 100%;
-}
-
-.gaugeValue {
+.ringCenter {
   position: absolute;
-  bottom: 0;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   text-align: center;
 }
 
-.gaugePercentage {
+.ringValue {
   display: block;
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
   color: #1e293b;
 }
 
-.gaugeLabel {
+.ringLabel {
   font-size: 0.8rem;
   color: #64748b;
 }
 
-.gaugeStats {
-  display: flex;
-  justify-content: space-between;
-}
-
-.gaugeStat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.gaugeStatLabel {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.gaugeStatValue {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-/* Service Cards */
-.serviceCardsGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.serviceCard {
+/* Weekly Trend Bar Chart */
+.trendCard {
   background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 16px;
   border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
+  padding: 2rem;
 }
 
-.serviceCard:hover {
-  border-color: #c7d2fe;
-}
-
-.serviceCardHeader {
+.barChart {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.serviceInfo {
-  display: flex;
-  align-items: center;
+  height: 200px;
   gap: 1rem;
 }
 
-.serviceIcon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+.barColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  gap: 0.5rem;
+}
+
+.barValue {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.barTrack {
+  flex: 1;
+  width: 100%;
+  max-width: 48px;
+  background: #f1f5f9;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.barFill {
+  width: 100%;
+  background: linear-gradient(180deg, #6366f1, #a78bfa);
+  border-radius: 8px 8px 0 0;
+  transition: height 1s ease;
+  min-height: 4px;
+}
+
+.barLabel {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* Plan Info Card */
+.planInfoCard {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
+  justify-content: space-between;
+  gap: 2rem;
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem 2rem;
 }
 
-.serviceInfo h4 {
-  font-size: 1rem;
+.planInfoLeft {
+  flex: 1;
+}
+
+.planBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  border-radius: 20px;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.25rem;
-}
-
-.serviceInfo p {
-  font-size: 0.8rem;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.servicePercentage {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.serviceBarTrack {
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
+  color: #6366f1;
   margin-bottom: 0.75rem;
 }
 
-.serviceBarFill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.5s ease;
+.planBadge svg {
+  color: #f59e0b;
 }
 
-.serviceStats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.875rem;
-  color: #64748b;
-}
-
-/* Job Breakdown */
-.jobBreakdownCard {
-  background: white;
-  border-radius: 16px;
-  padding: 1.5rem;
-  border: 1px solid #e2e8f0;
-}
-
-.chartLegend {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.legendEntry {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #475569;
-}
-
-.legendColor {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.jobsList {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.jobRow {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.jobInfo {
-  min-width: 180px;
-}
-
-.jobInfo h4 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.25rem;
-}
-
-.jobInfo span {
-  font-size: 0.8rem;
-  color: #94a3b8;
-}
-
-.jobBarContainer {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.jobBarTrack {
-  flex: 1;
-  height: 20px;
-  background: #f1f5f9;
-  border-radius: 4px;
-  display: flex;
-  overflow: hidden;
-}
-
-.jobBarSegment {
-  height: 100%;
-  transition: width 0.5s ease;
-}
-
-.jobBarSegment:first-child {
-  border-radius: 4px 0 0 4px;
-}
-
-.jobBarSegment:last-child {
-  border-radius: 0 4px 4px 0;
-}
-
-.jobTotal {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1e293b;
-  min-width: 80px;
-  text-align: right;
-}
-
-/* Activity Card */
-.activityCard {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-}
-
-.activityList {
-  padding: 0;
-}
-
-.activityItem {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  transition: background 0.2s ease;
-}
-
-.activityItem:hover {
-  background: #f8fafc;
-}
-
-.activityIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.125rem;
-  flex-shrink: 0;
-}
-
-.activityDetails {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.activityMain {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.activityAction {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.activityJob {
-  font-size: 0.875rem;
-  color: #64748b;
-}
-
-.activityJob::before {
-  content: '•';
-  margin-right: 0.5rem;
-}
-
-.activityTime {
-  font-size: 0.8rem;
-  color: #94a3b8;
-}
-
-.activityCredits {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-}
-
-.creditAmount {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #ef4444;
-}
-
-.creditService {
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.viewAllBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 1rem;
-  background: #f8fafc;
-  border: none;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #6366f1;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.viewAllBtn:hover {
-  background: #e0e7ff;
-}
-
-/* Empty State */
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 2rem;
-  text-align: center;
-}
-
-.emptyState .emptyIcon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.emptyState h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.5rem;
-}
-
-.emptyState p {
+.planDescription {
   font-size: 0.9rem;
   color: #64748b;
   margin: 0;
-  max-width: 280px;
-}
-
-/* Tips Card */
-.tipsCard {
-  display: flex;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border-radius: 16px;
-}
-
-.tipsIcon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.tipsContent h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #92400e;
-  margin: 0 0 0.75rem;
-}
-
-.tipsContent ul {
-  margin: 0;
-  padding-left: 1.25rem;
-}
-
-.tipsContent li {
-  font-size: 0.9rem;
-  color: #78350f;
-  margin-bottom: 0.5rem;
   line-height: 1.5;
 }
 
-.tipsContent li:last-child {
-  margin-bottom: 0;
+.managePlanBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.managePlanBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
-  .gaugesGrid {
+  .overviewCards {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .interviewCreditsCard {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2rem;
+  }
+
+  .creditsRight {
+    display: flex;
+    justify-content: center;
   }
 }
 
 @media (max-width: 768px) {
-  .pageHeader {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .headerActions {
-    width: 100%;
-    flex-direction: column;
-  }
-  
-  .periodSelect, .downloadBtn {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .section {
-    padding: 0 1rem 1.5rem;
-  }
-  
-  .section:first-of-type {
-    padding-top: 1.5rem;
-  }
-  
-  .gaugesGrid {
+  .overviewCards {
     grid-template-columns: 1fr;
+    padding: 1rem;
   }
-  
-  .creditBarHeader {
-    flex-direction: column;
-    gap: 1rem;
+
+  .section {
+    padding: 0 1rem 1.25rem;
   }
-  
-  .jobRow {
-    flex-direction: column;
-    align-items: flex-start;
+
+  .pageHeader {
+    padding: 1.5rem 1rem;
   }
-  
-  .jobInfo {
-    min-width: 100%;
-    margin-bottom: 0.5rem;
-  }
-  
-  .jobBarContainer {
-    width: 100%;
-  }
-  
-  .activityItem {
+
+  .creditsNumbers {
     flex-wrap: wrap;
-  }
-  
-  .activityCredits {
-    width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-    padding-left: 56px;
-  }
-  
-  .tipsCard {
-    flex-direction: column;
     gap: 1rem;
+  }
+
+  .upgradePrompt {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .barChart {
+    height: 160px;
+  }
+
+  .planInfoCard {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .managePlanBtn {
+    justify-content: center;
   }
 }

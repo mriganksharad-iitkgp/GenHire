@@ -116,6 +116,23 @@
   margin-bottom: 2.5rem;
 }
 
+.logoIcon {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin: 0 auto 1rem auto;
+}
+
+.logoIcon svg {
+  width: 28px;
+  height: 28px;
+}
+
 .logoSection h1 {
   font-size: 2rem;
   font-weight: 800;

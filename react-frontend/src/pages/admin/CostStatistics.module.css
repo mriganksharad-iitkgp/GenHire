@@ -605,3 +605,274 @@
     width: 100%;
   }
 }
+
+/* Revenue vs Cost Section */
+.revenueGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  padding: 0 2rem 2rem;
+}
+
+.revenueCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.revenueCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.revenueIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.revenueLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.revenueAmount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.profitPositive {
+  color: #10b981;
+}
+
+.profitNegative {
+  color: #ef4444;
+}
+
+.revenueBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.revenueBreakdownItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.revenueDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.revenueItemValue {
+  margin-left: auto;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Profit Bar */
+.profitBar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.profitBarTrack {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.profitBarRevenue {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 6px;
+  z-index: 1;
+}
+
+.profitBarCost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  border-radius: 6px;
+  z-index: 2;
+}
+
+.profitBarLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* Cost Per Interview */
+.costPerInterviewCard {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 2rem;
+  margin: 0 2rem 2rem;
+}
+
+.cpiMetric {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cpiValue {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.cpiCurrency {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.cpiAmount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cpiUnit {
+  font-size: 1rem;
+  color: #64748b;
+  margin-left: 0.25rem;
+}
+
+.cpiDescription {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.cpiBreakdown {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cpiBreakdownItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.cpiBreakdownLabel {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.cpiBreakdownValue {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cpiInsight {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  font-size: 0.9rem;
+  color: #0369a1;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .revenueGrid {
+    grid-template-columns: 1fr;
+    padding: 0 1rem 1rem;
+  }
+
+  .costPerInterviewCard {
+    margin: 0 1rem 1rem;
+  }
+
+  .cpiBreakdown {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Plan Badge Styles */
+.planBadge {
+  display: inline-block;
+  padding: 0.3rem 0.85rem;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.planFree {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.planPro {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.planEnterprise {
+  background: #d1fae5;
+  color: #059669;
+}
+
+/* Subscription Status Badges */
+.statusBadge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.statusActive {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.statusExpired {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.statusNone {
+  background: #f1f5f9;
+  color: #94a3b8;
+}

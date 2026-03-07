@@ -141,50 +141,18 @@ const CostStatistics = () => {
   };
 
   // Stacked Bar for Recruiter comparison
-  const RecruiterStackedBar = ({ recruiter, maxValue }) => {
-    const cloudflare = recruiter.breakdown?.cloudflare || 0;
-    const nlp = recruiter.breakdown?.nlp || 0;
-    const llm = recruiter.breakdown?.llm || 0;
-    const allocated = recruiter.allocated || maxValue || 1;
-    const total = cloudflare + nlp + llm;
-    // Calculate width relative to this recruiter's own allocation
-    const cloudflareWidth = allocated > 0 ? (cloudflare / allocated) * 100 : 0;
-    const nlpWidth = allocated > 0 ? (nlp / allocated) * 100 : 0;
-    const llmWidth = allocated > 0 ? (llm / allocated) * 100 : 0;
+  // Helper to format dates
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
 
-    return (
-      <div className={styles.stackedBarRow}>
-        <div className={styles.stackedBarInfo}>
-          <div className={styles.recruiterAvatar}>
-            {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
-          </div>
-          <div className={styles.recruiterDetails}>
-            <span className={styles.recruiterName}>{recruiter.name || 'Unknown'}</span>
-            <span className={styles.recruiterDept}>{recruiter.department || 'General'}</span>
-          </div>
-        </div>
-        <div className={styles.stackedBarContainer}>
-          <div className={styles.stackedBarTrack}>
-            <div 
-              className={styles.stackedBarSegment}
-              style={{ width: `${cloudflareWidth}%`, background: '#f59e0b' }}
-              title={`Cloudflare: ₹${cloudflare.toLocaleString()}`}
-            ></div>
-            <div 
-              className={styles.stackedBarSegment}
-              style={{ width: `${nlpWidth}%`, background: '#10b981' }}
-              title={`NLP (Gemini): ₹${nlp.toLocaleString()}`}
-            ></div>
-            <div 
-              className={styles.stackedBarSegment}
-              style={{ width: `${llmWidth}%`, background: '#6366f1' }}
-              title={`LLM (ChatGPT): ₹${llm.toLocaleString()}`}
-            ></div>
-          </div>
-          <span className={styles.stackedBarTotal}>₹{total.toLocaleString()} / ₹{allocated.toLocaleString()}</span>
-        </div>
-      </div>
-    );
+  // Get plan badge style class
+  const getPlanBadgeClass = (planName) => {
+    const name = (planName || '').toLowerCase();
+    if (name.includes('enterprise')) return styles.planEnterprise;
+    if (name.includes('pro') || name.includes('professional') || name.includes('recruiter')) return styles.planPro;
+    return styles.planFree;
   };
 
   if (loading) {
@@ -226,11 +194,35 @@ const CostStatistics = () => {
   const nlp = overview.nlp || { used: 0, allocated: 0 };
   const llm = overview.llm || { used: 0, allocated: 0 };
 
-  const maxRecruiterUsage = costData.recruiters.length > 0 
-    ? Math.max(...costData.recruiters.map(r => 
-        (r.breakdown?.cloudflare || 0) + (r.breakdown?.nlp || 0) + (r.breakdown?.llm || 0)
-      ))
-    : 100;
+  // Revenue calculations based on subscription plans
+  const revenueData = (() => {
+    const recruiters = costData.recruiters || [];
+    let proCount = 0;
+    let enterpriseCount = 0;
+    let freeCount = 0;
+    let totalInterviews = 0;
+
+    recruiters.forEach(r => {
+      const planName = (r.plan?.name || r.plan?.slug || 'free').toLowerCase();
+      if (planName.includes('pro') || planName.includes('professional')) {
+        proCount++;
+      } else if (planName.includes('enterprise')) {
+        enterpriseCount++;
+      } else {
+        freeCount++;
+      }
+      totalInterviews += r.activity?.total_interviews || 0;
+    });
+
+    const proRevenue = proCount * 4999;
+    const enterpriseRevenue = enterpriseCount * 10000;
+    const totalRevenue = proRevenue + enterpriseRevenue;
+    const costPerInterview = totalInterviews > 0 ? Math.round(totalUsed / totalInterviews) : 0;
+    const profit = totalRevenue - totalUsed;
+    const margin = totalRevenue > 0 ? Math.round((profit / totalRevenue) * 100) : 0;
+
+    return { proCount, enterpriseCount, freeCount, proRevenue, enterpriseRevenue, totalRevenue, totalInterviews, costPerInterview, profit, margin };
+  })();
 
   return (
     <AdminLayout activeTab="cost-statistics">
@@ -345,42 +337,161 @@ const CostStatistics = () => {
         </div>
       </div>
 
-      {/* Horizontal Bars Section */}
+      {/* Revenue vs Cost Section */}
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2>Service Credit Usage</h2>
-          <p>Visual comparison of allocated vs used credits per service</p>
+          <h2>Revenue vs Infrastructure Cost</h2>
+          <p>Subscription revenue against platform operating costs</p>
         </div>
-        <div className={styles.horizontalBarsCard}>
-          <HorizontalBar 
-            label="Cloudflare (GPU)"
-            value={cloudflare.used}
-            maxValue={cloudflare.allocated}
-            color="#f59e0b"
-            sublabel="Video processing & face verification"
-          />
-          <HorizontalBar 
-            label="NLP (Gemini)"
-            value={nlp.used}
-            maxValue={nlp.allocated}
-            color="#10b981"
-            sublabel="CV analysis & job matching"
-          />
-          <HorizontalBar 
-            label="LLM (ChatGPT)"
-            value={llm.used}
-            maxValue={llm.allocated}
-            color="#6366f1"
-            sublabel="Interview questions & evaluation"
-          />
+        <div className={styles.revenueGrid}>
+          <div className={styles.revenueCard}>
+            <div className={styles.revenueCardHeader}>
+              <span className={styles.revenueIcon} style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              </span>
+              <span className={styles.revenueLabel}>Monthly Revenue</span>
+            </div>
+            <span className={styles.revenueAmount}>₹{revenueData.totalRevenue.toLocaleString()}</span>
+            <div className={styles.revenueBreakdown}>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#8b5cf6'}}></span>
+                <span>Recruiter Pro ({revenueData.proCount})</span>
+                <span className={styles.revenueItemValue}>₹{revenueData.proRevenue.toLocaleString()}</span>
+              </div>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#6366f1'}}></span>
+                <span>Enterprise ({revenueData.enterpriseCount})</span>
+                <span className={styles.revenueItemValue}>₹{revenueData.enterpriseRevenue.toLocaleString()}</span>
+              </div>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#94a3b8'}}></span>
+                <span>Free ({revenueData.freeCount})</span>
+                <span className={styles.revenueItemValue}>₹0</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.revenueCard}>
+            <div className={styles.revenueCardHeader}>
+              <span className={styles.revenueIcon} style={{ background: 'linear-gradient(135deg, #ef4444, #f87171)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M3 3v18h18" />
+                  <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
+                </svg>
+              </span>
+              <span className={styles.revenueLabel}>Infrastructure Cost</span>
+            </div>
+            <span className={styles.revenueAmount}>₹{totalUsed.toLocaleString()}</span>
+            <div className={styles.revenueBreakdown}>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#f59e0b'}}></span>
+                <span>Cloudflare (GPU)</span>
+                <span className={styles.revenueItemValue}>₹{cloudflare.used.toLocaleString()}</span>
+              </div>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#10b981'}}></span>
+                <span>NLP (Gemini)</span>
+                <span className={styles.revenueItemValue}>₹{nlp.used.toLocaleString()}</span>
+              </div>
+              <div className={styles.revenueBreakdownItem}>
+                <span className={styles.revenueDot} style={{background: '#6366f1'}}></span>
+                <span>LLM (ChatGPT)</span>
+                <span className={styles.revenueItemValue}>₹{llm.used.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.revenueCard}>
+            <div className={styles.revenueCardHeader}>
+              <span className={styles.revenueIcon} style={{ background: revenueData.profit >= 0 ? 'linear-gradient(135deg, #10b981, #34d399)' : 'linear-gradient(135deg, #ef4444, #f87171)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                  <polyline points="16 7 22 7 22 13" />
+                </svg>
+              </span>
+              <span className={styles.revenueLabel}>Profitability</span>
+            </div>
+            <span className={`${styles.revenueAmount} ${revenueData.profit >= 0 ? styles.profitPositive : styles.profitNegative}`}>
+              {revenueData.profit >= 0 ? '+' : ''}₹{revenueData.profit.toLocaleString()}
+            </span>
+            <div className={styles.profitBar}>
+              <div className={styles.profitBarTrack}>
+                <div
+                  className={styles.profitBarRevenue}
+                  style={{ width: revenueData.totalRevenue > 0 ? '100%' : '0%' }}
+                  title={`Revenue: ₹${revenueData.totalRevenue.toLocaleString()}`}
+                ></div>
+                <div
+                  className={styles.profitBarCost}
+                  style={{ width: revenueData.totalRevenue > 0 ? `${Math.min(100, (totalUsed / revenueData.totalRevenue) * 100)}%` : '0%' }}
+                  title={`Cost: ₹${totalUsed.toLocaleString()}`}
+                ></div>
+              </div>
+              <div className={styles.profitBarLabels}>
+                <span>Margin: {revenueData.margin}%</span>
+                <span>{revenueData.totalInterviews} interviews</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Recruiter Allocations Table */}
+      {/* Cost Per Interview */}
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2>Recruiter Credit Allocations</h2>
-          <p>Individual credit allocation and usage per recruiter</p>
+          <h2>Cost Per Interview</h2>
+          <p>Average infrastructure cost for each interview conducted</p>
+        </div>
+        <div className={styles.costPerInterviewCard}>
+          <div className={styles.cpiMetric}>
+            <div className={styles.cpiValue}>
+              <span className={styles.cpiCurrency}>₹</span>
+              <span className={styles.cpiAmount}>{revenueData.costPerInterview.toLocaleString()}</span>
+              <span className={styles.cpiUnit}>/ interview</span>
+            </div>
+            <p className={styles.cpiDescription}>
+              Based on {revenueData.totalInterviews} interviews and ₹{totalUsed.toLocaleString()} total infrastructure cost
+            </p>
+          </div>
+          <div className={styles.cpiBreakdown}>
+            <div className={styles.cpiBreakdownItem}>
+              <span className={styles.cpiBreakdownLabel}>GPU (Cloudflare)</span>
+              <span className={styles.cpiBreakdownValue}>
+                ₹{revenueData.totalInterviews > 0 ? Math.round(cloudflare.used / revenueData.totalInterviews) : 0}
+              </span>
+            </div>
+            <div className={styles.cpiBreakdownItem}>
+              <span className={styles.cpiBreakdownLabel}>NLP (Gemini)</span>
+              <span className={styles.cpiBreakdownValue}>
+                ₹{revenueData.totalInterviews > 0 ? Math.round(nlp.used / revenueData.totalInterviews) : 0}
+              </span>
+            </div>
+            <div className={styles.cpiBreakdownItem}>
+              <span className={styles.cpiBreakdownLabel}>LLM (ChatGPT)</span>
+              <span className={styles.cpiBreakdownValue}>
+                ₹{revenueData.totalInterviews > 0 ? Math.round(llm.used / revenueData.totalInterviews) : 0}
+              </span>
+            </div>
+          </div>
+          <div className={styles.cpiInsight}>
+            {revenueData.costPerInterview > 0 && revenueData.totalRevenue > 0 ? (
+              revenueData.totalRevenue / revenueData.totalInterviews > revenueData.costPerInterview
+                ? `✅ Revenue per interview (₹${Math.round(revenueData.totalRevenue / revenueData.totalInterviews)}) exceeds cost per interview — pricing is sustainable.`
+                : `⚠️ Revenue per interview (₹${Math.round(revenueData.totalRevenue / revenueData.totalInterviews)}) is below cost — consider adjusting pricing.`
+            ) : (
+              '📊 Cost per interview data will populate as interviews are conducted.'
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recruiter Plan Enrollment */}
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2>Recruiter Plan Enrollment</h2>
+          <p>Current subscription plan and validity for each recruiter</p>
         </div>
         <div className={styles.tableCard}>
           <table className={styles.recruitersTable}>
@@ -388,91 +499,56 @@ const CostStatistics = () => {
               <tr>
                 <th>Recruiter</th>
                 <th>Department</th>
-                <th>Allocated</th>
-                <th>Used</th>
-                <th>Available</th>
-                <th>Usage</th>
+                <th>Current Plan</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {costData.recruiters.map((recruiter) => {
-                const allocated = recruiter.allocated || 0;
-                const used = recruiter.used || 0;
-                const percentage = allocated > 0 ? calculatePercentage(used, allocated) : 0;
+                const plan = recruiter.plan || {};
+                const sub = recruiter.subscription || {};
+                const planName = plan.name || 'Free Tier';
+                const subStatus = sub.status || 'none';
                 return (
-                <tr key={recruiter.id}>
-                  <td>
-                    <div className={styles.recruiterCell}>
-                      <div className={styles.tableAvatar}>
-                        {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
+                  <tr key={recruiter.id}>
+                    <td>
+                      <div className={styles.recruiterCell}>
+                        <div className={styles.tableAvatar}>
+                          {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div>
+                          <span className={styles.tableName}>{recruiter.name || 'Unknown'}</span>
+                          <span className={styles.tableEmail}>{recruiter.email || ''}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className={styles.tableName}>{recruiter.name || 'Unknown'}</span>
-                        <span className={styles.tableEmail}>{recruiter.email || ''}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span className={styles.deptBadge}>{recruiter.department || 'General'}</span></td>
-                  <td>₹{allocated.toLocaleString()}</td>
-                  <td>₹{used.toLocaleString()}</td>
-                  <td>₹{(allocated - used).toLocaleString()}</td>
-                  <td>
-                    <div className={styles.usageCell}>
-                      <div className={styles.usageBar}>
-                        <div 
-                          className={styles.usageFill}
-                          style={{ 
-                            width: `${percentage}%`,
-                            background: percentage > 90 
-                              ? '#ef4444' 
-                              : percentage > 70 
-                                ? '#f59e0b' 
-                                : '#10b981'
-                          }}
-                        ></div>
-                      </div>
-                      <span className={styles.usagePercent}>
-                        {percentage}%
+                    </td>
+                    <td><span className={styles.deptBadge}>{recruiter.department || 'General'}</span></td>
+                    <td>
+                      <span className={`${styles.planBadge} ${getPlanBadgeClass(planName)}`}>
+                        {planName}
                       </span>
-                    </div>
-                  </td>
-                </tr>
-              )})}
+                    </td>
+                    <td>{formatDate(sub.start_date)}</td>
+                    <td>{formatDate(sub.end_date)}</td>
+                    <td>
+                      <span className={`${styles.statusBadge} ${
+                        subStatus === 'active' ? styles.statusActive 
+                        : subStatus === 'expired' ? styles.statusExpired 
+                        : styles.statusNone
+                      }`}>
+                        {subStatus === 'active' ? 'Active' 
+                          : subStatus === 'expired' ? 'Expired' 
+                          : subStatus === 'none' ? 'No Plan'
+                          : subStatus.charAt(0).toUpperCase() + subStatus.slice(1)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* Stacked Bar Chart */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2>Recruiter Cost Breakdown</h2>
-          <p>Compare service usage across all recruiters</p>
-        </div>
-        <div className={styles.stackedChartCard}>
-          <div className={styles.chartLegend}>
-            <div className={styles.legendEntry}>
-              <span className={styles.legendColor} style={{ background: '#f59e0b' }}></span>
-              <span>Cloudflare (GPU)</span>
-            </div>
-            <div className={styles.legendEntry}>
-              <span className={styles.legendColor} style={{ background: '#10b981' }}></span>
-              <span>NLP (Gemini)</span>
-            </div>
-            <div className={styles.legendEntry}>
-              <span className={styles.legendColor} style={{ background: '#6366f1' }}></span>
-              <span>LLM (ChatGPT)</span>
-            </div>
-          </div>
-          <div className={styles.stackedBarsContainer}>
-            {costData.recruiters.map((recruiter) => (
-              <RecruiterStackedBar 
-                key={recruiter.id}
-                recruiter={recruiter}
-                maxValue={maxRecruiterUsage}
-              />
-            ))}
-          </div>
         </div>
       </div>
       </div>

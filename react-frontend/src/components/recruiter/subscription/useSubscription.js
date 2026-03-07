@@ -44,8 +44,8 @@ const useSubscription = () => {
   // Helper to get default free tier
   const getDefaultFreeTier = () => ({
     plan: { name: "Free Tier", slug: "free" },
-    interviews_remaining: 5,
-    interviews_allowed: 5,
+    interviews_remaining: 2,
+    interviews_allowed: 2,
     interviews_used: 0,
     is_unlimited: false,
     status: "active",
@@ -53,8 +53,8 @@ const useSubscription = () => {
 
   // Computed properties
   const isFreeTier = !subscription || subscription?.plan?.slug === "free";
-  const interviewsRemaining = subscription?.interviews_remaining ?? 5;
-  const interviewsAllowed = subscription?.interviews_allowed ?? 5;
+  const interviewsRemaining = subscription?.interviews_remaining ?? 2;
+  const interviewsAllowed = subscription?.interviews_allowed ?? 2;
   const isLowUsage = !subscription?.is_unlimited && interviewsRemaining <= 2;
   const isOutOfInterviews =
     !subscription?.is_unlimited && interviewsRemaining <= 0;

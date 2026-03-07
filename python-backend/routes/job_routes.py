@@ -61,6 +61,27 @@ def create_job(current_user):
     result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
     return jsonify(result), status_code
 
+@job_bp.route('/jobs/generate-ai', methods=['POST'])
+@cross_origin()
+@token_required
+def generate_jd_with_ai(current_user):
+    """Generate a complete job description using AI from a simple text prompt"""
+    if current_user.get('user_type') not in ['recruiter', 'admin']:
+        return jsonify({'error': 'Unauthorized. Only recruiters can generate job descriptions.'}), 403
+    
+    data = request.get_json()
+    if not data or not data.get('prompt'):
+        return jsonify({'error': 'Please provide a prompt describing the job role'}), 400
+    
+    prompt_text = data['prompt'].strip()
+    if len(prompt_text) < 3:
+        return jsonify({'error': 'Prompt too short. Please describe the role you want to hire for.'}), 400
+    if len(prompt_text) > 2000:
+        return jsonify({'error': 'Prompt too long. Please keep it under 2000 characters.'}), 400
+    
+    result, status_code = job_controller.generate_jd_with_ai(prompt_text)
+    return jsonify(result), status_code
+
 @job_bp.route('/jobs/<job_id>', methods=['GET'])
 @cross_origin()
 @token_required

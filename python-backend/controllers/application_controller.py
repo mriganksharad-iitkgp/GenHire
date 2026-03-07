@@ -180,7 +180,7 @@ class ApplicationController:
             'cv_source': cv_source,
             # Background processing flags
             'processing_status': 'pending',  # Will be: pending → processing → completed
-            'is_visible': False,  # Hidden until CV scoring completes
+            'is_visible': True,  # Visible immediately so candidate sees it right away
             'cv_score_calculated_at': None,
             'processing_error': None,
             'auto_processed': True
@@ -262,10 +262,9 @@ class ApplicationController:
     def get_applications(self, user_id, user_type):
         """Retrieve applications based on user type"""
         if user_type in ['candidate', 'student']:
-            # Students see their own applications - ONLY VISIBLE ONES (CV scoring completed)
+            # Students see all their applications including pending ones
             applications = list(self.applications_collection.find({
-                'student_id': user_id,
-                'is_visible': True  # Only show applications where CV scoring is complete
+                'student_id': user_id
             }))
             
             # Convert ObjectId to string and fetch job details
@@ -278,9 +277,13 @@ class ApplicationController:
                     app['applied_at'] = app['applied_at'].isoformat()
                 if isinstance(app.get('updated_at'), datetime.datetime):
                     app['updated_at'] = app['updated_at'].isoformat()
-                # Ensure scores exist for UI
-                if app.get('cv_score') is None:
+                # Keep cv_score as None for pending apps so frontend shows 'Processing'
+                # Only use fallback for legacy data that has completed processing
+                if app.get('cv_score') is None and app.get('processing_status') == 'completed':
                     app['cv_score'] = 85.0  # fallback placeholder for legacy data
+                # Expose processing_status for frontend
+                if 'processing_status' not in app:
+                    app['processing_status'] = 'completed'  # legacy docs are already processed
                 # expose interview_score if present (legacy docs may miss it)
                 if 'interview_score' not in app:
                     app['interview_score'] = None

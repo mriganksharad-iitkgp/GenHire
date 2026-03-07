@@ -147,7 +147,12 @@ export default function ApplicationsList({
 
                 <div className={styles.applicationActions}>
                   <div className={styles.scoresRow}>
-                    {app.cvScore !== null && (
+                    {app.processingStatus && app.processingStatus !== 'completed' ? (
+                      <div className={styles.scorePill} title="CV scoring in progress">
+                        <span className={styles.pillLabel}>CV Score</span>
+                        <span className={styles.pillValue}><i className="fa fa-spinner fa-spin"></i> Processing...</span>
+                      </div>
+                    ) : app.cvScore !== null && (
                       <div className={styles.scorePill} title="CV Match Score">
                         <span className={styles.pillLabel}>CV Score</span>
                         <span className={styles.pillValue}>{app.cvScore}%</span>

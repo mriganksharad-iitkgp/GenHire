@@ -28,8 +28,8 @@ const SubscriptionBanner = ({
 
   // Default to free tier if no subscription
   const planName = subscription?.plan?.name || "Free Tier";
-  const interviewsRemaining = subscription?.interviews_remaining ?? 5;
-  const interviewsAllowed = subscription?.interviews_allowed ?? 5;
+  const interviewsRemaining = subscription?.interviews_remaining ?? 2;
+  const interviewsAllowed = subscription?.interviews_allowed ?? 2;
   const isUnlimited = subscription?.is_unlimited || false;
   const expiresAt = subscription?.expires_at;
   const isFreeTier = !subscription || planName.toLowerCase().includes("free");

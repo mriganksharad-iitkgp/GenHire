@@ -299,6 +299,44 @@ def start_interview(current_user):
     student = users_collection.find_one({"_id": ObjectId(app_doc["student_id"])})
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
+    # --- Interview quota enforcement ---
+    if job:
+        recruiter_id = job.get("created_by")
+        if recruiter_id:
+            db = db_config.get_db()
+            # Check if recruiter has an active paid subscription
+            subscription = db.subscriptions.find_one({
+                'employer_id': ObjectId(recruiter_id),
+                'status': 'active'
+            })
+            if subscription:
+                # Paid plan: check interviews_remaining on subscription
+                interviews_allowed = subscription.get('interviews_allowed', 0)
+                is_unlimited = interviews_allowed == -1
+                if not is_unlimited:
+                    interviews_remaining = subscription.get('interviews_remaining', 0)
+                    if interviews_remaining <= 0:
+                        return jsonify({"error": "Interview limit reached. The recruiter's plan has no remaining interview credits."}), 403
+                    # Decrement remaining count atomically
+                    db.subscriptions.update_one(
+                        {'_id': subscription['_id'], 'interviews_remaining': {'$gt': 0}},
+                        {'$inc': {'interviews_remaining': -1, 'interviews_used': 1}, '$set': {'updated_at': datetime.datetime.utcnow()}}
+                    )
+            else:
+                # Free tier: enforce 2 interviews per rolling 30 days
+                from datetime import timedelta
+                thirty_days_ago = datetime.datetime.utcnow() - timedelta(days=30)
+                recruiter_job_ids = [str(j['_id']) for j in jobs_collection.find({'created_by': recruiter_id})]
+                if recruiter_job_ids:
+                    recent_interviews = db.applications.count_documents({
+                        'job_id': {'$in': recruiter_job_ids},
+                        'is_visible': True,
+                        'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                        'updated_at': {'$gte': thirty_days_ago}
+                    })
+                    if recent_interviews >= 2:
+                        return jsonify({"error": "Interview limit reached. Free tier allows 2 interviews per month. Please upgrade your plan."}), 403
+
     if not student or not job:
         return jsonify({"error": "Student or job not found"}), 404
 

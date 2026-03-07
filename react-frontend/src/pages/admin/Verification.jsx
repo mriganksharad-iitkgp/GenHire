@@ -27,7 +27,7 @@ const Verification = () => {
     setLoading(true);
     try {
       const data = await adminApi.getPendingRecruiters();
-      setPendingRecruiters(data.recruiters || []);
+      setPendingRecruiters(data.pending_recruiters || data.recruiters || []);
     } catch (error) {
       console.error("Error fetching pending recruiters:", error);
       showNotification(error.message || "Failed to fetch pending recruiters", "error");
