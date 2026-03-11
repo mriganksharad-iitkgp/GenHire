@@ -5,6 +5,7 @@ import re
 from typing import List
 from langchain_openai import ChatOpenAI
 from .config import Config
+from interview.core.cost_tracker import CostTracker
 
 
 class RubricGenerator:
@@ -36,6 +37,18 @@ class RubricGenerator:
 
         try:
             response = self.llm.invoke(prompt)
+            
+            # Track cost
+            if hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("token_usage", {})
+                if usage:
+                    CostTracker().add_usage(
+                        source="rubrics_generation",
+                        model=Config.RUBRIC_GENERATION_MODEL,
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0)
+                    )
+            
             content = response.content.strip()
             return self._parse_rubrics_response(content)
         except Exception as e:

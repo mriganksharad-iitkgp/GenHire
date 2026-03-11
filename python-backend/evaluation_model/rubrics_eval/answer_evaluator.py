@@ -3,6 +3,7 @@
 from typing import List, Dict, Any, Tuple
 from langchain_openai import ChatOpenAI
 from .config import Config
+from interview.core.cost_tracker import CostTracker
 
 
 class AnswerEvaluator:
@@ -38,6 +39,18 @@ class AnswerEvaluator:
 
         try:
             response = self.llm.invoke(prompt)
+            
+            # Track cost
+            if hasattr(response, "response_metadata") and response.response_metadata:
+                usage = response.response_metadata.get("token_usage", {})
+                if usage:
+                    CostTracker().add_usage(
+                        source="answer_evaluation",
+                        model=Config.EVALUATION_MODEL,
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0)
+                    )
+
             result = response.content.strip()
             return float(result)
         except ValueError:

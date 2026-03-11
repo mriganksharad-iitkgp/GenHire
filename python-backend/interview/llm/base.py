@@ -34,11 +34,29 @@ class LLMResponse:
     @classmethod
     def from_llama_index(cls, response: Any, model_name: str = None) -> "LLMResponse":
         """Create LLMResponse from llama_index CompletionResponse."""
+        usage = None
+        # Try to extract usage from raw response or additional_kwargs
+        if hasattr(response, "raw") and hasattr(response.raw, "usage"):
+            # OpenAI raw response
+            try:
+                usage = {
+                    "prompt_tokens": response.raw.usage.prompt_tokens,
+                    "completion_tokens": response.raw.usage.completion_tokens,
+                    "total_tokens": response.raw.usage.total_tokens,
+                }
+            except AttributeError:
+                pass
+        
+        if usage is None and hasattr(response, "additional_kwargs"):
+            # Some providers put it here
+            usage = response.additional_kwargs.get("usage") or response.additional_kwargs.get("token_usage")
+
         return cls(
             text=response.text,
             model=model_name,
             finish_reason="completed",
             metadata=getattr(response, "additional_kwargs", {}),
+            usage=usage
         )
 
 

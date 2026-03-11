@@ -19,6 +19,7 @@ from interview.core.prompt_based_question_generator import (
     InterviewPhase,
 )
 from interview.core.session_manager import InterviewSessionManager
+from interview.core.cost_tracker import CostTracker
 from interview.config.settings import LLMConfig, LLMProvider, InterviewConfig
 from interview.llm.factory import LLMFactory
 from interview.document.loader import DocumentLoader
@@ -108,6 +109,13 @@ def display_answer_evaluation(evaluation_result):
             if isinstance(score, (int, float)):
                 print(f"   • {category.replace('_', ' ').title()}: {int(score * 100)}%")
 
+    # Show cost and usage
+    tracker = CostTracker()
+    summary = tracker.get_summary()
+    print(f"\n💰 Cost & Usage (Cumulative):")
+    print(f"   Tokens: {summary['total_tokens']} (Prompt: {summary['total_prompt_tokens']}, Completion: {summary['total_completion_tokens']})")
+    print(f"   Estimated Cost: ${summary['total_cost']:.4f}")
+
     print("-" * 40)
 
 
@@ -125,8 +133,8 @@ def interactive_interview():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Senior-AI-Engineer-JD.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
     reference_paths = []
 
     # Check if files exist
@@ -390,6 +398,18 @@ def interactive_interview():
 
         traceback.print_exc()
 
+    # Final cost summary
+    tracker = CostTracker()
+    summary = tracker.get_summary()
+    if summary['total_tokens'] > 0:
+        print("\n" + "=" * 80)
+        print("💰 Final Session Cost Summary")
+        print(f"   Total Tokens: {summary['total_tokens']}")
+        print(f"   - Prompt: {summary['total_prompt_tokens']}")
+        print(f"   - Completion: {summary['total_completion_tokens']}")
+        print(f"   Total Estimated Cost: ${summary['total_cost']:.4f}")
+        print("=" * 80 + "\n")
+
 
 def demo_mode():
     """Run a quick demo showing what the system extracts from CV/JD."""
@@ -399,8 +419,8 @@ def demo_mode():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\AI_JD.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
     try:
         document_loader = DocumentLoader(cv_path, jd_path, [])

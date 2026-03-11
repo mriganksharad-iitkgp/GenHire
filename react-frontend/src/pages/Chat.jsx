@@ -14,6 +14,9 @@ export default function Chat({ interviewId }) {
   // --- STATE MANAGEMENT ---
   // Add this with your other refs
   const isTimerRunningRef = useRef(false);
+  const currentAudioRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const [chatContent, setChatContent] = useState({});
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -39,9 +42,13 @@ export default function Chat({ interviewId }) {
   const [questionCount, setQuestionCount] = useState(0);
   const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
   const silenceTimerRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const volumeDetectionIntervalRef = useRef(null);
   const lastSpeechTimeRef = useRef(Date.now());
   const [interviewElapsedTime, setInterviewElapsedTime] = useState(0); // Track total interview time
   const interviewStartTimeRef = useRef(null);
+  const initialGreetingSpoken = useRef(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false); // Track answer submission
 
   // Add state for progressive text display
@@ -50,8 +57,6 @@ export default function Chat({ interviewId }) {
   const typingIntervalRef = useRef(null); // --- REFS ---
 
   const videoRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const currentUtteranceRef = useRef(null);
   const ffmpegRef = useRef(new FFmpeg());
   const stopPromiseResolver = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -64,6 +69,7 @@ export default function Chat({ interviewId }) {
   const transcriptRef = useRef("");
   // Track the currently active MediaStream explicitly to guarantee full shutdown
   const cameraStreamRef = useRef(null);
+  const pendingSubmissionRef = useRef(false);
 
   // --- HOOKS ---
   const navigate = useNavigate();
@@ -528,12 +534,12 @@ export default function Chat({ interviewId }) {
     clearInterval(timerRef.current);
     clearInterval(silenceTimerRef.current);
 
-    // Stop speech recognition
-    if (recognitionRef.current) {
+    // Stop speech recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
-        recognitionRef.current.stop();
+        mediaRecorderRef.current.stop();
       } catch (e) {
-        // Speech recognition already stopped
+        // Speech recording already stopped
       }
     }
     setIsRecording(false);
@@ -728,20 +734,16 @@ export default function Chat({ interviewId }) {
           (Date.now() - lastSpeechTimeRef.current) / 1000;
         setSilenceTimer(Math.floor(timeSinceLastSpeech));
 
-        // Auto-submit after 5 seconds of silence
+        // Auto-submit after 3 seconds of silence
         if (
-          timeSinceLastSpeech >= 5 &&
-          transcriptRef.current.trim().length > 0
+          timeSinceLastSpeech >= 3
         ) {
           clearInterval(silenceTimerRef.current);
           setIsTimerRunning(false);
 
-          if (recognitionRef.current && isRecording) {
-            recognitionRef.current.stop();
-          }
-          setIsRecording(false);
-          onSend(transcriptRef.current.trim());
-          transcriptRef.current = "";
+          pendingSubmissionRef.current = true;
+          stopRecording();
+          setSilenceTimer(0);
         }
       }, 1000);
     } else {
@@ -756,14 +758,7 @@ export default function Chat({ interviewId }) {
   // Replace your entire SpeechRecognition useEffect with this final version
 
   useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.error("Speech Recognition API is not supported in this browser.");
-      return;
-    }
-
-    // Don't set up recognition if interview is not in an active state
+    // MediaRecorder version to replace browser STT API
     if (
       interviewStatus !== "active" &&
       interviewStatus !== "registering" &&
@@ -772,93 +767,198 @@ export default function Chat({ interviewId }) {
       return;
     }
 
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
+    const initMediaRecorder = async () => {
+      try {
+        console.log("🎤 Requesting audio permissions...");
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("✅ Audio permissions granted.");
+        
+        // Find supported mime type
+        const mimeTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          'audio/wav',
+          'audio/mp4'
+        ];
+        const supportedMimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+        console.log(`🎤 Supported MimeType: ${supportedMimeType}`);
 
-    // This variable will live inside the hook's closure and hold the text from previous segments.
-    let finalizedText = "";
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedMimeType });
+        mediaRecorderRef.current = mediaRecorder;
 
-    // Keep track of current interview status in closure
-    let currentInterviewStatus = interviewStatus;
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            console.log(`🎤 Audio data available: ${event.data.size} bytes`);
+            audioChunksRef.current.push(event.data);
+          }
+        };
 
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
+        mediaRecorder.onstart = () => {
+          console.log("🎤 MediaRecorder started.");
+        };
 
-    // When a new recording segment STARTS, we update our finalizedText with the full transcript so far.
-    recognition.onstart = () => {
-      setIsRecording(true);
-      finalizedText = transcriptRef.current;
-    };
+        mediaRecorder.onstop = async () => {
+          console.log(`🎤 MediaRecorder stopped. Total chunks: ${audioChunksRef.current.length}`);
+          const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType || 'audio/webm' });
+          audioChunksRef.current = [];
+          console.log(`🎤 Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+          
+          if (audioBlob.size < 100) {
+            console.warn("⚠️ Audio blob is too small, transcription might fail.");
+          }
 
-    // The 'onresult' handler now only needs to worry about the CURRENT segment's text.
-    recognition.onresult = (event) => {
-      let interimTranscript = "";
-      let finalTranscriptForSegment = "";
+          // Send to backend for transcription
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = reader.result.split(',')[1];
+            console.log("🎤 Sending audio to backend for transcription...");
+            try {
+              const sampleRate = stream.getAudioTracks()[0].getSettings().sampleRate || 48000;
+              const encoding = supportedMimeType.includes('opus') ? (supportedMimeType.includes('webm') ? 'WEBM_OPUS' : 'OGG_OPUS') : 'LINEAR16';
+              const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+              
+              const response = await fetch(`${apiUrl}/api/speech/transcribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  audio_base64: base64Audio,
+                  sample_rate_hertz: sampleRate,
+                  encoding: encoding
+                }),
+              });
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                console.error(`❌ Transcription API error: ${response.status}`, errorData);
+                return;
+              }
 
-      for (let i = 0; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscriptForSegment = event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
+              const data = await response.json();
+              console.log("✅ Transcription response:", data);
+              if (data.transcript) {
+                const finalTranscript = (transcriptRef.current + " " + data.transcript).trim();
+                setInput(finalTranscript);
+                transcriptRef.current = finalTranscript;
+                
+                // If auto-submit or manual send was triggered
+                if (pendingSubmissionRef.current) {
+                  pendingSubmissionRef.current = false;
+                  onSend(finalTranscript);
+                  setInput("");
+                  transcriptRef.current = "";
+                }
+              } else {
+                console.warn("⚠️ No transcript received from backend.");
+                // Still handle pending submission even if no transcript
+                if (pendingSubmissionRef.current) {
+                  pendingSubmissionRef.current = false;
+                  if (transcriptRef.current.trim()) {
+                    onSend(transcriptRef.current.trim());
+                    setInput("");
+                    transcriptRef.current = "";
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("❌ Transcription network/fetch error:", error);
+            }
+          };
+        };
+      } catch (err) {
+        console.error("❌ Failed to initialize MediaRecorder:", err);
       }
-
-      // Reset silence timer when speech is detected
-      if (finalTranscriptForSegment || interimTranscript) {
-        lastSpeechTimeRef.current = Date.now();
-        setSilenceTimer(0);
-      }
-
-      // Combine the text from previous segments with the live text from the current one.
-      const fullLiveTranscript =
-        finalizedText + (finalTranscriptForSegment || interimTranscript);
-      setInput(fullLiveTranscript);
-      transcriptRef.current = fullLiveTranscript;
     };
 
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-
-      // Only restart if timer is active AND interview is still active
-      if (isTimerRunningRef.current && currentInterviewStatus === "active") {
-        try {
-          recognition.start();
-        } catch (e) {
-          // Could not restart recognition
-        }
-      }
-    };
+    initMediaRecorder();
 
     return () => {
-      currentInterviewStatus = "completed";
-      try {
-        recognition.stop();
-      } catch (e) {
-        // Already stopped
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
       }
     };
   }, [interviewStatus]);
 
   const startRecording = useCallback(() => {
-    if (isSpeaking || isRecording || !recognitionRef.current) return;
+    if (isSpeaking || isRecording || !mediaRecorderRef.current) return;
 
     setInput("");
     transcriptRef.current = "";
     lastSpeechTimeRef.current = Date.now();
     setSilenceTimer(0);
-    recognitionRef.current.start();
-    setIsRecording(true);
+    
+    try {
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+
+      // Start volume-based silence detection
+      const stream = mediaRecorderRef.current.stream;
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 256;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      volumeDetectionIntervalRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+        
+        // Threshold for speech detection (adjust as needed)
+        if (average > 10) {
+          lastSpeechTimeRef.current = Date.now();
+          if (silenceTimer > 0) {
+            setSilenceTimer(0);
+          }
+        }
+      }, 100);
+
+    } catch (e) {
+      console.error("Error starting MediaRecorder or volume detection:", e);
+    }
   }, [isSpeaking, isRecording]);
-  const speakResponse = (text) => {
-    if (!window.speechSynthesis || !text) return;
+
+  const stopRecording = useCallback(() => {
+    if (!isRecording || !mediaRecorderRef.current) return;
+    
+    try {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+
+      // Clean up volume detection
+      if (volumeDetectionIntervalRef.current) {
+        clearInterval(volumeDetectionIntervalRef.current);
+        volumeDetectionIntervalRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    } catch (e) {
+      console.error("Error stopping MediaRecorder:", e);
+    }
+  }, [isRecording]);
+  const speakResponse = async (text) => {
+    if (!text) {
+      console.warn("⚠️ speakResponse called with no text.");
+      return;
+    }
+    console.log(`🔊 speakResponse: "${text.substring(0, 50)}..."`);
 
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      console.log("🔊 Cancelling current speech...");
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+      }
       // Clear any existing typing animation
       clearInterval(typingIntervalRef.current);
     }
@@ -867,67 +967,108 @@ export default function Chat({ interviewId }) {
     setFullQuestionText(text);
     setDisplayedText(""); // Reset displayed text
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    currentUtteranceRef.current = utterance;
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      console.log(`🔊 Fetching TTS from: ${apiUrl}/api/speech/synthesize`);
+      const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-
-      // Start progressive text animation
-      let currentIndex = 0;
-      const words = text.split(" ");
-      const totalWords = words.length;
-
-      // Estimate speech duration (average speaking rate: ~120 words per minute for natural speech)
-      const estimatedDuration = (totalWords / 120) * 60 * 1000; // Convert to milliseconds
-      // Use words for better pacing rather than characters
-      const intervalDelay = estimatedDuration / words.length; // Time per word
-
-      typingIntervalRef.current = setInterval(() => {
-        if (currentIndex < words.length) {
-          // Display words progressively instead of characters for more natural flow
-          const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
-          setDisplayedText(wordsToShow);
-          currentIndex++;
-        } else {
-          clearInterval(typingIntervalRef.current);
-          setDisplayedText(text); // Ensure complete text is shown
-        }
-      }, Math.max(intervalDelay, 300)); // Minimum 300ms per word for natural reading pace
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      // Clear typing animation and show full text
-      clearInterval(typingIntervalRef.current);
-      setDisplayedText(text); // Ensure full text is shown
-
-      // Start silence detection after AI finishes speaking
-      if (interviewStatus === "active") {
-        setSilenceTimer(0);
-        lastSpeechTimeRef.current = Date.now();
-        setIsTimerRunning(true);
-        startRecording();
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`❌ TTS API error: ${response.status}`, errorData);
+        setIsSpeaking(false);
+        setDisplayedText(text);
+        return;
       }
-    };
 
-    utterance.onerror = () => {
+      const data = await response.json();
+      if (data.audio_base64) {
+        console.log("✅ TTS audio received, base64 length:", data.audio_base64.length);
+        const audioSrc = `data:audio/mp3;base64,${data.audio_base64}`;
+        const audio = new Audio(audioSrc);
+        currentAudioRef.current = audio;
+
+        audio.onplay = () => {
+          console.log("🔊 TTS audio playback started.");
+          setIsSpeaking(true);
+
+          // Start progressive text animation
+          let currentIndex = 0;
+          const words = text.split(" ");
+          
+          // Estimate speech duration from audio length if possible
+          // Otherwise use a default word-based timing
+          const intervalDelay = audio.duration ? (audio.duration * 1000 / words.length) : 300;
+          console.log(`🔊 Text animation interval: ${intervalDelay}ms`);
+
+          typingIntervalRef.current = setInterval(() => {
+            if (currentIndex < words.length) {
+              const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
+              setDisplayedText(wordsToShow);
+              currentIndex++;
+            } else {
+              clearInterval(typingIntervalRef.current);
+              setDisplayedText(text);
+            }
+          }, Math.max(intervalDelay, 150));
+        };
+
+        audio.onended = () => {
+          console.log("🔊 TTS audio playback ended.");
+          setIsSpeaking(false);
+          currentAudioRef.current = null;
+          clearInterval(typingIntervalRef.current);
+          setDisplayedText(text);
+
+          if (interviewStatus === "active") {
+            console.log("🎤 AI finished speaking. Starting silence detection & recording...");
+            setSilenceTimer(0);
+            lastSpeechTimeRef.current = Date.now();
+            setIsTimerRunning(true);
+            startRecording();
+          }
+        };
+
+        audio.onerror = (e) => {
+          console.error("❌ Audio playback error:", e);
+          setIsSpeaking(false);
+          currentAudioRef.current = null;
+          clearInterval(typingIntervalRef.current);
+          setDisplayedText(text);
+        };
+
+        audio.play().catch(e => {
+          console.error("❌ Audio play() failed:", e);
+          // Auto-resume if blocked by browser policy (common issue)
+          setIsSpeaking(false);
+          setDisplayedText(text);
+        });
+      } else {
+        console.error("❌ No audio_base64 in TTS response.");
+        setIsSpeaking(false);
+        setDisplayedText(text);
+      }
+    } catch (error) {
+      console.error("❌ Error in Google TTS fetch:", error);
       setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      clearInterval(typingIntervalRef.current);
-      setDisplayedText(text); // Show full text on error
-    };
-
-    window.speechSynthesis.speak(utterance);
+      setDisplayedText(text);
+    }
   }; // Automatically speak the first question
   useEffect(() => {
     if (
       interviewStatus === "active" &&
       currentQuestion &&
       !isSpeaking &&
-      !currentUtteranceRef.current
+      !currentAudioRef.current &&
+      !initialGreetingSpoken.current
     ) {
+      initialGreetingSpoken.current = true;
+      console.log("🔊 Speaking initial greeting and first question...");
       setTimeout(() => {
         const initialMessage = `Your CV has a ${Math.round(
           similarityScore * 100
@@ -935,7 +1076,7 @@ export default function Chat({ interviewId }) {
         speakResponse(initialMessage);
       }, 1000);
     } // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interviewStatus]);
+  }, [interviewStatus, currentQuestion, similarityScore]);
 
   // Interview elapsed time tracker
   useEffect(() => {
@@ -990,15 +1131,15 @@ export default function Chat({ interviewId }) {
         }
 
         // Stop speech synthesis
-        if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
+        if (currentAudioRef.current) {
+          currentAudioRef.current.pause();
+          currentAudioRef.current = null;
         }
 
-        // Stop speech recognition
-        if (recognitionRef.current) {
+        // Stop speech recording
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
           try {
-            recognitionRef.current.stop();
-            recognitionRef.current.abort();
+            mediaRecorderRef.current.stop();
           } catch (e) {
             // Already stopped
           }
@@ -1203,21 +1344,26 @@ export default function Chat({ interviewId }) {
         <button
           className={Styles["send-button"]}
           onClick={() => {
+            // If currently recording, stop it and signal for submission
+            if (isRecording) {
+              clearInterval(silenceTimerRef.current);
+              setIsTimerRunning(false);
+              pendingSubmissionRef.current = true;
+              stopRecording();
+              return;
+            }
+
+            // If not recording but we have input, send it
             if (input.trim().length > 0) {
               clearInterval(silenceTimerRef.current);
               setIsTimerRunning(false);
-              if (recognitionRef.current && isRecording) {
-                recognitionRef.current.stop();
-              }
-              setIsRecording(false);
               onSend(input.trim());
               setInput("");
               transcriptRef.current = "";
             }
           }}
           disabled={
-            !input ||
-            input.trim().length === 0 ||
+            (!isRecording && (!input || input.trim().length === 0)) ||
             isSpeaking ||
             !isTimerRunning ||
             isSubmittingAnswer
@@ -1230,6 +1376,17 @@ export default function Chat({ interviewId }) {
                 style={{ width: "16px", height: "16px", borderWidth: "2px" }}
               ></div>
               Submitting...
+            </>
+          ) : isRecording ? (
+            <>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M6 6h12v12H6z" />
+              </svg>
+              Stop & Send
             </>
           ) : (
             <>
