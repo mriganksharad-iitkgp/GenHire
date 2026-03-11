@@ -1,8 +1,11 @@
 import os
 import base64
+import wave
+import io
 from google.cloud import speech
 from google.cloud import texttospeech
 import logging
+from interview.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +21,37 @@ class GoogleSpeechService:
             
             self.speech_client = speech.SpeechClient()
             self.tts_client = texttospeech.TextToSpeechClient()
+            self.cost_tracker = CostTracker()
             logger.info("✅ Google Speech Service clients initialized successfully.")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Google Speech Service: {e}")
             self.speech_client = None
             self.tts_client = None
+
+    def _estimate_audio_duration(self, audio_content, encoding, sample_rate_hertz):
+        """Estimate audio duration in seconds."""
+        try:
+            # For LINEAR16/WAV we can be precise if it's a valid WAV
+            if encoding == "LINEAR16":
+                try:
+                    with wave.open(io.BytesIO(audio_content), 'rb') as wav_file:
+                        frames = wav_file.getnframes()
+                        rate = wav_file.getframerate()
+                        return frames / float(rate)
+                except:
+                    # Fallback to byte size estimation for raw PCM
+                    # 16-bit = 2 bytes per sample
+                    return len(audio_content) / (2.0 * sample_rate_hertz)
+            
+            # For compressed formats (WEBM/MP3/OGG), we use a rough heuristic 
+            # or a default minimum for short clips if we can't parse headers easily.
+            # Most interview answers are 5-60 seconds.
+            # Let's use a byte-to-duration approximation for WebM/Opus (roughly 32kbps)
+            # 32000 bits/s = 4000 bytes/s
+            return max(1.0, len(audio_content) / 4000.0)
+        except Exception as e:
+            logger.warning(f"Could not estimate audio duration: {e}")
+            return 1.0
 
     def speech_to_text(self, audio_content, sample_rate_hertz=16000, language_code="en-US", encoding="WEBM_OPUS"):
         """
@@ -41,6 +70,10 @@ class GoogleSpeechService:
                 logger.error(f"Failed to decode base64 audio: {e}")
                 return None
 
+        # Track cost
+        duration = self._estimate_audio_duration(audio_content, encoding, sample_rate_hertz)
+        self.cost_tracker.add_stt_usage("interview_stt", duration)
+
         # Determine encoding based on parameter
         encoding_map = {
             "WEBM_OPUS": speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
@@ -51,7 +84,7 @@ class GoogleSpeechService:
         
         selected_encoding = encoding_map.get(encoding.upper(), speech.RecognitionConfig.AudioEncoding.WEBM_OPUS)
         
-        logger.info(f"Sending STT request: {len(audio_content)} bytes, {sample_rate_hertz}Hz, {language_code}, encoding: {encoding}")
+        logger.info(f"Sending STT request: {len(audio_content)} bytes, {sample_rate_hertz}Hz, {language_code}, encoding: {encoding}, estimated duration: {duration:.2f}s")
         
         audio = speech.RecognitionAudio(content=audio_content)
         config = speech.RecognitionConfig(
@@ -83,6 +116,9 @@ class GoogleSpeechService:
             return None
 
         logger.info(f"Sending TTS request: '{text[:50]}...', voice: {voice_name}")
+
+        # Track cost
+        self.cost_tracker.add_tts_usage("interview_tts", len(text))
 
         synthesis_input = texttospeech.SynthesisInput(text=text)
         voice = texttospeech.VoiceSelectionParams(

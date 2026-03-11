@@ -113,7 +113,11 @@ def display_answer_evaluation(evaluation_result):
     tracker = CostTracker()
     summary = tracker.get_summary()
     print(f"\n💰 Cost & Usage (Cumulative):")
-    print(f"   Tokens: {summary['total_tokens']} (Prompt: {summary['total_prompt_tokens']}, Completion: {summary['total_completion_tokens']})")
+    print(f"   LLM Tokens: {summary['total_tokens']} (P: {summary['total_prompt_tokens']}, C: {summary['total_completion_tokens']})")
+    if summary.get('total_stt_seconds', 0) > 0:
+        print(f"   Speech-to-Text: {summary['total_stt_seconds']}s")
+    if summary.get('total_tts_characters', 0) > 0:
+        print(f"   Text-to-Speech: {summary['total_tts_characters']} chars")
     print(f"   Estimated Cost: ${summary['total_cost']:.4f}")
 
     print("-" * 40)
@@ -401,13 +405,15 @@ def interactive_interview():
     # Final cost summary
     tracker = CostTracker()
     summary = tracker.get_summary()
-    if summary['total_tokens'] > 0:
+    if summary['total_cost'] > 0:
         print("\n" + "=" * 80)
         print("💰 Final Session Cost Summary")
-        print(f"   Total Tokens: {summary['total_tokens']}")
-        print(f"   - Prompt: {summary['total_prompt_tokens']}")
-        print(f"   - Completion: {summary['total_completion_tokens']}")
         print(f"   Total Estimated Cost: ${summary['total_cost']:.4f}")
+        print(f"   - LLM Tokens: {summary['total_tokens']} ({summary['total_prompt_tokens']} prompt, {summary['total_completion_tokens']} completion)")
+        if summary.get('total_stt_seconds', 0) > 0:
+            print(f"   - Speech-to-Text: {summary['total_stt_seconds']} seconds")
+        if summary.get('total_tts_characters', 0) > 0:
+            print(f"   - Text-to-Speech: {summary['total_tts_characters']} characters")
         print("=" * 80 + "\n")
 
 
