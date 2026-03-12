@@ -206,6 +206,33 @@
   background: #e2e8f0;
 }
 
+.creditBreakdownRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.creditBreakdownItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.creditBreakdownItem span {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.creditBreakdownItem strong {
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
 .renewalInfo {
   display: flex;
   align-items: center;
@@ -310,6 +337,63 @@
   padding: 2rem;
 }
 
+.monthFiltersRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.monthFilterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.monthFilterGroup label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.monthFilterGroup input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  color: #334155;
+  background: #fff;
+  font-size: 0.875rem;
+}
+
+.rangeSummary {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.rangeSummary > div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.55rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+}
+
+.rangeSummary span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.rangeSummary strong {
+  font-size: 1rem;
+  color: #1e293b;
+}
+
 .barChart {
   display: flex;
   align-items: flex-end;
@@ -356,6 +440,95 @@
   font-size: 0.75rem;
   color: #64748b;
   white-space: nowrap;
+}
+
+.pipelineLegend {
+  display: flex;
+  gap: 1.2rem;
+  margin-bottom: 1rem;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pipelineLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pipelineLegend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legendInterviewed {
+  background: #6366f1;
+}
+
+.legendSelected {
+  background: #22c55e;
+}
+
+.legendRejected {
+  background: #ef4444;
+}
+
+.multiBarChart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 220px;
+  gap: 0.8rem;
+}
+
+.multiBarColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  gap: 0.5rem;
+}
+
+.multiBarValues {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.multiBarTrack {
+  flex: 1;
+  width: 100%;
+  max-width: 54px;
+  background: #f1f5f9;
+  border-radius: 10px 10px 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.multiBar {
+  width: 30%;
+  border-radius: 6px 6px 0 0;
+  min-height: 0;
+  transition: height 0.8s ease;
+}
+
+.multiBarInterviewed {
+  background: #6366f1;
+}
+
+.multiBarSelected {
+  background: #22c55e;
+}
+
+.multiBarRejected {
+  background: #ef4444;
 }
 
 /* Plan Info Card */
@@ -456,6 +629,10 @@
     gap: 1rem;
   }
 
+  .creditBreakdownRow {
+    grid-template-columns: 1fr;
+  }
+
   .upgradePrompt {
     flex-direction: column;
     text-align: center;
@@ -463,6 +640,32 @@
 
   .barChart {
     height: 160px;
+  }
+
+  .pipelineLegend {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .multiBarChart {
+    height: 180px;
+  }
+
+  .monthFiltersRow {
+    align-items: stretch;
+  }
+
+  .monthFilterGroup {
+    width: 100%;
+  }
+
+  .rangeSummary {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .rangeSummary > div {
+    flex: 1;
   }
 
   .planInfoCard {

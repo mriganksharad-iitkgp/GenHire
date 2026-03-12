@@ -11,6 +11,7 @@ import { proctoringConfig } from "../config/proctoring";
 // Removed formatTime function - no longer needed since we removed the 30-second timer
 
 export default function Chat({ interviewId }) {
+  const MAX_QUESTIONS = 10;
   // --- STATE MANAGEMENT ---
   // Add this with your other refs
   const isTimerRunningRef = useRef(false);
@@ -21,6 +22,7 @@ export default function Chat({ interviewId }) {
   const [sessionId, setSessionId] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [interviewStatus, setInterviewStatus] = useState("starting");
+  const [startErrorMessage, setStartErrorMessage] = useState("");
   const [evaluation, setEvaluation] = useState(null);
   const [similarityScore, setSimilarityScore] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
@@ -431,7 +433,17 @@ export default function Chat({ interviewId }) {
         },
         body: JSON.stringify({ application_id: applicationId }),
       })
-        .then((res) => (res.ok ? res.json() : Promise.reject(res.json())))
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const message =
+              data?.error || data?.message || "Could not start interview session.";
+            const error = new Error(message);
+            error.status = res.status;
+            throw error;
+          }
+          return data;
+        })
         .then((data) => {
           setSessionId(data.session_id);
           sessionIdRef.current = data.session_id;
@@ -441,12 +453,15 @@ export default function Chat({ interviewId }) {
         })
         .catch((err) => {
           console.error("Error starting interview:", err);
+          const message =
+            err?.message || "Could not start the interview session.";
+          setStartErrorMessage(message);
           setChatContent({
-            0: { response: "⚠️ Error: Could not start the interview session." },
+            0: {
+              response: `⚠️ Error: ${message}`,
+            },
           });
-          // Redirect back appropriately based on mode
-          const redirectPath = isPracticeMode ? "/practice" : "/profile#applications";
-          setTimeout(() => navigate(redirectPath), 3000);
+          setInterviewStatus("start_failed");
         });
     }
   }, [interviewId, interviewStatus, navigate, location.state]);
@@ -692,8 +707,8 @@ export default function Chat({ interviewId }) {
         if (!response.ok)
           throw new Error(data.error || "Failed to submit answer");
 
-        // Auto-end interview after 10 questions
-        if (data.interview_complete || questionCount >= 2) {
+        // Auto-end interview after configured max questions
+        if (data.interview_complete || questionCount >= MAX_QUESTIONS) {
           // Reset submitting state before ending
           setIsSubmittingAnswer(false);
           await endInterview();
@@ -1096,6 +1111,60 @@ export default function Chat({ interviewId }) {
     );
   }
 
+  if (interviewStatus === "start_failed") {
+    const normalizedError = (startErrorMessage || "").toLowerCase();
+    const isQuotaError =
+      normalizedError.includes("credit") ||
+      normalizedError.includes("limit") ||
+      normalizedError.includes("unavailable");
+
+    return (
+      <div className={Styles.loadingContainer}>
+        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px" }}>
+          Interview Could Not Start
+        </h3>
+        <p
+          style={{
+            color: "#444",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "12px",
+            padding: "12px 14px",
+            borderRadius: "10px",
+            background: "#fff1f2",
+            border: "1px solid #fecdd3",
+          }}
+        >
+          {startErrorMessage || "Could not start the interview session."}
+        </p>
+
+        {isQuotaError && (
+          <p
+            style={{
+              color: "#666",
+              maxWidth: "560px",
+              textAlign: "center",
+              lineHeight: "1.6",
+              marginTop: "8px",
+            }}
+          >
+            No action is required from you as a candidate. Please contact the recruiter to reopen interview availability for this role.
+          </p>
+        )}
+
+        <div style={{ marginTop: "18px", display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => navigate("/profile#applications")}
+            className={Styles.registerButton}
+          >
+            Back to Applications
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Updated main interview render
   return (
     <div className={Styles["page-container-fullscreen"]}>
@@ -1104,7 +1173,7 @@ export default function Chat({ interviewId }) {
         <div className={Styles["interview-header"]}>
           <div className={Styles["progress-info"]}>
             <span className={Styles["question-counter"]}>
-              Question {questionCount} of 10
+              Question {questionCount} of {MAX_QUESTIONS}
             </span>
             <span className={Styles["time-elapsed"]}>
               ⏱️ {formatTime(interviewElapsedTime)}

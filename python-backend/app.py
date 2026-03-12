@@ -44,6 +44,10 @@ from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
 
 from services.cv_scoring_service import CVScoringService
+from services.interview_quota_service import (
+    get_recruiter_interview_quota,
+    consume_interview_credit,
+)
 from controllers.admin_controller import AdminController
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
@@ -293,10 +297,12 @@ def start_interview(current_user):
     if not app_doc:
         return jsonify({"error": "Application not found"}), 404
 
-    if app_doc.get("student_id") != str(current_user["_id"]):
+    app_student_id = str(app_doc.get("student_id", ""))
+    current_user_id = str(current_user.get("_id", ""))
+    if app_student_id != current_user_id:
         return jsonify({"error": "Unauthorized"}), 403
 
-    student = users_collection.find_one({"_id": ObjectId(app_doc["student_id"])})
+    student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
     # --- Interview quota enforcement ---
@@ -304,41 +310,31 @@ def start_interview(current_user):
         recruiter_id = job.get("created_by")
         if recruiter_id:
             db = db_config.get_db()
-            # Check if recruiter has an active paid subscription
-            subscription = db.subscriptions.find_one({
-                'employer_id': ObjectId(recruiter_id),
-                'status': 'active'
-            })
-            if subscription:
-                # Paid plan: check interviews_remaining on subscription
-                interviews_allowed = subscription.get('interviews_allowed', 0)
-                is_unlimited = interviews_allowed == -1
-                if not is_unlimited:
-                    interviews_remaining = subscription.get('interviews_remaining', 0)
-                    if interviews_remaining <= 0:
-                        return jsonify({"error": "Interview limit reached. The recruiter's plan has no remaining interview credits."}), 403
-                    # Decrement remaining count atomically
-                    db.subscriptions.update_one(
-                        {'_id': subscription['_id'], 'interviews_remaining': {'$gt': 0}},
-                        {'$inc': {'interviews_remaining': -1, 'interviews_used': 1}, '$set': {'updated_at': datetime.datetime.utcnow()}}
-                    )
-            else:
-                # Free tier: enforce 2 interviews per rolling 30 days
-                from datetime import timedelta
-                thirty_days_ago = datetime.datetime.utcnow() - timedelta(days=30)
-                recruiter_job_ids = [str(j['_id']) for j in jobs_collection.find({'created_by': recruiter_id})]
-                if recruiter_job_ids:
-                    recent_interviews = db.applications.count_documents({
-                        'job_id': {'$in': recruiter_job_ids},
-                        'is_visible': True,
-                        'status': {'$in': ['interviewed', 'selected', 'rejected']},
-                        'updated_at': {'$gte': thirty_days_ago}
-                    })
-                    if recent_interviews >= 2:
-                        return jsonify({"error": "Interview limit reached. Free tier allows 2 interviews per month. Please upgrade your plan."}), 403
+            quota = get_recruiter_interview_quota(db, recruiter_id)
 
-    if not student or not job:
-        return jsonify({"error": "Student or job not found"}), 404
+            if not quota.get("can_start_interview", False):
+                return jsonify(
+                    {
+                        "error": quota.get("error_message")
+                        or "Interview is currently unavailable for this job.",
+                        "error_code": quota.get("error_code")
+                        or "RECRUITER_INTERVIEW_LIMIT_REACHED",
+                        "plan_owner": quota.get("plan_owner", "recruiter"),
+                    }
+                ), 403
+
+            # Consume credit idempotently for this application/month.
+            if not consume_interview_credit(db, recruiter_id, application_id, quota_snapshot=quota):
+                return jsonify(
+                    {
+                        "error": "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan.",
+                        "error_code": "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
+                        "plan_owner": "recruiter",
+                    }
+                ), 403
+
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
 
     cv_details = student.get("cv_details")
     if not cv_details:
@@ -593,6 +589,8 @@ def end_interview(current_user, session_id):
                     'transcript': interview_transcript,
                     'error': 'Application not found'
                 })
+
+            previous_status = str(existing_app.get("status", "pending")).lower()
             
             result = applications_collection.update_one(
                 {"_id": ObjectId(application_id)},
@@ -605,6 +603,21 @@ def end_interview(current_user, session_id):
                     }
                 },
             )
+
+            # Keep recruiter job-card counters in sync with the application status transition
+            status_counters = ["pending", "interviewed", "selected", "rejected"]
+            job_counter_update = {}
+
+            if previous_status in status_counters and previous_status != "interviewed":
+                job_counter_update[previous_status] = -1
+            if previous_status != "interviewed":
+                job_counter_update["interviewed"] = job_counter_update.get("interviewed", 0) + 1
+
+            if job_counter_update:
+                jobs_collection.update_one(
+                    {"_id": ObjectId(existing_app["job_id"])},
+                    {"$inc": job_counter_update},
+                )
             
             if result.modified_count == 0:
                 print(f"❌ Warning: Application {application_id} was not updated (no documents modified)")
