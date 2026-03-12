@@ -42,6 +42,7 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
+from routes.speech_routes import speech_bp
 
 from services.cv_scoring_service import CVScoringService
 from services.interview_quota_service import (
@@ -148,6 +149,7 @@ app.register_blueprint(cv_bp, url_prefix='/api/cv')
 admin_controller = AdminController(collections)
 init_admin_routes(admin_controller)
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
+app.register_blueprint(speech_bp, url_prefix='/api/speech')
 logger.info("[OK] Admin routes registered at /api/admin")
 
 # Define a dictionary to hold a detector instance for each session

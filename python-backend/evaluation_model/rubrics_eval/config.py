@@ -11,9 +11,9 @@ class Config:
 
     # OpenAI Configuration
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    RUBRIC_GENERATION_MODEL: str = "gpt-5.2"
+    RUBRIC_GENERATION_MODEL: str = "gpt-5-mini"
     EVALUATION_MODEL: str = "gpt-5-mini"
-    ANSWER_GENERATION_MODEL: str = "gpt-5.2"
+    ANSWER_GENERATION_MODEL: str = "gpt-5-mini"
 
     # Temperature settings
     RUBRIC_GENERATION_TEMPERATURE: float = 1.0

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..llm.base import BaseLLM
+from .cost_tracker import CostTracker
 from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
     CV_KEYWORDS_EXTRACTION_PROMPT,
@@ -163,6 +164,21 @@ class PromptBasedQuestionGenerator:
             "What trade-offs have you considered when working with {topic}, and how did you decide?",
         ]
         
+    def _complete_llm(self, prompt: str) -> Any:
+        """Wrapper for LLM completion with cost tracking."""
+        response = self.llm.complete(prompt)
+        
+        # Track cost if usage is available
+        if hasattr(response, "usage") and response.usage:
+            CostTracker().add_usage(
+                source="question_generation",
+                model=getattr(response, "model", None) or self.config.default_model,
+                prompt_tokens=response.usage.get("prompt_tokens", 0),
+                completion_tokens=response.usage.get("completion_tokens", 0)
+            )
+            
+        return response
+
     def _get_embedding(self, text: str) -> np.ndarray:
         """Generate embedding for text using a simple method.
         
@@ -266,7 +282,7 @@ class PromptBasedQuestionGenerator:
             prompt = GREETING_PROMPT.format(
                 candidate_name=context.candidate_name
             )
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, 'text'):
                 self.last_question_source = "prompt"
                 return response.text.strip()
@@ -359,7 +375,7 @@ class PromptBasedQuestionGenerator:
                 job_title=context.job_title,
                 role_jd_keywords=", ".join(context.jd_keywords or []) or "—",
             )
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, 'text'):
                 question = response.text.strip()
                 # Validate: check if question is on-role and not duplicate
@@ -1148,7 +1164,7 @@ class PromptBasedQuestionGenerator:
             topics_covered=topics_covered_str,
         )
         try:
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
                 candidate = response.text.strip()
                 # Validate: check if question is appropriate and not duplicate
@@ -1318,7 +1334,7 @@ class PromptBasedQuestionGenerator:
         )
 
         try:
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
                 self.last_question_source = "prompt"
                 return response.text.strip()
@@ -1338,7 +1354,7 @@ class PromptBasedQuestionGenerator:
         prompt = CV_KEYWORDS_EXTRACTION_PROMPT.format(cv_content=cv_content, jd_content=jd_content)
 
         try:
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
                 keywords_text = response.text.strip()
                 # Parse the comma-separated response
@@ -1406,7 +1422,7 @@ class PromptBasedQuestionGenerator:
         prompt = SKILL_LEVEL_ASSESSMENT_PROMPT.format(cv_content=cv_text)
 
         try:
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
                 skill_level = response.text.strip().lower()
                 # Validate and return appropriate skill level
@@ -1637,7 +1653,7 @@ class PromptBasedQuestionGenerator:
     def _generate_structure_explanation(self, context: ConversationContext) -> str:
         """Generate a brief explanation of the interview structure."""
         try:
-            response = self.llm.complete(STRUCTURE_EXPLANATION_PROMPT)
+            response = self._complete_llm(STRUCTURE_EXPLANATION_PROMPT)
             if response and hasattr(response, "text"):
                 self.last_question_source = "prompt"
                 return response.text.strip()
@@ -1668,7 +1684,7 @@ class PromptBasedQuestionGenerator:
         )
 
         try:
-            response = self.llm.complete(prompt)
+            response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
                 question = response.text.strip()
                 # Validate: check if question is not duplicate and has sufficient content
