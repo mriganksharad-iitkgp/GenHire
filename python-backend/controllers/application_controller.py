@@ -632,9 +632,7 @@ class ApplicationController:
                         job_update[old_status] = -1
                     
                     # Map new status to job counter
-                    if new_status == 'shortlisted':
-                        job_update['selected'] = job_update.get('selected', 0) + 1
-                    elif new_status in status_counters:
+                    if new_status in status_counters:
                         job_update[new_status] = job_update.get(new_status, 0) + 1
                     
                     if job_update:

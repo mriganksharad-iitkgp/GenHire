@@ -3,9 +3,9 @@ from flask_cors import cross_origin
 from controllers.profile_controller import ProfileController
 from middleware.auth_middleware import token_required, recruiter_required
 from config.database import db_config
-from bson import ObjectId
 import random
 from datetime import datetime, timedelta
+from services.interview_quota_service import get_recruiter_interview_quota
 
 profile_bp = Blueprint('profile', __name__, url_prefix='/api')
 
@@ -105,11 +105,13 @@ def get_recruiter_cost_statistics(current_user):
         # Debug log
         print(f"[Cost Stats] Applications: {applications_count}, All Interviews: {all_interviews_count}, Last 30 days: {interviews_count_last_30_days}")
         
-        # Get recruiter's subscription
-        subscription = db.subscriptions.find_one({
-            'employer_id': ObjectId(recruiter_id),
-            'status': 'active'
-        })
+        # Shared quota snapshot (same source used by interview start enforcement)
+        quota = get_recruiter_interview_quota(db, recruiter_id)
+
+        # Get recruiter's subscription for metadata (plan name / expiry) if available
+        subscription = None
+        if quota.get('subscription_id'):
+            subscription = db.subscriptions.find_one({'_id': quota['subscription_id']})
         
         # Get plan details if subscription exists
         plan = None
@@ -136,8 +138,43 @@ def get_recruiter_cost_statistics(current_user):
             job_ids=job_ids
         )
         
-        # Use last-30-days interview count for credit quota
-        interviews_used_for_quota = interviews_count_last_30_days
+        # Use centralized quota values to prevent drift from start-interview logic
+        interviews_used_for_quota = int(quota.get('interviews_used', 0) or 0)
+        interviews_allowed_for_quota = int(quota.get('interviews_allowed', 2) or 2)
+        interviews_remaining_for_quota = int(quota.get('interviews_remaining', 0) or 0)
+        plan_interviews_allowed = int(quota.get('plan_interviews_allowed', 0) or 0)
+        plan_interviews_used = int(quota.get('plan_interviews_used', 0) or 0)
+        plan_interviews_remaining = int(quota.get('plan_interviews_remaining', 0) or 0)
+        free_interviews_allowed = int(quota.get('free_interviews_allowed', 2) or 2)
+        free_interviews_used = int(quota.get('free_interviews_used', 0) or 0)
+        free_interviews_remaining = int(quota.get('free_interviews_remaining', 0) or 0)
+
+        # Keep overview in sync with the same monthly quota window
+        interviews_count_last_30_days = interviews_used_for_quota
+
+        # Build monthly pipeline quality data (interviewed/selected/rejected)
+        monthly_pipeline_map = {}
+        for app in all_applications:
+            status = str(app.get('status', '')).lower()
+            if status not in ['interviewed', 'selected', 'rejected']:
+                continue
+
+            status_time = app.get('updated_at') or app.get('applied_at')
+            if not isinstance(status_time, datetime):
+                continue
+
+            month_key = status_time.strftime('%Y-%m')
+            if month_key not in monthly_pipeline_map:
+                monthly_pipeline_map[month_key] = {
+                    'month': month_key,
+                    'interviewed': 0,
+                    'selected': 0,
+                    'rejected': 0
+                }
+
+            monthly_pipeline_map[month_key][status] += 1
+
+        monthly_pipeline = [monthly_pipeline_map[k] for k in sorted(monthly_pipeline_map.keys())]
         
         # Generate job breakdown
         job_breakdown = generate_job_breakdown(jobs, max_jobs=10)
@@ -191,9 +228,15 @@ def get_recruiter_cost_statistics(current_user):
             },
             'plan': {
                 'name': credits_data['plan']['name'],
-                'interviews_allowed': (subscription.get('interviews_allowed') or 2) if subscription else 2,
-                'interviews_remaining': max(0, ((subscription.get('interviews_allowed') or 2) - interviews_used_for_quota) if subscription else (2 - interviews_used_for_quota)),
-                'interviews_used': min(interviews_used_for_quota, (subscription.get('interviews_allowed') or 2) if subscription else 2),
+                'interviews_allowed': interviews_allowed_for_quota,
+                'interviews_remaining': interviews_remaining_for_quota,
+                'interviews_used': interviews_used_for_quota,
+                'plan_interviews_allowed': plan_interviews_allowed,
+                'plan_interviews_used': plan_interviews_used,
+                'plan_interviews_remaining': plan_interviews_remaining,
+                'free_interviews_allowed': free_interviews_allowed,
+                'free_interviews_used': free_interviews_used,
+                'free_interviews_remaining': free_interviews_remaining,
                 'expires_at': subscription.get('expires_at').strftime('%Y-%m-%d') if subscription and subscription.get('expires_at') else None
             },
             'credits': {
@@ -215,6 +258,7 @@ def get_recruiter_cost_statistics(current_user):
                 }
             },
             'usageHistory': usage_history,
+            'monthlyPipeline': monthly_pipeline,
             'recentActivity': recent_activity,
             'jobBreakdown': job_breakdown,
             'summary': {

@@ -40,8 +40,7 @@ class InterviewConfig:
     question_timeout_seconds: int = 300
     similarity_threshold: float = 0.7
     default_llm_provider: LLMProvider = LLMProvider.OPENAI
-    # default_model: str = "llama-3.3-70b-versatile"
-    default_model: str = "gpt-5.2"
+    default_model: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     embedding_model: str = "all-MiniLM-L6-v2"
     
     # Structure explanation phase settings
@@ -58,7 +57,7 @@ class LLMConfig:
     """Configuration for LLM providers."""
 
     provider: LLMProvider = LLMProvider.OPENAI
-    model_name: str = "gpt-5.2"
+    model_name: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     api_key: str = os.getenv("OPENAI_API_KEY", "")
     temperature: float = 0.7
     max_tokens: Optional[int] = None

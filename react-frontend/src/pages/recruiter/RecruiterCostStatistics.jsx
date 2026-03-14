@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "./RecruiterCostStatistics.module.css";
@@ -9,6 +9,8 @@ const RecruiterCostStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [costData, setCostData] = useState(null);
   const [error, setError] = useState(null);
+  const [monthFrom, setMonthFrom] = useState("");
+  const [monthTo, setMonthTo] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -89,7 +91,176 @@ const RecruiterCostStatistics = () => {
         totalInterviews: 0,
         activeJobs: 0,
       },
+      monthlyPipeline: [],
     };
+  };
+
+  const safeCostData = costData || generateFallbackData();
+
+  // Plan & interview data
+  const plan = safeCostData.plan || {};
+  const interviewsAllowed = plan.interviews_allowed || 2;
+  const interviewsUsed = plan.interviews_used || 0;
+  const interviewsRemaining = Math.max(0, plan.interviews_remaining ?? 2);
+  const planCreditsRemaining = Math.max(0, plan.plan_interviews_remaining ?? 0);
+  const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
+  const isUnlimited = interviewsAllowed === -1;
+  const usagePercentage = isUnlimited ? 0 : (interviewsAllowed > 0 ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100)) : 0);
+  const isNearLimit = !isUnlimited && usagePercentage >= 80;
+  const planName = plan.name || "Free Tier";
+  const expiresAt = plan.expires_at;
+
+  // Calculate days until renewal
+  const daysUntilRenewal = (() => {
+    if (!expiresAt) return null;
+    const expDate = new Date(expiresAt);
+    const now = new Date();
+    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  })();
+
+  // Usage history (source data)
+  const usageHistory = safeCostData.usageHistory || [];
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+
+  const monthToIndex = (monthKey) => {
+    const [year, month] = String(monthKey || "").split("-").map(Number);
+    if (!year || !month) return null;
+    return year * 12 + (month - 1);
+  };
+
+  const indexToMonth = (index) => {
+    const year = Math.floor(index / 12);
+    const month = (index % 12) + 1;
+    return `${year}-${String(month).padStart(2, "0")}`;
+  };
+
+  const addMonths = (monthKey, monthsToAdd) => {
+    const base = monthToIndex(monthKey);
+    if (base === null) return monthKey;
+    return indexToMonth(base + monthsToAdd);
+  };
+
+  const monthlySeries = useMemo(() => {
+    const monthlyMap = new Map();
+
+    usageHistory.forEach((entry) => {
+      if (!entry?.date) return;
+      const date = new Date(entry.date);
+      if (Number.isNaN(date.getTime())) return;
+
+      const monthKey = `${date.getFullYear()}-${String(
+        date.getMonth() + 1,
+      ).padStart(2, "0")}`;
+      const current = monthlyMap.get(monthKey) || 0;
+      monthlyMap.set(monthKey, current + Number(entry.interviews || 0));
+    });
+
+    return Array.from(monthlyMap.entries())
+      .map(([month, interviews]) => ({ month, interviews }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [usageHistory]);
+
+  useEffect(() => {
+    if (!monthlySeries.length) return;
+
+    const firstMonth = monthlySeries[0].month;
+    const defaultTo = addMonths(firstMonth, 2) < currentMonthKey ? addMonths(firstMonth, 2) : currentMonthKey;
+
+    if (!monthFrom) setMonthFrom(firstMonth);
+    if (!monthTo) setMonthTo(defaultTo);
+  }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
+
+  const maxMonthToAllowed = useMemo(() => {
+    if (!monthFrom) return currentMonthKey;
+    const cappedByRange = addMonths(monthFrom, 12);
+    return cappedByRange < currentMonthKey ? cappedByRange : currentMonthKey;
+  }, [monthFrom, currentMonthKey]);
+
+  const handleMonthFromChange = (nextFrom) => {
+    setMonthFrom(nextFrom);
+
+    if (!nextFrom) return;
+
+    const autoTo = addMonths(nextFrom, 2);
+    const cappedAutoTo = autoTo < currentMonthKey ? autoTo : currentMonthKey;
+    setMonthTo(cappedAutoTo);
+  };
+
+  useEffect(() => {
+    if (!monthFrom || !monthTo) return;
+
+    const startIdx = monthToIndex(monthFrom);
+    const endIdx = monthToIndex(monthTo);
+    if (startIdx === null || endIdx === null) return;
+
+    if (endIdx < startIdx) {
+      setMonthTo(monthFrom);
+      return;
+    }
+
+    if (endIdx - startIdx > 12) {
+      setMonthTo(addMonths(monthFrom, 12));
+      return;
+    }
+
+    const currentIdx = monthToIndex(currentMonthKey);
+    if (currentIdx !== null && endIdx > currentIdx) {
+      setMonthTo(currentMonthKey);
+    }
+  }, [monthFrom, monthTo, currentMonthKey]);
+
+  const filteredMonthlySeries = useMemo(() => {
+    if (!monthlySeries.length) return [];
+
+    const from = monthFrom || monthlySeries[0].month;
+    const to = monthTo || monthlySeries[monthlySeries.length - 1].month;
+    if (from > to) return [];
+
+    const valueMap = new Map(monthlySeries.map((item) => [item.month, item.interviews]));
+    const result = [];
+
+    const [fromYear, fromMonth] = from.split("-").map(Number);
+    const [toYear, toMonth] = to.split("-").map(Number);
+
+    let year = fromYear;
+    let month = fromMonth;
+
+    while (year < toYear || (year === toYear && month <= toMonth)) {
+      const key = `${year}-${String(month).padStart(2, "0")}`;
+      result.push({
+        month: key,
+        interviews: Number(valueMap.get(key) || 0),
+      });
+
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
+
+    return result;
+  }, [monthlySeries, monthFrom, monthTo]);
+
+  const maxMonthlyUsage = Math.max(
+    ...filteredMonthlySeries.map((item) => item.interviews),
+    1,
+  );
+
+  const selectedRangeTotal = filteredMonthlySeries.reduce(
+    (sum, item) => sum + item.interviews,
+    0,
+  );
+
+  const selectedRangeAvg = filteredMonthlySeries.length
+    ? (selectedRangeTotal / filteredMonthlySeries.length).toFixed(1)
+    : "0.0";
+
+  const formatMonthLabel = (monthKey) => {
+    const [year, month] = monthKey.split("-").map(Number);
+    const date = new Date(year, month - 1, 1);
+    return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   };
 
   if (loading) {
@@ -118,33 +289,6 @@ const RecruiterCostStatistics = () => {
       </>
     );
   }
-
-  // Plan & interview data
-  const plan = costData.plan || {};
-  const interviewsAllowed = plan.interviews_allowed || 2;
-  const interviewsUsed = plan.interviews_used || 0;
-  const interviewsRemaining = Math.max(0, plan.interviews_remaining ?? 2);
-  const isUnlimited = interviewsAllowed === -1;
-  const usagePercentage = isUnlimited ? 0 : (interviewsAllowed > 0 ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100)) : 0);
-  const isNearLimit = !isUnlimited && usagePercentage >= 80;
-  const planName = plan.name || "Free Tier";
-  const expiresAt = plan.expires_at;
-
-  // Calculate days until renewal
-  const daysUntilRenewal = (() => {
-    if (!expiresAt) return null;
-    const expDate = new Date(expiresAt);
-    const now = new Date();
-    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  })();
-
-  // Usage history for the bar chart
-  const usageHistory = costData.usageHistory || [];
-  const maxWeeklyUsage = Math.max(
-    ...usageHistory.map(w => w.interviews || 0),
-    1
-  );
 
   // Interview usage ring
   const circumference = 2 * Math.PI * 54;
@@ -229,6 +373,19 @@ const RecruiterCostStatistics = () => {
                   </div>
                 </div>
 
+                {!isUnlimited && (
+                  <div className={styles.creditBreakdownRow}>
+                    <div className={styles.creditBreakdownItem}>
+                      <span>Plan credits left</span>
+                      <strong>{planCreditsRemaining}</strong>
+                    </div>
+                    <div className={styles.creditBreakdownItem}>
+                      <span>Free credits left (this month)</span>
+                      <strong>{freeCreditsRemaining}</strong>
+                    </div>
+                  </div>
+                )}
+
                 {expiresAt && (
                   <div className={styles.renewalInfo}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -288,17 +445,53 @@ const RecruiterCostStatistics = () => {
             </div>
           </div>
 
-          {/* Weekly Usage Trend */}
+          {/* Monthly Interview Analytics */}
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Weekly Interview Trend</h2>
-              <p>Your interview activity over the past 6 weeks</p>
+              <h2>Monthly Interview Analytics</h2>
+              <p>Select a month range to analyze interview volume and trend</p>
             </div>
             <div className={styles.trendCard}>
+              <div className={styles.monthFiltersRow}>
+                <div className={styles.monthFilterGroup}>
+                  <label htmlFor="monthFrom">From</label>
+                  <input
+                    id="monthFrom"
+                    type="month"
+                    value={monthFrom}
+                    onChange={(e) => handleMonthFromChange(e.target.value)}
+                    max={currentMonthKey}
+                  />
+                </div>
+                <div className={styles.monthFilterGroup}>
+                  <label htmlFor="monthTo">To</label>
+                  <input
+                    id="monthTo"
+                    type="month"
+                    value={monthTo}
+                    onChange={(e) => setMonthTo(e.target.value)}
+                    min={monthFrom || undefined}
+                    max={maxMonthToAllowed || undefined}
+                  />
+                </div>
+
+                <div className={styles.rangeSummary}>
+                  <div>
+                    <span>Total</span>
+                    <strong>{selectedRangeTotal}</strong>
+                  </div>
+                  <div>
+                    <span>Avg / month</span>
+                    <strong>{selectedRangeAvg}</strong>
+                  </div>
+                </div>
+              </div>
+
               <div className={styles.barChart}>
-                {usageHistory.map((week, i) => {
-                  const total = week.interviews || 0;
-                  const barHeight = maxWeeklyUsage > 0 ? (total / maxWeeklyUsage) * 100 : 0;
+                {filteredMonthlySeries.map((item, i) => {
+                  const total = item.interviews || 0;
+                  const barHeight =
+                    maxMonthlyUsage > 0 ? (total / maxMonthlyUsage) * 100 : 0;
                   return (
                     <div key={i} className={styles.barColumn}>
                       <div className={styles.barValue}>{total}</div>
@@ -308,7 +501,7 @@ const RecruiterCostStatistics = () => {
                           style={{ height: `${Math.max(barHeight, 4)}%` }}
                         ></div>
                       </div>
-                      <div className={styles.barLabel}>{week.week}</div>
+                      <div className={styles.barLabel}>{formatMonthLabel(item.month)}</div>
                     </div>
                   );
                 })}

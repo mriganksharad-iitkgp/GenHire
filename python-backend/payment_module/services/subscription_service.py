@@ -22,6 +22,19 @@ from ..config.settings import PaymentConfig
 logger = logging.getLogger(__name__)
 
 
+def _normalize_validity_days(raw_validity_days: Any, default_days: int = 30) -> int:
+    """Normalize validity period and enforce monthly 30-day duration over legacy 28."""
+    try:
+        validity_days = int(raw_validity_days)
+    except (TypeError, ValueError):
+        validity_days = default_days
+
+    if validity_days == 28:
+        return 30
+
+    return max(1, validity_days)
+
+
 class SubscriptionService:
     """
     Service for managing employer subscriptions.
@@ -76,7 +89,7 @@ class SubscriptionService:
                 "slug": plan.slug,
                 "price_paise": plan.price_paise,
                 "interviews_allowed": plan.interviews_allowed,
-                "validity_days": plan.validity_days,
+                "validity_days": _normalize_validity_days(plan.validity_days),
                 "features": plan.features,
             }
 
@@ -133,7 +146,9 @@ class SubscriptionService:
             subscription = Subscription.from_dict(sub_data)
 
             # Calculate expiration
-            validity_days = subscription.plan_snapshot.get("validity_days", 30)
+            validity_days = _normalize_validity_days(
+                subscription.plan_snapshot.get("validity_days", 30)
+            )
             started_at = datetime.utcnow()
             expires_at = started_at + timedelta(days=validity_days)
 

@@ -33,6 +33,38 @@ class JobController:
             # Return all jobs for recruiters
             jobs = list(self.jobs_collection.find({'created_by': user_id}))
             for job in jobs:
+                job_id_str = str(job['_id'])
+
+                # Derive counters from applications to avoid stale denormalized values
+                job_applications = list(
+                    self.applications_collection.find(
+                        {'job_id': job_id_str, 'is_visible': True},
+                        {'status': 1}
+                    )
+                )
+
+                interviewed_count = 0
+                selected_count = 0
+                rejected_count = 0
+                pending_count = 0
+
+                for app in job_applications:
+                    status = str(app.get('status', 'pending')).lower()
+                    if status == 'interviewed':
+                        interviewed_count += 1
+                    elif status == 'selected':
+                        selected_count += 1
+                    elif status == 'rejected':
+                        rejected_count += 1
+                    elif status in ['pending', 'reviewed', 'shortlisted']:
+                        pending_count += 1
+
+                job['applicants'] = len(job_applications)
+                job['interviewed'] = interviewed_count
+                job['selected'] = selected_count
+                job['rejected'] = rejected_count
+                job['pending'] = pending_count
+
                 job['_id'] = str(job['_id'])
             return jobs, 200
         else:
