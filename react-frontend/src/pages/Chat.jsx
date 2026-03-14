@@ -787,7 +787,7 @@ export default function Chat({ interviewId }) {
         console.log("🎤 Requesting audio permissions...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log("✅ Audio permissions granted.");
-        
+
         // Find supported mime type
         const mimeTypes = [
           'audio/webm;codecs=opus',
@@ -818,7 +818,7 @@ export default function Chat({ interviewId }) {
           const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType || 'audio/webm' });
           audioChunksRef.current = [];
           console.log(`🎤 Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
-          
+
           if (audioBlob.size < 100) {
             console.warn("⚠️ Audio blob is too small, transcription might fail.");
           }
@@ -833,17 +833,17 @@ export default function Chat({ interviewId }) {
               const sampleRate = stream.getAudioTracks()[0].getSettings().sampleRate || 48000;
               const encoding = supportedMimeType.includes('opus') ? (supportedMimeType.includes('webm') ? 'WEBM_OPUS' : 'OGG_OPUS') : 'LINEAR16';
               const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-              
+
               const response = await fetch(`${apiUrl}/api/speech/transcribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   audio_base64: base64Audio,
                   sample_rate_hertz: sampleRate,
                   encoding: encoding
                 }),
               });
-              
+
               if (!response.ok) {
                 const errorData = await response.json();
                 console.error(`❌ Transcription API error: ${response.status}`, errorData);
@@ -856,7 +856,7 @@ export default function Chat({ interviewId }) {
                 const finalTranscript = (transcriptRef.current + " " + data.transcript).trim();
                 setInput(finalTranscript);
                 transcriptRef.current = finalTranscript;
-                
+
                 // If auto-submit or manual send was triggered
                 if (pendingSubmissionRef.current) {
                   pendingSubmissionRef.current = false;
@@ -902,7 +902,7 @@ export default function Chat({ interviewId }) {
     transcriptRef.current = "";
     lastSpeechTimeRef.current = Date.now();
     setSilenceTimer(0);
-    
+
     try {
       audioChunksRef.current = [];
       mediaRecorderRef.current.start();
@@ -927,7 +927,7 @@ export default function Chat({ interviewId }) {
           sum += dataArray[i];
         }
         const average = sum / bufferLength;
-        
+
         // Threshold for speech detection (adjust as needed)
         if (average > 10) {
           lastSpeechTimeRef.current = Date.now();
@@ -944,7 +944,7 @@ export default function Chat({ interviewId }) {
 
   const stopRecording = useCallback(() => {
     if (!isRecording || !mediaRecorderRef.current) return;
-    
+
     try {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -1015,7 +1015,7 @@ export default function Chat({ interviewId }) {
           // Start progressive text animation
           let currentIndex = 0;
           const words = text.split(" ");
-          
+
           // Estimate speech duration from audio length if possible
           // Otherwise use a default word-based timing
           const intervalDelay = audio.duration ? (audio.duration * 1000 / words.length) : 300;

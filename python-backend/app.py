@@ -748,6 +748,7 @@ def get_user_interviews(current_user):
 
 # ... other imports
 
+
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
 def register_face(current_user, session_id):
