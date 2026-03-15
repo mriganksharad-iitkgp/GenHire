@@ -29,15 +29,16 @@ export default function Chat({ interviewId }) {
   const [evaluation, setEvaluation] = useState(null);
   const [similarityScore, setSimilarityScore] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [gazeDirection, setGazeDirection] = useState(null);
+  const [gazeTimes, setGazeTimes] = useState(null);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("idle");
+  const [gazeRecorderStatus, setGazeRecorderStatus] = useState("idle"); // idle | calibrating | tracking | submitted | failed
   const [proctoringAlert, setProctoringAlert] = useState({
     active: false,
     message: "",
   });
   const [warningCount, setWarningCount] = useState(0);
-  const [gazeDirection, setGazeDirection] = useState("Face Not Detected");
-  const [gazeTimes, setGazeTimes] = useState({ Left: 0, Center: 0, Right: 0 });
 
   // Removed timeLeft state - using only silence detection now
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -66,6 +67,14 @@ export default function Chat({ interviewId }) {
   const proctoringIntervalRef = useRef(null);
   const sessionIdRef = useRef(null);
   const interviewStartInitiated = useRef(false);
+  const gazeRecorderScriptsLoadedRef = useRef(false);
+  const gazeRecorderTrackingRef = useRef(false);
+  const gazePointsRef = useRef([]);
+  const gazeStartedAtMsRef = useRef(null);
+  const gazeEndedAtMsRef = useRef(null);
+  const gazeStartTimeRef = useRef(null);
+  const gazeRecordingDataRef = useRef(null);
+
   // --- MODIFICATION --- Add refs for the timer and the latest transcript
   const timerRef = useRef(null);
   const transcriptRef = useRef("");
@@ -137,7 +146,124 @@ export default function Chat({ interviewId }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [interviewStatus, proctoringAlert.active, warningCount]); // --- LIVE PROCTORING & WEBSOCKETS (No changes needed) ---
+  }, [interviewStatus, proctoringAlert.active, warningCount]); 
+
+  const loadScript = useCallback((src) => {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === "true") {
+          resolve();
+          return;
+        }
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => {
+        script.dataset.loaded = "true";
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.body.appendChild(script);
+    });
+  }, []);
+
+  const startInlineGazeRecorder = useCallback(async () => {
+    if (gazeRecorderTrackingRef.current) return;
+    try {
+      setGazeRecorderStatus('calibrating');
+      if (!gazeRecorderScriptsLoadedRef.current) {
+        await loadScript("https://app.gazerecorder.com/GazeCloudAPI.js");
+        await loadScript("https://app.gazerecorder.com/GazeRecorderAPI.js");
+        await loadScript("https://app.gazerecorder.com/GazePlayer.js");
+        gazeRecorderScriptsLoadedRef.current = true;
+      }
+
+      if (!window.GazeCloudAPI || !window.GazeRecorderAPI) {
+        throw new Error('GazeRecorder scripts not available.');
+      }
+
+      gazePointsRef.current = [];
+      gazeRecordingDataRef.current = null;
+      gazeStartedAtMsRef.current = Date.now();
+      gazeEndedAtMsRef.current = null;
+      gazeStartTimeRef.current = Date.now();
+
+      window.GazeCloudAPI.OnResult = function (gazeData) {
+        if (!gazeRecorderTrackingRef.current) return;
+        gazePointsRef.current.push({
+          timestamp: (Date.now() - gazeStartTimeRef.current) / 1000,
+          x: gazeData?.docX || 0,
+          y: gazeData?.docY || 0
+        });
+      };
+
+      window.GazeCloudAPI.OnCalibrationComplete = function () {
+        window.GazeRecorderAPI.Rec();
+        gazeRecorderTrackingRef.current = true;
+        gazeStartTimeRef.current = Date.now();
+        setGazeRecorderStatus('tracking');
+      };
+
+      window.GazeCloudAPI.StartEyeTracking();
+    } catch (error) {
+      console.error('Failed to start inline GazeRecorder:', error);
+      setGazeRecorderStatus('failed');
+    }
+  }, [loadScript]);
+
+  const finalizeInlineGazeRecorder = useCallback(async () => {
+    const currentSessionId = sessionIdRef.current;
+    if (!currentSessionId || !gazeRecorderScriptsLoadedRef.current) return;
+
+    try {
+      if (gazeRecorderTrackingRef.current) {
+        window.GazeRecorderAPI.StopRec();
+        window.GazeCloudAPI.StopEyeTracking();
+        gazeRecordingDataRef.current = window.GazeRecorderAPI.GetRecData();
+        gazeRecorderTrackingRef.current = false;
+        gazeEndedAtMsRef.current = Date.now();
+      }
+
+      if (!gazePointsRef.current.length) {
+        console.warn('No GazeRecorder points captured.');
+        return;
+      }
+
+      const token = localStorage.getItem("companyxyz-token");
+      const apiBase = (process.env.REACT_APP_API_URL || '').replace(/\/$/, '');
+      const response = await fetch(`${apiBase}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          recordingData: gazeRecordingDataRef.current,
+          gazePoints: gazePointsRef.current,
+          startedAtMs: gazeStartedAtMsRef.current,
+          endedAtMs: gazeEndedAtMsRef.current,
+          viewport: { width: window.innerWidth, height: window.innerHeight }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.json()).error || 'Failed to submit GazeRecorder data');
+      }
+
+      setGazeRecorderStatus('submitted');
+    } catch (error) {
+      console.error('Failed to finalize inline GazeRecorder:', error);
+      setGazeRecorderStatus('failed');
+    }
+  }, []);
+
+  // --- LIVE PROCTORING & WEBSOCKETS (No changes needed) ---
 
   const startLiveProctoring = useCallback(() => {
     const currentSessionId = sessionIdRef.current;
@@ -257,12 +383,19 @@ export default function Chat({ interviewId }) {
         throw new Error(
           (await response.json()).message || "Face registration failed."
         );
+
+      console.log("✅ Face registered successfully, starting live proctoring...");
+      await startInlineGazeRecorder();
+
+      // IMPORTANT: Start live proctoring AFTER successful face registration
+      // startLiveProctoring();
+      
       setInterviewStatus("active");
     } catch (error) {
       console.error("Face registration error:", error);
       alert(`Could not register face: ${error.message}.`);
     }
-  }, []); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
+  }, [startInlineGazeRecorder]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
   const uploadRecording = useCallback(async (blob) => {
     const currentSessionId = sessionIdRef.current;
@@ -306,12 +439,15 @@ export default function Chat({ interviewId }) {
       );
       if (!response.ok)
         throw new Error((await response.json()).error || "Upload failed");
+
+      // Existing proctoring upload completed; also finalize inline GazeRecorder submission.
+      await finalizeInlineGazeRecorder();
       setUploadStatus("success");
     } catch (error) {
       setUploadStatus("error");
       throw error;
     }
-  }, []);
+  }, [finalizeInlineGazeRecorder]);
 
   const stopAndUploadRecording = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -1113,6 +1249,14 @@ export default function Chat({ interviewId }) {
       clearInterval(typingIntervalRef.current);
       stopLiveProctoring();
       stopCamera();
+      if (gazeRecorderTrackingRef.current && window.GazeCloudAPI && window.GazeRecorderAPI) {
+        try {
+          window.GazeRecorderAPI.StopRec();
+          window.GazeCloudAPI.StopEyeTracking();
+        } catch (error) {
+          console.warn('Cleanup error for GazeRecorder:', error);
+        }
+      }
     };
   }, [stopLiveProctoring, stopCamera]);
 
@@ -1157,6 +1301,15 @@ export default function Chat({ interviewId }) {
             mediaRecorderRef.current.stop();
           } catch (e) {
             // Already stopped
+          }
+        }
+
+        if (gazeRecorderTrackingRef.current && window.GazeCloudAPI && window.GazeRecorderAPI) {
+          try {
+            window.GazeRecorderAPI.StopRec();
+            window.GazeCloudAPI.StopEyeTracking();
+          } catch (error) {
+            console.warn('Cleanup error for GazeRecorder:', error);
           }
         }
 
@@ -1351,12 +1504,6 @@ export default function Chat({ interviewId }) {
         <video ref={videoRef} autoPlay muted playsInline />       {" "}
       </div>
       {" "}
-      {(gazeDirection === "Left" || gazeDirection === "Right") && (
-        <div className={Styles["gaze-warning"]}>
-          Please look at the center of the screen          {" "}
-        </div>
-      )}
-      {" "}
       <div className={Styles["avatar-container"]}>
         <Avatar />       {" "}
       </div>
@@ -1379,6 +1526,9 @@ export default function Chat({ interviewId }) {
                   : isSpeaking
                     ? displayedText
                     : currentQuestion || "Waiting for next question..."}
+          </p>
+          <p className={Styles["transcript-display"]}>
+            Proctoring Calibration: {gazeRecorderStatus}
           </p>
           {input && input.trim().length > 0 && (
             <div
