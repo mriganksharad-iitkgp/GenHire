@@ -137,8 +137,8 @@ def interactive_interview():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Mid-Level-AIML-Engineer-JD.pdf"
     reference_paths = []
 
     # Check if files exist
@@ -197,7 +197,8 @@ def interactive_interview():
         print(f"   Candidate: {context.candidate_name}")
         print(f"   Position: {context.job_title}")
         print(f"   Your CV Keywords: {', '.join(context.cv_keywords)}")
-        print(f"   Assessed Skill Level: {context.candidate_skill_level}")
+        print(f"   Assessed Candidate Skill Level: {context.candidate_skill_level}")
+        print(f"   Required Job Skill Level: {context.jd_required_skill_level}")
 
         # Show evaluation system info
         try:
@@ -425,8 +426,8 @@ def demo_mode():
     # cv_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
     # jd_path = "e:\\BTP\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
 
-    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\software_engineering_cv.pdf"
-    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\software_engineering_job_description.pdf"
+    cv_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\cv\\MyAICV.pdf"
+    jd_path = "C:\\Users\\Acer\\OneDrive - iitkgp.ac.in\\Desktop\\main2\\product-prototyping-lab\\python-backend\\uploads\\jd\\Mid-Level-AIML-Engineer-JD.pdf"
 
     try:
         document_loader = DocumentLoader(cv_path, jd_path, [])

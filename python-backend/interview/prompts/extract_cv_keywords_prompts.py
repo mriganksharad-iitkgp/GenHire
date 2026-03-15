@@ -1,34 +1,31 @@
-"""
-Prompts for CV and JD keyword extraction using LLM analysis.
-"""
+JD_KEYWORDS_EXTRACTION_PROMPT = """Analyze the Job Description (JD) to extract the most critical technical skills, technologies, and methodologies required for the role.
+
+INSTRUCTIONS:
+1. Extract 10-15 specific technical keywords (e.g., Python, Docker, System Design, React).
+2. Focus ONLY on what the role REQUIRES.
+3. Ignore generic soft skills (e.g., "Team player", "Leadership").
+4. List the most important technologies mentioned in the JD first.
+5. Return ONLY a comma-separated list of keywords.
+
+JD CONTENT:
+{jd_content}
+
+Comma-separated keywords:"""
 
 CV_KEYWORDS_EXTRACTION_PROMPT = """Analyze BOTH the CV/Resume and the Job Description to extract the most relevant technical skills and topic areas for interview questions.
 
-Weight JD relevance higher when ranking topics (prioritize JD ~60%, CV evidence ~40%). Prefer items explicitly required in the JD and demonstrated in the CV.
+Weight JD relevance as the HIGHEST priority (prioritize JD requirements ~80%, CV evidence ~20%). Focus on what the JOB REQUIRES. 
+1. If a skill is in the JD, it MUST be included in the list, even if it's not prominent in the CV.
+2. If a skill is in the CV but NOT in the JD, only include it if it's highly relevant to the role's domain.
+3. The resulting list should serve as a roadmap for testing if the candidate meets the JOB'S requirements.
+4. Extract only technical skills, tools, and methodologies (e.g., Python, AWS, System Design, Agile).
+5. Avoid generic terms like "Communication" or "Teamwork".
+6. Return ONLY a comma-separated list of keywords.
 
-CORE DOMAINS TO CONSIDER:
-1. Programming Languages (Python, JavaScript, Java, C++, C#, Go, Rust, Swift, Kotlin, etc.)
-2. Web Technologies (HTML, CSS, React, Angular, Vue, Node.js, Django, Flask, Spring)
-3. Mobile (iOS, Android, React Native, Flutter)
-4. Databases (SQL, MySQL, PostgreSQL, MongoDB, Redis, Elasticsearch)
-5. Cloud & DevOps (AWS, Azure, GCP, Docker, Kubernetes, Terraform, CI/CD)
-6. Data/ML (Pandas, NumPy, TensorFlow, PyTorch, Scikit-learn, Spark, Hadoop)
-7. Architecture & APIs (Microservices, Design Patterns, REST, GraphQL, gRPC)
-8. Security & Reliability (Auth, JWT, OAuth, Testing, Monitoring, Logging)
-
-CV Content:
+CV CONTENT:
 {cv_content}
 
-Job Description (JD) Content:
+JD CONTENT:
 {jd_content}
 
-TASK:
-- Extract 12–15 concise keywords and technical topic areas.
-- Sort by JD relevance first, then by CV evidence depth (projects, years, achievements).
-- Include both concrete technologies (e.g., "Python", "React") and topic areas (e.g., "System Design", "CI/CD").
-- Return a single comma-separated list only.
-
-Examples of good outputs:
-- "Python, System Design, REST APIs, React, Docker, AWS, CI/CD, PostgreSQL, Unit Testing, Kubernetes, Microservices, Logging, OAuth, GraphQL, Caching"
-
-Technical Keywords and Areas:"""
+Comma-separated keywords:"""

@@ -2,7 +2,10 @@
 Central prompt manager for importing all interview prompts.
 """
 
-from .extract_cv_keywords_prompts import CV_KEYWORDS_EXTRACTION_PROMPT
+from .extract_cv_keywords_prompts import (
+    CV_KEYWORDS_EXTRACTION_PROMPT,
+    JD_KEYWORDS_EXTRACTION_PROMPT,
+)
 from .skill_assessment_prompts import SKILL_LEVEL_ASSESSMENT_PROMPT
 from .greeting_prompts import GREETING_PROMPT, FALLBACK_GREETING
 from .structure_explanation_prompts import (
@@ -28,6 +31,7 @@ from .hr_question_prompts import (
 
 __all__ = [
     "CV_KEYWORDS_EXTRACTION_PROMPT",
+    "JD_KEYWORDS_EXTRACTION_PROMPT",
     "SKILL_LEVEL_ASSESSMENT_PROMPT",
     "GREETING_PROMPT",
     "FALLBACK_GREETING",
