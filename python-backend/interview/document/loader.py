@@ -33,7 +33,7 @@ class DocumentLoader:
         ]
 
         # Load with llama-index if available
-        if LLAMA_INDEX_AVAILABLE:
+        if LLAMA_INDEX_AVAILABLE and self.reference_paths:
             try:
                 self.documents = SimpleDirectoryReader(
                     input_files=self.reference_paths

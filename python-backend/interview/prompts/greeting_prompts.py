@@ -7,8 +7,8 @@ GREETING_PROMPT = """Give a brief, friendly greeting for the technical interview
 Keep it very short (10 seconds max). Be warm and welcoming.
 
 Example:
-"Hi {candidate_name}! I'm AI interviewer. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
+"Hi {candidate_name}! I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
 
 Generate a short greeting that asks for a brief self-introduction:"""
 
-FALLBACK_GREETING = "Hi {candidate_name}! I'm AI interviewer. Great to meet you! Could you please give me a brief introduction about yourself and your background{tech_mention}?"
+FALLBACK_GREETING = "Hi {candidate_name}! I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
