@@ -12,6 +12,23 @@ JD CONTENT:
 
 Comma-separated keywords:"""
 
+JD_DIFFICULTY_DISTRIBUTION_PROMPT = """Analyze the following Job Description (JD) and determine the ideal difficulty distribution for a technical interview.
+Based on the seniority, required skills, and responsibilities, provide the percentage of questions that should be Easy, Medium, and Hard.
+
+INSTRUCTIONS:
+1. The total percentage must sum to 100%.
+2. Return ONLY a JSON object in the following format:
+   {{"easy": X, "medium": Y, "hard": Z}}
+3. Consider:
+   - Junior/Entry-level roles: Higher percentage of Easy/Medium questions.
+   - Mid-level roles: Balanced distribution, focused on Medium.
+   - Senior/Architect roles: Higher percentage of Hard/Medium questions.
+
+JD CONTENT:
+{jd_content}
+
+JSON Response:"""
+
 CV_KEYWORDS_EXTRACTION_PROMPT = """Analyze BOTH the CV/Resume and the Job Description to extract the most relevant technical skills and topic areas for interview questions.
 
 Weight JD relevance as the HIGHEST priority (prioritize JD requirements ~80%, CV evidence ~20%). Focus on what the JOB REQUIRES. 

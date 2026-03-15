@@ -199,6 +199,11 @@ def interactive_interview():
         print(f"   Your CV Keywords: {', '.join(context.cv_keywords)}")
         print(f"   Assessed Candidate Skill Level: {context.candidate_skill_level}")
         print(f"   Required Job Skill Level: {context.jd_required_skill_level}")
+        
+        # Display active question banks
+        if hasattr(qg, "question_bank_paths") and qg.question_bank_paths:
+            bank_names = [os.path.basename(p) for p in qg.question_bank_paths]
+            print(f"   📚 Question Banks: {', '.join(bank_names)}")
 
         # Show evaluation system info
         try:

@@ -18,6 +18,7 @@ from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
     CV_KEYWORDS_EXTRACTION_PROMPT,
     JD_KEYWORDS_EXTRACTION_PROMPT,
+    JD_DIFFICULTY_DISTRIBUTION_PROMPT,
     SKILL_LEVEL_ASSESSMENT_PROMPT,
     GREETING_PROMPT,
     FALLBACK_GREETING,
@@ -26,6 +27,7 @@ from ..prompts import (
     EXPERIENTIAL_QUESTION_PROMPT,
     FALLBACK_EXPERIENTIAL_QUESTION,
     TECHNICAL_QUESTION_PROMPT,
+    REPHRASE_BANK_QUESTION_PROMPT,
     FALLBACK_TECHNICAL_QUESTION,
     PERFORMANCE_GUIDANCE,
     PREVIOUS_ANSWER_CONTEXT,
@@ -98,6 +100,7 @@ class ConversationContext:
     last_mentioned_concepts: List[str] = field(default_factory=list)
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
     role_difficulty: str = "medium"  # easy|medium|hard derived from JD
+    difficulty_distribution: Dict[str, float] = field(default_factory=lambda: {"easy": 0.3, "medium": 0.4, "hard": 0.3})
     hr_questions_asked: int = 0
     hr_question_types_asked: List[str] = field(default_factory=list)
     asked_questions: List[str] = field(default_factory=list)
@@ -232,6 +235,7 @@ class PromptBasedQuestionGenerator:
 
         # Classify role difficulty from JD and align skill level mapping
         role_diff = self._classify_role_difficulty(job_description)
+        difficulty_dist = self._analyze_jd_difficulty_distribution(job_description)
         skill_level_map = {"easy": "beginner", "medium": "intermediate", "hard": "expert"}
         jd_required_skill = skill_level_map.get(role_diff, "intermediate")
         
@@ -270,6 +274,7 @@ class PromptBasedQuestionGenerator:
             cv_experiences=experiences,
             cv_projects=projects,
             role_difficulty=role_diff,
+            difficulty_distribution=difficulty_dist,
             job_role=job_role,
         )
 
@@ -292,14 +297,40 @@ class PromptBasedQuestionGenerator:
             self.last_question_source = "fallback"
             return self._fallback_greeting(context)
 
+    def _rephrase_with_cv(self, bank_question: str, topic: str, difficulty: str, context: ConversationContext) -> str:
+        """Rephrase a bank question to better align with the candidate's CV while staying true to the JD."""
+        try:
+            # Prepare CV and JD content for rephrasing
+            cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
+            jd_summary = context.job_title + ": " + ", ".join(context.jd_keywords[:5])
+            
+            prompt = REPHRASE_BANK_QUESTION_PROMPT.format(
+                bank_question=bank_question,
+                cv_content=cv_summary or "N/A",
+                jd_content=jd_summary or "N/A",
+                topic=topic,
+                difficulty=difficulty
+            )
+            
+            response = self._complete_llm(prompt)
+            if response and hasattr(response, "text"):
+                rephrased = response.text.strip()
+                # Basic validation: ensure it's a question and not just repeating the prompt
+                if rephrased and "?" in rephrased and len(rephrased) > 15:
+                    return rephrased
+            return bank_question
+        except Exception as e:
+            logger.error(f"Error rephrasing bank question: {e}")
+            return bank_question
+
     def _generate_technical_question(
         self,
         context: ConversationContext,
         last_answer: Optional[str] = None,
         answer_evaluation: Optional[Dict] = None,
     ) -> str:
-        """Generate a technical question using LLM first, then question bank as fallback."""
-        # Select difficulty for potential bank fallback
+        """Generate a technical question using JD as primary, tailored with CV, using bank as source."""
+        # Select difficulty based on JD-derived distribution
         selected_diff = self._select_question_difficulty(context)
 
         # If candidate says it's a repeat, rotate topic proactively
@@ -309,8 +340,9 @@ class PromptBasedQuestionGenerator:
                 context.current_topic = next_topic
                 context.fallback_usage_by_topic[next_topic] = 0
 
-        # Build context about previous answers
+        # Build context about previous answers for the rephrasing model
         jd_keywords_str = ", ".join(context.jd_keywords or []) if context.jd_keywords else "N/A"
+        cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
         
         previous_context = ""
         score = 0.5  # Default score
@@ -356,7 +388,31 @@ class PromptBasedQuestionGenerator:
 
         topics_covered_str = ", ".join(context.topics_covered) if context.topics_covered else "none yet"
 
-        # STEP 1: Try to generate question using LLM FIRST (primary method)
+        # STEP 1: Try to get a question from the bank matching the selected difficulty
+        bank_q = self._get_question_from_bank(context, context.current_topic, selected_diff)
+        if bank_q:
+            logger.info(f"Question bank HIT for topic '{context.current_topic}' and difficulty '{selected_diff}'")
+            
+            # REPHRASE/TAILOR the bank question using the CV
+            tailored_q = self._rephrase_with_cv(bank_q, context.current_topic, selected_diff, context)
+            
+            if context.current_topic not in context.topics_covered:
+                context.topics_covered.append(context.current_topic)
+            
+            context.questions_on_current_topic += 1
+            
+            # Check if should switch topic
+            should_switch = self._should_switch_topic(context, answer_evaluation)
+            if should_switch:
+                next_topic = self._get_next_topic(context)
+                if next_topic:
+                    context.current_topic = next_topic
+                    context.questions_on_current_topic = 0
+            
+            self.last_question_source = "bank_tailored"
+            return tailored_q
+
+        # STEP 2: If no bank question, generate one using LLM (JD-primary, CV-tailored)
         try:
             prompt = TECHNICAL_QUESTION_PROMPT.format(
                 role_jd_keywords=jd_keywords_str,
@@ -366,23 +422,20 @@ class PromptBasedQuestionGenerator:
                 previous_context=previous_context,
                 performance_guidance=performance_guidance,
                 job_title=context.job_title,
-                role_difficulty=context.role_difficulty,
+                role_difficulty=selected_diff, # Use selected difficulty distribution
             )
             response = self._complete_llm(prompt)
             if response and hasattr(response, 'text'):
                 question = response.text.strip()
                 # Validate: check if question is on-role and not duplicate
                 if question and len(question) > 10 and not self._is_near_duplicate(context, question):
-                    # Role guard: if the generated question is off-role, try bank fallback
                     if self._is_on_role_question(question, context.job_role, context.jd_keywords):
                         self.last_question_source = "prompt"
                         if context.current_topic not in context.topics_covered:
                             context.topics_covered.append(context.current_topic)
                         
-                        # Increment questions asked on this topic
                         context.questions_on_current_topic += 1
                         
-                        # Check if should switch topic
                         should_switch = self._should_switch_topic(context, answer_evaluation)
                         if should_switch:
                             next_topic = self._get_next_topic(context)
@@ -392,42 +445,23 @@ class PromptBasedQuestionGenerator:
                         
                         return question
         except Exception as e:
-            # LLM generation failed, continue to fallback
-            pass
+            logger.error(f"Error generating tailored technical question: {e}")
         
-        # STEP 2: If LLM fails or generates invalid question, try question bank as fallback
-        bank_q = self._get_question_from_bank(context, context.current_topic, selected_diff)
-        if bank_q:
-            logger.info(f"Question bank HIT for topic '{context.current_topic}' and difficulty '{selected_diff}'")
-            if context.current_topic not in context.topics_covered:
-                context.topics_covered.append(context.current_topic)
-            
-            context.questions_on_current_topic += 1
-            
-            should_switch_topic = self._should_switch_topic(context, answer_evaluation)
-            if should_switch_topic:
-                next_topic = self._get_next_topic(context)
-                if next_topic:
-                    context.current_topic = next_topic
-                    context.questions_on_current_topic = 0
-            self.last_question_source = "bank"
-            return bank_q
-        else:
-            logger.info(f"Question bank MISS for topic '{context.current_topic}' and difficulty '{selected_diff}'")
-        
-        # STEP 3: If both LLM and bank fail, use hardcoded fallback
+        # STEP 3: Fallback if everything else fails
         return self._fallback_technical_question_with_context(context, last_answer or "", score)
 
     def _select_question_difficulty(self, context: ConversationContext) -> str:
-        """Select question difficulty based on JD-derived role difficulty."""
-        role = getattr(context, "role_difficulty", "medium")
-        if role == "easy":
-            schedule = ["easy", "easy", "medium"]
-        elif role == "hard":
-            schedule = ["hard", "hard", "medium"]
-        else:  # medium
-            schedule = ["medium", "medium", "easy", "hard"]
-        return schedule[context.question_count % len(schedule)]
+        """Select question difficulty based on JD-derived difficulty distribution."""
+        dist = getattr(context, "difficulty_distribution", {"easy": 0.3, "medium": 0.4, "hard": 0.3})
+        
+        # Simple weighted random choice
+        r = np.random.random()
+        cumulative = 0.0
+        for diff in ["easy", "medium", "hard"]:
+            cumulative += dist.get(diff, 0.0)
+            if r <= cumulative:
+                return diff
+        return "medium"
 
     def _load_question_bank(self) -> None:
         if not getattr(self, "question_bank_dir", None):
@@ -502,6 +536,7 @@ class PromptBasedQuestionGenerator:
 
     def _load_question_banks_for_role(self, job_role: str) -> None:
         paths = self._select_bank_files_for_role(job_role)
+        self.question_bank_paths = paths  # Store for display/tracking
         aggregated: List[Dict[str, Any]] = []
         for p in paths:
             try:
@@ -1819,3 +1854,43 @@ class PromptBasedQuestionGenerator:
         if score_easy > score_medium:
             return "easy"
         return "medium"
+
+    def _analyze_jd_difficulty_distribution(self, job_description: str) -> Dict[str, float]:
+        """Analyze JD and return difficulty distribution using LLM."""
+        if not job_description.strip():
+            return {"easy": 0.3, "medium": 0.4, "hard": 0.3}
+
+        prompt = JD_DIFFICULTY_DISTRIBUTION_PROMPT.format(jd_content=job_description)
+
+        try:
+            response = self._complete_llm(prompt)
+            if response and hasattr(response, "text"):
+                res_text = response.text.strip()
+                # Find JSON block
+                match = re.search(r"\{.*\}", res_text, re.DOTALL)
+                if match:
+                    dist = json.loads(match.group(0))
+                    # Validate distribution
+                    easy = float(dist.get("easy", 0))
+                    medium = float(dist.get("medium", 0))
+                    hard = float(dist.get("hard", 0))
+                    total = easy + medium + hard
+                    if total > 0:
+                        return {
+                            "easy": easy / total,
+                            "medium": medium / total,
+                            "hard": hard / total
+                        }
+            
+            # Fallback based on role_difficulty if LLM fails
+            role_diff = self._classify_role_difficulty(job_description)
+            if role_diff == "easy":
+                return {"easy": 0.6, "medium": 0.3, "hard": 0.1}
+            elif role_diff == "hard":
+                return {"easy": 0.1, "medium": 0.3, "hard": 0.6}
+            else:
+                return {"easy": 0.3, "medium": 0.4, "hard": 0.3}
+                
+        except Exception as e:
+            logger.error(f"Error analyzing JD difficulty distribution: {e}")
+            return {"easy": 0.3, "medium": 0.4, "hard": 0.3}
