@@ -27,6 +27,8 @@ import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancle";
+import CandidateSubscriptionPlans from "./pages/candidate/CandidateSubscriptionPlans";
+import CandidateCostStatistics from "./pages/candidate/CandidateCostStatistics";
 
 // Admin Pages
 import AdminOverview from "./pages/admin/AdminOverview";
@@ -63,6 +65,7 @@ function App() {
               element={<RecruiterDashboard />}
             />
             <Route path="/subscription" element={<SubscriptionPlans />} />
+            <Route path="/candidate/subscription" element={<CandidateSubscriptionPlans />} />
 
             {/* Payment Routes */}
             <Route path="/payment/success" element={<PaymentSuccess />} />
@@ -82,6 +85,7 @@ function App() {
             
             {/* Recruiter Cost Statistics */}
             <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />
+            <Route path="/candidate/cost-statistics" element={<CandidateCostStatistics />} />
             
             {/* Landing Page - Public Home */}
             <Route path="/" element={<LandingPage />} />

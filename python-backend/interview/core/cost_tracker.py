@@ -25,7 +25,8 @@ class CostTracker:
         "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
         "gpt-5.2": {"input": 5.00, "output": 15.00},
         "gpt-5-mini": {"input": 0.25, "output": 1.00},
-        
+        "gemini-1.5-flash-latest": {"input": 0.075, "output": 0.30},
+        "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
         # Google Cloud Speech-to-Text (per minute, assumed $0.024/min)
         "google-stt": {"price_per_minute": 0.024},
         

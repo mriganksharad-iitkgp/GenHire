@@ -1,878 +1,254 @@
-/* Cost Statistics Page Styles */
-.costStatistics {
-  padding: 0;
-  min-height: 100vh;
-  background: #f8fafc;
-}
-
-/* Loading State */
-.loadingContainer {
+.wrapper {
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: 1rem;
+  gap: 16px;
 }
 
-.loadingSpinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loadingContainer p {
-  color: #64748b;
-  font-size: 1rem;
-}
-
-/* Page Header */
-.pageHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2rem;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.headerContent h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 0.25rem;
-}
-
-.headerContent p {
-  font-size: 0.95rem;
-  color: #64748b;
+.headerBlock h1 {
   margin: 0;
+  font-size: 28px;
+  color: #0f172a;
 }
 
-.headerActions {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.periodSelect {
-  padding: 0.625rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: white;
-  color: #1e293b;
-  font-size: 0.95rem;
-  cursor: pointer;
-  outline: none;
-  min-width: 140px;
-}
-
-.periodSelect:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.exportBtn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.exportBtn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-}
-
-/* Overview Cards */
-.overviewCards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
-  padding: 2rem;
-}
-
-.overviewCard {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
-
-.overviewCard:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.overviewIcon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.overviewInfo {
-  display: flex;
-  flex-direction: column;
-}
-
-.overviewLabel {
-  font-size: 0.875rem;
-  color: #64748b;
-  margin-bottom: 0.25rem;
-}
-
-.overviewValue {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-/* Sections */
-.section {
-  padding: 0 2rem 2rem;
-}
-
-.sectionHeader {
-  margin-bottom: 1.5rem;
-}
-
-.sectionHeader h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 0.25rem;
-}
-
-.sectionHeader p {
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0;
-}
-
-/* Pie Charts Grid */
-.pieChartsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-}
-
-.pieChartCard {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  padding: 1.5rem;
-  transition: all 0.2s ease;
-}
-
-.pieChartCard:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.pieChartHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.pieChartIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-}
-
-.pieChartHeader h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-}
-
-.pieChartContainer {
-  position: relative;
-  width: 160px;
-  height: 160px;
-  margin: 0 auto 1.5rem;
-}
-
-.pieChart {
-  width: 100%;
-  height: 100%;
-}
-
-.pieChartCenter {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.pieChartPercentage {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.pieChartLabel {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.pieChartLegend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.legendItem {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+.headerBlock p {
+  margin: 8px 0 0;
   color: #475569;
 }
 
-.legendDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-/* Horizontal Bars */
-.horizontalBarsCard {
-  background: white;
-  border-radius: 16px;
+.card {
+  background: #ffffff;
   border: 1px solid #e2e8f0;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+  border-radius: 12px;
+  padding: 16px;
 }
 
-.horizontalBarContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  color: #0f172a;
 }
 
-.horizontalBarHeader {
+.sectionTitleRow {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.horizontalBarLabel {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1e293b;
+.sectionTitleRow h2 {
+  margin: 0;
 }
 
-.horizontalBarValue {
-  font-size: 0.9rem;
-  font-weight: 500;
+.exportBtn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.exportBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.subText {
+  margin: 0 0 12px;
   color: #64748b;
 }
 
-.horizontalBarTrack {
-  height: 12px;
-  background: #e2e8f0;
-  border-radius: 6px;
-  overflow: hidden;
+.vizGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.horizontalBarFill {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 1s ease;
-}
-
-.horizontalBarSublabel {
-  font-size: 0.8rem;
-  color: #94a3b8;
-}
-
-/* Table Card */
-.tableCard {
-  background: white;
-  border-radius: 16px;
+.chartCard {
   border: 1px solid #e2e8f0;
-  overflow: hidden;
+  border-radius: 10px;
+  padding: 12px;
+  background: #ffffff;
 }
 
-.recruitersTable {
+.chartCard h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #334155;
+}
+
+.chartWrap {
+  height: 280px;
+}
+
+.doughnutWrap {
+  height: 320px;
+}
+
+.fullWidthChart {
+  grid-column: 1 / -1;
+}
+
+.planLegend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.planLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.planLegendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.timelineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  font-size: 14px;
+  color: #334155;
+}
+
+.field input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.field input:disabled {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.timelineMeta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.status {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.recruitersTable th {
+.table th,
+.table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px;
   text-align: left;
-  padding: 1rem 1.5rem;
+  vertical-align: top;
+  font-size: 14px;
+}
+
+.table th {
   background: #f8fafc;
-  font-size: 0.8rem;
+  color: #0f172a;
   font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #e2e8f0;
 }
 
-.recruitersTable td {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.95rem;
-  color: #475569;
+.totalLine {
+  margin-top: 12px;
+  font-size: 15px;
+  color: #0f172a;
 }
 
-.recruitersTable tr:last-child td {
-  border-bottom: none;
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 
-.recruitersTable tr:hover td {
-  background: #f8fafc;
-}
-
-.recruiterCell {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.tableAvatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 0.875rem;
-  flex-shrink: 0;
-}
-
-.tableName {
-  display: block;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.tableEmail {
-  display: block;
-  font-size: 0.8rem;
-  color: #94a3b8;
-}
-
-.deptBadge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  background: #e0e7ff;
-  color: #6366f1;
-  border-radius: 50px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.usageCell {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.usageBar {
-  flex: 1;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
-  max-width: 100px;
-}
-
-.usageFill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.5s ease;
-}
-
-.usagePercent {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #1e293b;
-  min-width: 40px;
-}
-
-/* Stacked Chart */
-.stackedChartCard {
-  background: white;
-  border-radius: 16px;
+.kpiCard {
   border: 1px solid #e2e8f0;
-  padding: 2rem;
-}
-
-.chartLegend {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-}
-
-.legendEntry {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #475569;
-}
-
-.legendColor {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.stackedBarsContainer {
+  border-radius: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 6px;
 }
 
-.stackedBarRow {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
+.kpiCard h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #334155;
 }
 
-.stackedBarInfo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 200px;
+.kpiCard p {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
-.recruiterAvatar {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 0.75rem;
-  flex-shrink: 0;
+.kpiCard small {
+  color: #64748b;
 }
 
-.recruiterDetails {
-  display: flex;
-  flex-direction: column;
+.positive {
+  color: #15803d !important;
 }
 
-.recruiterName {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.recruiterDept {
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-.stackedBarContainer {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.stackedBarTrack {
-  flex: 1;
-  height: 24px;
-  background: #f1f5f9;
-  border-radius: 6px;
-  display: flex;
-  overflow: hidden;
-}
-
-.stackedBarSegment {
-  height: 100%;
-  transition: width 0.5s ease;
-  position: relative;
-}
-
-.stackedBarSegment:first-child {
-  border-radius: 6px 0 0 6px;
-}
-
-.stackedBarSegment:last-child {
-  border-radius: 0 6px 6px 0;
-}
-
-.stackedBarTotal {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1e293b;
-  min-width: 80px;
-  text-align: right;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-  .overviewCards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .pieChartsGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.negative {
+  color: #b91c1c !important;
 }
 
 @media (max-width: 768px) {
-  .pageHeader {
-    flex-direction: column;
-    align-items: flex-start;
+  .wrapper {
+    padding: 14px;
   }
-  
-  .headerActions {
-    width: 100%;
-    flex-direction: column;
+
+  .headerBlock h1 {
+    font-size: 22px;
   }
-  
-  .periodSelect, .exportBtn {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .overviewCards {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-  }
-  
-  .section {
-    padding: 0 1rem 1.5rem;
-  }
-  
-  .pieChartsGrid {
+
+  .vizGrid {
     grid-template-columns: 1fr;
   }
-  
-  .recruitersTable {
-    display: block;
-    overflow-x: auto;
+
+  .fullWidthChart {
+    grid-column: auto;
   }
-  
-  .stackedBarRow {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .stackedBarInfo {
-    min-width: 100%;
-    margin-bottom: 0.5rem;
-  }
-  
-  .stackedBarContainer {
-    width: 100%;
-  }
-}
-
-/* Revenue vs Cost Section */
-.revenueGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  padding: 0 2rem 2rem;
-}
-
-.revenueCard {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.revenueCardHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.revenueIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.revenueLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #64748b;
-}
-
-.revenueAmount {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.profitPositive {
-  color: #10b981;
-}
-
-.profitNegative {
-  color: #ef4444;
-}
-
-.revenueBreakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.revenueBreakdownItem {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #475569;
-}
-
-.revenueDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.revenueItemValue {
-  margin-left: auto;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-/* Profit Bar */
-.profitBar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.profitBarTrack {
-  position: relative;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.profitBarRevenue {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
-  border-radius: 6px;
-  z-index: 1;
-}
-
-.profitBarCost {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #ef4444, #f87171);
-  border-radius: 6px;
-  z-index: 2;
-}
-
-.profitBarLabels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-/* Cost Per Interview */
-.costPerInterviewCard {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  padding: 2rem;
-  margin: 0 2rem 2rem;
-}
-
-.cpiMetric {
-  text-align: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.cpiValue {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.cpiCurrency {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #6366f1;
-}
-
-.cpiAmount {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.cpiUnit {
-  font-size: 1rem;
-  color: #64748b;
-  margin-left: 0.25rem;
-}
-
-.cpiDescription {
-  color: #64748b;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
-}
-
-.cpiBreakdown {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.cpiBreakdownItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 12px;
-}
-
-.cpiBreakdownLabel {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.cpiBreakdownValue {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.cpiInsight {
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-  font-size: 0.9rem;
-  color: #0369a1;
-  line-height: 1.5;
-}
-
-@media (max-width: 900px) {
-  .revenueGrid {
-    grid-template-columns: 1fr;
-    padding: 0 1rem 1rem;
-  }
-
-  .costPerInterviewCard {
-    margin: 0 1rem 1rem;
-  }
-
-  .cpiBreakdown {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Plan Badge Styles */
-.planBadge {
-  display: inline-block;
-  padding: 0.3rem 0.85rem;
-  border-radius: 50px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.planFree {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.planPro {
-  background: #ede9fe;
-  color: #7c3aed;
-}
-
-.planEnterprise {
-  background: #d1fae5;
-  color: #059669;
-}
-
-/* Subscription Status Badges */
-.statusBadge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 50px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.statusActive {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.statusExpired {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.statusNone {
-  background: #f1f5f9;
-  color: #94a3b8;
 }

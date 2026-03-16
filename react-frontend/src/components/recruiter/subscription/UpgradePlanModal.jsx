@@ -34,13 +34,12 @@ const UpgradePlanModal = ({
         getPaymentHistory().catch(() => ({ data: { payments: [] } })),
       ]);
 
-      if (plansRes?.data?.plans) {
-        setPlans(plansRes.data.plans);
-      } else if (plansRes?.plans) {
-        setPlans(plansRes.plans);
-      } else if (Array.isArray(plansRes)) {
-        setPlans(plansRes);
-      }
+      const rawPlans = plansRes?.data?.plans || plansRes?.plans || (Array.isArray(plansRes) ? plansRes : []);
+      const allowedRecruiterPlanSlugs = new Set(["free", "professional", "recruiter-max"]);
+      const filteredPlans = rawPlans.filter((plan) =>
+        allowedRecruiterPlanSlugs.has(String(plan?.slug || "").toLowerCase()),
+      );
+      setPlans(filteredPlans);
 
       if (historyRes?.data?.payments) {
         setPaymentHistory(historyRes.data.payments);
@@ -211,16 +210,16 @@ const UpgradePlanModal = ({
             <div className={styles.plansGrid}>
               {plans.map((plan) => {
                 const isCurrent = isCurrentPlan(plan);
-                const isEnterprise = plan.slug === "enterprise";
+                const isFeaturedPlan = plan.slug === "recruiter-max";
 
                 return (
                   <div
                     key={plan.id || plan.slug}
                     className={`${styles.planCard} ${
                       isCurrent ? styles.current : ""
-                    } ${isEnterprise ? styles.featured : ""}`}
+                    } ${isFeaturedPlan ? styles.featured : ""}`}
                   >
-                    {isEnterprise && (
+                    {isFeaturedPlan && (
                       <div className={styles.featuredBadge}>
                         <svg
                           viewBox="0 0 24 24"
@@ -312,7 +311,7 @@ const UpgradePlanModal = ({
                     <button
                       className={`${styles.selectButton} ${
                         isCurrent ? styles.disabled : ""
-                      } ${isEnterprise ? styles.primary : ""}`}
+                      } ${isFeaturedPlan ? styles.primary : ""}`}
                       onClick={() => !isCurrent && handleUpgrade(plan.id)}
                       disabled={isCurrent || paymentLoading === plan.id}
                     >

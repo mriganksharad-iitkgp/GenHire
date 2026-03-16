@@ -17,6 +17,8 @@ from .cost_tracker import CostTracker
 from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
     CV_KEYWORDS_EXTRACTION_PROMPT,
+    JD_KEYWORDS_EXTRACTION_PROMPT,
+    JD_DIFFICULTY_DISTRIBUTION_PROMPT,
     SKILL_LEVEL_ASSESSMENT_PROMPT,
     GREETING_PROMPT,
     FALLBACK_GREETING,
@@ -25,6 +27,7 @@ from ..prompts import (
     EXPERIENTIAL_QUESTION_PROMPT,
     FALLBACK_EXPERIENTIAL_QUESTION,
     TECHNICAL_QUESTION_PROMPT,
+    REPHRASE_BANK_QUESTION_PROMPT,
     FALLBACK_TECHNICAL_QUESTION,
     PERFORMANCE_GUIDANCE,
     PREVIOUS_ANSWER_CONTEXT,
@@ -76,7 +79,8 @@ class ConversationContext:
     current_topic: str
     depth_level: ConversationDepth
     topics_covered: List[str]
-    candidate_skill_level: str
+    candidate_skill_level: str  # extracted from CV
+    jd_required_skill_level: str  # extracted from JD
     answer_quality_trend: List[float]
     follow_up_count: int
     needs_topic_change: bool
@@ -92,9 +96,11 @@ class ConversationContext:
     cv_experiences: List[str] = field(default_factory=list)
     cv_projects: List[str] = field(default_factory=list)
     experiential_questions_asked: int = 0
+    questions_on_current_topic: int = 0
     last_mentioned_concepts: List[str] = field(default_factory=list)
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
     role_difficulty: str = "medium"  # easy|medium|hard derived from JD
+    difficulty_distribution: Dict[str, float] = field(default_factory=lambda: {"easy": 0.3, "medium": 0.4, "hard": 0.3})
     hr_questions_asked: int = 0
     hr_question_types_asked: List[str] = field(default_factory=list)
     asked_questions: List[str] = field(default_factory=list)
@@ -224,27 +230,24 @@ class PromptBasedQuestionGenerator:
         jd_keywords = self._filter_keywords_by_role(jd_keywords, job_role)
         self._load_question_banks_for_role(job_role)
 
-        # Assess initial skill level
+        # Assess initial skill level from candidate CV
         skill_level = self._assess_initial_skill_level(resume_sections)
 
         # Classify role difficulty from JD and align skill level mapping
         role_diff = self._classify_role_difficulty(job_description)
+        difficulty_dist = self._analyze_jd_difficulty_distribution(job_description)
         skill_level_map = {"easy": "beginner", "medium": "intermediate", "hard": "expert"}
-        mapped_skill = skill_level_map.get(role_diff, skill_level)
+        jd_required_skill = skill_level_map.get(role_diff, "intermediate")
+        
         candidate_name = self._extract_candidate_name(resume_sections)
 
         # Select starting topic: PRIORITIZE JD keywords to make interview role-focused
         starting_topic = "role fundamentals"
         if jd_keywords:
-            # First priority: JD keywords that also appear in CV (ensures role relevance + candidate has experience)
-            jd_in_cv = [kw for kw in jd_keywords if kw in (cv_keywords or [])]
-            if jd_in_cv:
-                starting_topic = jd_in_cv[0]
-            else:
-                # Second priority: Pure JD keywords (role requirements even if not in CV)
-                starting_topic = jd_keywords[0]
+            # ONLY use JD keywords for technical topics
+            starting_topic = jd_keywords[0]
         elif cv_keywords:
-            # Fallback: CV keywords if JD has no keywords
+            # Very last fallback if JD extraction fails completely
             starting_topic = cv_keywords[0]
 
         # Extract experiences and projects
@@ -255,7 +258,8 @@ class PromptBasedQuestionGenerator:
             current_topic=starting_topic,
             depth_level=ConversationDepth.SURFACE,
             topics_covered=[],
-            candidate_skill_level=mapped_skill,
+            candidate_skill_level=skill_level,
+            jd_required_skill_level=jd_required_skill,
             answer_quality_trend=[],
             follow_up_count=0,
             needs_topic_change=False,
@@ -270,6 +274,7 @@ class PromptBasedQuestionGenerator:
             cv_experiences=experiences,
             cv_projects=projects,
             role_difficulty=role_diff,
+            difficulty_distribution=difficulty_dist,
             job_role=job_role,
         )
 
@@ -292,14 +297,40 @@ class PromptBasedQuestionGenerator:
             self.last_question_source = "fallback"
             return self._fallback_greeting(context)
 
+    def _rephrase_with_cv(self, bank_question: str, topic: str, difficulty: str, context: ConversationContext) -> str:
+        """Rephrase a bank question to better align with the candidate's CV while staying true to the JD."""
+        try:
+            # Prepare CV and JD content for rephrasing
+            cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
+            jd_summary = context.job_title + ": " + ", ".join(context.jd_keywords[:5])
+            
+            prompt = REPHRASE_BANK_QUESTION_PROMPT.format(
+                bank_question=bank_question,
+                cv_content=cv_summary or "N/A",
+                jd_content=jd_summary or "N/A",
+                topic=topic,
+                difficulty=difficulty
+            )
+            
+            response = self._complete_llm(prompt)
+            if response and hasattr(response, "text"):
+                rephrased = response.text.strip()
+                # Basic validation: ensure it's a question and not just repeating the prompt
+                if rephrased and "?" in rephrased and len(rephrased) > 15:
+                    return rephrased
+            return bank_question
+        except Exception as e:
+            logger.error(f"Error rephrasing bank question: {e}")
+            return bank_question
+
     def _generate_technical_question(
         self,
         context: ConversationContext,
         last_answer: Optional[str] = None,
         answer_evaluation: Optional[Dict] = None,
     ) -> str:
-        """Generate a technical question using LLM first, then question bank as fallback."""
-        # Select difficulty for potential bank fallback
+        """Generate a technical question using JD as primary, tailored with CV, using bank as source."""
+        # Select difficulty based on JD-derived distribution
         selected_diff = self._select_question_difficulty(context)
 
         # If candidate says it's a repeat, rotate topic proactively
@@ -309,20 +340,14 @@ class PromptBasedQuestionGenerator:
                 context.current_topic = next_topic
                 context.fallback_usage_by_topic[next_topic] = 0
 
-        # Build context about previous answers
-        jd_list = list(context.jd_keywords or [])
-        cv_list = list(context.cv_keywords or [])
-        merged_keywords: List[str] = []
-        for kw in jd_list:
-            if kw and kw not in merged_keywords:
-                merged_keywords.append(kw)
-        for kw in cv_list:
-            if kw and kw not in merged_keywords:
-                merged_keywords.append(kw)
-        cv_keywords_str = ", ".join(merged_keywords) if merged_keywords else "technical skills"
+        # Build context about previous answers for the rephrasing model
+        jd_keywords_str = ", ".join(context.jd_keywords or []) if context.jd_keywords else "N/A"
+        cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
+        
         previous_context = ""
         score = 0.5  # Default score
         
+        performance_guidance = PERFORMANCE_GUIDANCE["good"]
         if last_answer and answer_evaluation:
             score = answer_evaluation.get("relevance_score", 0.5)
             mentioned_concepts = self._extract_concepts_from_answer(last_answer)
@@ -363,67 +388,80 @@ class PromptBasedQuestionGenerator:
 
         topics_covered_str = ", ".join(context.topics_covered) if context.topics_covered else "none yet"
 
-        # STEP 1: Try to generate question using LLM FIRST (primary method)
+        # STEP 1: Try to get a question from the bank matching the selected difficulty
+        bank_q = self._get_question_from_bank(context, context.current_topic, selected_diff)
+        if bank_q:
+            logger.info(f"Question bank HIT for topic '{context.current_topic}' and difficulty '{selected_diff}'")
+            
+            # REPHRASE/TAILOR the bank question using the CV
+            tailored_q = self._rephrase_with_cv(bank_q, context.current_topic, selected_diff, context)
+            
+            if context.current_topic not in context.topics_covered:
+                context.topics_covered.append(context.current_topic)
+            
+            context.questions_on_current_topic += 1
+            
+            # Check if should switch topic
+            should_switch = self._should_switch_topic(context, answer_evaluation)
+            if should_switch:
+                next_topic = self._get_next_topic(context)
+                if next_topic:
+                    context.current_topic = next_topic
+                    context.questions_on_current_topic = 0
+            
+            self.last_question_source = "bank_tailored"
+            return tailored_q
+
+        # STEP 2: If no bank question, generate one using LLM (JD-primary, CV-tailored)
         try:
             prompt = TECHNICAL_QUESTION_PROMPT.format(
-                cv_keywords=cv_keywords_str,
+                role_jd_keywords=jd_keywords_str,
                 current_topic=context.current_topic,
                 question_type=question_type,
                 topics_covered=topics_covered_str,
                 previous_context=previous_context,
-                performance_guidance=performance_guidance if last_answer else PERFORMANCE_GUIDANCE["good"],
+                performance_guidance=performance_guidance,
                 job_title=context.job_title,
-                role_jd_keywords=", ".join(context.jd_keywords or []) or "—",
+                role_difficulty=selected_diff, # Use selected difficulty distribution
             )
             response = self._complete_llm(prompt)
             if response and hasattr(response, 'text'):
                 question = response.text.strip()
                 # Validate: check if question is on-role and not duplicate
                 if question and len(question) > 10 and not self._is_near_duplicate(context, question):
-                    # Role guard: if the generated question is off-role, try bank fallback
                     if self._is_on_role_question(question, context.job_role, context.jd_keywords):
                         self.last_question_source = "prompt"
                         if context.current_topic not in context.topics_covered:
                             context.topics_covered.append(context.current_topic)
                         
-                        # Check if should switch topic
+                        context.questions_on_current_topic += 1
+                        
                         should_switch = self._should_switch_topic(context, answer_evaluation)
                         if should_switch:
                             next_topic = self._get_next_topic(context)
                             if next_topic:
                                 context.current_topic = next_topic
+                                context.questions_on_current_topic = 0
                         
                         return question
         except Exception as e:
-            # LLM generation failed, continue to fallback
-            pass
+            logger.error(f"Error generating tailored technical question: {e}")
         
-        # STEP 2: If LLM fails or generates invalid question, try question bank as fallback
-        bank_q = self._get_question_from_bank(context, context.current_topic, selected_diff)
-        if bank_q:
-            if context.current_topic not in context.topics_covered:
-                context.topics_covered.append(context.current_topic)
-            should_switch_topic = self._should_switch_topic(context, answer_evaluation)
-            if should_switch_topic:
-                next_topic = self._get_next_topic(context)
-                if next_topic:
-                    context.current_topic = next_topic
-            self.last_question_source = "bank"
-            return bank_q
-        
-        # STEP 3: If both LLM and bank fail, use hardcoded fallback
+        # STEP 3: Fallback if everything else fails
         return self._fallback_technical_question_with_context(context, last_answer or "", score)
 
     def _select_question_difficulty(self, context: ConversationContext) -> str:
-        """Select question difficulty based on JD-derived role difficulty."""
-        role = getattr(context, "role_difficulty", "medium")
-        if role == "easy":
-            schedule = ["easy", "easy", "medium"]
-        elif role == "hard":
-            schedule = ["hard", "hard", "medium"]
-        else:  # medium
-            schedule = ["medium", "medium", "easy", "hard"]
-        return schedule[context.question_count % len(schedule)]
+        """Select question difficulty based on JD-derived difficulty distribution."""
+        dist = getattr(context, "difficulty_distribution", {"easy": 0.3, "medium": 0.4, "hard": 0.3})
+        
+        # Simple weighted random choice
+        r = np.random.random()
+        cumulative = 0.0
+        for diff in ["easy", "medium", "hard"]:
+            cumulative += dist.get(diff, 0.0)
+            if r <= cumulative:
+                return diff
+        return "medium"
 
     def _load_question_bank(self) -> None:
         if not getattr(self, "question_bank_dir", None):
@@ -498,6 +536,7 @@ class PromptBasedQuestionGenerator:
 
     def _load_question_banks_for_role(self, job_role: str) -> None:
         paths = self._select_bank_files_for_role(job_role)
+        self.question_bank_paths = paths  # Store for display/tracking
         aggregated: List[Dict[str, Any]] = []
         for p in paths:
             try:
@@ -612,61 +651,55 @@ class PromptBasedQuestionGenerator:
     def _should_switch_topic(
         self, context: ConversationContext, answer_evaluation: Optional[Dict]
     ) -> bool:
-        """Determine if we should switch to a new topic based on conversation flow."""
-
-        # Don't switch too early
-        if context.question_count < 3:
-            return False
-
-        # Switch every 3-4 questions, but also consider performance
-        base_switch_interval = 3
-
-        if answer_evaluation:
-            score = answer_evaluation.get("overall_score", 0.5)
-
-            # If they're struggling (< 0.4), switch sooner to find their strengths
-            if score < 0.4 and context.question_count % 2 == 0:
+        """Determine if we should switch to a new topic based on conversation flow.
+        
+        Forces very frequent topic changes for technical questions.
+        """
+        # FORCED SWITCH: After at most 2 questions, always switch.
+        if context.questions_on_current_topic >= 2:
+            return True
+            
+        # PREFERRED SWITCH: Switch after 1 question if there are many topics remaining
+        covered_lowered = [c.lower() for c in context.topics_covered]
+        uncovered_jd_count = len([t for t in context.jd_keywords if t.lower() not in covered_lowered])
+        if context.questions_on_current_topic >= 1 and uncovered_jd_count > 2:
+            return True
+            
+        # Performance-based early switch
+        if answer_evaluation and context.questions_on_current_topic >= 1:
+            score = answer_evaluation.get("relevance_score", 0.5)
+            if score < 0.4: # Struggle detected, move to new topic immediately
                 return True
-
-            # If they're doing well (> 0.8), can explore topic longer
-            if score > 0.8:
-                base_switch_interval = 4
-
-        # Check if it's time to switch based on interval
-        questions_on_current_topic = context.question_count % base_switch_interval
-        return questions_on_current_topic == 0 and len(context.cv_keywords) > len(
-            context.topics_covered
-        )
+                
+        return False
 
     def _get_next_topic(self, context: ConversationContext) -> Optional[str]:
-        """Get the next topic to explore - PRIORITIZE JD keywords for role-specific questions."""
-        # Priority 1: JD keywords that also appear in CV (role-relevant AND candidate has experience)
-        jd_in_cv = [t for t in (context.jd_keywords or []) if t in (context.cv_keywords or [])]
-        jd_in_cv_allowed = [t for t in jd_in_cv if self._is_topic_on_role(t, context.job_role)]
-        uncovered_jd_in_cv = [t for t in jd_in_cv_allowed if t not in (context.topics_covered or [])]
-        if uncovered_jd_in_cv:
-            return uncovered_jd_in_cv[0]
+        """Get the next topic to explore - ONLY consider JD keywords for technical rounds."""
+        # Clean and prioritize keywords from JD
+        jd_keywords = [t.lower() for t in (context.jd_keywords or []) if t]
+        covered = [t.lower() for t in (context.topics_covered or []) if t]
+        
+        # Ensure current topic is added to covered to avoid repeats
+        if context.current_topic.lower() not in covered:
+            covered.append(context.current_topic.lower())
 
-        # Priority 2: Pure JD keywords (role requirements, test knowledge even if not in CV)
-        jd_only = [t for t in (context.jd_keywords or []) 
-                   if self._is_topic_on_role(t, context.job_role) 
-                   and t not in (context.topics_covered or [])]
-        if jd_only:
-            return jd_only[0]
+        # Priority 1: Uncovered JD keywords that are on-role
+        jd_allowed = [t for t in jd_keywords if t not in covered and self._is_topic_on_role(t, context.job_role)]
+        if jd_allowed:
+            return jd_allowed[0]
 
-        # Priority 3: CV keywords that are role-appropriate (fallback to CV-only topics)
-        cv_topics = [
-            t for t in (context.cv_keywords or [])
-            if t not in (context.topics_covered or []) and self._is_topic_on_role(t, context.job_role)
-        ]
-        if cv_topics:
-            return cv_topics[0]
+        # Priority 2: Any uncovered JD technical keywords
+        all_uncovered_jd = [t for t in jd_keywords if t not in covered]
+        if all_uncovered_jd:
+            return all_uncovered_jd[0]
 
-        # Priority 4: Cycle back to covered topics for deeper exploration
-        if context.topics_covered:
-            return context.topics_covered[
-                context.question_count % len(context.topics_covered)
-            ]
+        # Priority 3: Cycle back to covered topics for deeper exploration
+        if covered:
+            # Pick a topic from covered that is NOT the current topic
+            other_topics = [t for t in covered if t != context.current_topic.lower()]
+            if other_topics:
+                return other_topics[0]
+            return covered[0]
 
         return None
 
@@ -694,24 +727,28 @@ class PromptBasedQuestionGenerator:
         role = (job_role or "software_engineer").lower()
         mapping = {
             "data_analyst": [
-                "sql", "excel", "power bi", "tableau", "dashboard", "kpi", "report", "metric", "analysis", "data", "python", "pandas"
+                "sql", "excel", "power bi", "tableau", "dashboard", "kpi", "report", "metric", "analysis", "data", "python", "pandas",
+                "visualization", "statistics", "cleaning", "modeling", "etl"
             ],
             "business_analyst": [
                 "requirement", "sql", "excel", "power bi", "tableau", "dashboard", "kpi",
-                "stakeholder", "user story", "process", "metric", "report", "visualization", "business", "analysis"
+                "stakeholder", "user story", "process", "metric", "report", "visualization", "business", "analysis",
+                "documentation", "agile", "workflow", "modeling"
             ],
             "devops_engineer": [
                 "ci", "cd", "pipeline", "docker", "kubernetes", "helm", "terraform", "ansible",
-                "aws", "gcp", "azure", "monitor", "logging", "prometheus", "grafana", "deployment", "scaling", "load balancer"
+                "aws", "gcp", "azure", "monitor", "logging", "prometheus", "grafana", "deployment", "scaling", "load balancer",
+                "linux", "bash", "security", "infrastructure", "yaml", "git"
             ],
             "full_stack_developer": [
                 "react", "angular", "vue", "node", "express", "django", "flask", "rest", "graphql",
                 "authentication", "authorization", "jwt", "database", "sql", "mongodb", "postgres", "redis",
-                "state", "redux", "routing", "css", "html"
+                "state", "redux", "routing", "css", "html", "javascript", "typescript", "api", "testing"
             ],
             "data_scientist": [
                 "python", "pandas", "numpy", "stat", "model", "training", "evaluation", "regression", "classification",
-                "clustering", "nlp", "vision", "feature", "machine learning", "deep", "time series", "recommend"
+                "clustering", "nlp", "vision", "feature", "machine learning", "deep", "time series", "recommend",
+                "scikit-learn", "tensorflow", "pytorch", "keras", "sql", "jupyter"
             ],
             "product_manager": [
                 "product strategy", "roadmap", "user research", "stakeholder", "prioritization", "metrics", "kpi",
@@ -721,10 +758,12 @@ class PromptBasedQuestionGenerator:
                 "product vision", "product-market fit", "customer journey", "persona", "wireframe", "prototype"
             ],
             "product_engineer": [
-                "feature", "requirements", "api", "performance", "scalability", "product", "ab test", "metric", "user"
+                "feature", "requirements", "api", "performance", "scalability", "product", "ab test", "metric", "user",
+                "system design", "frontend", "backend", "full stack"
             ],
             "software_engineer": [
-                "algorithm", "data structure", "system design", "api", "database", "cache", "concurrency", "testing"
+                "algorithm", "data structure", "system design", "api", "database", "cache", "concurrency", "testing",
+                "oop", "solid", "design patterns", "architecture", "refactoring", "performance", "scalability"
             ],
         }
         return mapping.get(role, mapping["software_engineer"])  # default generic
@@ -925,18 +964,21 @@ class PromptBasedQuestionGenerator:
         union = len(sa | sb)
         return inter / union if union else 0.0
 
-    def _is_near_duplicate(self, context: ConversationContext, question: str, threshold: float = 0.45) -> bool:
+    def _is_near_duplicate(self, context: ConversationContext, question: str, threshold: float = 0.35) -> bool:
         """Check if question is too similar to previously asked questions.
         
         Args:
             context: Conversation context with asked questions
             question: New question to check
-            threshold: Jaccard similarity threshold (lowered to 0.45 for stricter duplicate detection)
+            threshold: Jaccard similarity threshold (further lowered to 0.35 for stricter detection)
             
         Returns:
             True if question is a near-duplicate, False otherwise
         """
         cand_tokens = self._tokenize_for_similarity(question)
+        if not cand_tokens:
+            return False
+            
         for prev in (context.asked_questions or []):
             prev_tokens = self._tokenize_for_similarity(prev)
             similarity = self._jaccard_similarity(cand_tokens, prev_tokens)
@@ -994,14 +1036,19 @@ class PromptBasedQuestionGenerator:
         return variants[0] if variants else ""
 
     def _record_fallback_and_maybe_switch_topic(self, context: ConversationContext) -> None:
+        """Force a topic switch if LLM fails or generates a duplicate twice."""
         topic = context.current_topic
         count = (context.fallback_usage_by_topic.get(topic, 0) or 0) + 1
         context.fallback_usage_by_topic[topic] = count
-        if count >= 2:
+        
+        # Aggressive switch: if we hit fallback even once, try rotating topic 
+        # to keep the conversation fresh and avoid sounding repeated
+        if count >= 1:
             next_topic = self._get_next_topic(context)
             if next_topic:
                 context.current_topic = next_topic
                 context.fallback_usage_by_topic[next_topic] = 0
+                context.questions_on_current_topic = 0
 
     def _load_hr_question_banks(self) -> None:
         """Load HR question banks by seniority and create embeddings."""
@@ -1159,6 +1206,7 @@ class PromptBasedQuestionGenerator:
         # STEP 1: Try to generate HR question using LLM FIRST (primary method)
         prompt = HR_QUESTION_PROMPT.format(
             job_title=context.job_title,
+            jd_keywords=", ".join(context.jd_keywords or []) if context.jd_keywords else "N/A",
             candidate_name=context.candidate_name,
             experience_level=exp_level,
             topics_covered=topics_covered_str,
@@ -1235,9 +1283,10 @@ class PromptBasedQuestionGenerator:
                 context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
 
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
+            # Continue asking technical questions until total count reaches the limit
             if (
-                context.question_count >= 7
-            ):  # After 12 technical questions, go to HR phase
+                context.question_count >= 12
+            ):  # Increased limit to 12 for better topic coverage
                 context.interview_phase = InterviewPhase.HR_QUESTIONS
                 question = self._generate_hr_question(
                     context, last_answer, answer_evaluation
@@ -1445,9 +1494,8 @@ class PromptBasedQuestionGenerator:
     # Fallback methods
 
     def _fallback_greeting(self, context: ConversationContext) -> str:
-        tech_mention = f" with {context.cv_keywords[0]}" if context.cv_keywords else ""
         return FALLBACK_GREETING.format(
-            candidate_name=context.candidate_name, tech_mention=tech_mention
+            candidate_name=context.candidate_name
         )
 
     def _fallback_extract_cv_keywords(self, cv_content: str, jd_content: str = "") -> List[str]:
@@ -1570,8 +1618,36 @@ class PromptBasedQuestionGenerator:
         return [present(k) for k in ordered][:12]
 
     def _extract_jd_keywords(self, jd_content: str) -> List[str]:
-        """Extract technical keywords from JD using same fallback list."""
-        return self._fallback_extract_cv_keywords("", jd_content)
+        """Extract technical keywords from JD content using LLM."""
+        if not jd_content.strip():
+            return ["General Programming"]
+
+        prompt = JD_KEYWORDS_EXTRACTION_PROMPT.format(jd_content=jd_content)
+
+        try:
+            response = self._complete_llm(prompt)
+            if response and hasattr(response, "text"):
+                keywords_text = response.text.strip()
+                # Parse the comma-separated response
+                keywords = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
+                # Clean and format keywords
+                formatted_keywords = []
+                for keyword in keywords[:15]:  # Limit to 15 keywords
+                    cleaned = keyword.strip().strip('"').strip("'")
+                    if cleaned and len(cleaned) > 1:
+                        formatted_keywords.append(cleaned)
+
+                return (
+                    formatted_keywords
+                    if formatted_keywords
+                    else self._fallback_extract_cv_keywords("", jd_content)
+                )
+            else:
+                return self._fallback_extract_cv_keywords("", jd_content)
+
+        except Exception as e:
+            print(f"Error extracting JD keywords with LLM: {e}")
+            return self._fallback_extract_cv_keywords("", jd_content)
 
     def _fallback_assess_skill_level(self, cv_text: str) -> str:
         """Fallback method for skill level assessment when LLM fails."""
@@ -1670,14 +1746,32 @@ class PromptBasedQuestionGenerator:
         answer_evaluation: Optional[Dict] = None,
     ) -> str:
         """Generate an experiential question based on CV experiences and projects using LLM first."""
-        experiences_str = "\n".join(context.cv_experiences or [])
-        projects_str = "\n".join(context.cv_projects or [])
+        
+        # Track asked experiences to avoid repetition
+        asked_items = set()
+        for prev in context.asked_questions:
+            for item in (context.cv_experiences or []) + (context.cv_projects or []):
+                # Basic fuzzy check to see if an experience was already discussed
+                if item.lower()[:30] in prev.lower():
+                    asked_items.add(item)
+        
+        # Filter down to unasked experiences/projects for the prompt to force variety
+        unasked_exp = [e for e in (context.cv_experiences or []) if e not in asked_items]
+        unasked_proj = [p for p in (context.cv_projects or []) if p not in asked_items]
+        
+        # If we've run out of unasked items, recycle but prefer least recently used
+        display_exp = unasked_exp if unasked_exp else context.cv_experiences
+        display_proj = unasked_proj if unasked_proj else context.cv_projects
+
+        experiences_str = "\n".join(display_exp[:5]) # Show subset to force focus
+        projects_str = "\n".join(display_proj[:5])
         topics_covered_str = ", ".join(context.topics_covered or []) or "none"
 
         # STEP 1: Try to generate experiential question using LLM FIRST (primary method)
         prompt = EXPERIENTIAL_QUESTION_PROMPT.format(
             candidate_name=context.candidate_name,
             job_title=context.job_title,
+            jd_keywords=", ".join(context.jd_keywords or []) if context.jd_keywords else "N/A",
             cv_experiences=experiences_str,
             cv_projects=projects_str,
             topics_covered=topics_covered_str,
@@ -1760,3 +1854,43 @@ class PromptBasedQuestionGenerator:
         if score_easy > score_medium:
             return "easy"
         return "medium"
+
+    def _analyze_jd_difficulty_distribution(self, job_description: str) -> Dict[str, float]:
+        """Analyze JD and return difficulty distribution using LLM."""
+        if not job_description.strip():
+            return {"easy": 0.3, "medium": 0.4, "hard": 0.3}
+
+        prompt = JD_DIFFICULTY_DISTRIBUTION_PROMPT.format(jd_content=job_description)
+
+        try:
+            response = self._complete_llm(prompt)
+            if response and hasattr(response, "text"):
+                res_text = response.text.strip()
+                # Find JSON block
+                match = re.search(r"\{.*\}", res_text, re.DOTALL)
+                if match:
+                    dist = json.loads(match.group(0))
+                    # Validate distribution
+                    easy = float(dist.get("easy", 0))
+                    medium = float(dist.get("medium", 0))
+                    hard = float(dist.get("hard", 0))
+                    total = easy + medium + hard
+                    if total > 0:
+                        return {
+                            "easy": easy / total,
+                            "medium": medium / total,
+                            "hard": hard / total
+                        }
+            
+            # Fallback based on role_difficulty if LLM fails
+            role_diff = self._classify_role_difficulty(job_description)
+            if role_diff == "easy":
+                return {"easy": 0.6, "medium": 0.3, "hard": 0.1}
+            elif role_diff == "hard":
+                return {"easy": 0.1, "medium": 0.3, "hard": 0.6}
+            else:
+                return {"easy": 0.3, "medium": 0.4, "hard": 0.3}
+                
+        except Exception as e:
+            logger.error(f"Error analyzing JD difficulty distribution: {e}")
+            return {"easy": 0.3, "medium": 0.4, "hard": 0.3}

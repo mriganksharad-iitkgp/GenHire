@@ -8,6 +8,7 @@ const UserTable = ({
   onDelete,
   showDelete = true,
   showType = true,
+  showPlan = false,
   currentUserId,
   emptyMessage = "No users found",
 }) => {
@@ -39,6 +40,7 @@ const UserTable = ({
             <tr>
               <th>User</th>
               {showType && <th>Type</th>}
+              {showPlan && <th>Plan</th>}
               <th>Status</th>
               <th>Joined</th>
               {showDelete && <th>Actions</th>}
@@ -57,6 +59,7 @@ const UserTable = ({
                   </div>
                 </td>
                 {showType && <td><div style={{ width: 60, height: 24, background: "#e2e8f0", borderRadius: 6 }}></div></td>}
+                {showPlan && <td><div style={{ width: 90, height: 24, background: "#e2e8f0", borderRadius: 6 }}></div></td>}
                 <td><div style={{ width: 60, height: 24, background: "#e2e8f0", borderRadius: 6 }}></div></td>
                 <td><div style={{ width: 80, height: 14, background: "#e2e8f0", borderRadius: 4 }}></div></td>
                 {showDelete && <td><div style={{ width: 32, height: 32, background: "#e2e8f0", borderRadius: 8 }}></div></td>}
@@ -91,6 +94,7 @@ const UserTable = ({
           <tr>
             <th>User</th>
             {showType && <th>Type</th>}
+            {showPlan && <th>Plan</th>}
             <th>Status</th>
             <th>Joined</th>
             {showDelete && <th>Actions</th>}
@@ -127,6 +131,13 @@ const UserTable = ({
                 <td>
                   <span className={`${styles.badge} ${styles[user.user_type]}`}>
                     {user.user_type}
+                  </span>
+                </td>
+              )}
+              {showPlan && (
+                <td>
+                  <span className={`${styles.badge} ${user.enrolled_plan === "Free" ? styles.pending : styles.selected}`}>
+                    {user.enrolled_plan || "Free"}
                   </span>
                 </td>
               )}

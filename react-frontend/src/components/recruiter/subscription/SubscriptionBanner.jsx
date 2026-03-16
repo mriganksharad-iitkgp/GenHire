@@ -169,7 +169,7 @@ const SubscriptionBanner = ({
             </p>
           ) : (
             <p className={styles.ctaText}>
-              Unlock more interviews with our Enterprise plan
+              Unlock more interviews with our Recruiter Max plan
             </p>
           )}
           <button className={styles.upgradeButton} onClick={onUpgrade}>

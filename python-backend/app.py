@@ -16,7 +16,8 @@ logger.addHandler(ch)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warn, 3=error
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
+from utils.gaze_recorder_service import GazeRecorderService
 from flask_socketio import SocketIO
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -194,6 +195,10 @@ os.makedirs(TMP_FOLDER, exist_ok=True)
 app.config["PROCTORING_FOLDER"] = PROCTORING_FOLDER
 app.config["RECORDING_FOLDER"] = RECORDING_FOLDER
 app.config["TMP_FOLDER"] = TMP_FOLDER
+
+GAZE_RECORDER_FOLDER = os.path.join(PROCTORING_FOLDER, "gaze_recorder")
+os.makedirs(GAZE_RECORDER_FOLDER, exist_ok=True)
+gaze_recorder_service = GazeRecorderService(output_dir=GAZE_RECORDER_FOLDER)
 
 # Import middleware for interview routes
 from middleware.auth_middleware import token_required
@@ -643,6 +648,76 @@ def end_interview(current_user, session_id):
 # ... (rest of app.py remains the same)
 
 
+@app.route('/api/interviews/<session_id>/gaze-recorder-page', methods=['GET'])
+def get_gaze_recorder_page(session_id):
+    """
+    Serves a GazeRecorder + heatmap analysis page using the exact browser API flow.
+    Optional query param: ?token=<jwt> for result submission.
+    """
+    auth_token = request.args.get('token', '')
+    submit_url = f"{request.host_url.rstrip('/')}/api/interviews/{session_id}/gaze-recorder-results"
+    html = gaze_recorder_service.build_session_page(
+        session_id=session_id,
+        submit_url=submit_url,
+        auth_token=auth_token
+    )
+    return Response(html, mimetype='text/html')
+
+
+@app.route('/api/interviews/<session_id>/gaze-recorder-results', methods=['POST'])
+@token_required
+def upload_gaze_recorder_results(current_user, session_id):
+    """
+    Receives raw GazeRecorder payloads and stores smart heatmap analysis.
+    """
+    data = request.get_json() or {}
+    recording_data = data.get('recordingData')
+    gaze_points = data.get('gazePoints', [])
+    started_at_ms = data.get('startedAtMs')
+    ended_at_ms = data.get('endedAtMs')
+    viewport = data.get('viewport', {})
+    width = int(viewport.get('width', 1920) or 1920)
+    height = int(viewport.get('height', 1080) or 1080)
+
+    if not isinstance(gaze_points, list) or len(gaze_points) == 0:
+        return jsonify({'error': 'gazePoints are required'}), 400
+
+    analysis_result = gaze_recorder_service.analyze_gaze_patterns(
+        gaze_points=gaze_points,
+        window_width=width,
+        window_height=height,
+        started_at_ms=started_at_ms,
+        ended_at_ms=ended_at_ms
+    )
+
+    file_paths = gaze_recorder_service.save_payload_files(
+        session_id=session_id,
+        user_id=str(current_user['_id']),
+        recording_data=recording_data,
+        analysis_result=analysis_result,
+        gaze_points=gaze_points
+    )
+
+    interviews_collection.update_one(
+        {'session_id': session_id, 'user_id': str(current_user['_id'])},
+        {'$set': {
+            'gaze_recorder_recording_path': file_paths.get('recording_path'),
+            'gaze_recorder_analysis_path': file_paths['analysis_path'],
+            'gaze_recorder_points_path': file_paths['points_path'],
+            'gaze_recorder_analysis': analysis_result,
+            'gaze_recorder_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
+            'proctoring_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
+            'proctoring_source': 'gaze_recorder_api',
+            'updated_at': datetime.datetime.utcnow()
+        }}
+    )
+
+    return jsonify({
+        'message': 'GazeRecorder results saved successfully',
+        'analysis': analysis_result
+    }), 200
+
+
 @app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
 @token_required
 def upload_recording(current_user, session_id):
@@ -747,6 +822,7 @@ def get_user_interviews(current_user):
 
 
 # ... other imports
+
 
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required

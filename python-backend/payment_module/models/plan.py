@@ -20,8 +20,8 @@ class Plan:
     Represents a hiring plan that employers can purchase.
 
     Attributes:
-        name: Display name (e.g., "Starter", "Growth", "Enterprise")
-        slug: URL-friendly identifier (e.g., "starter", "growth")
+        name: Display name (e.g., "Free Tier", "Recruiter Pro", "Recruiter Max")
+        slug: URL-friendly identifier (e.g., "free", "professional", "recruiter-max")
         description: Marketing description
         price_paise: Price in paise (99900 = ₹999.00)
         interviews_allowed: Number of interviews, -1 for unlimited
@@ -40,6 +40,8 @@ class Plan:
     interviews_allowed: int
     validity_days: int
     features: List[str] = field(default_factory=list)
+    audience: str = "recruiter"
+    is_popular: bool = False
     is_active: bool = True
     display_order: int = 0
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -66,6 +68,8 @@ class Plan:
             "interviews_allowed": self.interviews_allowed,
             "validity_days": self.validity_days,
             "features": self.features,
+            "audience": self.audience,
+            "is_popular": self.is_popular,
             "is_active": self.is_active,
             "display_order": self.display_order,
             "created_at": self.created_at,
@@ -89,6 +93,8 @@ class Plan:
             "is_unlimited": self.is_unlimited,
             "validity_days": self.validity_days,
             "features": self.features,
+            "audience": self.audience,
+            "is_popular": self.is_popular,
             "display_order": self.display_order,
         }
 
@@ -105,6 +111,8 @@ class Plan:
             interviews_allowed=data.get("interviews_allowed", 0),
             validity_days=data.get("validity_days", 30),
             features=data.get("features", []),
+            audience=data.get("audience", "recruiter"),
+            is_popular=data.get("is_popular", False),
             is_active=data.get("is_active", True),
             display_order=data.get("display_order", 0),
             created_at=data.get("created_at", datetime.utcnow()),
@@ -126,6 +134,10 @@ class PlanSchema:
 
     INDEXES = [
         {"keys": [("slug", 1)], "unique": True, "name": "idx_plan_slug_unique"},
+        {
+            "keys": [("audience", 1), ("is_active", 1), ("display_order", 1)],
+            "name": "idx_plan_audience_active_order",
+        },
         {
             "keys": [("is_active", 1), ("display_order", 1)],
             "name": "idx_plan_active_order",

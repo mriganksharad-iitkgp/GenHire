@@ -106,11 +106,66 @@ class AdminController:
             
             # Get users with sorting (newest first)
             users_cursor = self.users_collection.find(query).sort('created_at', -1).skip(skip).limit(limit)
-            
+            users_docs = list(users_cursor)
+
+            active_plan_by_user_id = {}
+            subscriptions_collection = self.users_collection.database.get_collection('subscriptions')
+
+            def _load_active_plan_name(user_docs, audience):
+                if not user_docs:
+                    return
+
+                user_object_ids = [doc['_id'] for doc in user_docs]
+                user_string_ids = [str(doc['_id']) for doc in user_docs]
+
+                audience_filter = (
+                    {
+                        '$or': [
+                            {'plan_snapshot.audience': 'recruiter'},
+                            {'plan_snapshot.audience': {'$exists': False}},
+                        ]
+                    }
+                    if audience == 'recruiter'
+                    else {'plan_snapshot.audience': 'candidate'}
+                )
+
+                sub_query = {
+                    'status': 'active',
+                    '$and': [
+                        audience_filter,
+                        {
+                            '$or': [
+                                {'employer_id': {'$in': user_object_ids}},
+                                {'employer_id': {'$in': user_string_ids}},
+                            ]
+                        }
+                    ]
+                }
+
+                active_subscriptions = list(
+                    subscriptions_collection.find(sub_query).sort('created_at', -1)
+                )
+
+                for subscription in active_subscriptions:
+                    owner_id = str(subscription.get('employer_id'))
+                    if owner_id in active_plan_by_user_id:
+                        continue
+
+                    plan_snapshot = subscription.get('plan_snapshot') or {}
+                    plan_name = plan_snapshot.get('name') or plan_snapshot.get('slug') or 'Free'
+                    active_plan_by_user_id[owner_id] = plan_name
+
+            candidate_docs = [doc for doc in users_docs if doc.get('user_type') == 'candidate']
+            recruiter_docs = [doc for doc in users_docs if doc.get('user_type') == 'recruiter']
+
+            _load_active_plan_name(candidate_docs, 'candidate')
+            _load_active_plan_name(recruiter_docs, 'recruiter')
+
             users = []
-            for user in users_cursor:
+            for user in users_docs:
+                user_id = str(user['_id'])
                 users.append({
-                    'id': str(user['_id']),
+                    'id': user_id,
                     'name': user.get('name', ''),
                     'email': user.get('email', ''),
                     'user_type': user.get('user_type', 'candidate'),
@@ -121,7 +176,8 @@ class AdminController:
                     'company_industry': user.get('company_industry'),
                     'created_at': user.get('created_at').isoformat() if user.get('created_at') else None,
                     'verified_at': user.get('verified_at').isoformat() if user.get('verified_at') else None,
-                    'auth_provider': user.get('auth_provider', 'local')
+                    'auth_provider': user.get('auth_provider', 'local'),
+                    'enrolled_plan': active_plan_by_user_id.get(user_id, 'Free'),
                 })
             
             return {
@@ -1465,105 +1521,579 @@ class AdminController:
             print(traceback.format_exc())
             return {'error': 'Failed to get practice report'}, 500
 
-    def get_cost_statistics(self, current_user, period='month'):
-        """Get cost statistics for all recruiters - Admin only"""
+    def get_cost_statistics(self, current_user, period='month', start_date=None, end_date=None):
+        """Get timeline-based admin cost and profitability statistics."""
         try:
-            from services.credit_service import (
-                calculate_recruiter_credits,
-                aggregate_recruiter_statistics
-            )
             from config.database import db_config
-            
-            # Get database for accessing subscriptions/plans
-            db = db_config.get_db()
-            
-            # Get ALL recruiters (no limit)
-            recruiters = list(self.users_collection.find({'user_type': 'recruiter'}))
-            
-            if not recruiters:
-                return {
-                    'overview': {
-                        'totalBudget': 0,
-                        'totalUsed': 0,
-                        'totalAvailable': 0,
-                        'cloudflare': {'allocated': 0, 'used': 0},
-                        'nlp': {'allocated': 0, 'used': 0},
-                        'llm': {'allocated': 0, 'used': 0},
-                        'totalRecruiters': 0,
-                        'activeRecruiters': 0
-                    },
-                    'recruiters': []
-                }, 200
-            
-            recruiters_data = []
-            
-            for recruiter in recruiters:
-                recruiter_id = str(recruiter['_id'])
-                
-                # Get recruiter's jobs
-                jobs = list(self.jobs_collection.find({'created_by': recruiter_id}))
-                job_ids = [str(job['_id']) for job in jobs]
-                
-                # Get applications count for recruiter's jobs (only visible ones)
-                applications_count = self.applications_collection.count_documents({
-                    'job_id': {'$in': job_ids},
-                    'is_visible': True
-                }) if job_ids else 0
-                
-                # Count interviews completed (applications with status interviewed/selected/rejected)
-                interviews_count = self.applications_collection.count_documents({
-                    'job_id': {'$in': job_ids},
-                    'is_visible': True,
-                    'status': {'$in': ['interviewed', 'selected', 'rejected']}
-                }) if job_ids else 0
-                
-                # Get subscription plan if exists - using db_config for subscriptions
-                plan = None
-                subscription = db.subscriptions.find_one({
-                    'employer_id': recruiter['_id'],
-                    'status': 'active'
-                })
-                
-                if subscription and subscription.get('plan_id'):
-                    plan = db.plans.find_one({'_id': subscription['plan_id']})
-                
-                # Calculate credits using shared service
-                recruiter_stats = calculate_recruiter_credits(
-                    recruiter=recruiter,
-                    jobs=jobs,
-                    applications_count=applications_count,
-                    interviews_count=interviews_count,
-                    plan=plan,
-                    add_variation=False  # Use deterministic calculation
-                )
-                
-                # Add subscription/plan enrollment details
-                if subscription:
-                    started = subscription.get('created_at') or subscription.get('start_date')
-                    expires = subscription.get('expires_at') or subscription.get('end_date')
-                    recruiter_stats['subscription'] = {
-                        'status': subscription.get('status', 'unknown'),
-                        'start_date': started.isoformat() if started else None,
-                        'end_date': expires.isoformat() if expires else None,
-                    }
+            from interview.core.cost_tracker import CostTracker
+
+            def _safe_iso(dt_val):
+                return dt_val.isoformat() if dt_val else None
+
+            def _round_money(value):
+                return round(float(value or 0.0), 2)
+
+            def _safe_div(num, den):
+                return (num / den) if den else 0.0
+
+            def _parse_date(date_value, end_of_day=False):
+                if not date_value:
+                    return None
+
+                parsed = None
+                try:
+                    parsed = datetime.datetime.fromisoformat(str(date_value).replace('Z', '+00:00'))
+                except Exception:
+                    try:
+                        parsed = datetime.datetime.strptime(str(date_value), '%Y-%m-%d')
+                    except Exception:
+                        return None
+
+                if parsed.tzinfo is not None:
+                    parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+                if len(str(date_value)) <= 10:
+                    parsed = parsed.replace(
+                        hour=23 if end_of_day else 0,
+                        minute=59 if end_of_day else 0,
+                        second=59 if end_of_day else 0,
+                        microsecond=999999 if end_of_day else 0,
+                    )
+
+                return parsed
+
+            def _period_window(period_value):
+                now = datetime.datetime.utcnow()
+                normalized_period = (period_value or 'month').lower()
+
+                if normalized_period == 'week':
+                    start = now - datetime.timedelta(days=7)
+                elif normalized_period == 'quarter':
+                    start = now - datetime.timedelta(days=90)
+                elif normalized_period == 'year':
+                    start = now - datetime.timedelta(days=365)
                 else:
-                    recruiter_stats['subscription'] = {
-                        'status': 'none',
-                        'start_date': None,
-                        'end_date': None,
+                    normalized_period = 'month'
+                    start = now - datetime.timedelta(days=30)
+
+                return normalized_period, start, now
+
+            def _build_date_range_query(base_query, date_fields, start_dt, end_dt):
+                if not date_fields:
+                    return base_query
+
+                date_conditions = [
+                    {field_name: {'$gte': start_dt, '$lte': end_dt}}
+                    for field_name in date_fields
+                ]
+
+                return {
+                    '$and': [
+                        base_query,
+                        {'$or': date_conditions}
+                    ]
+                }
+
+            def _count_documents_with_window(collection, base_query, date_fields, start_dt, end_dt):
+                if collection is None:
+                    return 0
+                query = _build_date_range_query(base_query, date_fields, start_dt, end_dt)
+                return collection.count_documents(query)
+
+            def _monthly_cost_for_window(monthly_cost, start_dt, end_dt):
+                if not monthly_cost:
+                    return 0.0
+                total_days = max(1, (end_dt - start_dt).days)
+                return (monthly_cost / 30.0) * total_days
+
+            def _llm_cost_usd(pricing_map, model_key, prompt_tokens, completion_tokens, action_count):
+                rates = pricing_map.get(model_key, {})
+                input_rate = rates.get('input', 0.0)
+                output_rate = rates.get('output', 0.0)
+                prompt_cost = (prompt_tokens / 1_000_000.0) * input_rate
+                completion_cost = (completion_tokens / 1_000_000.0) * output_rate
+                return (prompt_cost + completion_cost) * max(action_count, 0)
+
+            normalized_period, period_start, period_end = _period_window(period)
+            requested_start = _parse_date(start_date, end_of_day=False)
+            requested_end = _parse_date(end_date, end_of_day=True) if end_date else None
+
+            if start_date and requested_start is None:
+                return {'error': 'Invalid start_date format. Use YYYY-MM-DD.'}, 400
+
+            if end_date and requested_end is None:
+                return {'error': 'Invalid end_date format. Use YYYY-MM-DD.'}, 400
+
+            if requested_end is None:
+                requested_end = datetime.datetime.utcnow()
+
+            if requested_start:
+                period_start = requested_start
+                period_end = requested_end
+                normalized_period = 'custom'
+
+            if period_start > period_end:
+                return {
+                    'error': 'Invalid timeline. start_date cannot be after end_date.'
+                }, 400
+
+            db = db_config.get_db()
+            if db is None:
+                return {'error': 'Database connection unavailable.'}, 500
+            plans_collection = db.plans
+            payments_collection = db.payments
+
+            plans_list = list(plans_collection.find({}))
+            plans_by_id = {plan_doc.get('_id'): plan_doc for plan_doc in plans_list}
+
+            pricing = CostTracker.PRICING
+            inr_per_usd = 83.0
+
+            # User-provided assumptions
+            monthly_infra_assumptions = {
+                'cloudflare': 5000.0,
+                'mongodb': 3000.0,
+            }
+            cloudflare_gpu_ratio = 245.0 / (245.0 + 100.0)
+
+            action_assumptions = {
+                'cv_scoring': {
+                    'model': 'gemini-1.5-flash-latest',
+                    'prompt_tokens': 1800,
+                    'completion_tokens': 600,
+                },
+                'ai_jd_generation': {
+                    'model': 'llama-3.3-70b-versatile',
+                    'prompt_tokens': 1500,
+                    'completion_tokens': 1200,
+                },
+                'ai_interview': {
+                    'model': 'gpt-4o',
+                    'prompt_tokens': 4200,
+                    'completion_tokens': 2100,
+                    'stt_seconds': 900,
+                    'tts_characters': 22000,
+                },
+                'evaluation': {
+                    'model': 'gpt-5-mini',
+                    'prompt_tokens': 1500,
+                    'completion_tokens': 1000,
+                },
+            }
+
+            completed_interview_query = {
+                'is_visible': True,
+                'status': {'$in': ['interviewed', 'selected', 'rejected']},
+            }
+            completed_interviews = _count_documents_with_window(
+                self.applications_collection,
+                completed_interview_query,
+                ['updated_at', 'created_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+
+            cv_scoring_count = _count_documents_with_window(
+                self.applications_collection,
+                {'cv_score': {'$exists': True, '$ne': None}},
+                ['updated_at', 'created_at', 'cv_score_calculated_at'],
+                period_start,
+                period_end,
+            )
+
+            jd_generation_count = _count_documents_with_window(
+                self.jobs_collection,
+                {},
+                ['created_at', 'updated_at'],
+                period_start,
+                period_end,
+            )
+
+            practice_interview_count = _count_documents_with_window(
+                self.practice_sessions_collection,
+                {},
+                ['created_at', 'updated_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+
+            interview_evaluation_count = _count_documents_with_window(
+                self.applications_collection,
+                {
+                    'is_visible': True,
+                    'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                    'interview_score': {'$exists': True, '$ne': None},
+                },
+                ['updated_at', 'created_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+
+            practice_evaluation_count = _count_documents_with_window(
+                self.practice_sessions_collection,
+                {
+                    'evaluation': {'$exists': True, '$ne': None},
+                },
+                ['updated_at', 'created_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+
+            stt_rate = pricing.get('google-stt', {}).get('price_per_minute', 0.024)
+            tts_rate = pricing.get('google-tts', {}).get('price_per_1m_chars', 4.0)
+
+            def _build_llm_line_item(key, title, cfg, count, formula_hint):
+                llm_usd = _llm_cost_usd(pricing, cfg['model'], cfg['prompt_tokens'], cfg['completion_tokens'], count)
+                total_inr = llm_usd * inr_per_usd
+                return {
+                    'key': key,
+                    'title': title,
+                    'count': int(count),
+                    'model': cfg['model'],
+                    'rates_usd_per_1m_tokens': {
+                        'input': pricing.get(cfg['model'], {}).get('input', 0.0),
+                        'output': pricing.get(cfg['model'], {}).get('output', 0.0),
+                    },
+                    'assumptions': {
+                        'prompt_tokens_per_action': cfg['prompt_tokens'],
+                        'completion_tokens_per_action': cfg['completion_tokens'],
+                    },
+                    'formula': formula_hint,
+                    'total_cost_inr': _round_money(total_inr),
+                    'avg_cost_inr': _round_money(_safe_div(total_inr, count)),
+                }
+
+            cv_item = _build_llm_line_item(
+                'cv_scoring',
+                'Total CV Score Calculation Cost',
+                action_assumptions['cv_scoring'],
+                cv_scoring_count,
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+            )
+
+            jd_item = _build_llm_line_item(
+                'ai_jd_generation',
+                'Total AI JD Generation Cost',
+                action_assumptions['ai_jd_generation'],
+                jd_generation_count,
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+            )
+
+            interview_cfg = action_assumptions['ai_interview']
+            interview_llm_usd = _llm_cost_usd(
+                pricing,
+                interview_cfg['model'],
+                interview_cfg['prompt_tokens'],
+                interview_cfg['completion_tokens'],
+                completed_interviews,
+            )
+            interview_stt_usd = ((interview_cfg['stt_seconds'] / 60.0) * stt_rate) * max(completed_interviews, 0)
+            interview_tts_usd = ((interview_cfg['tts_characters'] / 1_000_000.0) * tts_rate) * max(completed_interviews, 0)
+            interview_total_inr = (interview_llm_usd + interview_stt_usd + interview_tts_usd) * inr_per_usd
+
+            interview_item = {
+                'key': 'ai_interview',
+                'title': 'Total AI Interview Cost',
+                'count': int(completed_interviews),
+                'model': interview_cfg['model'],
+                'rates_usd_per_1m_tokens': {
+                    'input': pricing.get(interview_cfg['model'], {}).get('input', 0.0),
+                    'output': pricing.get(interview_cfg['model'], {}).get('output', 0.0),
+                },
+                'speech_rates': {
+                    'stt_usd_per_minute': stt_rate,
+                    'tts_usd_per_1m_characters': tts_rate,
+                },
+                'assumptions': {
+                    'prompt_tokens_per_action': interview_cfg['prompt_tokens'],
+                    'completion_tokens_per_action': interview_cfg['completion_tokens'],
+                    'stt_seconds_per_action': interview_cfg['stt_seconds'],
+                    'tts_characters_per_action': interview_cfg['tts_characters'],
+                },
+                'formula': 'count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
+                'total_cost_inr': _round_money(interview_total_inr),
+                'avg_cost_inr': _round_money(_safe_div(interview_total_inr, completed_interviews)),
+            }
+
+            practice_llm_usd = _llm_cost_usd(
+                pricing,
+                interview_cfg['model'],
+                interview_cfg['prompt_tokens'],
+                interview_cfg['completion_tokens'],
+                practice_interview_count,
+            )
+            practice_stt_usd = ((interview_cfg['stt_seconds'] / 60.0) * stt_rate) * max(practice_interview_count, 0)
+            practice_tts_usd = ((interview_cfg['tts_characters'] / 1_000_000.0) * tts_rate) * max(practice_interview_count, 0)
+            practice_total_inr = (practice_llm_usd + practice_stt_usd + practice_tts_usd) * inr_per_usd
+
+            practice_item = {
+                'key': 'practice_interview',
+                'title': 'Practice Interview Cost',
+                'count': int(practice_interview_count),
+                'model': interview_cfg['model'],
+                'rates_usd_per_1m_tokens': {
+                    'input': pricing.get(interview_cfg['model'], {}).get('input', 0.0),
+                    'output': pricing.get(interview_cfg['model'], {}).get('output', 0.0),
+                },
+                'speech_rates': {
+                    'stt_usd_per_minute': stt_rate,
+                    'tts_usd_per_1m_characters': tts_rate,
+                },
+                'assumptions': {
+                    'prompt_tokens_per_action': interview_cfg['prompt_tokens'],
+                    'completion_tokens_per_action': interview_cfg['completion_tokens'],
+                    'stt_seconds_per_action': interview_cfg['stt_seconds'],
+                    'tts_characters_per_action': interview_cfg['tts_characters'],
+                },
+                'formula': 'count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
+                'total_cost_inr': _round_money(practice_total_inr),
+                'avg_cost_inr': _round_money(_safe_div(practice_total_inr, practice_interview_count)),
+            }
+
+            interview_eval_item = _build_llm_line_item(
+                'ai_interview_evaluation',
+                'Total AI Interview Evaluation Cost',
+                action_assumptions['evaluation'],
+                interview_evaluation_count,
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+            )
+
+            practice_eval_item = _build_llm_line_item(
+                'practice_interview_evaluation',
+                'Practice Interview Evaluation Cost',
+                action_assumptions['evaluation'],
+                practice_evaluation_count,
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+            )
+
+            ai_cost_line_items = [
+                cv_item,
+                jd_item,
+                interview_item,
+                interview_eval_item,
+                practice_item,
+                practice_eval_item,
+            ]
+            total_ai_cost_inr = sum(item.get('total_cost_inr', 0.0) for item in ai_cost_line_items)
+
+            cloudflare_total_prorated = _monthly_cost_for_window(monthly_infra_assumptions['cloudflare'], period_start, period_end)
+            cloudflare_gpu_prorated = cloudflare_total_prorated * cloudflare_gpu_ratio
+            cloudflare_base_prorated = cloudflare_total_prorated - cloudflare_gpu_prorated
+            mongodb_prorated = _monthly_cost_for_window(monthly_infra_assumptions['mongodb'], period_start, period_end)
+
+            infrastructure_costs = {
+                'cloudflare': {
+                    'monthly_assumption_inr': _round_money(monthly_infra_assumptions['cloudflare']),
+                    'prorated_cost_inr': _round_money(cloudflare_total_prorated),
+                    'gpu_component_inr': _round_money(cloudflare_gpu_prorated),
+                    'base_component_inr': _round_money(cloudflare_base_prorated),
+                    'note': 'GPU share is a derived component inside Cloudflare cost (not added separately).',
+                },
+                'mongodb': {
+                    'monthly_assumption_inr': _round_money(monthly_infra_assumptions['mongodb']),
+                    'prorated_cost_inr': _round_money(mongodb_prorated),
+                },
+            }
+            total_infrastructure_cost_inr = _round_money(cloudflare_total_prorated + mongodb_prorated)
+            total_cost_inr = _round_money(total_ai_cost_inr + total_infrastructure_cost_inr)
+
+            payments_query = {
+                '$and': [
+                    {'status': 'succeeded'},
+                    {
+                        '$or': [
+                            {'completed_at': {'$gte': period_start, '$lte': period_end}},
+                            {'created_at': {'$gte': period_start, '$lte': period_end}},
+                        ]
                     }
-                
-                recruiters_data.append(recruiter_stats)
-            
-            # Aggregate overview statistics
-            overview = aggregate_recruiter_statistics(recruiters_data)
-            
+                ]
+            }
+            succeeded_payments = list(payments_collection.find(payments_query)) if payments_collection is not None else []
+
+            def _resolve_payment_plan(payment_doc):
+                plan_doc = plans_by_id.get(payment_doc.get('plan_id'))
+                snapshot = payment_doc.get('metadata', {}) or {}
+                if not plan_doc:
+                    fallback_snapshot = payment_doc.get('plan_snapshot') or {}
+                    snapshot = {**fallback_snapshot, **snapshot}
+
+                plan_name = (
+                    (plan_doc or {}).get('name')
+                    or snapshot.get('plan_name')
+                    or snapshot.get('name')
+                    or 'Unknown Plan'
+                )
+                plan_slug = (
+                    (plan_doc or {}).get('slug')
+                    or snapshot.get('plan_slug')
+                    or snapshot.get('slug')
+                    or 'unknown-plan'
+                )
+                audience = (
+                    (plan_doc or {}).get('audience')
+                    or snapshot.get('owner_type')
+                    or snapshot.get('audience')
+                    or 'recruiter'
+                )
+                if audience not in {'candidate', 'recruiter'}:
+                    audience = 'recruiter'
+
+                price_paise = (
+                    (plan_doc or {}).get('price_paise')
+                    or snapshot.get('price_paise')
+                    or 0
+                )
+
+                return {
+                    'name': plan_name,
+                    'slug': plan_slug,
+                    'audience': audience,
+                    'price_inr': _round_money((price_paise or 0) / 100.0),
+                }
+
+            incoming_summary = {
+                'candidate': {
+                    'plans': {},
+                    'succeeded_payment_count': 0,
+                    'total_incoming_inr': 0.0,
+                },
+                'recruiter': {
+                    'plans': {},
+                    'succeeded_payment_count': 0,
+                    'total_incoming_inr': 0.0,
+                }
+            }
+
+            for payment_doc in succeeded_payments:
+                payment_amount_inr = (payment_doc.get('amount_paise', 0) or 0) / 100.0
+                plan_data = _resolve_payment_plan(payment_doc)
+                audience = plan_data['audience']
+                plan_key = f"{plan_data['slug']}::{plan_data['price_inr']}"
+
+                if plan_key not in incoming_summary[audience]['plans']:
+                    incoming_summary[audience]['plans'][plan_key] = {
+                        'plan_name': plan_data['name'],
+                        'plan_slug': plan_data['slug'],
+                        'plan_price_inr': plan_data['price_inr'],
+                        'succeeded_payment_count': 0,
+                        'incoming_amount_inr': 0.0,
+                    }
+
+                incoming_summary[audience]['plans'][plan_key]['succeeded_payment_count'] += 1
+                incoming_summary[audience]['plans'][plan_key]['incoming_amount_inr'] += payment_amount_inr
+                incoming_summary[audience]['succeeded_payment_count'] += 1
+                incoming_summary[audience]['total_incoming_inr'] += payment_amount_inr
+
+            refund_query = {
+                '$and': [
+                    {'status': {'$in': ['refunded', 'partially_refunded']}},
+                    {
+                        '$or': [
+                            {'updated_at': {'$gte': period_start, '$lte': period_end}},
+                            {'created_at': {'$gte': period_start, '$lte': period_end}},
+                        ]
+                    }
+                ]
+            }
+            refund_payments = list(payments_collection.find(refund_query)) if payments_collection is not None else []
+            refund_total_inr = _round_money(sum((p.get('refund_amount_paise', 0) or 0) / 100.0 for p in refund_payments))
+
+            candidate_plans = sorted(
+                [
+                    {
+                        **plan_row,
+                        'incoming_amount_inr': _round_money(plan_row['incoming_amount_inr'])
+                    }
+                    for plan_row in incoming_summary['candidate']['plans'].values()
+                ],
+                key=lambda item: (-item['incoming_amount_inr'], item['plan_name'])
+            )
+            recruiter_plans = sorted(
+                [
+                    {
+                        **plan_row,
+                        'incoming_amount_inr': _round_money(plan_row['incoming_amount_inr'])
+                    }
+                    for plan_row in incoming_summary['recruiter']['plans'].values()
+                ],
+                key=lambda item: (-item['incoming_amount_inr'], item['plan_name'])
+            )
+
+            candidate_total_incoming = _round_money(incoming_summary['candidate']['total_incoming_inr'])
+            recruiter_total_incoming = _round_money(incoming_summary['recruiter']['total_incoming_inr'])
+            total_incoming = _round_money(candidate_total_incoming + recruiter_total_incoming)
+            net_incoming_after_refunds = _round_money(total_incoming - refund_total_inr)
+
+            profit_gross = _round_money(total_incoming - total_cost_inr)
+            profit_net = _round_money(net_incoming_after_refunds - total_cost_inr)
+            margin_gross = round((_safe_div(profit_gross, total_incoming) * 100.0), 2) if total_incoming > 0 else 0.0
+            margin_net = round((_safe_div(profit_net, net_incoming_after_refunds) * 100.0), 2) if net_incoming_after_refunds > 0 else 0.0
+
             return {
-                'overview': overview,
-                'recruiters': recruiters_data,
-                'period': period
+                'timeline': {
+                    'period_mode': normalized_period,
+                    'start_date': _safe_iso(period_start),
+                    'end_date': _safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'cost_statistics': {
+                    'currency': 'INR',
+                    'ai_costs': ai_cost_line_items,
+                    'total_ai_cost_inr': _round_money(total_ai_cost_inr),
+                    'infrastructure_costs': {
+                        **infrastructure_costs,
+                        'total_infrastructure_cost_inr': total_infrastructure_cost_inr,
+                    },
+                    'total_cost_inr': total_cost_inr,
+                },
+                'incoming_money': {
+                    'candidate': {
+                        'plans': candidate_plans,
+                        'succeeded_payment_count': incoming_summary['candidate']['succeeded_payment_count'],
+                        'total_incoming_inr': candidate_total_incoming,
+                    },
+                    'recruiter': {
+                        'plans': recruiter_plans,
+                        'succeeded_payment_count': incoming_summary['recruiter']['succeeded_payment_count'],
+                        'total_incoming_inr': recruiter_total_incoming,
+                    },
+                    'total_incoming_inr': total_incoming,
+                    'refund_adjustments': {
+                        'refund_events_count': len(refund_payments),
+                        'total_refunded_inr': refund_total_inr,
+                    },
+                    'net_incoming_after_refunds_inr': net_incoming_after_refunds,
+                },
+                'profitability': {
+                    'cost_total_inr': total_cost_inr,
+                    'incoming_total_inr': total_incoming,
+                    'net_incoming_after_refunds_inr': net_incoming_after_refunds,
+                    'profit_gross_inr': profit_gross,
+                    'profit_net_inr': profit_net,
+                    'margin_gross_pct': margin_gross,
+                    'margin_net_pct': margin_net,
+                },
+                'activity_counts': {
+                    'cv_scoring': int(cv_scoring_count),
+                    'ai_jd_generation': int(jd_generation_count),
+                    'ai_interview': int(completed_interviews),
+                    'ai_interview_evaluation': int(interview_evaluation_count),
+                    'practice_interview': int(practice_interview_count),
+                    'practice_interview_evaluation': int(practice_evaluation_count),
+                },
+                'assumptions': {
+                    'pricing_reference': 'interview/core/cost_tracker.py',
+                    'inr_per_usd': inr_per_usd,
+                    'timeline_fallback_period': period,
+                    'evaluation_assumption_tokens': {
+                        'prompt': action_assumptions['evaluation']['prompt_tokens'],
+                        'completion': action_assumptions['evaluation']['completion_tokens'],
+                    },
+                    'monthly_infrastructure_assumptions_inr': monthly_infra_assumptions,
+                    'cloudflare_gpu_ratio': round(cloudflare_gpu_ratio, 4),
+                },
             }, 200
-            
+
         except Exception as e:
             import traceback
             print(f"Error getting admin cost statistics: {str(e)}")

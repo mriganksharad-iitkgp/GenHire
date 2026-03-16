@@ -60,17 +60,17 @@ def init_payment_routes(db):
 
 
 # =============================================================================
-# PLAN ROUTES (Public)
+# PLAN ROUTES (Protected - role-aware visibility)
 # =============================================================================
 
 
 @payment_bp.route("/plans", methods=["GET"])
-def get_plans():
+@token_required
+def get_plans(current_user):
     """
     GET /api/payment/plans
 
-    Get all active pricing plans.
-    Public endpoint - no auth required.
+    Get active pricing plans visible to authenticated user's role.
 
     Response:
     {
@@ -81,31 +81,31 @@ def get_plans():
         }
     }
     """
-    response, status_code = _plan_controller.get_all_plans()
+    response, status_code = _plan_controller.get_all_plans(current_user)
     return jsonify(response), status_code
 
 
 @payment_bp.route("/plans/<plan_id>", methods=["GET"])
-def get_plan(plan_id):
+@token_required
+def get_plan(current_user, plan_id):
     """
     GET /api/payment/plans/<plan_id>
 
-    Get specific plan by ID.
-    Public endpoint.
+    Get specific plan by ID (role-scoped).
     """
-    response, status_code = _plan_controller.get_plan(plan_id)
+    response, status_code = _plan_controller.get_plan(plan_id, current_user)
     return jsonify(response), status_code
 
 
 @payment_bp.route("/plans/slug/<slug>", methods=["GET"])
-def get_plan_by_slug(slug):
+@token_required
+def get_plan_by_slug(current_user, slug):
     """
     GET /api/payment/plans/slug/<slug>
 
-    Get specific plan by slug (e.g., 'starter').
-    Public endpoint.
+    Get specific plan by slug (role-scoped).
     """
-    response, status_code = _plan_controller.get_plan_by_slug(slug)
+    response, status_code = _plan_controller.get_plan_by_slug(slug, current_user)
     return jsonify(response), status_code
 
 
@@ -133,7 +133,7 @@ def initiate_payment(current_user):
         "success": true,
         "data": {
             "order_id": "order_...",
-            "amount": 10000,
+            "amount": 9999,
             "currency": "INR",
             "key_id": "rzp_...",
             "payment_id": "..."

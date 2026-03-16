@@ -12,7 +12,8 @@ PLAN_CREDITS = {
     'starter': 2000,
     'growth': 5000,
     'professional': 5000,
-    'enterprise': 10000,
+    'recruiter-max': 10000,
+    'max': 10000,
     'default': 2000
 }
 

@@ -165,6 +165,7 @@ const ManageCandidates = () => {
           onRowClick={handleRowClick}
           onDelete={(user) => setDeleteModal({ isOpen: true, user })}
           showType={false}
+          showPlan
           emptyMessage="No candidates found"
         />
 

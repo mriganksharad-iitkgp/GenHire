@@ -50,7 +50,7 @@ class PaymentConfig:
     # Prices in paise (1 INR = 100 paise)
     # - Free Tier: 2 free interviews
     # - Recruiter Pro: ₹4,999/month, 100 interviews
-    # - Enterprise: ₹10,000/month, unlimited interviews
+    # - Recruiter Max: ₹9,999/month, 300 interviews
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
         "free": {
             "name": "Free Tier",
@@ -59,6 +59,7 @@ class PaymentConfig:
             "price_paise": 0,  # Free plan
             "interviews_allowed": 2,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
+            "audience": "recruiter",
             "features": [
                 "2 AI-powered interviews",
                 "Basic candidate analytics",
@@ -74,6 +75,7 @@ class PaymentConfig:
             "price_paise": 499900,  # ₹4,999.00
             "interviews_allowed": 100,
             "validity_days": 30,  # 1 month validity
+            "audience": "recruiter",
             "features": [
                 "100 AI-powered interviews/month",
                 "Advanced analytics & reporting",
@@ -85,19 +87,69 @@ class PaymentConfig:
             "display_order": 2,
             "is_popular": True,
         },
-        "enterprise": {
-            "name": "Enterprise",
-            "slug": "enterprise",
-            "description": "Enterprise plan with unlimited interviews for large organizations",
-            "price_paise": 1000000,  # ₹10,000.00
-            "interviews_allowed": -1,  # Unlimited
+        "recruiter_max": {
+            "name": "Recruiter Max",
+            "slug": "recruiter-max",
+            "description": "Advanced recruiter plan with 300 interviews per month",
+            "price_paise": 999900,  # ₹9,999.00
+            "interviews_allowed": 300,
             "validity_days": 30,  # 1 month validity
+            "audience": "recruiter",
             "features": [
-                "Unlimited AI-powered interviews",
+                "300 AI-powered interviews/month",
                 "Custom integrations",
-                "Dedicated support & SLA guarantee",
+                "Advanced analytics and reporting",
                 "Custom branding",
-                "On-premise option",
+                "Priority support",
+            ],
+            "is_active": True,
+            "display_order": 3,
+        },
+        "candidate_free": {
+            "name": "Free Tier",
+            "slug": "candidate-free",
+            "description": "Free plan with 2 practice interviews per month",
+            "price_paise": 0,
+            "interviews_allowed": 2,
+            "validity_days": 30,
+            "audience": "candidate",
+            "features": [
+                "2 Practice Interviews/month",
+                "Smart practice feedback",
+                "Basic interview analytics",
+            ],
+            "is_active": True,
+            "display_order": 1,
+        },
+        "candidate_pro": {
+            "name": "Candidate Pro",
+            "slug": "candidate-pro",
+            "description": "50 practice interviews per month for active preparation",
+            "price_paise": 99900,
+            "interviews_allowed": 50,
+            "validity_days": 30,
+            "audience": "candidate",
+            "features": [
+                "50 Practice Interviews/month",
+                "Detailed interview scoring",
+                "Priority report generation",
+            ],
+            "is_active": True,
+            "display_order": 2,
+            "is_popular": True,
+        },
+        "candidate_max": {
+            "name": "Candidate Max",
+            "slug": "candidate-max",
+            "description": "100 practice interviews per month for intensive preparation",
+            "price_paise": 149900,
+            "interviews_allowed": 100,
+            "validity_days": 30,
+            "audience": "candidate",
+            "features": [
+                "100 Practice Interviews/month",
+                "Advanced analytics dashboard",
+                "Priority support",
             ],
             "is_active": True,
             "display_order": 3,
@@ -119,4 +171,4 @@ class PaymentConfig:
     @classmethod
     def is_test_mode(cls) -> bool:
         """Check if Razorpay is in test mode"""
-        return cls.RAZORPAY_KEY_ID and cls.RAZORPAY_KEY_ID.startswith("rzp_test_")
+        return bool(cls.RAZORPAY_KEY_ID and cls.RAZORPAY_KEY_ID.startswith("rzp_test_"))

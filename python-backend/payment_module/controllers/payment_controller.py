@@ -53,14 +53,6 @@ class PaymentController:
             Tuple of (response_dict, status_code)
         """
         try:
-            # Validate user is a recruiter/employer
-            if user_data.get("user_type") != "recruiter":
-                return {
-                    "success": False,
-                    "error": "Only employers can purchase plans",
-                    "error_code": "unauthorized_user_type",
-                }, 403
-
             # Get request body
             data = request.get_json()
             if not data:
@@ -82,6 +74,7 @@ class PaymentController:
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
             employer_email = user_data.get("email", "")
             employer_name = user_data.get("name", "")
+            buyer_type = str(user_data.get("user_type") or "recruiter").strip().lower()
 
             # Initiate payment
             result = self.payment_service.initiate_payment(
@@ -89,6 +82,7 @@ class PaymentController:
                 employer_email=employer_email,
                 employer_name=employer_name,
                 plan_id=plan_id,
+                buyer_type=buyer_type,
             )
 
             if result["success"]:
@@ -137,14 +131,6 @@ class PaymentController:
             Tuple of (response_dict, status_code)
         """
         try:
-            # Validate user is a recruiter/employer
-            if user_data.get("user_type") != "recruiter":
-                return {
-                    "success": False,
-                    "error": "Only employers can verify payments",
-                    "error_code": "unauthorized_user_type",
-                }, 403
-
             # Get request body
             data = request.get_json()
             if not data:
@@ -227,7 +213,7 @@ class PaymentController:
 
             # Verify ownership
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
-            if str(payment.employer_id) != employer_id:
+            if str(payment.employer_id) not in {employer_id, str(user_data.get("_id"))}:
                 return {
                     "success": False,
                     "error": "Not authorized to view this payment",
@@ -316,7 +302,7 @@ class PaymentController:
                 }, 404
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
-            if str(payment.employer_id) != employer_id:
+            if str(payment.employer_id) not in {employer_id, str(user_data.get("_id"))}:
                 return {
                     "success": False,
                     "error": "Not authorized to refund this payment",

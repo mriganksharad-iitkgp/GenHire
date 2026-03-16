@@ -6,6 +6,7 @@ from config.database import db_config
 import random
 from datetime import datetime, timedelta
 from services.interview_quota_service import get_recruiter_interview_quota
+from services.candidate_practice_quota_service import get_candidate_practice_quota
 
 profile_bp = Blueprint('profile', __name__, url_prefix='/api')
 
@@ -271,6 +272,109 @@ def get_recruiter_cost_statistics(current_user):
         
         return jsonify({'success': True, 'data': cost_data}), 200
         
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@profile_bp.route('/candidate/cost-statistics', methods=['GET'])
+@cross_origin()
+@token_required
+def get_candidate_cost_statistics(current_user):
+    """Get candidate practice subscription and usage statistics."""
+    try:
+        user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+        if user_type not in ['candidate', 'student']:
+            return jsonify({'success': False, 'message': 'Only candidates can access cost statistics'}), 403
+
+        candidate_id = str(current_user['_id'])
+        db = db_config.get_db()
+
+        quota = get_candidate_practice_quota(db, candidate_id)
+
+        six_months_ago = datetime.utcnow() - timedelta(days=180)
+        practice_sessions = list(db.practice_sessions.find({
+            'user_id': candidate_id,
+            'is_practice': True,
+            'created_at': {'$gte': six_months_ago},
+        }).sort('created_at', 1))
+
+        monthly_map = {}
+        for session in practice_sessions:
+            created_at = session.get('created_at')
+            if not isinstance(created_at, datetime):
+                continue
+            month_key = created_at.strftime('%Y-%m')
+            current = monthly_map.get(month_key) or {
+                'month': month_key,
+                'interviews': 0,
+                'completed': 0,
+            }
+            current['interviews'] += 1
+            if str(session.get('status', '')).lower() == 'completed':
+                current['completed'] += 1
+            monthly_map[month_key] = current
+
+        monthly_usage = [monthly_map[key] for key in sorted(monthly_map.keys())]
+
+        completed_sessions = [
+            s for s in practice_sessions
+            if str(s.get('status', '')).lower() == 'completed'
+        ]
+
+        avg_interview_score = 0
+        if completed_sessions:
+            score_values = [
+                int(s.get('interview_score', 0) or 0)
+                for s in completed_sessions
+                if s.get('interview_score') is not None
+            ]
+            if score_values:
+                avg_interview_score = round(sum(score_values) / len(score_values), 1)
+
+        recent_activity = []
+        for index, session in enumerate(reversed(practice_sessions[-10:])):
+            created_at = session.get('created_at')
+            recent_activity.append({
+                'id': index + 1,
+                'action': 'Practice Interview',
+                'role': session.get('role', 'general'),
+                'status': session.get('status', 'active'),
+                'timestamp': created_at.strftime('%Y-%m-%d %H:%M') if isinstance(created_at, datetime) else '',
+            })
+
+        plan_name = quota.get('plan_name', 'Free Tier')
+        cost_data = {
+            'candidate': {
+                'name': current_user.get('name', 'Candidate'),
+                'email': current_user.get('email', ''),
+                'joinedDate': current_user.get('created_at', datetime.utcnow()).strftime('%Y-%m-%d') if isinstance(current_user.get('created_at'), datetime) else str(current_user.get('created_at', ''))[:10],
+            },
+            'plan': {
+                'name': plan_name,
+                'interviews_allowed': int(quota.get('interviews_allowed', 2) or 2),
+                'interviews_remaining': int(quota.get('interviews_remaining', 0) or 0),
+                'interviews_used': int(quota.get('interviews_used', 0) or 0),
+                'plan_interviews_allowed': int(quota.get('plan_interviews_allowed', 0) or 0),
+                'plan_interviews_used': int(quota.get('plan_interviews_used', 0) or 0),
+                'plan_interviews_remaining': int(quota.get('plan_interviews_remaining', 0) or 0),
+                'free_interviews_allowed': int(quota.get('free_interviews_allowed', 0) or 0),
+                'free_interviews_used': int(quota.get('free_interviews_used', 0) or 0),
+                'free_interviews_remaining': int(quota.get('free_interviews_remaining', 0) or 0),
+                'expires_at': None,
+            },
+            'monthlyUsage': monthly_usage,
+            'recentActivity': recent_activity,
+            'summary': {
+                'totalPracticeInterviews': len(practice_sessions),
+                'completedPracticeInterviews': len(completed_sessions),
+                'avgInterviewScore': avg_interview_score,
+            },
+        }
+
+        return jsonify({'success': True, 'data': cost_data}), 200
+
     except Exception as e:
         import traceback
         traceback.print_exc()

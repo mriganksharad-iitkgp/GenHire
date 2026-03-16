@@ -64,7 +64,12 @@ class PaymentService:
             logger.error(f"Error creating payment indexes: {str(e)}")
 
     def initiate_payment(
-        self, employer_id: str, employer_email: str, employer_name: str, plan_id: str
+        self,
+        employer_id: str,
+        employer_email: str,
+        employer_name: str,
+        plan_id: str,
+        buyer_type: str = "recruiter",
     ) -> Dict[str, Any]:
         """
         Initiate payment for a plan.
@@ -94,6 +99,16 @@ class PaymentService:
                     "success": False,
                     "error": "Plan not found or inactive",
                     "error_code": "invalid_plan",
+                }
+
+            plan_audience = getattr(plan, "audience", "recruiter")
+            if buyer_type == "student":
+                buyer_type = "candidate"
+            if plan_audience != buyer_type:
+                return {
+                    "success": False,
+                    "error": f"This plan is available only for {plan_audience}s",
+                    "error_code": "plan_audience_mismatch",
                 }
 
             # 2. Generate idempotency key (≤40 chars for Razorpay receipt limit)
@@ -127,6 +142,8 @@ class PaymentService:
                     "employer_name": employer_name,
                     "employer_email": employer_email,
                     "plan_name": plan.name,
+                    "buyer_type": buyer_type,
+                    "plan_audience": plan_audience,
                 },
             )
 
@@ -135,7 +152,10 @@ class PaymentService:
 
             # 5. Create pending subscription
             subscription = self.subscription_service.create_pending_subscription(
-                employer_id=employer_id, plan=plan, razorpay_order_id=razorpay_order_id
+                employer_id=employer_id,
+                plan=plan,
+                razorpay_order_id=razorpay_order_id,
+                owner_type=buyer_type,
             )
 
             if subscription:
@@ -161,6 +181,7 @@ class PaymentService:
                 "notes": {
                     "plan_id": str(plan._id),
                     "plan_name": plan.name,
+                    "plan_audience": plan_audience,
                 },
             }
 
@@ -643,13 +664,14 @@ class PaymentService:
             return None
 
     def get_employer_payments(self, employer_id: str, limit: int = 20) -> list:
-        """Get payment history for an employer"""
+        """Get payment history for an authenticated user id."""
         try:
-            payments = (
-                self.collection.find({"employer_id": ObjectId(employer_id)})
-                .sort("created_at", -1)
-                .limit(limit)
-            )
+            filters = {"$or": [{"employer_id": employer_id}]}
+            try:
+                filters["$or"].append({"employer_id": ObjectId(employer_id)})
+            except Exception:
+                pass
+            payments = self.collection.find(filters).sort("created_at", -1).limit(limit)
 
             return [Payment.from_dict(p).to_api_response() for p in payments]
         except Exception as e:

@@ -19,7 +19,7 @@ class CVScoringService:
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-flash-latest",
             temperature=0.3,  # Lower temperature for more consistent scoring
-            api_key=SecretStr(self.google_api_key)
+            google_api_key=self.google_api_key
         )
     def format_cv_details(self, cv_details: Dict[str, Any]) -> str:
         """Format CV details dictionary into readable text for AI processing"""

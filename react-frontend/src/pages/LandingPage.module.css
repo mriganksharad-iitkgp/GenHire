@@ -867,6 +867,13 @@
   background: #f8fafc;
 }
 
+.pricingGroupTitle {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 1.25rem;
+}
+
 .pricingGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -981,6 +988,16 @@
   flex-shrink: 0;
 }
 
+.unavailableFeature {
+  color: #94a3b8 !important;
+  text-decoration: line-through;
+}
+
+.unavailableFeature span {
+  background: #f1f5f9 !important;
+  color: #cbd5e1 !important;
+}
+
 .pricingBtn {
   width: 100%;
   padding: 1rem;
@@ -997,6 +1014,14 @@
 .pricingBtn:hover {
   border-color: #6366f1;
   color: #6366f1;
+}
+
+.disabledPricingBtn,
+.disabledPricingBtn:hover {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
 }
 
 .primaryPricingBtn {

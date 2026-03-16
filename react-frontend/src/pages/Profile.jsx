@@ -16,11 +16,11 @@ const Profile = () => {
 	const { invalidateApplications, invalidateCvs } = useCandidateData();
 	const [activeTab, setActiveTab] = useState("bio"); // Add state for active tab
 	const [cvFile, setCvFile] = useState(null);
-	
+
 	// Filter states for applications
 	const [companyFilter, setCompanyFilter] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	
+
 	// Interview report modal state
 	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [reportData, setReportData] = useState(null);
@@ -49,7 +49,7 @@ const Profile = () => {
 		} else if (hash === "#bio") {
 			setActiveTab("bio");
 		}
-		
+
 		// Also check URL search params for tab navigation
 		const urlParams = new URLSearchParams(window.location.search);
 		const tabParam = urlParams.get('tab');
@@ -58,7 +58,7 @@ const Profile = () => {
 		} else if (tabParam === 'bio') {
 			setActiveTab("bio");
 		}
-		}, [navigate]);
+	}, [navigate]);
 
 	// Add hash change listener to handle navigation from navbar (NO RELOADING)
 	useEffect(() => {
@@ -74,7 +74,7 @@ const Profile = () => {
 
 		// Listen for hash changes
 		window.addEventListener('hashchange', handleHashChange);
-		
+
 		// Also check on mount if hash exists
 		handleHashChange();
 
@@ -86,14 +86,14 @@ const Profile = () => {
 	// Hooks for profile and applications
 	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
 	const { applications, loading: loadingApps, openReport, companies, load: reloadApplications } = useCandidateApplications(showToast);
-	
+
 	// Check for interview completion on mount and force immediate refresh
 	useEffect(() => {
 		const interviewCompleted = localStorage.getItem('interview-just-completed');
 		if (interviewCompleted === 'true') {
 			console.log('Interview completion detected on Profile mount - forcing immediate refresh...');
 			localStorage.removeItem('interview-just-completed'); // Clear immediately
-			
+
 			// Force multiple refreshes with delays to ensure database sync
 			reloadApplications(true);
 			setTimeout(() => reloadApplications(true), 1000);
@@ -102,7 +102,7 @@ const Profile = () => {
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []); // Run only once on mount - reloadApplications is stable
-	
+
 	// Reload applications ONLY when necessary (interview completion or manual refresh)
 	useEffect(() => {
 		const handleVisibilityChange = () => {
@@ -111,18 +111,18 @@ const Profile = () => {
 				const interviewCompleted = localStorage.getItem('interview-just-completed');
 				if (interviewCompleted === 'true') {
 					localStorage.removeItem('interview-just-completed'); // Clear the flag
-					
+
 					// Multiple refresh attempts with increasing delays to ensure update is caught
 					reloadApplications(true);
-					
+
 					setTimeout(() => {
 						reloadApplications(true);
 					}, 1000);
-					
+
 					setTimeout(() => {
 						reloadApplications(true);
 					}, 2000);
-					
+
 					setTimeout(() => {
 						reloadApplications(true);
 					}, 3000);
@@ -130,11 +130,11 @@ const Profile = () => {
 				// REMOVED: Don't reload on every visibility change
 			}
 		};
-		
+
 		// REMOVED: Don't reload on hash change - just switch tabs without reloading
-		
+
 		document.addEventListener('visibilitychange', handleVisibilityChange);
-		
+
 		return () => {
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
@@ -144,7 +144,7 @@ const Profile = () => {
 	const handleTabChange = (tab) => {
 		setActiveTab(tab);
 		window.location.hash = `#${tab}`;
-		
+
 		// If switching to applications tab, check for interview completion and refresh
 		if (tab === 'applications') {
 			const interviewCompleted = localStorage.getItem('interview-just-completed');
@@ -159,36 +159,36 @@ const Profile = () => {
 	};
 
 	// Handle CV upload
-		const handleCVUpload = async (e) => {
+	const handleCVUpload = async (e) => {
 		e.preventDefault();
-			if (!cvFile) {
+		if (!cvFile) {
 			showToast("Please select a CV file.", "error");
 			return;
 		}
-			const ok = await uploadCvFile(cvFile);
-			if (ok) {
-				setCvFile(null);
-				// Invalidate CVs cache so next modal open fetches fresh list
-				invalidateCvs();
-			}
+		const ok = await uploadCvFile(cvFile);
+		if (ok) {
+			setCvFile(null);
+			// Invalidate CVs cache so next modal open fetches fresh list
+			invalidateCvs();
+		}
 	};
 
 	// Handle photo upload
-		const handlePhotoUpload = async (file) => {
-			if (!file) return;
-			await uploadProfilePhoto(file);
-		};
+	const handlePhotoUpload = async (file) => {
+		if (!file) return;
+		await uploadProfilePhoto(file);
+	};
 
 	// Handle CV viewing
-		const handleViewCV = async () => {
-			try {
-				const blob = await apiViewCV();
-				const url = window.URL.createObjectURL(blob);
-				window.open(url, '_blank');
-			} catch (e) {
-				showToast("Error viewing CV", "error");
-			}
-		};
+	const handleViewCV = async () => {
+		try {
+			const blob = await apiViewCV();
+			const url = window.URL.createObjectURL(blob);
+			window.open(url, '_blank');
+		} catch (e) {
+			showToast("Error viewing CV", "error");
+		}
+	};
 
 	// Handle profile data update
 	const handleProfileUpdate = async (e) => {
@@ -264,33 +264,33 @@ const Profile = () => {
 		const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
 		return matchesCompany && matchesStatus;
 	});
-	
+
 	const sortedApplications = [...filteredApplications].sort((a, b) => new Date(b.appliedDate) - new Date(a.appliedDate));
 
 	// Get unique companies for filter dropdown
-		const uniqueCompanies = useMemo(() => companies, [companies]);
+	const uniqueCompanies = useMemo(() => companies, [companies]);
 
-		const openInterviewReport = async (app) => {
-			const report = await openReport(app);
-			if (!report) return;
-			setReportData(report);
-			const cv = typeof app.cvScore === 'number' ? Math.round(app.cvScore) : null;
-			const interview = typeof app.interviewScore === 'number' ? Math.round(app.interviewScore) : (typeof report.final_score === 'number' ? Math.round(report.final_score) : null);
-			setReportScores({ cv, interview });
-			setIsReportOpen(true);
-		};
-		
+	const openInterviewReport = async (app) => {
+		const report = await openReport(app);
+		if (!report) return;
+		setReportData(report);
+		const cv = typeof app.cvScore === 'number' ? Math.round(app.cvScore) : null;
+		const interview = typeof app.interviewScore === 'number' ? Math.round(app.interviewScore) : (typeof report.final_score === 'number' ? Math.round(report.final_score) : null);
+		setReportScores({ cv, interview });
+		setIsReportOpen(true);
+	};
+
 	// Handle Give Interview action for shortlisted candidates
 	const handleGiveInterview = async (application) => {
 		try {
 			showToast(`Starting interview session for ${application.position}...`, 'info');
-			
+
 			// Navigate directly to the interview page with application ID
 			// Chat.jsx will handle the API call to start the interview
 			navigate(`/interview/start`, {
 				state: { applicationId: application.id }
 			});
-			
+
 		} catch (error) {
 			console.error('Error starting interview:', error);
 			showToast('Failed to start interview session. Please try again.', 'error');
@@ -299,25 +299,25 @@ const Profile = () => {
 
 	return (
 		<div className={styles.profileContainer}>
-		<div className={styles.content}>
-			<SidebarProfile
-				photoUrl={profilePhotoUrl}
-				isUploadingPhoto={uploadingPhoto}
-				onPhotoSelected={(e) => {
-					const file = e.target.files?.[0];
-					if (file) handlePhotoUpload(file);
-				}}
-				cvFileName={cvFile ? cvFile.name : undefined}
-				cvPath={cvPath}
-				onViewCV={handleViewCV}
-				onCvFileChange={(e) => setCvFile(e.target.files?.[0] || null)}
-				onUploadCv={handleCVUpload}
-				uploadingCV={uploadingCV}
-				cvDetails={cvDetails}
-				onSaveCvDetails={handleSaveCvDetails}
-				showToast={showToast}
-			>						{/* Application Statistics Card */}
-						<div className={styles.statsCard}>
+			<div className={styles.content}>
+				<SidebarProfile
+					photoUrl={profilePhotoUrl}
+					isUploadingPhoto={uploadingPhoto}
+					onPhotoSelected={(e) => {
+						const file = e.target.files?.[0];
+						if (file) handlePhotoUpload(file);
+					}}
+					cvFileName={cvFile ? cvFile.name : undefined}
+					cvPath={cvPath}
+					onViewCV={handleViewCV}
+					onCvFileChange={(e) => setCvFile(e.target.files?.[0] || null)}
+					onUploadCv={handleCVUpload}
+					uploadingCV={uploadingCV}
+					cvDetails={cvDetails}
+					onSaveCvDetails={handleSaveCvDetails}
+					showToast={showToast}
+				>						{/* Application Statistics Card */}
+					<div className={styles.statsCard}>
 						<h3>Application Status</h3>
 						<div className={styles.statsContainer}>
 							<div className={styles.statItem}>
@@ -392,25 +392,23 @@ const Profile = () => {
 							</div>
 						</div>
 					</div>
-						</SidebarProfile>
+				</SidebarProfile>
 
-						<div className={styles.mainContent}>
+				<div className={styles.mainContent}>
 					{/* Tab Navigation */}
 					<div className={styles.tabNavigation}>
 						<button
-							className={`${styles.tabButton} ${
-								activeTab === "bio" ? styles.activeTab : ""
-							}`}
+							className={`${styles.tabButton} ${activeTab === "bio" ? styles.activeTab : ""
+								}`}
 							onClick={() => handleTabChange("bio")}
 						>
 							<i className="fa fa-user"></i> Bio Data
 						</button>
 						<button
-							className={`${styles.tabButton} ${
-								activeTab === "applications"
+							className={`${styles.tabButton} ${activeTab === "applications"
 									? styles.activeTab
 									: ""
-							}`}
+								}`}
 							onClick={() => handleTabChange("applications")}
 						>
 							<i className="fa fa-file-text"></i> Applications
@@ -420,29 +418,29 @@ const Profile = () => {
 					{/* Tab Content */}
 					<div className={styles.tabContent}>
 						{/* Bio Data Tab */}
-												{activeTab === "bio" && (
-													<BioForm bio={bio} onChange={setBio} onSubmit={handleProfileUpdate} />
-												)}
+						{activeTab === "bio" && (
+							<BioForm bio={bio} onChange={setBio} onSubmit={handleProfileUpdate} />
+						)}
 
 						{/* Applications Tab */}
-												{activeTab === "applications" && (
-													<ApplicationsList
-														applications={applications}
-														companies={uniqueCompanies}
-														companyFilter={companyFilter}
-														statusFilter={statusFilter}
-														setCompanyFilter={setCompanyFilter}
-														setStatusFilter={setStatusFilter}
-														onClearFilters={() => { setCompanyFilter(""); setStatusFilter(""); }}
-														onViewCV={handleViewCV}
-														onOpenReport={openInterviewReport}
-														onGiveInterview={handleGiveInterview}
-													/>
-												)}
-					</div>
+						{activeTab === "applications" && (
+							<ApplicationsList
+								applications={applications}
+								companies={uniqueCompanies}
+								companyFilter={companyFilter}
+								statusFilter={statusFilter}
+								setCompanyFilter={setCompanyFilter}
+								setStatusFilter={setStatusFilter}
+								onClearFilters={() => { setCompanyFilter(""); setStatusFilter(""); }}
+								onViewCV={handleViewCV}
+								onOpenReport={openInterviewReport}
+								onGiveInterview={handleGiveInterview}
+							/>
+						)}
 					</div>
 				</div>
-								{/* Interview Report Modal */}
+			</div>
+			{/* Interview Report Modal */}
 			<InterviewReportModal
 				isOpen={isReportOpen}
 				onClose={() => setIsReportOpen(false)}
@@ -450,7 +448,7 @@ const Profile = () => {
 				cvScore={reportScores.cv}
 				interviewScore={reportScores.interview}
 			/>
-			
+
 			{/* Toast Notification */}
 			{toast && (
 				<Toast
