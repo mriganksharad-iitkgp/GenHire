@@ -9,8 +9,7 @@ Design Decisions:
 """
 
 import logging
-from flask import jsonify, request
-from typing import Tuple
+from typing import Tuple, Dict, Any
 
 from ..services.plan_service import PlanService
 
@@ -35,7 +34,14 @@ class PlanController:
         """
         self.plan_service = PlanService(db)
 
-    def get_all_plans(self) -> Tuple[dict, int]:
+    @staticmethod
+    def _normalize_user_type(user_data: Dict[str, Any]) -> str:
+        user_type = str(user_data.get("user_type") or "recruiter").strip().lower()
+        if user_type == "student":
+            return "candidate"
+        return user_type
+
+    def get_all_plans(self, user_data: Dict[str, Any]) -> Tuple[dict, int]:
         """
         Get all active plans.
 
@@ -43,7 +49,15 @@ class PlanController:
             Tuple of (response_dict, status_code)
         """
         try:
-            plans = self.plan_service.get_all_active_plans()
+            audience = self._normalize_user_type(user_data)
+            if audience not in {"recruiter", "candidate"}:
+                return {
+                    "success": False,
+                    "error": "Unsupported user type for plans",
+                    "error_code": "unsupported_user_type",
+                }, 403
+
+            plans = self.plan_service.get_all_active_plans(audience=audience)
 
             return {"success": True, "data": {"plans": plans, "count": len(plans)}}, 200
 
@@ -55,7 +69,7 @@ class PlanController:
                 "error_code": "fetch_failed",
             }, 500
 
-    def get_plan(self, plan_id: str) -> Tuple[dict, int]:
+    def get_plan(self, plan_id: str, user_data: Dict[str, Any]) -> Tuple[dict, int]:
         """
         Get a specific plan by ID.
 
@@ -73,7 +87,8 @@ class PlanController:
                     "error_code": "missing_plan_id",
                 }, 400
 
-            plan = self.plan_service.get_plan_by_id(plan_id)
+            audience = self._normalize_user_type(user_data)
+            plan = self.plan_service.get_plan_by_id(plan_id, audience=audience)
 
             if not plan:
                 return {
@@ -92,7 +107,7 @@ class PlanController:
                 "error_code": "fetch_failed",
             }, 500
 
-    def get_plan_by_slug(self, slug: str) -> Tuple[dict, int]:
+    def get_plan_by_slug(self, slug: str, user_data: Dict[str, Any]) -> Tuple[dict, int]:
         """
         Get a specific plan by slug.
 
@@ -110,7 +125,8 @@ class PlanController:
                     "error_code": "missing_slug",
                 }, 400
 
-            plan = self.plan_service.get_plan_by_slug(slug)
+            audience = self._normalize_user_type(user_data)
+            plan = self.plan_service.get_plan_by_slug(slug, audience=audience)
 
             if not plan:
                 return {

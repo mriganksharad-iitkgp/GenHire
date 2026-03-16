@@ -165,6 +165,7 @@ const ManageRecruiters = () => {
           onRowClick={handleRowClick}
           onDelete={(user) => setDeleteModal({ isOpen: true, user })}
           showType={false}
+          showPlan
           emptyMessage="No recruiters found"
         />
 

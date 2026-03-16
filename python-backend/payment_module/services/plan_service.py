@@ -41,6 +41,9 @@ class PlanService:
         self.collection = db[PlanSchema.COLLECTION_NAME]
         self._ensure_indexes()
         self._seed_default_plans()
+        self._ensure_default_plans_exist()
+        self._backfill_plan_audience()
+        self._migrate_legacy_enterprise_to_recruiter_max()
 
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
@@ -85,7 +88,103 @@ class PlanService:
         except Exception as e:
             logger.error(f"Error seeding plans: {str(e)}")
 
-    def get_all_active_plans(self) -> List[Dict[str, Any]]:
+    def _ensure_default_plans_exist(self):
+        """Ensure every configured default plan exists by slug (safe additive seed)."""
+        try:
+            for _, plan_data in PaymentConfig.DEFAULT_PLANS.items():
+                existing = self.collection.find_one({"slug": plan_data["slug"]})
+                if existing:
+                    continue
+
+                plan = Plan(
+                    name=plan_data["name"],
+                    slug=plan_data["slug"],
+                    description=plan_data["description"],
+                    price_paise=plan_data["price_paise"],
+                    interviews_allowed=plan_data["interviews_allowed"],
+                    validity_days=plan_data["validity_days"],
+                    features=plan_data["features"],
+                    audience=plan_data.get("audience", "recruiter"),
+                    is_popular=plan_data.get("is_popular", False),
+                    is_active=plan_data["is_active"],
+                    display_order=plan_data["display_order"],
+                )
+
+                self.collection.insert_one(plan.to_dict())
+                logger.info(f"Added missing default plan: {plan.name} ({plan.slug})")
+        except Exception as e:
+            logger.error(f"Error ensuring default plans: {str(e)}")
+
+    def _backfill_plan_audience(self):
+        """Backfill missing audience for legacy plans as recruiter."""
+        try:
+            result = self.collection.update_many(
+                {"audience": {"$exists": False}},
+                {"$set": {"audience": "recruiter", "updated_at": datetime.utcnow()}},
+            )
+            if result.modified_count:
+                logger.info(f"Backfilled audience on {result.modified_count} legacy plans")
+        except Exception as e:
+            logger.error(f"Error backfilling plan audience: {str(e)}")
+
+    def _migrate_legacy_enterprise_to_recruiter_max(self):
+        """Remove legacy recruiter enterprise plans and enforce recruiter-max defaults."""
+        try:
+            now = datetime.utcnow()
+            max_result = self.collection.update_one(
+                {"slug": "recruiter-max", "audience": "recruiter"},
+                {
+                    "$set": {
+                        "name": "Recruiter Max",
+                        "slug": "recruiter-max",
+                        "description": "Advanced recruiter plan with 300 interviews per month",
+                        "price_paise": 999900,
+                        "interviews_allowed": 300,
+                        "validity_days": 30,
+                        "audience": "recruiter",
+                        "display_order": 3,
+                        "updated_at": now,
+                        "features": [
+                            "300 AI-powered interviews/month",
+                            "Custom integrations",
+                            "Advanced analytics and reporting",
+                            "Custom branding",
+                            "Priority support",
+                        ],
+                    }
+                },
+            )
+
+            delete_result = self.collection.delete_many(
+                {
+                    "$or": [
+                        {"slug": "enterprise"},
+                        {"name": "Enterprise", "audience": "recruiter"},
+                    ]
+                }
+            )
+
+            if max_result.modified_count:
+                logger.info("Normalized recruiter-max plan defaults")
+            if delete_result.deleted_count:
+                logger.info(f"Deleted {delete_result.deleted_count} legacy enterprise plan(s)")
+        except Exception as e:
+            logger.error(f"Error normalizing recruiter plans: {str(e)}")
+
+    @staticmethod
+    def _audience_filter(audience: Optional[str]) -> Dict[str, Any]:
+        if audience == "recruiter":
+            return {
+                "$or": [
+                    {"audience": "recruiter"},
+                    {"audience": {"$exists": False}},
+                ]
+            }
+        if audience == "candidate":
+            return {"audience": "candidate"}
+        return {}
+
+    def get_all_active_plans(self, audience: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get all active plans sorted by display order.
 
@@ -93,9 +192,11 @@ class PlanService:
             List of plan API responses
         """
         try:
-            plans = self.collection.find({"is_active": True}).sort(
-                "display_order", ASCENDING
-            )
+            filters = {"is_active": True}
+            if audience in {"recruiter", "candidate"}:
+                filters.update(self._audience_filter(audience))
+
+            plans = self.collection.find(filters).sort("display_order", ASCENDING)
 
             return [Plan.from_dict(p).to_api_response() for p in plans]
 
@@ -103,7 +204,7 @@ class PlanService:
             logger.error(f"Error fetching plans: {str(e)}")
             return []
 
-    def get_plan_by_id(self, plan_id: str) -> Optional[Plan]:
+    def get_plan_by_id(self, plan_id: str, audience: Optional[str] = None) -> Optional[Plan]:
         """
         Get plan by ID.
 
@@ -114,9 +215,9 @@ class PlanService:
             Plan object or None
         """
         try:
-            plan_data = self.collection.find_one(
-                {"_id": ObjectId(plan_id), "is_active": True}
-            )
+            filters = {"_id": ObjectId(plan_id), "is_active": True}
+            filters.update(self._audience_filter(audience))
+            plan_data = self.collection.find_one(filters)
 
             if plan_data:
                 return Plan.from_dict(plan_data)
@@ -126,7 +227,7 @@ class PlanService:
             logger.error(f"Error fetching plan {plan_id}: {str(e)}")
             return None
 
-    def get_plan_by_slug(self, slug: str) -> Optional[Plan]:
+    def get_plan_by_slug(self, slug: str, audience: Optional[str] = None) -> Optional[Plan]:
         """
         Get plan by slug identifier.
 
@@ -137,7 +238,9 @@ class PlanService:
             Plan object or None
         """
         try:
-            plan_data = self.collection.find_one({"slug": slug, "is_active": True})
+            filters = {"slug": slug, "is_active": True}
+            filters.update(self._audience_filter(audience))
+            plan_data = self.collection.find_one(filters)
 
             if plan_data:
                 return Plan.from_dict(plan_data)
@@ -155,8 +258,10 @@ class PlanService:
         price_paise: int,
         interviews_allowed: int,
         validity_days: int,
-        features: List[str] = None,
+        features=None,
         display_order: int = 0,
+        audience: str = "recruiter",
+        is_popular: bool = False,
     ) -> Optional[Plan]:
         """
         Create a new plan.
@@ -190,6 +295,8 @@ class PlanService:
                 validity_days=validity_days,
                 features=features or [],
                 display_order=display_order,
+                audience=audience,
+                is_popular=is_popular,
             )
 
             result = self.collection.insert_one(plan.to_dict())

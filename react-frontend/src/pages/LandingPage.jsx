@@ -58,7 +58,7 @@ const LandingPage = () => {
     {
       icon: "🔒",
       title: "Secure & Reliable",
-      description: "Enterprise-grade security with encrypted data storage and GDPR compliance.",
+      description: "Production-grade security with encrypted data storage and GDPR compliance.",
       gradient: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)"
     }
   ];
@@ -457,29 +457,94 @@ const LandingPage = () => {
             </p>
           </div>
 
+          <h3 className={styles.pricingGroupTitle}>Candidate Plans</h3>
           <div className={styles.pricingGrid}>
             <div className={styles.pricingCard}>
               <div className={styles.pricingHeader}>
-                <h3>Candidate</h3>
+                <h3>Free Tier</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>0</span>
-                  <span className={styles.period}>/forever</span>
+                  <span className={styles.amount}>Free</span>
                 </div>
-                <p>Perfect for job seekers</p>
+                <p>Free plan with 2 practice interviews per month</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> Unlimited practice interviews</li>
-                <li><span>✓</span> CV analysis & scoring</li>
-                <li><span>✓</span> Job matching</li>
-                <li><span>✓</span> Performance reports</li>
-                <li><span>✓</span> Interview feedback</li>
+                <li><span>✓</span> 2 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Candidate Analytics</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Priority Support</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Custom Branding</li>
+                <li className={styles.unavailableFeature}><span>✕</span> API Access</li>
               </ul>
-              <button 
-                className={styles.pricingBtn}
-                onClick={() => navigate("/register")}
-              >
-                Get Started Free
+              <button className={`${styles.pricingBtn} ${styles.disabledPricingBtn}`} disabled>
+                Current Plan
+              </button>
+            </div>
+
+            <div className={`${styles.pricingCard} ${styles.popular}`}>
+              <div className={styles.popularBadge}>Most Popular</div>
+              <div className={styles.pricingHeader}>
+                <h3>Candidate Pro</h3>
+                <div className={styles.pricingPrice}>
+                  <span className={styles.currency}>₹</span>
+                  <span className={styles.amount}>999.00</span>
+                  <span className={styles.period}>/month</span>
+                </div>
+                <p>50 practice interviews per month</p>
+              </div>
+              <ul className={styles.pricingFeatures}>
+                <li><span>✓</span> 50 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Candidate Analytics</li>
+                <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> API Access</li>
+              </ul>
+              <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/register")}>
+                Upgrade Now
+              </button>
+            </div>
+
+            <div className={styles.pricingCard}>
+              <div className={styles.pricingHeader}>
+                <h3>Candidate Max</h3>
+                <div className={styles.pricingPrice}>
+                  <span className={styles.currency}>₹</span>
+                  <span className={styles.amount}>1,499.00</span>
+                  <span className={styles.period}>/month</span>
+                </div>
+                <p>100 practice interviews per month</p>
+              </div>
+              <ul className={styles.pricingFeatures}>
+                <li><span>✓</span> 100 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Candidate Analytics</li>
+                <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> API Access</li>
+              </ul>
+              <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/register")}>
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+
+          <h3 className={styles.pricingGroupTitle}>Recruiter Plans</h3>
+          <div className={styles.pricingGrid}>
+            <div className={styles.pricingCard}>
+              <div className={styles.pricingHeader}>
+                <h3>Free Tier</h3>
+                <div className={styles.pricingPrice}>
+                  <span className={styles.amount}>Free</span>
+                </div>
+                <p>Starter free tier with limited interviews</p>
+              </div>
+              <ul className={styles.pricingFeatures}>
+                <li><span>✓</span> 2 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Basic Analytics</li>
+              </ul>
+              <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
+                Start for Free
               </button>
             </div>
 
@@ -489,49 +554,43 @@ const LandingPage = () => {
                 <h3>Recruiter Pro</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>4,999</span>
+                  <span className={styles.amount}>4,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
                 <p>For growing teams</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 AI interviews/month</li>
-                <li><span>✓</span> Unlimited job postings</li>
-                <li><span>✓</span> Advanced analytics</li>
-                <li><span>✓</span> CV screening & ranking</li>
-                <li><span>✓</span> Proctoring features</li>
-                <li><span>✓</span> Priority support</li>
+                <li><span>✓</span> 100 AI Interviews/month</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Advanced Analytics</li>
+                <li><span>✓</span> CV Screening & Ranking</li>
+                <li><span>✓</span> Proctoring Features</li>
+                <li><span>✓</span> Priority Support</li>
               </ul>
-              <button 
-                className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`}
-                onClick={() => navigate("/recruiter-signup")}
-              >
+              <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
                 Start Free Trial
               </button>
             </div>
 
             <div className={styles.pricingCard}>
               <div className={styles.pricingHeader}>
-                <h3>Enterprise</h3>
+                <h3>Recruiter Max</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>10,000</span>
+                  <span className={styles.amount}>9,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
                 <p>For large organizations</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> Unlimited interviews</li>
-                <li><span>✓</span> Custom integrations</li>
-                <li><span>✓</span> Dedicated support & SLA</li>
-                <li><span>✓</span> On-premise option</li>
-                <li><span>✓</span> Custom branding</li>
-                <li><span>✓</span> API access</li>
+                <li><span>✓</span> 300 AI Interviews/month</li>
+                <li><span>✓</span> Custom Integrations</li>
+                <li><span>✓</span> Advanced Analytics & Reporting</li>
+                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> API Access</li>
               </ul>
-              <button 
-                className={styles.pricingBtn}
-                onClick={() => navigate("/recruiter-signup")}
-              >
+              <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
                 Get Started
               </button>
             </div>

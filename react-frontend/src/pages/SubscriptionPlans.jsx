@@ -205,22 +205,22 @@ const SubscriptionPlans = () => {
       is_popular: true,
     },
     {
-      id: "enterprise",
-      slug: "enterprise",
-      name: "Enterprise",
-      description: "Enterprise plan with unlimited interviews for large organizations",
-      price: 10000,
+      id: "recruiter-max",
+      slug: "recruiter-max",
+      name: "Recruiter Max",
+      description: "Advanced recruiter plan with 300 interviews per month",
+      price: 9999,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "Unlimited AI Interviews", included: true },
+        { name: "300 AI Interviews/month", included: true },
         { name: "Custom Integrations", included: true },
-        { name: "Dedicated Support & SLA", included: true },
+        { name: "Advanced Analytics & Reporting", included: true },
         { name: "Custom Branding", included: true },
-        { name: "On-premise Option", included: true },
+        { name: "Priority Support", included: true },
         { name: "API Access", included: true },
       ],
-      interviews_allowed: -1,
+      interviews_allowed: 300,
       is_popular: false,
     },
   ];
@@ -249,7 +249,12 @@ const SubscriptionPlans = () => {
         normalizedPlans = getFallbackPlans();
       }
       
-      setPlans(normalizedPlans);
+      const allowedRecruiterPlanSlugs = new Set(["free", "professional", "recruiter-max"]);
+      const recruiterPlans = normalizedPlans.filter((plan) =>
+        allowedRecruiterPlanSlugs.has(String(plan?.slug || "").toLowerCase()),
+      );
+
+      setPlans(recruiterPlans);
       console.log("Fetched plans:", normalizedPlans); 
       console.log("Fetched plansres:", plansRes);
 

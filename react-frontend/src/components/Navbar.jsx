@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
 import { UpgradeButton } from "./recruiter/subscription";
+import { CandidatePlanButton } from "./candidate/subscription";
 
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
@@ -191,6 +192,14 @@ const Navbar = ({ userType = "candidate" }) => {
               >
                 Practice
               </Link>
+              <Link
+                to="/candidate/cost-statistics"
+                className={`${styles.navLink} ${
+                  location.pathname === "/candidate/cost-statistics" ? styles.active : ""
+                }`}
+              >
+                Cost Statistics
+              </Link>
             </>
           )}
         </nav>
@@ -198,6 +207,7 @@ const Navbar = ({ userType = "candidate" }) => {
         <div className={styles.navActions}>
           {/* Upgrade Button for Recruiters */}
           {userType === "recruiter" && <UpgradeButton />}
+          {userType !== "recruiter" && <CandidatePlanButton />}
 
           <button
             className={styles.darkModeButton}

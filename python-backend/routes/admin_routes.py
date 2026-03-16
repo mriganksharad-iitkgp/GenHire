@@ -311,5 +311,7 @@ def get_practice_report(current_user, session_id):
 def get_admin_cost_statistics(current_user):
     """Get cost statistics for all recruiters - Admin only"""
     period = request.args.get('period', 'month')
-    result, status = admin_controller.get_cost_statistics(current_user, period)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_cost_statistics(current_user, period, start_date, end_date)
     return jsonify(result), status

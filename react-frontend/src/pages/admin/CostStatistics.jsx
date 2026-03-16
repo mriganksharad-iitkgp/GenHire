@@ -1,556 +1,647 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import styles from './CostStatistics.module.css';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+const formatInrNumber = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatInrCompact = (value) => {
+  const amount = Number(value || 0);
+  const absAmount = Math.abs(amount);
+
+  if (absAmount >= 10000000) return `₹${(amount / 10000000).toFixed(2)}Cr`;
+  if (absAmount >= 100000) return `₹${(amount / 100000).toFixed(2)}L`;
+  if (absAmount >= 1000) return `₹${(amount / 1000).toFixed(2)}K`;
+  return `₹${amount.toFixed(2)}`;
+};
+
+const chartValueLabelPlugin = {
+  id: 'chartValueLabelPlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const chartType = chart.config.type;
+
+    if (chartType === 'bar') {
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const meta = chart.getDatasetMeta(datasetIndex);
+        if (meta.hidden) return;
+
+        meta.data.forEach((element, dataIndex) => {
+          const rawValue = Number(dataset.data[dataIndex] || 0);
+          const valueText = formatInrNumber(rawValue);
+          const x = element.x;
+          const y = rawValue >= 0 ? element.y - 8 : element.y + 16;
+
+          ctx.save();
+          ctx.font = '600 11px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#0f172a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(valueText, x, y);
+          ctx.restore();
+        });
+      });
+    }
+
+    if (chartType === 'doughnut') {
+      const dataset = chart.data.datasets?.[0];
+      if (!dataset) return;
+      const meta = chart.getDatasetMeta(0);
+      if (meta.hidden) return;
+
+      const values = dataset.data?.map((value) => Number(value || 0)) || [];
+      const total = values.reduce((sum, value) => sum + value, 0);
+      const chartTop = chart.chartArea?.top ?? 0;
+      const chartBottom = chart.chartArea?.bottom ?? chart.height;
+
+      const labelPoints = meta.data.map((arc, index) => {
+        const rawValue = values[index] || 0;
+        const angle = (arc.startAngle + arc.endAngle) / 2;
+        const ratio = total > 0 ? rawValue / total : 0;
+        const isTinySlice = ratio > 0 && ratio < 0.06;
+        const side = Math.cos(angle) >= 0 ? 'right' : 'left';
+
+        return {
+          arc,
+          side,
+          text: isTinySlice ? formatInrCompact(rawValue) : formatInrNumber(rawValue),
+          lineStartX: arc.x + Math.cos(angle) * (arc.outerRadius + 2),
+          lineStartY: arc.y + Math.sin(angle) * (arc.outerRadius + 2),
+          lineMidX: arc.x + Math.cos(angle) * (arc.outerRadius + 16),
+          lineMidY: arc.y + Math.sin(angle) * (arc.outerRadius + 16),
+          textX: arc.x + Math.cos(angle) * (arc.outerRadius + (isTinySlice ? 36 : 28)),
+          textY: arc.y + Math.sin(angle) * (arc.outerRadius + (isTinySlice ? 26 : 18)),
+        };
+      });
+
+      ['left', 'right'].forEach((side) => {
+        const points = labelPoints
+          .filter((point) => point.side === side)
+          .sort((first, second) => first.textY - second.textY);
+
+        const minGap = 14;
+        for (let index = 1; index < points.length; index += 1) {
+          if (points[index].textY - points[index - 1].textY < minGap) {
+            points[index].textY = points[index - 1].textY + minGap;
+          }
+        }
+
+        points.forEach((point) => {
+          point.textY = Math.max(chartTop + 10, Math.min(chartBottom - 10, point.textY));
+        });
+      });
+
+      labelPoints.forEach((point) => {
+        const lineEndX = point.side === 'right' ? point.textX - 6 : point.textX + 6;
+
+        ctx.save();
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(point.lineStartX, point.lineStartY);
+        ctx.lineTo(point.lineMidX, point.lineMidY);
+        ctx.lineTo(lineEndX, point.textY);
+        ctx.stroke();
+
+        ctx.font = '600 10px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#0f172a';
+        ctx.textAlign = point.side === 'right' ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(point.text, point.textX, point.textY);
+        ctx.restore();
+      });
+    }
+  },
+};
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, chartValueLabelPlugin);
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+const formatDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatMoney = (value) => formatInrNumber(value);
+
+const planIncomingPalette = ['#8b5cf6', '#7c3aed', '#0ea5e9', '#0284c7', '#16a34a', '#15803d'];
+
+const toCsvValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const stringValue = String(value).replace(/"/g, '""');
+  return `"${stringValue}"`;
+};
+
+const downloadCsv = (filename, rows) => {
+  const csvContent = rows.map((row) => row.map((cell) => toCsvValue(cell)).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 const CostStatistics = () => {
+  const todayDate = useMemo(() => new Date(), []);
+  const defaultStartDate = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return formatDateInput(date);
+  }, []);
+
+  const [startDate, setStartDate] = useState(defaultStartDate);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const [costData, setCostData] = useState(null);
   const [error, setError] = useState(null);
+  const [costData, setCostData] = useState(null);
+
+  const endDate = formatDateInput(todayDate);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchCostStats = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || 'token');
         if (!token) {
-          setError('Please login to view cost statistics');
+          setError('Please login to view cost statistics.');
           setLoading(false);
           return;
         }
 
-        const response = await fetch(
-          `${API_BASE_URL}/api/admin/cost-statistics?period=${selectedPeriod}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        const query = new URLSearchParams({
+          start_date: startDate,
+          end_date: endDate,
+        });
+
+        const response = await fetch(`${API_BASE_URL}/api/admin/cost-statistics?${query.toString()}`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
         const data = await response.json();
-
-        if (response.ok) {
-          setCostData(data);
-        } else {
-          setError(data.error || 'Failed to load cost statistics');
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch admin cost statistics.');
         }
-      } catch (err) {
-        console.error('Error fetching cost statistics:', err);
-        setError('Failed to load cost statistics. Please try again.');
+
+        setCostData(data);
+      } catch (fetchError) {
+        setError(fetchError.message || 'Failed to fetch admin cost statistics.');
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchData();
-  }, [selectedPeriod]);
 
-  const calculatePercentage = (used, total) => {
-    if (!total || total === 0) return 0;
-    return Math.round((used / total) * 100);
+    fetchCostStats();
+  }, [startDate, endDate]);
+
+  const aiCostRows = useMemo(() => costData?.cost_statistics?.ai_costs || [], [costData]);
+  const infraCosts = useMemo(() => costData?.cost_statistics?.infrastructure_costs || {}, [costData]);
+  const incoming = useMemo(() => costData?.incoming_money || {}, [costData]);
+  const profitability = useMemo(() => costData?.profitability || {}, [costData]);
+
+  const overviewBarData = useMemo(() => ({
+    labels: ['Total Incoming', 'Net Incoming', 'Total Cost', 'Gross Profit', 'Net Profit'],
+    datasets: [
+      {
+        label: 'INR',
+        data: [
+          incoming?.total_incoming_inr || 0,
+          incoming?.net_incoming_after_refunds_inr || 0,
+          costData?.cost_statistics?.total_cost_inr || 0,
+          profitability?.profit_gross_inr || 0,
+          profitability?.profit_net_inr || 0,
+        ],
+        backgroundColor: ['#6366f1', '#8b5cf6', '#ef4444', '#22c55e', '#16a34a'],
+        borderRadius: 8,
+      },
+    ],
+  }), [incoming, profitability, costData]);
+
+  const aiMixData = useMemo(() => ({
+    labels: aiCostRows.map((item) => item.title),
+    datasets: [
+      {
+        data: aiCostRows.map((item) => item.total_cost_inr || 0),
+        backgroundColor: ['#6366f1', '#8b5cf6', '#0ea5e9', '#06b6d4', '#10b981', '#f59e0b'],
+        borderWidth: 0,
+      },
+    ],
+  }), [aiCostRows]);
+
+  const planIncomingData = useMemo(() => {
+    const candidatePlans = incoming?.candidate?.plans || [];
+    const recruiterPlans = incoming?.recruiter?.plans || [];
+
+    const matchAmount = (plans, candidateSlugs = [], candidateNames = []) => {
+      const row = plans.find((plan) => {
+        const slug = String(plan.plan_slug || '').toLowerCase();
+        const name = String(plan.plan_name || '').toLowerCase();
+        const slugMatched = candidateSlugs.some((value) => slug.includes(value));
+        const nameMatched = candidateNames.some((value) => name.includes(value));
+        return slugMatched || nameMatched;
+      });
+      return row?.incoming_amount_inr || 0;
+    };
+
+    const candidateProIncoming = matchAmount(candidatePlans, ['candidate-pro'], ['candidate pro']);
+    const candidateMaxIncoming = matchAmount(candidatePlans, ['candidate-max'], ['candidate max']);
+    const recruiterProIncoming = matchAmount(recruiterPlans, ['professional', 'recruiter-pro'], ['recruiter pro', 'professional']);
+    const recruiterMaxIncoming = matchAmount(recruiterPlans, ['recruiter-max'], ['recruiter max']);
+
+    return {
+      labels: [
+        'Candidate Pro',
+        'Candidate Max',
+        'Recruiter Pro',
+        'Recruiter Max',
+        'Candidate Total',
+        'Recruiter Total',
+      ],
+      datasets: [
+        {
+          label: 'Incoming INR',
+          data: [
+            candidateProIncoming,
+            candidateMaxIncoming,
+            recruiterProIncoming,
+            recruiterMaxIncoming,
+            incoming?.candidate?.total_incoming_inr || 0,
+            incoming?.recruiter?.total_incoming_inr || 0,
+          ],
+          backgroundColor: planIncomingPalette,
+          borderRadius: 8,
+        },
+      ],
+    };
+  }, [incoming]);
+
+  const sharedBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 24,
+      },
+    },
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
   };
 
-  // SVG Pie Chart Component
-  const PieChart = ({ used, total, color, label, icon }) => {
-    const percentage = calculatePercentage(used, total);
-    const circumference = 2 * Math.PI * 45;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-      <div className={styles.pieChartCard}>
-        <div className={styles.pieChartHeader}>
-          <span className={styles.pieChartIcon} style={{ background: color }}>
-            {icon}
-          </span>
-          <h3>{label}</h3>
-        </div>
-        <div className={styles.pieChartContainer}>
-          <svg className={styles.pieChart} viewBox="0 0 100 100">
-            {/* Background circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="45"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="10"
-            />
-            {/* Progress circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="45"
-              fill="none"
-              stroke={color}
-              strokeWidth="10"
-              strokeLinecap="round"
-              strokeDasharray={strokeDasharray}
-              strokeDashoffset={strokeDashoffset}
-              transform="rotate(-90 50 50)"
-              style={{ transition: 'stroke-dashoffset 1s ease' }}
-            />
-          </svg>
-          <div className={styles.pieChartCenter}>
-            <span className={styles.pieChartPercentage}>{percentage}%</span>
-            <span className={styles.pieChartLabel}>Used</span>
-          </div>
-        </div>
-        <div className={styles.pieChartLegend}>
-          <div className={styles.legendItem}>
-            <span className={styles.legendDot} style={{ background: color }}></span>
-            <span>Used: ₹{used.toLocaleString()}</span>
-          </div>
-          <div className={styles.legendItem}>
-            <span className={styles.legendDot} style={{ background: '#e2e8f0' }}></span>
-            <span>Available: ₹{(total - used).toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-    );
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 18,
+        right: 32,
+        bottom: 18,
+        left: 32,
+      },
+    },
+    plugins: {
+      legend: {
+        position: 'bottom',
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `${context.label}: ${formatInrNumber(context.raw)}`,
+        },
+      },
+    },
   };
 
-  // Horizontal Bar Component (like CV Score)
-  const HorizontalBar = ({ label, value, maxValue, color, sublabel }) => {
-    const percentage = calculatePercentage(value, maxValue);
-    
-    return (
-      <div className={styles.horizontalBarContainer}>
-        <div className={styles.horizontalBarHeader}>
-          <span className={styles.horizontalBarLabel}>{label}</span>
-          <span className={styles.horizontalBarValue}>₹{value.toLocaleString()} / ₹{maxValue.toLocaleString()}</span>
-        </div>
-        <div className={styles.horizontalBarTrack}>
-          <div 
-            className={styles.horizontalBarFill}
-            style={{ 
-              width: `${percentage}%`, 
-              background: color 
-            }}
-          ></div>
-        </div>
-        {sublabel && <span className={styles.horizontalBarSublabel}>{sublabel}</span>}
-      </div>
-    );
-  };
+  const handleExportCsv = () => {
+    if (!costData) return;
 
-  // Stacked Bar for Recruiter comparison
-  // Helper to format dates
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+    const timeline = costData.timeline || {};
+    const rows = [
+      ['Section', 'Metric', 'Value', 'Model', 'Count', 'Avg Cost INR', 'Total Cost INR', 'Formula'],
+      ['Timeline', 'Start Date', timeline.start_date || '', '', '', '', '', ''],
+      ['Timeline', 'End Date', timeline.end_date || '', '', '', '', '', ''],
+      ['Timeline', 'Days', timeline.days || 0, '', '', '', '', ''],
+    ];
 
-  // Get plan badge style class
-  const getPlanBadgeClass = (planName) => {
-    const name = (planName || '').toLowerCase();
-    if (name.includes('enterprise')) return styles.planEnterprise;
-    if (name.includes('pro') || name.includes('professional') || name.includes('recruiter')) return styles.planPro;
-    return styles.planFree;
-  };
-
-  if (loading) {
-    return (
-      <AdminLayout activeTab="cost-statistics">
-        <div className={styles.loadingContainer}>
-          <div className={styles.loadingSpinner}></div>
-          <p>Loading cost statistics...</p>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <AdminLayout activeTab="cost-statistics">
-        <div className={styles.loadingContainer}>
-          <p style={{ color: '#ef4444' }}>{error}</p>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  if (!costData || !costData.recruiters) {
-    return (
-      <AdminLayout activeTab="cost-statistics">
-        <div className={styles.loadingContainer}>
-          <p>No cost data available.</p>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  // Safe access for overview with defaults
-  const overview = costData.overview || {};
-  const totalBudget = overview.totalBudget || 0;
-  const totalUsed = overview.totalUsed || 0;
-  const cloudflare = overview.cloudflare || { used: 0, allocated: 0 };
-  const nlp = overview.nlp || { used: 0, allocated: 0 };
-  const llm = overview.llm || { used: 0, allocated: 0 };
-
-  // Revenue calculations based on subscription plans
-  const revenueData = (() => {
-    const recruiters = costData.recruiters || [];
-    let proCount = 0;
-    let enterpriseCount = 0;
-    let freeCount = 0;
-    let totalInterviews = 0;
-
-    recruiters.forEach(r => {
-      const planName = (r.plan?.name || r.plan?.slug || 'free').toLowerCase();
-      if (planName.includes('pro') || planName.includes('professional')) {
-        proCount++;
-      } else if (planName.includes('enterprise')) {
-        enterpriseCount++;
-      } else {
-        freeCount++;
-      }
-      totalInterviews += r.activity?.total_interviews || 0;
+    (costData?.cost_statistics?.ai_costs || []).forEach((item) => {
+      rows.push([
+        'AI Costs',
+        item.title || item.key,
+        '',
+        item.model || '',
+        item.count || 0,
+        item.avg_cost_inr || 0,
+        item.total_cost_inr || 0,
+        item.formula || '',
+      ]);
     });
 
-    const proRevenue = proCount * 4999;
-    const enterpriseRevenue = enterpriseCount * 10000;
-    const totalRevenue = proRevenue + enterpriseRevenue;
-    const costPerInterview = totalInterviews > 0 ? Math.round(totalUsed / totalInterviews) : 0;
-    const profit = totalRevenue - totalUsed;
-    const margin = totalRevenue > 0 ? Math.round((profit / totalRevenue) * 100) : 0;
+    rows.push(['AI Costs', 'Total AI Cost', '', '', '', '', costData?.cost_statistics?.total_ai_cost_inr || 0, '']);
+    rows.push(['Infrastructure', 'Cloudflare Monthly Assumption', infraCosts?.cloudflare?.monthly_assumption_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'Cloudflare Pro-rated', infraCosts?.cloudflare?.prorated_cost_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'MongoDB Monthly Assumption', infraCosts?.mongodb?.monthly_assumption_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'MongoDB Pro-rated', infraCosts?.mongodb?.prorated_cost_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'Total Infrastructure Cost', infraCosts?.total_infrastructure_cost_inr || 0, '', '', '', '', '']);
 
-    return { proCount, enterpriseCount, freeCount, proRevenue, enterpriseRevenue, totalRevenue, totalInterviews, costPerInterview, profit, margin };
-  })();
+    (incoming?.candidate?.plans || []).forEach((plan) => {
+      rows.push([
+        'Incoming Candidate',
+        plan.plan_name || '',
+        plan.incoming_amount_inr || 0,
+        '',
+        plan.succeeded_payment_count || 0,
+        '',
+        '',
+        'Succeeded payments in selected timeline',
+      ]);
+    });
+    rows.push(['Incoming Candidate', 'Candidate Total Incoming', incoming?.candidate?.total_incoming_inr || 0, '', incoming?.candidate?.succeeded_payment_count || 0, '', '', '']);
+
+    (incoming?.recruiter?.plans || []).forEach((plan) => {
+      rows.push([
+        'Incoming Recruiter',
+        plan.plan_name || '',
+        plan.incoming_amount_inr || 0,
+        '',
+        plan.succeeded_payment_count || 0,
+        '',
+        '',
+        'Succeeded payments in selected timeline',
+      ]);
+    });
+    rows.push(['Incoming Recruiter', 'Recruiter Total Incoming', incoming?.recruiter?.total_incoming_inr || 0, '', incoming?.recruiter?.succeeded_payment_count || 0, '', '', '']);
+    rows.push(['Incoming Total', 'Total Incoming', incoming?.total_incoming_inr || 0, '', '', '', '', '']);
+    rows.push(['Incoming Total', 'Refunded Total', incoming?.refund_adjustments?.total_refunded_inr || 0, '', incoming?.refund_adjustments?.refund_events_count || 0, '', '', '']);
+    rows.push(['Incoming Total', 'Net Incoming After Refunds', incoming?.net_incoming_after_refunds_inr || 0, '', '', '', '', '']);
+
+    rows.push(['Profitability', 'Total Cost', profitability?.cost_total_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Gross Profit', profitability?.profit_gross_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Gross Margin %', profitability?.margin_gross_pct || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Net Profit', profitability?.profit_net_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Net Margin %', profitability?.margin_net_pct || 0, '', '', '', '', '']);
+
+    const safeStart = String(timeline.start_date || startDate).slice(0, 10);
+    const safeEnd = String(timeline.end_date || endDate).slice(0, 10);
+    downloadCsv(`admin-cost-statistics-${safeStart}-to-${safeEnd}.csv`, rows);
+  };
 
   return (
     <AdminLayout activeTab="cost-statistics">
-      <div className={styles.costStatistics}>
-      {/* Page Header */}
-      <div className={styles.pageHeader}>
-        <div className={styles.headerContent}>
-          <h1>Cost Statistics</h1>
-          <p>Monitor and analyze platform resource consumption and costs</p>
+      <div className={styles.wrapper}>
+        <div className={styles.headerBlock}>
+          <h1>Admin Cost Statistics</h1>
+          <p>Select a timeline and review complete cost, incoming money, and profitability.</p>
         </div>
-        <div className={styles.headerActions}>
-          <select 
-            className={styles.periodSelect}
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-          >
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="quarter">This Quarter</option>
-            <option value="year">This Year</option>
-          </select>
-          <button className={styles.exportBtn}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Export Report
-          </button>
-        </div>
-      </div>
 
-      {/* Overview Cards */}
-      <div className={styles.overviewCards}>
-        <div className={styles.overviewCard}>
-          <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-              <line x1="1" y1="10" x2="23" y2="10" />
-            </svg>
+        <section className={styles.card}>
+          <div className={styles.sectionTitleRow}>
+            <h2>Timeline</h2>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={handleExportCsv}
+              disabled={loading || !costData}
+            >
+              Export CSV
+            </button>
           </div>
-          <div className={styles.overviewInfo}>
-            <span className={styles.overviewLabel}>Total Budget</span>
-            <span className={styles.overviewValue}>₹{totalBudget.toLocaleString()}</span>
+          <div className={styles.timelineGrid}>
+            <label className={styles.field}>
+              <span>From Date</span>
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>To Date (Present)</span>
+              <input type="date" value={endDate} disabled />
+            </label>
           </div>
-        </div>
-        <div className={styles.overviewCard}>
-          <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </div>
-          <div className={styles.overviewInfo}>
-            <span className={styles.overviewLabel}>Total Used</span>
-            <span className={styles.overviewValue}>₹{totalUsed.toLocaleString()}</span>
-          </div>
-        </div>
-        <div className={styles.overviewCard}>
-          <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #f59e0b, #fbbf24)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-          </div>
-          <div className={styles.overviewInfo}>
-            <span className={styles.overviewLabel}>Available</span>
-            <span className={styles.overviewValue}>₹{(totalBudget - totalUsed).toLocaleString()}</span>
-          </div>
-        </div>
-        <div className={styles.overviewCard}>
-          <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #ef4444, #f87171)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M3 3v18h18" />
-              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
-            </svg>
-          </div>
-          <div className={styles.overviewInfo}>
-            <span className={styles.overviewLabel}>Utilization</span>
-            <span className={styles.overviewValue}>{calculatePercentage(totalUsed, totalBudget)}%</span>
-          </div>
-        </div>
-      </div>
+          {costData?.timeline && (
+            <div className={styles.timelineMeta}>
+              <span>Applied Range: {new Date(costData.timeline.start_date).toLocaleDateString('en-IN')} - {new Date(costData.timeline.end_date).toLocaleDateString('en-IN')}</span>
+              <span>Days: {costData.timeline.days}</span>
+            </div>
+          )}
+        </section>
 
-      {/* Pie Charts Section */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2>Resource Usage by Service</h2>
-          <p>Breakdown of credits consumption across different services</p>
-        </div>
-        <div className={styles.pieChartsGrid}>
-          <PieChart 
-            used={cloudflare.used}
-            total={cloudflare.allocated}
-            color="#f59e0b"
-            label="Cloudflare (GPU)"
-            icon="☁️"
-          />
-          <PieChart 
-            used={nlp.used}
-            total={nlp.allocated}
-            color="#10b981"
-            label="NLP (Gemini)"
-            icon="🧠"
-          />
-          <PieChart 
-            used={llm.used}
-            total={llm.allocated}
-            color="#6366f1"
-            label="LLM (ChatGPT)"
-            icon="💬"
-          />
-        </div>
-      </div>
+        {loading && <div className={styles.status}>Loading cost statistics...</div>}
+        {error && <div className={`${styles.status} ${styles.error}`}>{error}</div>}
 
-      {/* Revenue vs Cost Section */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2>Revenue vs Infrastructure Cost</h2>
-          <p>Subscription revenue against platform operating costs</p>
-        </div>
-        <div className={styles.revenueGrid}>
-          <div className={styles.revenueCard}>
-            <div className={styles.revenueCardHeader}>
-              <span className={styles.revenueIcon} style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-              </span>
-              <span className={styles.revenueLabel}>Monthly Revenue</span>
-            </div>
-            <span className={styles.revenueAmount}>₹{revenueData.totalRevenue.toLocaleString()}</span>
-            <div className={styles.revenueBreakdown}>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#8b5cf6'}}></span>
-                <span>Recruiter Pro ({revenueData.proCount})</span>
-                <span className={styles.revenueItemValue}>₹{revenueData.proRevenue.toLocaleString()}</span>
-              </div>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#6366f1'}}></span>
-                <span>Enterprise ({revenueData.enterpriseCount})</span>
-                <span className={styles.revenueItemValue}>₹{revenueData.enterpriseRevenue.toLocaleString()}</span>
-              </div>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#94a3b8'}}></span>
-                <span>Free ({revenueData.freeCount})</span>
-                <span className={styles.revenueItemValue}>₹0</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.revenueCard}>
-            <div className={styles.revenueCardHeader}>
-              <span className={styles.revenueIcon} style={{ background: 'linear-gradient(135deg, #ef4444, #f87171)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <path d="M3 3v18h18" />
-                  <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
-                </svg>
-              </span>
-              <span className={styles.revenueLabel}>Infrastructure Cost</span>
-            </div>
-            <span className={styles.revenueAmount}>₹{totalUsed.toLocaleString()}</span>
-            <div className={styles.revenueBreakdown}>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#f59e0b'}}></span>
-                <span>Cloudflare (GPU)</span>
-                <span className={styles.revenueItemValue}>₹{cloudflare.used.toLocaleString()}</span>
-              </div>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#10b981'}}></span>
-                <span>NLP (Gemini)</span>
-                <span className={styles.revenueItemValue}>₹{nlp.used.toLocaleString()}</span>
-              </div>
-              <div className={styles.revenueBreakdownItem}>
-                <span className={styles.revenueDot} style={{background: '#6366f1'}}></span>
-                <span>LLM (ChatGPT)</span>
-                <span className={styles.revenueItemValue}>₹{llm.used.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.revenueCard}>
-            <div className={styles.revenueCardHeader}>
-              <span className={styles.revenueIcon} style={{ background: revenueData.profit >= 0 ? 'linear-gradient(135deg, #10b981, #34d399)' : 'linear-gradient(135deg, #ef4444, #f87171)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                  <polyline points="16 7 22 7 22 13" />
-                </svg>
-              </span>
-              <span className={styles.revenueLabel}>Profitability</span>
-            </div>
-            <span className={`${styles.revenueAmount} ${revenueData.profit >= 0 ? styles.profitPositive : styles.profitNegative}`}>
-              {revenueData.profit >= 0 ? '+' : ''}₹{revenueData.profit.toLocaleString()}
-            </span>
-            <div className={styles.profitBar}>
-              <div className={styles.profitBarTrack}>
-                <div
-                  className={styles.profitBarRevenue}
-                  style={{ width: revenueData.totalRevenue > 0 ? '100%' : '0%' }}
-                  title={`Revenue: ₹${revenueData.totalRevenue.toLocaleString()}`}
-                ></div>
-                <div
-                  className={styles.profitBarCost}
-                  style={{ width: revenueData.totalRevenue > 0 ? `${Math.min(100, (totalUsed / revenueData.totalRevenue) * 100)}%` : '0%' }}
-                  title={`Cost: ₹${totalUsed.toLocaleString()}`}
-                ></div>
-              </div>
-              <div className={styles.profitBarLabels}>
-                <span>Margin: {revenueData.margin}%</span>
-                <span>{revenueData.totalInterviews} interviews</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Cost Per Interview */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2>Cost Per Interview</h2>
-          <p>Average infrastructure cost for each interview conducted</p>
-        </div>
-        <div className={styles.costPerInterviewCard}>
-          <div className={styles.cpiMetric}>
-            <div className={styles.cpiValue}>
-              <span className={styles.cpiCurrency}>₹</span>
-              <span className={styles.cpiAmount}>{revenueData.costPerInterview.toLocaleString()}</span>
-              <span className={styles.cpiUnit}>/ interview</span>
-            </div>
-            <p className={styles.cpiDescription}>
-              Based on {revenueData.totalInterviews} interviews and ₹{totalUsed.toLocaleString()} total infrastructure cost
-            </p>
-          </div>
-          <div className={styles.cpiBreakdown}>
-            <div className={styles.cpiBreakdownItem}>
-              <span className={styles.cpiBreakdownLabel}>GPU (Cloudflare)</span>
-              <span className={styles.cpiBreakdownValue}>
-                ₹{revenueData.totalInterviews > 0 ? Math.round(cloudflare.used / revenueData.totalInterviews) : 0}
-              </span>
-            </div>
-            <div className={styles.cpiBreakdownItem}>
-              <span className={styles.cpiBreakdownLabel}>NLP (Gemini)</span>
-              <span className={styles.cpiBreakdownValue}>
-                ₹{revenueData.totalInterviews > 0 ? Math.round(nlp.used / revenueData.totalInterviews) : 0}
-              </span>
-            </div>
-            <div className={styles.cpiBreakdownItem}>
-              <span className={styles.cpiBreakdownLabel}>LLM (ChatGPT)</span>
-              <span className={styles.cpiBreakdownValue}>
-                ₹{revenueData.totalInterviews > 0 ? Math.round(llm.used / revenueData.totalInterviews) : 0}
-              </span>
-            </div>
-          </div>
-          <div className={styles.cpiInsight}>
-            {revenueData.costPerInterview > 0 && revenueData.totalRevenue > 0 ? (
-              revenueData.totalRevenue / revenueData.totalInterviews > revenueData.costPerInterview
-                ? `✅ Revenue per interview (₹${Math.round(revenueData.totalRevenue / revenueData.totalInterviews)}) exceeds cost per interview — pricing is sustainable.`
-                : `⚠️ Revenue per interview (₹${Math.round(revenueData.totalRevenue / revenueData.totalInterviews)}) is below cost — consider adjusting pricing.`
-            ) : (
-              '📊 Cost per interview data will populate as interviews are conducted.'
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recruiter Plan Enrollment */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2>Recruiter Plan Enrollment</h2>
-          <p>Current subscription plan and validity for each recruiter</p>
-        </div>
-        <div className={styles.tableCard}>
-          <table className={styles.recruitersTable}>
-            <thead>
-              <tr>
-                <th>Recruiter</th>
-                <th>Department</th>
-                <th>Current Plan</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {costData.recruiters.map((recruiter) => {
-                const plan = recruiter.plan || {};
-                const sub = recruiter.subscription || {};
-                const planName = plan.name || 'Free Tier';
-                const subStatus = sub.status || 'none';
-                return (
-                  <tr key={recruiter.id}>
-                    <td>
-                      <div className={styles.recruiterCell}>
-                        <div className={styles.tableAvatar}>
-                          {(recruiter.name || 'U').split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <div>
-                          <span className={styles.tableName}>{recruiter.name || 'Unknown'}</span>
-                          <span className={styles.tableEmail}>{recruiter.email || ''}</span>
-                        </div>
+        {!loading && !error && (
+          <>
+            <section className={styles.card}>
+              <h2>Visual Overview</h2>
+              <p className={styles.subText}>Quick visual insight for cost, incoming, AI mix, and top plans in selected timeline.</p>
+              <div className={styles.vizGrid}>
+                <div className={styles.chartCard}>
+                  <h3>Incoming vs Cost vs Profit</h3>
+                  <div className={styles.chartWrap}>
+                    <Bar data={overviewBarData} options={sharedBarOptions} />
+                  </div>
+                </div>
+                <div className={styles.chartCard}>
+                  <h3>AI Cost Share</h3>
+                  <div className={`${styles.chartWrap} ${styles.doughnutWrap}`}>
+                    <Doughnut data={aiMixData} options={doughnutOptions} />
+                  </div>
+                </div>
+                <div className={`${styles.chartCard} ${styles.fullWidthChart}`}>
+                  <h3>Plan-Wise Incoming (Candidate + Recruiter)</h3>
+                  <div className={styles.chartWrap}>
+                    <Bar data={planIncomingData} options={sharedBarOptions} />
+                  </div>
+                  <div className={styles.planLegend}>
+                    {planIncomingData.labels.map((label, index) => (
+                      <div key={label} className={styles.planLegendItem}>
+                        <span
+                          className={styles.planLegendDot}
+                          style={{ backgroundColor: planIncomingPalette[index] || '#94a3b8' }}
+                        />
+                        <span>{label}</span>
                       </div>
-                    </td>
-                    <td><span className={styles.deptBadge}>{recruiter.department || 'General'}</span></td>
-                    <td>
-                      <span className={`${styles.planBadge} ${getPlanBadgeClass(planName)}`}>
-                        {planName}
-                      </span>
-                    </td>
-                    <td>{formatDate(sub.start_date)}</td>
-                    <td>{formatDate(sub.end_date)}</td>
-                    <td>
-                      <span className={`${styles.statusBadge} ${
-                        subStatus === 'active' ? styles.statusActive 
-                        : subStatus === 'expired' ? styles.statusExpired 
-                        : styles.statusNone
-                      }`}>
-                        {subStatus === 'active' ? 'Active' 
-                          : subStatus === 'expired' ? 'Expired' 
-                          : subStatus === 'none' ? 'No Plan'
-                          : subStatus.charAt(0).toUpperCase() + subStatus.slice(1)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>AI Cost Lines</h2>
+              <p className={styles.subText}>Each line includes count, model, average cost, and total cost for selected timeline.</p>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Cost Category</th>
+                      <th>Model</th>
+                      <th>Count</th>
+                      <th>Avg Cost</th>
+                      <th>Total Cost</th>
+                      <th>Formula</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiCostRows.map((row) => (
+                      <tr key={row.key}>
+                        <td>{row.title}</td>
+                        <td>{row.model}</td>
+                        <td>{row.count}</td>
+                        <td>{formatMoney(row.avg_cost_inr)}</td>
+                        <td>{formatMoney(row.total_cost_inr)}</td>
+                        <td>{row.formula}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>Total AI Cost: <strong>{formatMoney(costData?.cost_statistics?.total_ai_cost_inr)}</strong></div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Infrastructure Cost</h2>
+              <div className={styles.kpiGrid}>
+                <div className={styles.kpiCard}>
+                  <h3>Cloudflare (Monthly Assumption)</h3>
+                  <p>{formatMoney(infraCosts?.cloudflare?.monthly_assumption_inr)}</p>
+                  <small>Pro-rated: {formatMoney(infraCosts?.cloudflare?.prorated_cost_inr)}</small>
+                  <small>Derived GPU share: {formatMoney(infraCosts?.cloudflare?.gpu_component_inr)}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>MongoDB (Monthly Assumption)</h3>
+                  <p>{formatMoney(infraCosts?.mongodb?.monthly_assumption_inr)}</p>
+                  <small>Pro-rated: {formatMoney(infraCosts?.mongodb?.prorated_cost_inr)}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Total Infrastructure Cost</h3>
+                  <p>{formatMoney(infraCosts?.total_infrastructure_cost_inr)}</p>
+                  <small>Cloudflare + MongoDB</small>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Incoming Money - Candidates</h2>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Plan</th>
+                      <th>Plan Price</th>
+                      <th>Succeeded Payments</th>
+                      <th>Incoming Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(incoming?.candidate?.plans || []).map((plan) => (
+                      <tr key={`${plan.plan_slug}-${plan.plan_price_inr}`}>
+                        <td>{plan.plan_name}</td>
+                        <td>{formatMoney(plan.plan_price_inr)}</td>
+                        <td>{plan.succeeded_payment_count}</td>
+                        <td>{formatMoney(plan.incoming_amount_inr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>
+                Candidate Incoming Total: <strong>{formatMoney(incoming?.candidate?.total_incoming_inr)}</strong>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Incoming Money - Recruiters</h2>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Plan</th>
+                      <th>Plan Price</th>
+                      <th>Succeeded Payments</th>
+                      <th>Incoming Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(incoming?.recruiter?.plans || []).map((plan) => (
+                      <tr key={`${plan.plan_slug}-${plan.plan_price_inr}`}>
+                        <td>{plan.plan_name}</td>
+                        <td>{formatMoney(plan.plan_price_inr)}</td>
+                        <td>{plan.succeeded_payment_count}</td>
+                        <td>{formatMoney(plan.incoming_amount_inr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>
+                Recruiter Incoming Total: <strong>{formatMoney(incoming?.recruiter?.total_incoming_inr)}</strong>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Net Incoming & Profitability</h2>
+              <div className={styles.kpiGrid}>
+                <div className={styles.kpiCard}>
+                  <h3>Total Incoming</h3>
+                  <p>{formatMoney(incoming?.total_incoming_inr)}</p>
+                  <small>Candidate + Recruiter succeeded payments</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Refund Adjustments</h3>
+                  <p>{formatMoney(incoming?.refund_adjustments?.total_refunded_inr)}</p>
+                  <small>Refund events: {incoming?.refund_adjustments?.refund_events_count || 0}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Net Incoming (After Refunds)</h3>
+                  <p>{formatMoney(incoming?.net_incoming_after_refunds_inr)}</p>
+                  <small>Gross incoming - refunds</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Total Cost (AI + Infra)</h3>
+                  <p>{formatMoney(costData?.cost_statistics?.total_cost_inr)}</p>
+                  <small>Selected timeline total cost</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Gross)</h3>
+                  <p className={profitability?.profit_gross_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_gross_inr)}</p>
+                  <small>Margin: {profitability?.margin_gross_pct || 0}%</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Net)</h3>
+                  <p className={profitability?.profit_net_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_net_inr)}</p>
+                  <small>Margin: {profitability?.margin_net_pct || 0}%</small>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </AdminLayout>
   );

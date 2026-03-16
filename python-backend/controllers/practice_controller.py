@@ -8,6 +8,10 @@ from interview.config.settings import LLMProvider
 import logging
 from services.pdf_parser_service import get_pdf_parser
 from controllers.cv_controller import CVController
+from services.candidate_practice_quota_service import (
+    get_candidate_practice_quota,
+    consume_candidate_practice_credit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +105,21 @@ class PracticeController:
             user = self.collections['users'].find_one({'_id': ObjectId(user_id)})
             if not user:
                 return {'error': 'User not found'}, 404
+
+            db = self.collections['users'].database
+            quota_snapshot = get_candidate_practice_quota(db, user_id)
+            if not quota_snapshot.get('can_start_interview', False):
+                return {
+                    'error': quota_snapshot.get('error_message') or 'Monthly practice interview limit reached.',
+                    'error_code': quota_snapshot.get('error_code', 'CANDIDATE_PRACTICE_LIMIT_REACHED'),
+                    'plan': {
+                        'name': quota_snapshot.get('plan_name', 'Free Tier'),
+                        'interviews_allowed': quota_snapshot.get('interviews_allowed', 2),
+                        'interviews_used': quota_snapshot.get('interviews_used', 0),
+                        'interviews_remaining': quota_snapshot.get('interviews_remaining', 0),
+                    },
+                    'redirect': '/candidate/subscription'
+                }, 402
             
             # Get CV content (PDF or manual entry)
             cv_text = None
@@ -277,6 +296,25 @@ class PracticeController:
                 return session_result, 500
             
             session_id = session_result['session_id']
+
+            consumed = consume_candidate_practice_credit(
+                db,
+                candidate_id=user_id,
+                session_id=session_id,
+                quota_snapshot=quota_snapshot,
+            )
+
+            if not consumed:
+                try:
+                    self.interview_api.end_interview(session_id)
+                except Exception:
+                    logger.warning(f"Failed to cleanup interview session after quota rejection: {session_id}")
+
+                return {
+                    'error': "You've reached your monthly practice interview limit. Upgrade your plan to continue.",
+                    'error_code': 'CANDIDATE_PRACTICE_LIMIT_REACHED',
+                    'redirect': '/candidate/subscription'
+                }, 402
             
             # Use pre-calculated CV score (normalized to 0-1 for storage)
             logger.info(f"Practice session created: {session_id}, CV Score: {cv_score:.1f}% (normalized: {cv_score_normalized})")
@@ -316,7 +354,12 @@ class PracticeController:
                 'similarity_score': cv_score_normalized,  # Return normalized CV score (0-1)
                 'cv_score': cv_score,  # Return CV score as percentage (0-100) for display
                 'initial_questions': [question_result.get('question', '')],
-                'message': 'Practice interview session started successfully'
+                'message': 'Practice interview session started successfully',
+                'quota': {
+                    'interviews_allowed': quota_snapshot.get('interviews_allowed', 2),
+                    'interviews_used': quota_snapshot.get('interviews_used', 0) + 1,
+                    'interviews_remaining': max(0, int(quota_snapshot.get('interviews_remaining', 0) or 0) - 1),
+                }
             }, 200
             
         except Exception as e:

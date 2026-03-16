@@ -402,7 +402,7 @@ const RecruiterCostStatistics = () => {
                     </div>
                     <button
                       className={styles.upgradeBtn}
-                      onClick={() => navigate("/recruiter/subscription")}
+                      onClick={() => navigate("/subscription")}
                     >
                       Upgrade Plan
                     </button>
@@ -522,14 +522,14 @@ const RecruiterCostStatistics = () => {
                     ? 'Get started with 2 interviews. Upgrade to unlock more interviews and advanced features.'
                     : planName.includes('Pro')
                       ? 'You have 100 interviews per month with advanced analytics and priority support.'
-                      : planName.includes('Enterprise')
-                        ? 'Unlimited interviews with custom integrations, dedicated support, and SLA guarantee.'
+                        : planName.includes('Max')
+                        ? 'You have 300 interviews per month with custom integrations and advanced support.'
                         : 'Manage your subscription to get the most out of SmartHire.'}
                 </p>
               </div>
               <button
                 className={styles.managePlanBtn}
-                onClick={() => navigate("/recruiter/subscription")}
+                onClick={() => navigate("/subscription")}
               >
                 {planName === 'Free Tier' || planName.includes('Pro') ? 'Upgrade Plan' : 'Manage Plan'}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>

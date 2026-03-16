@@ -2,7 +2,7 @@
 Payment Module for Hiring/Recruitment Platform
 
 This module provides a complete payment solution using Stripe for:
-- Plan management (Starter, Growth, Enterprise)
+- Plan management (Free Tier, Recruiter Pro, Recruiter Max)
 - Payment processing with Stripe Checkout
 - Subscription management
 - Webhook handling with signature verification

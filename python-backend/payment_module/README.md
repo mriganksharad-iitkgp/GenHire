@@ -6,7 +6,7 @@ A production-ready payment service for a hiring/recruitment platform built with 
 
 ## Features
 
-- **Plan Management**: Starter, Growth, Enterprise plans with interview limits
+- **Plan Management**: Free Tier, Recruiter Pro, Recruiter Max plans with interview limits
 - **Razorpay Checkout**: PCI-compliant payment processing
 - **Webhook Handling**: Secure signature verification
 - **Interview Tracking**: Atomic decrement with race condition prevention
@@ -127,7 +127,7 @@ Response:
     "success": true,
     "data": {
         "order_id": "order_...",
-        "amount": 10000,
+        "amount": 9999,
         "currency": "INR",
         "key_id": "rzp_...",
         "payment_id": "...",

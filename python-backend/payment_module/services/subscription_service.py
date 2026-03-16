@@ -66,7 +66,7 @@ class SubscriptionService:
             logger.error(f"Error creating subscription indexes: {str(e)}")
 
     def create_pending_subscription(
-        self, employer_id: str, plan: Plan, razorpay_order_id: str
+        self, employer_id: str, plan: Plan, razorpay_order_id: str, owner_type: str = "recruiter"
     ) -> Optional[Subscription]:
         """
         Create a pending subscription when checkout is initiated.
@@ -91,6 +91,7 @@ class SubscriptionService:
                 "interviews_allowed": plan.interviews_allowed,
                 "validity_days": _normalize_validity_days(plan.validity_days),
                 "features": plan.features,
+                "audience": getattr(plan, "audience", owner_type),
             }
 
             subscription = Subscription(
@@ -101,6 +102,7 @@ class SubscriptionService:
                 interviews_allowed=plan.interviews_allowed,
                 interviews_remaining=plan.interviews_allowed,
                 razorpay_order_id=razorpay_order_id,
+                metadata={"owner_type": owner_type},
             )
 
             result = self.collection.insert_one(subscription.to_dict())
@@ -153,7 +155,10 @@ class SubscriptionService:
             expires_at = started_at + timedelta(days=validity_days)
 
             # Cancel any existing active subscription for this employer
-            self._cancel_existing_active(subscription.employer_id)
+            self._cancel_existing_active(
+                subscription.employer_id,
+                owner_type=subscription.plan_snapshot.get("audience", "recruiter"),
+            )
 
             # Activate the subscription
             result = self.collection.find_one_and_update(
@@ -182,7 +187,7 @@ class SubscriptionService:
             logger.error(f"Error activating subscription: {str(e)}")
             return None
 
-    def _cancel_existing_active(self, employer_id: ObjectId):
+    def _cancel_existing_active(self, employer_id: ObjectId, owner_type: str = "recruiter"):
         """
         Cancel any existing active subscriptions for an employer.
 
@@ -191,7 +196,14 @@ class SubscriptionService:
         """
         try:
             result = self.collection.update_many(
-                {"employer_id": employer_id, "status": SubscriptionStatus.ACTIVE.value},
+                {
+                    "employer_id": employer_id,
+                    "status": SubscriptionStatus.ACTIVE.value,
+                    "$or": [
+                        {"plan_snapshot.audience": owner_type},
+                        {"plan_snapshot.audience": {"$exists": False}} if owner_type == "recruiter" else {"plan_snapshot.audience": owner_type},
+                    ],
+                },
                 {
                     "$set": {
                         "status": SubscriptionStatus.CANCELLED.value,
@@ -209,7 +221,7 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error cancelling existing subscriptions: {str(e)}")
 
-    def get_active_subscription(self, employer_id: str) -> Optional[Subscription]:
+    def get_active_subscription(self, employer_id: str, audience: Optional[str] = None) -> Optional[Subscription]:
         """
         Get the active subscription for an employer.
 
@@ -223,11 +235,24 @@ class SubscriptionService:
             Active Subscription or None
         """
         try:
+            audience_filter = {}
+            if audience in {"recruiter", "candidate"}:
+                if audience == "recruiter":
+                    audience_filter = {
+                        "$or": [
+                            {"plan_snapshot.audience": "recruiter"},
+                            {"plan_snapshot.audience": {"$exists": False}},
+                        ]
+                    }
+                else:
+                    audience_filter = {"plan_snapshot.audience": "candidate"}
+
             # Try with ObjectId first (standard format)
             sub_data = self.collection.find_one(
                 {
                     "employer_id": ObjectId(employer_id),
                     "status": SubscriptionStatus.ACTIVE.value,
+                    **audience_filter,
                 }
             )
 
@@ -237,6 +262,7 @@ class SubscriptionService:
                     {
                         "employer_id": employer_id,
                         "status": SubscriptionStatus.ACTIVE.value,
+                        **audience_filter,
                     }
                 )
 
@@ -286,7 +312,7 @@ class SubscriptionService:
             logger.error(f"Error fetching subscription by order: {str(e)}")
             return None
 
-    def use_interview(self, employer_id: str) -> Dict[str, Any]:
+    def use_interview(self, employer_id: str, audience: str = "recruiter") -> Dict[str, Any]:
         """
         Decrement interview count atomically.
 
@@ -300,7 +326,7 @@ class SubscriptionService:
         """
         try:
             # First, get and validate the subscription
-            subscription = self.get_active_subscription(employer_id)
+            subscription = self.get_active_subscription(employer_id, audience=audience)
 
             if not subscription:
                 return {
@@ -395,7 +421,7 @@ class SubscriptionService:
             logger.error(f"Error expiring subscription: {str(e)}")
 
     def cancel_subscription(
-        self, employer_id: str, reason: str = "user_requested"
+        self, employer_id: str, reason: str = "user_requested", audience: str = "recruiter"
     ) -> bool:
         """
         Cancel an active subscription.
@@ -412,6 +438,16 @@ class SubscriptionService:
                 {
                     "employer_id": ObjectId(employer_id),
                     "status": SubscriptionStatus.ACTIVE.value,
+                    **(
+                        {
+                            "$or": [
+                                {"plan_snapshot.audience": "recruiter"},
+                                {"plan_snapshot.audience": {"$exists": False}},
+                            ]
+                        }
+                        if audience == "recruiter"
+                        else {"plan_snapshot.audience": audience}
+                    ),
                 },
                 {
                     "$set": {
@@ -429,7 +465,7 @@ class SubscriptionService:
             return False
 
     def get_subscription_history(
-        self, employer_id: str, limit: int = 10
+        self, employer_id: str, limit: int = 10, audience: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get subscription history for an employer.
@@ -442,8 +478,20 @@ class SubscriptionService:
             List of subscription API responses
         """
         try:
+            audience_filter = {}
+            if audience in {"recruiter", "candidate"}:
+                if audience == "recruiter":
+                    audience_filter = {
+                        "$or": [
+                            {"plan_snapshot.audience": "recruiter"},
+                            {"plan_snapshot.audience": {"$exists": False}},
+                        ]
+                    }
+                else:
+                    audience_filter = {"plan_snapshot.audience": "candidate"}
+
             subscriptions = (
-                self.collection.find({"employer_id": ObjectId(employer_id)})
+                self.collection.find({"employer_id": ObjectId(employer_id), **audience_filter})
                 .sort("created_at", -1)
                 .limit(limit)
             )

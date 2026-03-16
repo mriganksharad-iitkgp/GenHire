@@ -5,6 +5,7 @@ from pymongo.errors import DuplicateKeyError
 
 FREE_MONTHLY_CREDITS = 2
 PRO_MONTHLY_CREDITS = 100
+MAX_MONTHLY_CREDITS = 300
 USAGE_COLLECTION = "interview_credit_usage"
 
 
@@ -55,10 +56,13 @@ def _get_month_bounds(now):
 
 def _get_recruiter_job_ids(db, recruiter_id):
     recruiter_str = str(recruiter_id)
-    job_query = {"$or": [{"created_by": recruiter_str}]}
+    created_by_conditions = []
+    created_by_conditions.append({"created_by": recruiter_str})
     recruiter_obj = _safe_object_id(recruiter_id)
     if recruiter_obj:
-        job_query["$or"].append({"created_by": recruiter_obj})
+        created_by_conditions.append({"created_by": recruiter_obj})
+
+    job_query = {"$or": created_by_conditions}
 
     return [str(job["_id"]) for job in db.jobs.find(job_query, {"_id": 1})]
 
@@ -75,24 +79,21 @@ def _get_active_subscription(db, recruiter_id, now):
     return subscription
 
 
-def _is_enterprise(subscription):
+def _is_recruiter_max(subscription):
     if not subscription:
         return False
-    interviews_allowed = int(subscription.get("interviews_allowed", 0) or 0)
-    if interviews_allowed == -1:
-        return True
-
     snapshot = subscription.get("plan_snapshot") or {}
     slug = str(snapshot.get("slug", "")).lower()
     name = str(snapshot.get("name", "")).lower()
-    return "enterprise" in slug or "enterprise" in name
+    interviews_allowed = int(subscription.get("interviews_allowed", 0) or 0)
+    return "recruiter-max" in slug or "max" in name or interviews_allowed >= MAX_MONTHLY_CREDITS
 
 
 def _plan_monthly_credits(subscription):
     if not subscription:
         return 0
-    if _is_enterprise(subscription):
-        return -1
+    if _is_recruiter_max(subscription):
+        return MAX_MONTHLY_CREDITS
 
     # Pro monthly credits by policy; fallback to stored value if higher.
     stored = int(subscription.get("interviews_allowed", 0) or 0)
@@ -150,7 +151,7 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
     Policy:
     - Free: 2 interviews per calendar month for every recruiter.
     - Pro: 100 interviews per calendar month during active validity.
-    - Enterprise: unlimited during active validity.
+    - Recruiter Max: 300 interviews per calendar month during active validity.
     - Consumption priority: plan credits first, then free credits.
     """
     now = now or datetime.datetime.utcnow()
@@ -160,7 +161,7 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
     _ensure_usage_indexes(db)
 
     subscription = _get_active_subscription(db, recruiter_id, now)
-    plan_is_unlimited = _is_enterprise(subscription)
+    plan_is_unlimited = False
     plan_monthly_credits = _plan_monthly_credits(subscription)
 
     usage = _ledger_usage_counts(db, recruiter_id, month_key)
@@ -170,41 +171,29 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
     # Bootstrap old data if ledger is not populated for this month.
     if plan_used == 0 and free_used == 0:
         legacy_total = _legacy_monthly_usage_total(db, recruiter_id, month_start)
-        if plan_is_unlimited:
-            plan_used = legacy_total
-        elif plan_monthly_credits > 0:
+        if plan_monthly_credits > 0:
             plan_used = min(legacy_total, plan_monthly_credits)
             free_used = max(0, legacy_total - plan_used)
         else:
             free_used = legacy_total
 
-    if plan_is_unlimited:
-        plan_remaining = -1
-        can_use_plan = True
-    else:
-        plan_remaining = max(0, plan_monthly_credits - plan_used)
-        can_use_plan = plan_remaining > 0
+    plan_remaining = max(0, plan_monthly_credits - plan_used)
+    can_use_plan = plan_remaining > 0
 
     free_remaining = max(0, FREE_MONTHLY_CREDITS - free_used)
     can_use_free = free_remaining > 0
 
     can_start = can_use_plan or can_use_free
 
-    if plan_is_unlimited:
-        total_allowed = -1
-        total_used = plan_used
-        total_remaining = -1
-        quota_mode = "enterprise"
-    else:
-        total_allowed = max(0, plan_monthly_credits) + FREE_MONTHLY_CREDITS
-        total_used = plan_used + free_used
-        total_remaining = max(0, total_allowed - total_used)
-        quota_mode = "pro" if plan_monthly_credits > 0 else "free"
+    total_allowed = max(0, plan_monthly_credits) + FREE_MONTHLY_CREDITS
+    total_used = plan_used + free_used
+    total_remaining = max(0, total_allowed - total_used)
+    quota_mode = "max" if plan_monthly_credits >= MAX_MONTHLY_CREDITS else ("pro" if plan_monthly_credits > 0 else "free")
 
     error_code = None
     error_message = None
     if not can_start:
-        if plan_monthly_credits > 0 or plan_is_unlimited:
+        if plan_monthly_credits > 0:
             error_code = "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED"
             error_message = "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan."
         else:

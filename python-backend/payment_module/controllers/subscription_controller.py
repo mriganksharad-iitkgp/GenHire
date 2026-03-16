@@ -38,6 +38,13 @@ class SubscriptionController:
         self.subscription_service = SubscriptionService(db)
         self.plan_service = PlanService(db)
 
+    @staticmethod
+    def _normalize_user_type(user_data: Dict[str, Any]) -> str:
+        user_type = str(user_data.get("user_type") or "recruiter").strip().lower()
+        if user_type == "student":
+            return "candidate"
+        return user_type
+
     def get_current_subscription(self, user_data: Dict[str, Any]) -> Tuple[dict, int]:
         """
         Get current active subscription for authenticated user.
@@ -49,18 +56,19 @@ class SubscriptionController:
             Tuple of (response_dict, status_code)
         """
         try:
-            # Validate user is recruiter
-            if user_data.get("user_type") != "recruiter":
+            audience = self._normalize_user_type(user_data)
+            if audience not in {"recruiter", "candidate"}:
                 return {
                     "success": False,
-                    "error": "Only employers have subscriptions",
+                    "error": "Unsupported user type for subscriptions",
                     "error_code": "unauthorized_user_type",
                 }, 403
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
 
             subscription = self.subscription_service.get_active_subscription(
-                employer_id
+                employer_id,
+                audience=audience,
             )
 
             if not subscription:
@@ -101,12 +109,13 @@ class SubscriptionController:
         """
         try:
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
+            audience = self._normalize_user_type(user_data)
 
             limit = request.args.get("limit", 10, type=int)
             limit = min(limit, 50)
 
             subscriptions = self.subscription_service.get_subscription_history(
-                employer_id=employer_id, limit=limit
+                employer_id=employer_id, limit=limit, audience=audience
             )
 
             return {
@@ -136,8 +145,8 @@ class SubscriptionController:
             Tuple of (response_dict, status_code)
         """
         try:
-            # Validate user is recruiter
-            if user_data.get("user_type") != "recruiter":
+            audience = self._normalize_user_type(user_data)
+            if audience != "recruiter":
                 return {
                     "success": False,
                     "error": "Only employers can use interviews",
@@ -146,7 +155,10 @@ class SubscriptionController:
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
 
-            result = self.subscription_service.use_interview(employer_id)
+            result = self.subscription_service.use_interview(
+                employer_id,
+                audience=audience,
+            )
 
             if result["success"]:
                 return {
@@ -193,25 +205,28 @@ class SubscriptionController:
             Tuple of (response_dict, status_code)
         """
         try:
-            if user_data.get("user_type") != "recruiter":
+            audience = self._normalize_user_type(user_data)
+            if audience not in {"recruiter", "candidate"}:
                 return {
                     "success": True,
-                    "data": {"can_interview": False, "reason": "not_employer"},
+                    "data": {"can_interview": False, "can_practice": False, "reason": "unsupported_user_type"},
                 }, 200
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
 
             subscription = self.subscription_service.get_active_subscription(
-                employer_id
+                employer_id,
+                audience=audience,
             )
 
             if not subscription:
                 return {
                     "success": True,
                     "data": {
-                        "can_interview": False,
+                        "can_interview": audience == "recruiter" and False,
+                        "can_practice": audience == "candidate" and False,
                         "reason": "no_subscription",
-                        "message": "Please purchase a plan to conduct interviews",
+                        "message": "Please purchase a plan to continue",
                     },
                 }, 200
 
@@ -220,7 +235,8 @@ class SubscriptionController:
                 return {
                     "success": True,
                     "data": {
-                        "can_interview": False,
+                        "can_interview": audience == "recruiter" and False,
+                        "can_practice": audience == "candidate" and False,
                         "reason": reason,
                         "message": (
                             "Please purchase a new plan"
@@ -233,7 +249,8 @@ class SubscriptionController:
             return {
                 "success": True,
                 "data": {
-                    "can_interview": True,
+                    "can_interview": audience == "recruiter",
+                    "can_practice": audience == "candidate",
                     "interviews_remaining": (
                         subscription.interviews_remaining
                         if not subscription.is_unlimited
@@ -268,10 +285,11 @@ class SubscriptionController:
             Tuple of (response_dict, status_code)
         """
         try:
-            if user_data.get("user_type") != "recruiter":
+            audience = self._normalize_user_type(user_data)
+            if audience not in {"recruiter", "candidate"}:
                 return {
                     "success": False,
-                    "error": "Only employers have subscriptions",
+                    "error": "Unsupported user type for subscriptions",
                     "error_code": "unauthorized_user_type",
                 }, 403
 
@@ -282,7 +300,9 @@ class SubscriptionController:
             reason = data.get("reason", "user_requested")
 
             success = self.subscription_service.cancel_subscription(
-                employer_id=employer_id, reason=reason
+                employer_id=employer_id,
+                reason=reason,
+                audience=audience,
             )
 
             if success:

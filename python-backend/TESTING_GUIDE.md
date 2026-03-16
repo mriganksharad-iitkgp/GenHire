@@ -413,6 +413,48 @@ db.users.findOne({email: "test@example.com"})
 }
 ```
 
+## Test 11: Billing Smoke Test (Candidate + Recruiter)
+
+Use the billing smoke script to quickly validate role isolation and billing endpoints after subscription changes.
+
+### 11.1 Set environment variables
+
+```bash
+export SMOKE_BASE_URL="http://localhost:5000"
+export SMOKE_RECRUITER_TOKEN="<recruiter_jwt_token>"
+export SMOKE_CANDIDATE_TOKEN="<candidate_jwt_token>"
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:SMOKE_BASE_URL="http://localhost:5000"
+$env:SMOKE_RECRUITER_TOKEN="<recruiter_jwt_token>"
+$env:SMOKE_CANDIDATE_TOKEN="<candidate_jwt_token>"
+```
+
+### 11.2 Run the script
+
+```bash
+cd python-backend
+python scripts/billing_smoke_test.py
+```
+
+### 11.3 What it verifies
+
+- Recruiter sees only recruiter plans from `/api/payment/plans`
+- Candidate sees candidate plans from `/api/payment/plans`
+- Both roles can access `/api/payment/subscriptions/me` and `/api/payment/payments/history`
+- Recruiter-only endpoint guard works: candidate blocked on `/api/recruiter/cost-statistics`
+- Candidate-only endpoint guard works: recruiter blocked on `/api/candidate/cost-statistics`
+
+### 11.4 Expected result
+
+- Script prints `PASS` for each check
+- Final line prints: `SUMMARY: PASS`
+
+If it fails, inspect the failing endpoint response and verify the token belongs to the intended user role.
+
 ## Test Checklist
 
 Use this checklist to verify everything works:
