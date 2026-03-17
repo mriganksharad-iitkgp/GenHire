@@ -1213,21 +1213,20 @@ export default function Chat({ interviewId }) {
   useEffect(() => {
     if (
       interviewStatus === "active" &&
+      (gazeRecorderStatus === "tracking" || gazeRecorderStatus === "failed") &&
       currentQuestion &&
       !isSpeaking &&
       !currentAudioRef.current &&
       !initialGreetingSpoken.current
     ) {
       initialGreetingSpoken.current = true;
-      console.log("🔊 Speaking initial greeting and first question...");
-      setTimeout(() => {
-        const initialMessage = `Your CV has a ${Math.round(
-          similarityScore * 100
-        )}% match. ${currentQuestion}`;
-        speakResponse(initialMessage);
-      }, 1000);
+      console.log("🔊 Calibration complete — speaking initial greeting and first question...");
+      const initialMessage = `Your CV has a ${Math.round(
+        similarityScore * 100
+      )}% match. ${currentQuestion}`;
+      speakResponse(initialMessage);
     } // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interviewStatus, currentQuestion, similarityScore]);
+  }, [interviewStatus, gazeRecorderStatus, currentQuestion, similarityScore]);
 
   // Interview elapsed time tracker
   useEffect(() => {
