@@ -74,6 +74,7 @@ export default function Chat({ interviewId }) {
   const gazeEndedAtMsRef = useRef(null);
   const gazeStartTimeRef = useRef(null);
   const gazeRecordingDataRef = useRef(null);
+  const gazeRecorderStartRequestedRef = useRef(false);
 
   // --- MODIFICATION --- Add refs for the timer and the latest transcript
   const timerRef = useRef(null);
@@ -173,8 +174,11 @@ export default function Chat({ interviewId }) {
   }, []);
 
   const startInlineGazeRecorder = useCallback(async () => {
-    if (gazeRecorderTrackingRef.current) return;
+    if (gazeRecorderTrackingRef.current || gazeRecorderStartRequestedRef.current) {
+      return true;
+    }
     try {
+      gazeRecorderStartRequestedRef.current = true;
       setGazeRecorderStatus('calibrating');
       if (!gazeRecorderScriptsLoadedRef.current) {
         await loadScript("https://app.gazerecorder.com/GazeCloudAPI.js");
@@ -210,9 +214,12 @@ export default function Chat({ interviewId }) {
       };
 
       window.GazeCloudAPI.StartEyeTracking();
+      return true;
     } catch (error) {
       console.error('Failed to start inline GazeRecorder:', error);
       setGazeRecorderStatus('failed');
+      gazeRecorderStartRequestedRef.current = false;
+      return false;
     }
   }, [loadScript]);
 
@@ -257,6 +264,7 @@ export default function Chat({ interviewId }) {
       }
 
       setGazeRecorderStatus('submitted');
+      gazeRecorderStartRequestedRef.current = false;
     } catch (error) {
       console.error('Failed to finalize inline GazeRecorder:', error);
       setGazeRecorderStatus('failed');
@@ -384,18 +392,14 @@ export default function Chat({ interviewId }) {
           (await response.json()).message || "Face registration failed."
         );
 
-      console.log("✅ Face registered successfully, starting live proctoring...");
-      await startInlineGazeRecorder();
-
-      // IMPORTANT: Start live proctoring AFTER successful face registration
-      // startLiveProctoring();
+      console.log("✅ Face registered successfully, starting interview monitoring...");
       
       setInterviewStatus("active");
     } catch (error) {
       console.error("Face registration error:", error);
       alert(`Could not register face: ${error.message}.`);
     }
-  }, [startInlineGazeRecorder]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
+  }, []); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
   const uploadRecording = useCallback(async (blob) => {
     const currentSessionId = sessionIdRef.current;
@@ -507,6 +511,9 @@ export default function Chat({ interviewId }) {
       cameraStreamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       startLiveProctoring();
+      // Start the inline GazeRecorder on the same interview page.
+      // This triggers calibration exactly when interview monitoring starts.
+      await startInlineGazeRecorder();
       const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunksRef.current.push(e.data);
@@ -534,7 +541,7 @@ export default function Chat({ interviewId }) {
     } catch (error) {
       console.error("Error accessing webcam:", error);
     }
-  }, [startLiveProctoring, uploadRecording]);
+  }, [startInlineGazeRecorder, startLiveProctoring, uploadRecording]);
 
   // --- INTERVIEW LIFECYCLE MANAGEMENT ---
   useEffect(() => {
@@ -1257,6 +1264,7 @@ export default function Chat({ interviewId }) {
           console.warn('Cleanup error for GazeRecorder:', error);
         }
       }
+      gazeRecorderStartRequestedRef.current = false;
     };
   }, [stopLiveProctoring, stopCamera]);
 
@@ -1312,6 +1320,7 @@ export default function Chat({ interviewId }) {
             console.warn('Cleanup error for GazeRecorder:', error);
           }
         }
+        gazeRecorderStartRequestedRef.current = false;
 
         // Clear all timers
         clearInterval(timerRef.current);
@@ -1530,6 +1539,17 @@ export default function Chat({ interviewId }) {
           <p className={Styles["transcript-display"]}>
             Proctoring Calibration: {gazeRecorderStatus}
           </p>
+          {gazeRecorderStatus === "calibrating" && (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#ffe066",
+                fontWeight: 600
+              }}
+            >
+              Please complete eye calibration prompt on this page.
+            </div>
+          )}
           {input && input.trim().length > 0 && (
             <div
               style={{
