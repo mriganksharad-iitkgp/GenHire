@@ -87,6 +87,7 @@ const CandidateCostStatistics = () => {
   const interviewsRemaining = Math.max(0, plan.interviews_remaining ?? 2);
   const planCreditsRemaining = Math.max(0, plan.plan_interviews_remaining ?? 0);
   const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
+  const isFreeTier = String(plan.name || "").toLowerCase().includes("free");
   const usagePercentage =
     interviewsAllowed > 0
       ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100))
@@ -227,7 +228,11 @@ const CandidateCostStatistics = () => {
             <div className={styles.interviewCreditsCard}>
               <div className={styles.creditsLeft}>
                 <h2>Practice Credits</h2>
-                <p className={styles.creditsSubtitle}>{plan.name || "Free Tier"} — {interviewsAllowed} practice interviews/month</p>
+                <p className={styles.creditsSubtitle}>
+                  {plan.name || "Free Tier"} — {isFreeTier
+                    ? "2 one-time free interviews at signup (lifetime)"
+                    : `${interviewsAllowed} practice interviews/month`}
+                </p>
 
                 <div className={styles.creditsNumbers}>
                   <div className={styles.creditsStat}>
@@ -252,7 +257,7 @@ const CandidateCostStatistics = () => {
                     <strong>{planCreditsRemaining}</strong>
                   </div>
                   <div className={styles.creditBreakdownItem}>
-                    <span>Free credits left (this month)</span>
+                    <span>Free credits left (lifetime)</span>
                     <strong>{freeCreditsRemaining}</strong>
                   </div>
                 </div>
@@ -261,7 +266,9 @@ const CandidateCostStatistics = () => {
                   <div className={styles.upgradePrompt}>
                     <div className={styles.upgradeText}>
                       <strong>Running low on practice credits!</strong>
-                      <p>You've used {usagePercentage}% of your monthly practice interviews. Upgrade to continue.</p>
+                      <p>
+                        You've used {usagePercentage}% of {isFreeTier ? "your lifetime free interviews" : "your monthly practice interviews"}. Upgrade to continue.
+                      </p>
                     </div>
                     <button className={styles.upgradeBtn} onClick={() => navigate("/candidate/subscription")}>
                       Upgrade Plan
@@ -367,7 +374,7 @@ const CandidateCostStatistics = () => {
                   Current Plan: {plan.name || "Free Tier"}
                 </div>
                 <p className={styles.planDescription}>
-                  Track your monthly practice interview usage and upgrade anytime for more interview attempts.
+                  Track your practice interview usage and upgrade anytime for more interview attempts.
                 </p>
               </div>
               <button className={styles.managePlanBtn} onClick={() => navigate("/candidate/subscription")}>

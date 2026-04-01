@@ -26,6 +26,8 @@ class PracticeController:
         'business-analyst': 'technical_question_bank/BusinessAnalyst_JD.txt',
         'fullstack-developer': 'technical_question_bank/FullStackDeveloper_JD.txt',
         'devops-engineer': 'technical_question_bank/DevOpsEngineer_JD.txt',
+        'finance-analyst': 'technical_question_bank/BusinessAnalyst_JD.txt',
+        'ui-ux-designer': 'technical_question_bank/ProductManager_JD.txt',
     }
     
     def __init__(self, collections):
@@ -41,7 +43,9 @@ class PracticeController:
             'product-manager': 'Product Manager',
             'business-analyst': 'Business Analyst',
             'fullstack-developer': 'Full Stack Developer',
-            'devops-engineer': 'DevOps Engineer'
+            'devops-engineer': 'DevOps Engineer',
+            'finance-analyst': 'Finance Analyst',
+            'ui-ux-designer': 'UI/UX Designer',
         }
         
         # Ensure upload directories exist

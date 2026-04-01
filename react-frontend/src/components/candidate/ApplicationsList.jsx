@@ -197,7 +197,7 @@ export default function ApplicationsList({
 
                   <div className={styles.actionsRight}>
                     {/* Always show View CV button */}
-                    <button type="button" className={styles.ghostButton} onClick={onViewCV} aria-label="View your uploaded CV">
+                    <button type="button" className={styles.ghostButton} onClick={() => onViewCV && onViewCV(app)} aria-label="View CV used for this application">
                       <i className="fa fa-file-pdf-o"></i> View CV
                     </button>
                     

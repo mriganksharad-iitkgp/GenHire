@@ -104,10 +104,11 @@ const RecruiterCostStatistics = () => {
   const interviewsRemaining = Math.max(0, plan.interviews_remaining ?? 2);
   const planCreditsRemaining = Math.max(0, plan.plan_interviews_remaining ?? 0);
   const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
+  const planName = plan.name || "Free Tier";
   const isUnlimited = interviewsAllowed === -1;
+  const isFreeTier = String(planName || "").toLowerCase().includes("free");
   const usagePercentage = isUnlimited ? 0 : (interviewsAllowed > 0 ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100)) : 0);
   const isNearLimit = !isUnlimited && usagePercentage >= 80;
-  const planName = plan.name || "Free Tier";
   const expiresAt = plan.expires_at;
 
   // Calculate days until renewal
@@ -354,7 +355,13 @@ const RecruiterCostStatistics = () => {
             <div className={styles.interviewCreditsCard}>
               <div className={styles.creditsLeft}>
                 <h2>Interview Credits</h2>
-                <p className={styles.creditsSubtitle}>{planName} — {isUnlimited ? 'Unlimited interviews' : `${interviewsAllowed} interviews/month`}</p>
+                <p className={styles.creditsSubtitle}>
+                  {planName} — {isUnlimited
+                    ? 'Unlimited interviews'
+                    : isFreeTier
+                      ? '2 one-time free interviews at signup (lifetime)'
+                      : `${interviewsAllowed} interviews/month`}
+                </p>
                 
                 <div className={styles.creditsNumbers}>
                   <div className={styles.creditsStat}>
@@ -380,7 +387,7 @@ const RecruiterCostStatistics = () => {
                       <strong>{planCreditsRemaining}</strong>
                     </div>
                     <div className={styles.creditBreakdownItem}>
-                      <span>Free credits left (this month)</span>
+                      <span>Free credits left (lifetime)</span>
                       <strong>{freeCreditsRemaining}</strong>
                     </div>
                   </div>
@@ -398,7 +405,9 @@ const RecruiterCostStatistics = () => {
                   <div className={styles.upgradePrompt}>
                     <div className={styles.upgradeText}>
                       <strong>Running low on interview credits!</strong>
-                      <p>You've used {usagePercentage}% of your monthly interviews. Upgrade to get more.</p>
+                      <p>
+                        You've used {usagePercentage}% of {isFreeTier ? 'your lifetime free interviews' : 'your monthly interviews'}. Upgrade to get more.
+                      </p>
                     </div>
                     <button
                       className={styles.upgradeBtn}
@@ -519,7 +528,7 @@ const RecruiterCostStatistics = () => {
                 </div>
                 <p className={styles.planDescription}>
                   {planName === 'Free Tier'
-                    ? 'Get started with 2 interviews. Upgrade to unlock more interviews and advanced features.'
+                    ? 'Get started with 2 one-time free interviews at signup. Upgrade to unlock monthly interview credits and advanced features.'
                     : planName.includes('Pro')
                       ? 'You have 100 interviews per month with advanced analytics and priority support.'
                         : planName.includes('Max')

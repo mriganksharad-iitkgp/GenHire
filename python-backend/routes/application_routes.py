@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, send_file
 from flask_cors import cross_origin
 import os
 import datetime
+import uuid
 from controllers.application_controller import ApplicationController
 from middleware.auth_middleware import token_required
 from config.database import db_config
@@ -12,6 +13,77 @@ application_bp = Blueprint('applications', __name__, url_prefix='/api')
 # Initialize application controller
 collections = db_config.get_collections()
 application_controller = ApplicationController(collections)
+
+
+def _format_cv_from_details(cv_details):
+    if not isinstance(cv_details, dict):
+        return ""
+
+    parts = []
+    personal = cv_details.get('personalInfo', {})
+    name = personal.get('fullName')
+    if name:
+        parts.append(f"Name: {name}")
+    if personal.get('email'):
+        parts.append(f"Email: {personal.get('email')}")
+    if personal.get('phone'):
+        parts.append(f"Phone: {personal.get('phone')}")
+
+    summary = cv_details.get('professionalSummary')
+    if summary:
+        parts.append("\nProfessional Summary")
+        parts.append(str(summary))
+
+    education = cv_details.get('education', []) or []
+    if education:
+        parts.append("\nEducation")
+        for edu in education:
+            parts.append(f"- {edu.get('degree', '')} at {edu.get('institution', '')}")
+
+    experience = cv_details.get('workExperience', []) or []
+    if experience:
+        parts.append("\nWork Experience")
+        for exp in experience:
+            parts.append(f"- {exp.get('position', '')} at {exp.get('company', '')}")
+
+    skills = cv_details.get('skills', {})
+    technical_skills = skills.get('technical', []) if isinstance(skills, dict) else []
+    if technical_skills:
+        parts.append("\nSkills")
+        parts.append(", ".join(str(skill) for skill in technical_skills if skill))
+
+    projects = cv_details.get('projects', []) or []
+    if projects:
+        parts.append("\nProjects")
+        for project in projects:
+            parts.append(f"- {project.get('name', '')}: {project.get('description', '')}")
+
+    return "\n".join(part for part in parts if part)
+
+
+def _generate_profile_cv_pdf(cv_text, application_id):
+    output_dir = os.path.join('uploads', 'generated_profile_cvs')
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"application_{application_id}_{uuid.uuid4().hex[:8]}.pdf")
+
+    from matplotlib import pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    lines = [line for line in str(cv_text or '').splitlines()]
+    if not lines:
+        lines = ["Profile CV details are available but currently empty."]
+
+    lines_per_page = 44
+    with PdfPages(output_path) as pdf:
+        for idx in range(0, len(lines), lines_per_page):
+            chunk = lines[idx:idx + lines_per_page]
+            fig = plt.figure(figsize=(8.27, 11.69))
+            fig.text(0.06, 0.96, "\n".join(chunk), va='top', ha='left', family='monospace', fontsize=10)
+            plt.axis('off')
+            pdf.savefig(fig)
+            plt.close(fig)
+
+    return output_path
 
 @application_bp.route('/jobs/<job_id>/apply', methods=['POST'])
 @cross_origin()
@@ -89,9 +161,10 @@ def update_application_status(current_user, application_id):
 @cross_origin()
 @token_required
 def get_application_cv(current_user, application_id):
-    """Stream the candidate's CV PDF for a given application (recruiters only)"""
-    if current_user.get('user_type') != 'recruiter':
-        return jsonify({'error': 'Unauthorized. Only recruiters can view candidate CVs.'}), 403
+    """Stream the exact CV used for a given application (candidate owner or recruiter owner)."""
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    if user_type not in ['recruiter', 'candidate', 'student']:
+        return jsonify({'error': 'Unauthorized'}), 403
 
     # Find the application
     try:
@@ -102,10 +175,17 @@ def get_application_cv(current_user, application_id):
     if not app_doc:
         return jsonify({'error': 'Application not found'}), 404
 
-    # Verify recruiter owns the job
-    job = collections['jobs'].find_one({'_id': ObjectId(app_doc['job_id'])})
-    if not job or job.get('created_by') != str(current_user['_id']):
-        return jsonify({'error': 'Unauthorized to view this CV'}), 403
+    current_user_id = str(current_user['_id'])
+
+    if user_type == 'recruiter':
+        # Verify recruiter owns the job
+        job = collections['jobs'].find_one({'_id': ObjectId(app_doc['job_id'])})
+        if not job or job.get('created_by') != current_user_id:
+            return jsonify({'error': 'Unauthorized to view this CV'}), 403
+    else:
+        # Candidate can only view their own application CV
+        if str(app_doc.get('student_id')) != current_user_id:
+            return jsonify({'error': 'Unauthorized to view this CV'}), 403
 
     # Look up candidate user for CV path
     try:
@@ -116,12 +196,38 @@ def get_application_cv(current_user, application_id):
     if not student_user:
         return jsonify({'error': 'Candidate not found'}), 404
 
-    cv_path = student_user.get('cv_path')
-    if not cv_path or not os.path.exists(cv_path):
-        return jsonify({'error': 'CV not found'}), 404
+    cv_path = None
+    cv_id = app_doc.get('cv_id')
+    cv_snapshot = app_doc.get('cv_snapshot') or {}
 
-    # Stream the PDF
-    return send_file(cv_path)
+    # Priority 1: Exact CV selected during application
+    if cv_id:
+        for cv in (student_user.get('cv_uploads') or []):
+            if cv.get('cv_id') == cv_id and cv.get('file_path') and os.path.exists(cv.get('file_path')):
+                cv_path = cv.get('file_path')
+                break
+
+    # Priority 2: Snapshot path captured at application time
+    if not cv_path:
+        snapshot_file_path = cv_snapshot.get('file_path')
+        if snapshot_file_path and os.path.exists(snapshot_file_path):
+            cv_path = snapshot_file_path
+
+    # Priority 3: Legacy fallback for older application records
+    if not cv_path and student_user.get('cv_path') and os.path.exists(student_user.get('cv_path')):
+        cv_path = student_user.get('cv_path')
+
+    if cv_path:
+        return send_file(cv_path)
+
+    # Manual/profile CV: generate PDF from stored snapshot/details
+    if app_doc.get('cv_source') == 'cv_manual_entry':
+        cv_text = cv_snapshot.get('text') or _format_cv_from_details(student_user.get('cv_details'))
+        if cv_text:
+            generated_pdf = _generate_profile_cv_pdf(cv_text, application_id)
+            return send_file(generated_pdf, mimetype='application/pdf')
+
+    return jsonify({'error': 'CV not found for this application'}), 404
 
 @application_bp.route('/applications/<application_id>', methods=['GET'])
 @cross_origin()

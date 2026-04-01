@@ -15,7 +15,18 @@ class DatabaseConfig:
         """Establish connection to MongoDB and return database instance"""
         self.client = MongoClient(self.uri)
         self.db = self.client[self.database_name]
+        self._ensure_indexes()
         return self.db
+
+    def _ensure_indexes(self):
+        """Create critical indexes used by auth and query paths."""
+        try:
+            users = self.db['users']
+            users.create_index('email_lower', unique=True, sparse=True, name='uq_users_email_lower')
+            users.create_index('email', unique=False, sparse=True, name='idx_users_email')
+        except Exception as e:
+            # Do not block startup when legacy duplicate data exists.
+            print(f"Warning: failed to ensure DB indexes: {e}")
     
     def get_db(self):
         """Get database instance, connecting if needed"""

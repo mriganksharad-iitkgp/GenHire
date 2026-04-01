@@ -3,7 +3,7 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 
-CANDIDATE_FREE_MONTHLY_CREDITS = 2
+CANDIDATE_FREE_LIFETIME_CREDITS = 2
 CANDIDATE_USAGE_COLLECTION = "candidate_practice_credit_usage"
 
 
@@ -77,13 +77,13 @@ def _find_active_candidate_subscription(db, candidate_id, now):
 
 def _usage_counts(db, candidate_id, month_key):
     usage_collection = db[CANDIDATE_USAGE_COLLECTION]
-    base = {"candidate_id": str(candidate_id), "usage_month": month_key}
+    base_plan = {"candidate_id": str(candidate_id), "usage_month": month_key, "source": "plan"}
+    base_free = {"candidate_id": str(candidate_id), "source": "free"}
 
     return {
-        "plan_used": usage_collection.count_documents({**base, "source": "plan"}),
-        "free_used": usage_collection.count_documents({**base, "source": "free"}),
+        "plan_used": usage_collection.count_documents(base_plan),
+        "free_used": usage_collection.count_documents(base_free),
     }
-
 
 def get_candidate_practice_quota(db, candidate_id, now=None):
     now = now or datetime.datetime.utcnow()
@@ -118,7 +118,7 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
         quota_mode = "paid"
     else:
         plan_remaining = 0
-        free_allowed = CANDIDATE_FREE_MONTHLY_CREDITS
+        free_allowed = CANDIDATE_FREE_LIFETIME_CREDITS
         free_remaining = max(0, free_allowed - free_used)
         total_allowed = free_allowed
         total_used = free_used
@@ -130,7 +130,7 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
     error_message = None
     if not can_start:
         error_code = "CANDIDATE_PRACTICE_LIMIT_REACHED"
-        error_message = "You've reached your monthly practice interview limit. Upgrade your plan to continue."
+        error_message = "You've reached your free practice interview limit. Upgrade your plan to continue."
 
     return {
         "quota_mode": quota_mode,

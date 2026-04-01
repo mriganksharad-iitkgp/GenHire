@@ -125,6 +125,7 @@ class ApplicationController:
             cv_snapshot = {
                 'cv_id': selected_cv.get('cv_id'),
                 'filename': selected_cv.get('filename'),
+                'file_path': selected_cv.get('file_path'),
                 'text': cv_text,
                 'upload_date': selected_cv.get('upload_date'),
                 'source': cv_source,

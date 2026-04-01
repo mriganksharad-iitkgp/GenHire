@@ -4,6 +4,7 @@ import Toast from "../components/Toast";
 import Pagination from "../components/Pagination";
 import CVSelectionModal from "../components/CVSelectionModal";
 import { useCandidateData } from "../contexts/CandidateDataContext";
+import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "../constants/jobTaxonomy";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -379,8 +380,10 @@ const Dashboard = () => {
 		return null;
 	};
 
-	// Get unique job roles for the filter dropdown
-	const uniqueJobRoles = [...new Set(jobOpenings.map(job => job.title).filter(Boolean))].sort();
+	// Get unique canonical job roles for the filter dropdown
+	const uniqueJobRoles = [...new Set([
+		...jobOpenings.map((job) => canonicalizeJobRole(job.title)).filter(Boolean),
+	])].sort();
 	
 	// Get unique companies for the filter dropdown
 	const uniqueCompanies = [...new Set(jobOpenings.map(job => job.company || 'TechCorp Solutions').filter(Boolean))].sort();
@@ -422,7 +425,7 @@ const Dashboard = () => {
 		}
 
 		const roleSel = jobRoleFilter.trim();
-		const matchesJobRole = roleSel === '' || String(job.title || '') === roleSel;
+		const matchesJobRole = roleSel === '' || canonicalizeJobRole(job.title) === roleSel;
 
 		const companySel = companyFilter.trim();
 		const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
@@ -489,12 +492,11 @@ const Dashboard = () => {
 							className={styles.filterSelect}
 						>
 							<option value="">All Locations</option>
-							<option value="Remote">Remote</option>
-							<option value="Hybrid">Hybrid</option>
-							<option value="San Francisco">San Francisco</option>
-							<option value="New York">New York</option>
-							<option value="Boston">Boston</option>
-							<option value="Seattle">Seattle</option>
+							{INDIA_LOCATION_OPTIONS.map((locationOption) => (
+								<option key={locationOption} value={locationOption}>
+									{locationOption}
+								</option>
+							))}
 						</select>
 
 						<select

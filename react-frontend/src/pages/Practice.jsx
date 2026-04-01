@@ -7,6 +7,7 @@ import CVSelectionModal from '../components/CVSelectionModal';
 import CVDetailsModal from '../components/candidate/CVDetailsModal';
 import PracticeDetailsModal from '../components/PracticeDetailsModal';
 import JDDetailsModal from '../components/JDDetailsModal';
+import { PRACTICE_ROLE_OPTIONS } from '../constants/jobTaxonomy';
 import styles from "./Practice.module.css";
 
 const Practice = () => {
@@ -33,15 +34,7 @@ const Practice = () => {
 	};
 
 	// Predefined roles for quick practice
-	const roles = [
-		{ id: 'software-engineer', name: 'Software Engineer', icon: 'fa-code' },
-		{ id: 'data-scientist', name: 'Data Scientist', icon: 'fa-line-chart' },
-		{ id: 'product-manager', name: 'Product Manager', icon: 'fa-tasks' },
-		{ id: 'business-analyst', name: 'Business Analyst', icon: 'fa-briefcase' },
-		{ id: 'fullstack-developer', name: 'Full Stack Developer', icon: 'fa-laptop' },
-		{ id: 'devops-engineer', name: 'DevOps Engineer', icon: 'fa-server' },
-		{ id: 'custom', name: 'Custom (Upload JD)', icon: 'fa-upload' }
-	];
+	const roles = PRACTICE_ROLE_OPTIONS;
 
 	// Fetch practice history on component mount
 	useEffect(() => {

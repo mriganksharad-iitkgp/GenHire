@@ -3,7 +3,7 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 
-FREE_MONTHLY_CREDITS = 2
+FREE_LIFETIME_CREDITS = 2
 PRO_MONTHLY_CREDITS = 100
 MAX_MONTHLY_CREDITS = 300
 USAGE_COLLECTION = "interview_credit_usage"
@@ -102,10 +102,11 @@ def _plan_monthly_credits(subscription):
 
 def _ledger_usage_counts(db, recruiter_id, month_key):
     usage_collection = db[USAGE_COLLECTION]
-    base_query = {"recruiter_id": str(recruiter_id), "usage_month": month_key}
+    base_plan = {"recruiter_id": str(recruiter_id), "usage_month": month_key, "source": "plan"}
+    base_free = {"recruiter_id": str(recruiter_id), "source": "free"}
     return {
-        "plan_used": usage_collection.count_documents({**base_query, "source": "plan"}),
-        "free_used": usage_collection.count_documents({**base_query, "source": "free"}),
+        "plan_used": usage_collection.count_documents(base_plan),
+        "free_used": usage_collection.count_documents(base_free),
     }
 
 
@@ -180,12 +181,12 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
     plan_remaining = max(0, plan_monthly_credits - plan_used)
     can_use_plan = plan_remaining > 0
 
-    free_remaining = max(0, FREE_MONTHLY_CREDITS - free_used)
+    free_remaining = max(0, FREE_LIFETIME_CREDITS - free_used)
     can_use_free = free_remaining > 0
 
     can_start = can_use_plan or can_use_free
 
-    total_allowed = max(0, plan_monthly_credits) + FREE_MONTHLY_CREDITS
+    total_allowed = max(0, plan_monthly_credits) + FREE_LIFETIME_CREDITS
     total_used = plan_used + free_used
     total_remaining = max(0, total_allowed - total_used)
     quota_mode = "max" if plan_monthly_credits >= MAX_MONTHLY_CREDITS else ("pro" if plan_monthly_credits > 0 else "free")
@@ -198,7 +199,7 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
             error_message = "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan."
         else:
             error_code = "RECRUITER_INTERVIEW_LIMIT_REACHED"
-            error_message = "Interview is currently unavailable for this job. The recruiter has reached the monthly interview limit on their plan."
+            error_message = "Interview is currently unavailable for this job. The recruiter has reached the free interview limit on their account."
 
     return {
         "quota_mode": quota_mode,
@@ -212,7 +213,7 @@ def get_recruiter_interview_quota(db, recruiter_id, now=None):
         "plan_interviews_allowed": -1 if plan_is_unlimited else int(max(0, plan_monthly_credits)),
         "plan_interviews_used": plan_used,
         "plan_interviews_remaining": plan_remaining,
-        "free_interviews_allowed": FREE_MONTHLY_CREDITS,
+        "free_interviews_allowed": FREE_LIFETIME_CREDITS,
         "free_interviews_used": free_used,
         "free_interviews_remaining": free_remaining,
         "interviews_allowed": total_allowed,

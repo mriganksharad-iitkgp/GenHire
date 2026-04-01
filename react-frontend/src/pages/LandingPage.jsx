@@ -465,7 +465,7 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>Free plan with 2 practice interviews per month</p>
+                <p>2 one-time free practice interviews at signup (lifetime)</p>
               </div>
               <ul className={styles.pricingFeatures}>
                 <li><span>✓</span> 2 AI Interviews</li>
@@ -541,7 +541,10 @@ const LandingPage = () => {
               <ul className={styles.pricingFeatures}>
                 <li><span>✓</span> 2 AI Interviews</li>
                 <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Basic Analytics</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Candidate Analytics</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Priority Support</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Custom Branding</li>
+                <li className={styles.unavailableFeature}><span>✕</span> API Access</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
                 Start for Free
@@ -557,15 +560,15 @@ const LandingPage = () => {
                   <span className={styles.amount}>4,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
-                <p>For growing teams</p>
+                <p>Professional plan for growing teams with 100 interviews per month</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 AI Interviews/month</li>
+                <li><span>✓</span> 100 AI Interviews</li>
                 <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Advanced Analytics</li>
-                <li><span>✓</span> CV Screening & Ranking</li>
-                <li><span>✓</span> Proctoring Features</li>
+                <li><span>✓</span> Candidate Analytics</li>
                 <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> API Access</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
                 Start Free Trial
@@ -580,14 +583,14 @@ const LandingPage = () => {
                   <span className={styles.amount}>9,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
-                <p>For large organizations</p>
+                <p>Advanced recruiter plan with 300 interviews per month</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 300 AI Interviews/month</li>
-                <li><span>✓</span> Custom Integrations</li>
-                <li><span>✓</span> Advanced Analytics & Reporting</li>
-                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> 300 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Candidate Analytics</li>
                 <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
                 <li><span>✓</span> API Access</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>

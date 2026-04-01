@@ -170,7 +170,7 @@ const SubscriptionPlans = () => {
       id: "free",
       slug: "free",
       name: "Free Tier",
-      description: "Starter free tier with limited interviews",
+      description: "2 one-time free interviews at signup (lifetime)",
       price: 0,
       currency: "INR",
       interval: "month",

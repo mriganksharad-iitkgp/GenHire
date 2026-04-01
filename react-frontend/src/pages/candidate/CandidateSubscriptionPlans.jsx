@@ -126,7 +126,7 @@ const CandidateSubscriptionPlans = () => {
       id: "candidate-free",
       slug: "candidate-free",
       name: "Free Tier",
-      description: "Free plan with 2 practice interviews per month",
+      description: "2 one-time free practice interviews at signup (lifetime)",
       price: 0,
       currency: "INR",
       interval: "month",
@@ -192,6 +192,17 @@ const CandidateSubscriptionPlans = () => {
           plan?.audience === "candidate" ||
           String(plan?.slug || "").startsWith("candidate-"),
       );
+
+      normalizedPlans = normalizedPlans.map((plan) => {
+        const slug = String(plan?.slug || "").toLowerCase();
+        if (slug === "candidate-free") {
+          return {
+            ...plan,
+            description: "2 one-time free practice interviews at signup (lifetime)",
+          };
+        }
+        return plan;
+      });
 
       if (!normalizedPlans || normalizedPlans.length === 0) {
         normalizedPlans = getFallbackPlans();

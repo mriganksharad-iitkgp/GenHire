@@ -117,28 +117,6 @@
   align-items: center;
 }
 
-.darkModeButton {
-  background: rgba(75, 85, 99, 0.1);
-  border: 2px solid transparent;
-  color: #4b5563;
-  font-size: 1.125rem;
-  cursor: pointer;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.darkModeButton:hover {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border-color: rgba(59, 130, 246, 0.2);
-  transform: scale(1.05);
-}
-
 /* User Dropdown */
 .userDropdown {
   position: relative;
@@ -332,18 +310,6 @@ body.dark .navLink.active::after {
   border-radius: 2px;
 }
 
-:global(.dark) .darkModeButton,
-body.dark .darkModeButton {
-  color: var(--dark-text);
-  background: rgba(107, 114, 128, 0.1);
-}
-
-:global(.dark) .darkModeButton:hover,
-body.dark .darkModeButton:hover {
-  background: rgba(96, 165, 250, 0.12);
-  color: var(--dark-accent-start);
-}
-
 :global(.dark) .userButton,
 body.dark .userButton {
   background: rgba(107, 114, 128, 0.1);
@@ -437,12 +403,6 @@ body.dark .dropdownItem.logout {
 
   .navActions {
     gap: 0.5rem;
-  }
-
-  .darkModeButton {
-    width: 2.25rem;
-    height: 2.25rem;
-    font-size: 1rem;
   }
 
   .avatar {
