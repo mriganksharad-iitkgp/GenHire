@@ -61,6 +61,7 @@ _ROLE_NORMALIZATION_RULES = [
     (re.compile(r"(business\s*analyst|\bba\b)", re.I), "Business Analyst"),
     (re.compile(r"(ui\/?ux|ux\s*designer|ui\s*designer|product\s*designer)", re.I), "UI/UX Designer"),
     (re.compile(r"(finance\s*analyst|financial\s*analyst)", re.I), "Finance Analyst"),
+]
 
 def canonicalize_job_role(title):
     value = str(title or "").strip()

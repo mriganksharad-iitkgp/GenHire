@@ -2,8 +2,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as pyjwt
 import datetime
 import os
+import re
 from bson import ObjectId
 import secrets
+from pymongo.errors import DuplicateKeyError
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from services.email_service import EmailService
@@ -24,13 +26,79 @@ class AuthController:
         if not normalized_email:
             return None
 
-        return self.users_collection.find_one({
+        user = self.users_collection.find_one({
             '$or': [
                 {'email_lower': normalized_email},
                 {'email': normalized_email},
                 {'email': str(email or '').strip()}
             ]
         })
+        if user:
+            return user
+
+        # Fallback for legacy records with mixed case or accidental spaces in `email`.
+        escaped = re.escape(normalized_email)
+        user = self.users_collection.find_one({
+            'email': {
+                '$regex': f'^\\s*{escaped}\\s*$',
+                '$options': 'i'
+            }
+        })
+        if user:
+            return user
+
+        # Last-resort normalization query using Mongo expressions.
+        return self.users_collection.find_one({
+            '$expr': {
+                '$eq': [
+                    {
+                        '$toLower': {
+                            '$trim': {
+                                'input': {'$ifNull': ['$email', '']}
+                            }
+                        }
+                    },
+                    normalized_email
+                ]
+            }
+        })
+
+    def check_email_account_type(self, email, requested_user_type='candidate'):
+        """Check if an email is available for the requested account type."""
+        normalized_email = self._normalize_email(email)
+        requested_user_type = str(requested_user_type or 'candidate').strip().lower()
+
+        if not normalized_email:
+            return {'error': 'Email is required'}, 400
+
+        if requested_user_type not in ['candidate', 'recruiter']:
+            return {'error': 'Invalid user type'}, 400
+
+        existing_user = self._find_user_by_email(normalized_email)
+        if not existing_user:
+            return {
+                'available': True,
+                'email': normalized_email,
+                'requested_user_type': requested_user_type
+            }, 200
+
+        existing_type = str(existing_user.get('user_type', 'candidate')).strip().lower()
+        if existing_type != requested_user_type:
+            return {
+                'available': False,
+                'email': normalized_email,
+                'requested_user_type': requested_user_type,
+                'existing_user_type': existing_type,
+                'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
+            }, 409
+
+        return {
+            'available': False,
+            'email': normalized_email,
+            'requested_user_type': requested_user_type,
+            'existing_user_type': existing_type,
+            'error': 'Email already exists'
+        }, 409
         
     def register_user(self, user_data):
         """Register a new user"""
@@ -105,7 +173,16 @@ class AuthController:
                 'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
             })
         
-        user_id = self.users_collection.insert_one(user_doc).inserted_id
+        try:
+            user_id = self.users_collection.insert_one(user_doc).inserted_id
+        except DuplicateKeyError:
+            existing_user = self._find_user_by_email(normalized_email)
+            existing_type = str((existing_user or {}).get('user_type', 'candidate')).strip().lower()
+            if existing_type != user_type:
+                return {
+                    'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
+                }, 409
+            return {'error': 'Email already exists'}, 409
         
         # Send verification email if required
         if self.require_email_verification:
@@ -418,6 +495,11 @@ class AuthController:
             return {'error': 'Google OAuth not configured'}, 500
 
         user_data = user_data or {}
+        user_type = str(user_type or 'candidate').strip().lower()
+
+        # Only allow candidate and recruiter registration via OAuth.
+        if user_type not in ['candidate', 'recruiter']:
+            return {'error': 'Invalid user type'}, 400
         
         try:
             # Verify the token with Google (allow 10s clock skew for "Token used too early")
@@ -432,7 +514,6 @@ class AuthController:
             email = self._normalize_email(idinfo.get('email'))
             name = idinfo.get('name')
             google_id = idinfo.get('sub')
-            user_type = str(user_type or 'candidate').strip().lower()
 
             if not email:
                 return {'error': 'Email not provided by Google'}, 400
@@ -517,7 +598,16 @@ class AuthController:
                         'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
                     })
                 
-                user_id = self.users_collection.insert_one(user_doc).inserted_id
+                try:
+                    user_id = self.users_collection.insert_one(user_doc).inserted_id
+                except DuplicateKeyError:
+                    existing_user = self._find_user_by_email(email)
+                    existing_type = str((existing_user or {}).get('user_type', 'candidate')).strip().lower()
+                    if existing_type != user_type:
+                        return {
+                            'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
+                        }, 409
+                    return {'error': 'Email already exists'}, 409
                 
                 # Generate token
                 jwt_token = self.generate_token(user_id)
