@@ -582,7 +582,7 @@ const RecruiterOnboarding = () => {
                   </div>
                   
                   <div className={styles.inputGroup + ' ' + styles.fullWidth}>
-                    <label>Why are you joining SmartHire?</label>
+                    <label>Why are you joining GenHire?</label>
                     <textarea
                       value={additionalInfo.reasonForJoining}
                       onChange={(e) => setAdditionalInfo({...additionalInfo, reasonForJoining: e.target.value})}

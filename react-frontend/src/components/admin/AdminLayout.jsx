@@ -149,7 +149,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
                 <circle cx="7" cy="7" r="3"></circle>
               </svg>
             </div>
-            <h2>SmartHire</h2>
+            <h2>GenHire</h2>
             <span className={styles.adminBadge}>Admin</span>
           </div>
           {adminUser && (
@@ -171,7 +171,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
               <circle cx="7" cy="7" r="3"></circle>
             </svg>
           </div>
-          <h2>SmartHire</h2>
+          <h2>GenHire</h2>
           <span className={styles.adminBadge}>Admin</span>
         </div>
 

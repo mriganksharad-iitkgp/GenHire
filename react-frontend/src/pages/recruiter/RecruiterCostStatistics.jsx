@@ -533,7 +533,7 @@ const RecruiterCostStatistics = () => {
                       ? 'You have 100 interviews per month with advanced analytics and priority support.'
                         : planName.includes('Max')
                         ? 'You have 300 interviews per month with custom integrations and advanced support.'
-                        : 'Manage your subscription to get the most out of SmartHire.'}
+                        : 'Manage your subscription to get the most out of GenHire.'}
                 </p>
               </div>
               <button

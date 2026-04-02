@@ -120,15 +120,14 @@ class AuthController:
         if user_type not in ['candidate', 'recruiter']:
             return {'error': 'Invalid user type'}, 400
         
-        # Check if user exists
+        # Check if user exists - enforce one email per role
         existing_user = self._find_user_by_email(normalized_email)
         if existing_user:
-            existing_type = existing_user.get('user_type', 'candidate')
-            if existing_type != user_type:
-                return {
-                    'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
-                }, 409
-            return {'error': 'Email already exists'}, 400
+            existing_role = existing_user.get('user_type', 'candidate')
+            if existing_role == user_type:
+                return {'error': f'An account with this email already exists as a {existing_role}. Please log in instead.'}, 400
+            else:
+                return {'error': f'This email is already registered as a {existing_role}. Each email can only be associated with one role.'}, 409
         
         # Generate verification token
         verification_token = secrets.token_urlsafe(32)
@@ -522,10 +521,11 @@ class AuthController:
             user = self._find_user_by_email(email)
 
             if user:
-                existing_type = user.get('user_type', 'candidate')
-                if existing_type != user_type:
+                # Enforce one email = one role: block cross-role signup/login
+                existing_role = user.get('user_type', 'candidate')
+                if existing_role != user_type:
                     return {
-                        'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
+                        'error': f'This email is already registered as a {existing_role}. Each email can only be associated with one role.'
                     }, 409
 
                 # Update existing user if they signed up with local auth

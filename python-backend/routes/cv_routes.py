@@ -98,9 +98,9 @@ def create_cv_routes(db_collections):
     @cv_bp.route('/<cv_id>/preview', methods=['GET'])
     @token_required
     def preview_cv(current_user, cv_id):
-        """Preview/Download CV PDF file"""
+        """Preview/Download CV PDF file — supports both GCS and local storage"""
         try:
-            from flask import send_file
+            from flask import send_file, redirect
             import os
             
             user_id = str(current_user['_id'])
@@ -110,20 +110,43 @@ def create_cv_routes(db_collections):
             if not cv:
                 return jsonify({'error': 'CV not found'}), 404
             
+            # Check if the file is on GCS
+            gcs_path = cv.get('gcs_path')
+            if gcs_path:
+                try:
+                    from services import gcs_service
+                    if gcs_service.is_gcs_configured():
+                        signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
+                        return redirect(signed_url)
+                except Exception as e:
+                    return jsonify({'error': f'Failed to generate download link: {str(e)}'}), 500
+            
+            # Fallback to local file
             file_path = cv.get('file_path')
-            if not file_path or not os.path.exists(file_path):
+            if not file_path or file_path.startswith('gs://') or not os.path.exists(file_path):
                 return jsonify({'error': 'CV file not found'}), 404
             
-            # Send PDF file
+            # Send local PDF file
             return send_file(
                 file_path,
                 mimetype='application/pdf',
-                as_attachment=False,  # Open in browser, not download
+                as_attachment=False,
                 download_name=cv.get('filename', 'cv.pdf')
             )
             
         except Exception as e:
             return jsonify({'error': f'Failed to preview CV: {str(e)}'}), 500
+    
+    @cv_bp.route('/<cv_id>/download-url', methods=['GET'])
+    @token_required
+    def get_cv_download_url(current_user, cv_id):
+        """Get a signed download URL for a CV (for frontend use)"""
+        try:
+            user_id = str(current_user['_id'])
+            response, status_code = cv_controller.get_cv_download_url(user_id, cv_id)
+            return jsonify(response), status_code
+        except Exception as e:
+            return jsonify({'error': f'Failed to get download URL: {str(e)}'}), 500
     
     @cv_bp.route('/<cv_id>/text', methods=['GET'])
     @token_required

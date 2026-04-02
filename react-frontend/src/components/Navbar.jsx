@@ -117,7 +117,7 @@ const Navbar = ({ userType = "candidate" }) => {
               </svg>
             </div>
             <h1>
-              SmartHire
+              GenHire
             </h1>
           </Link>
         </div>

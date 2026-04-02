@@ -146,7 +146,7 @@ const Login = () => {
 							<circle cx="7" cy="7" r="3"></circle>
 						</svg>
 					</div>
-					<h1>SmartHire</h1>
+					<h1>GenHire</h1>
 					<p>
 						Welcome! Please select your role and log in to access your dashboard.
 					</p>
@@ -291,7 +291,7 @@ const Login = () => {
 				{userType !== "admin" && (
 					<div className={styles.registerSection}>
 						<p>
-							New to SmartHire?{" "}
+							New to GenHire?{" "}
 							<Link to="/register">Create an account</Link>
 						</p>
 					</div>

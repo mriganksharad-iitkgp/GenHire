@@ -8,13 +8,11 @@ import Avatar from "../components/Avatar"; // Import the new Avatar component
 import QRCode from "react-qr-code";
 import { proctoringConfig } from "../config/proctoring";
 
-// Removed formatTime function - no longer needed since we removed the 30-second timer
 
 export default function Chat({ interviewId }) {
   const MAX_QUESTIONS = 10;
   // --- STATE MANAGEMENT ---
-  // Add this with your other refs
-  const isTimerRunningRef = useRef(false);
+
   const currentAudioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -40,7 +38,6 @@ export default function Chat({ interviewId }) {
   });
   const [warningCount, setWarningCount] = useState(0);
 
-  // Removed timeLeft state - using only silence detection now
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [questionCount, setQuestionCount] = useState(0);
   const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
@@ -75,8 +72,7 @@ export default function Chat({ interviewId }) {
   const gazeStartTimeRef = useRef(null);
   const gazeRecordingDataRef = useRef(null);
 
-  // --- MODIFICATION --- Add refs for the timer and the latest transcript
-  const timerRef = useRef(null);
+
   const transcriptRef = useRef("");
   // Track the currently active MediaStream explicitly to guarantee full shutdown
   const cameraStreamRef = useRef(null);
@@ -93,10 +89,6 @@ export default function Chat({ interviewId }) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Add this hook to your component
-  useEffect(() => {
-    isTimerRunningRef.current = isTimerRunning;
-  }, [isTimerRunning]); // --- PROCTORING FOR TAB/WINDOW SWITCHING (No changes needed) ---
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -193,6 +185,9 @@ export default function Chat({ interviewId }) {
       gazeEndedAtMsRef.current = null;
       gazeStartTimeRef.current = Date.now();
 
+      // Disable click-based recalibration to prevent demo-timeout recalibration overlays
+      window.GazeCloudAPI.UseClickRecalibration = false;
+
       window.GazeCloudAPI.OnResult = function (gazeData) {
         if (!gazeRecorderTrackingRef.current) return;
         gazePointsRef.current.push({
@@ -203,10 +198,47 @@ export default function Chat({ interviewId }) {
       };
 
       window.GazeCloudAPI.OnCalibrationComplete = function () {
+        // If interview is already active, this is a demo-timeout recalibration — ignore it
+        // and gracefully degrade (interview continues without gaze tracking)
+        if (gazeRecorderTrackingRef.current) {
+          console.warn('⚠️ GazeCloudAPI recalibration triggered (likely demo timeout). Stopping gaze tracking gracefully.');
+          try {
+            window.GazeRecorderAPI.StopRec();
+            window.GazeCloudAPI.StopEyeTracking();
+          } catch (e) { /* already stopped */ }
+          gazeRecorderTrackingRef.current = false;
+          setGazeRecorderStatus('failed');
+          return;
+        }
+
         window.GazeRecorderAPI.Rec();
         gazeRecorderTrackingRef.current = true;
         gazeStartTimeRef.current = Date.now();
         setGazeRecorderStatus('tracking');
+
+        // Set a safety timer: stop gaze tracking gracefully before the 60s demo limit expires.
+        // This prevents the GazeCloudAPI from forcibly showing its recalibration overlay.
+        setTimeout(() => {
+          if (gazeRecorderTrackingRef.current) {
+            console.warn('⚠️ Proactively stopping gaze tracking before demo limit expires.');
+            try {
+              window.GazeRecorderAPI.StopRec();
+              window.GazeCloudAPI.StopEyeTracking();
+            } catch (e) { /* already stopped */ }
+            gazeRecorderTrackingRef.current = false;
+            gazeEndedAtMsRef.current = Date.now();
+            // Keep status as 'tracking' or set to 'failed' — interview continues either way
+            // since the initial greeting useEffect checks for 'tracking' OR 'failed'
+            setGazeRecorderStatus('failed');
+          }
+        }, 55000); // Stop at 55s to be safe before the 60s demo limit
+      };
+
+      // Handle camera denial / errors from GazeCloudAPI
+      window.GazeCloudAPI.OnCamDenied = function () {
+        console.warn('⚠️ GazeCloudAPI camera access denied.');
+        gazeRecorderTrackingRef.current = false;
+        setGazeRecorderStatus('failed');
       };
 
       window.GazeCloudAPI.StartEyeTracking();
@@ -681,8 +713,6 @@ export default function Chat({ interviewId }) {
 
     // CRITICAL: Stop timer and speech recognition IMMEDIATELY
     setIsTimerRunning(false);
-    isTimerRunningRef.current = false; // Stop recognition from restarting
-    clearInterval(timerRef.current);
     clearInterval(silenceTimerRef.current);
 
     // Stop speech recording
@@ -1313,7 +1343,6 @@ export default function Chat({ interviewId }) {
         }
 
         // Clear all timers
-        clearInterval(timerRef.current);
         clearInterval(silenceTimerRef.current);
 
         // Stop proctoring

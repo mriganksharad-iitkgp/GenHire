@@ -118,7 +118,7 @@ class PracticeController:
                     'error_code': quota_snapshot.get('error_code', 'CANDIDATE_PRACTICE_LIMIT_REACHED'),
                     'plan': {
                         'name': quota_snapshot.get('plan_name', 'Free Tier'),
-                        'interviews_allowed': quota_snapshot.get('interviews_allowed', 2),
+                        'interviews_allowed': quota_snapshot.get('interviews_allowed', 100),
                         'interviews_used': quota_snapshot.get('interviews_used', 0),
                         'interviews_remaining': quota_snapshot.get('interviews_remaining', 0),
                     },
@@ -360,7 +360,7 @@ class PracticeController:
                 'initial_questions': [question_result.get('question', '')],
                 'message': 'Practice interview session started successfully',
                 'quota': {
-                    'interviews_allowed': quota_snapshot.get('interviews_allowed', 2),
+                    'interviews_allowed': quota_snapshot.get('interviews_allowed', 100),
                     'interviews_used': quota_snapshot.get('interviews_used', 0) + 1,
                     'interviews_remaining': max(0, int(quota_snapshot.get('interviews_remaining', 0) or 0) - 1),
                 }

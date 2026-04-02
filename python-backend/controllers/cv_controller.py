@@ -1,6 +1,6 @@
 """
 CV Controller - Manage multiple CV uploads for candidates
-Handles CV PDF upload, storage, extraction, and management
+Handles CV PDF upload, storage (GCS or local), extraction, and management
 """
 
 import os
@@ -10,6 +10,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from bson import ObjectId
 from services.pdf_parser_service import get_pdf_parser
+from services import gcs_service
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,10 @@ class CVController:
             file_extension = original_filename.rsplit('.', 1)[1].lower()
             filename = f"{cv_id}.{file_extension}"
             
-            # Save file
+            # Save file locally first (needed for PDF text extraction)
             user_folder = self._get_user_cv_folder(user_id)
-            file_path = os.path.join(user_folder, filename)
-            cv_file.save(file_path)
+            local_file_path = os.path.join(user_folder, filename)
+            cv_file.save(local_file_path)
             
             # Extract text using PDF parser
             extracted_text = ""
@@ -91,7 +92,7 @@ class CVController:
             
             try:
                 if self.pdf_parser:
-                    result = self.pdf_parser.parse_cv_pdf(file_path)
+                    result = self.pdf_parser.parse_cv_pdf(local_file_path)
                     extracted_text = result.get('text', '')
                     metadata = result.get('metadata', {})
                     logger.info(f"Extracted {len(extracted_text)} characters from CV: {original_filename}")
@@ -101,11 +102,30 @@ class CVController:
                 logger.error(f"Failed to extract text from CV: {e}")
                 # Continue with upload but without extracted text
             
+            # Upload to GCS if configured, otherwise keep local
+            file_path = local_file_path
+            gcs_path = None
+            if gcs_service.is_gcs_configured():
+                try:
+                    gcs_path = f"cvs/{user_id}/{filename}"
+                    gcs_service.upload_from_path(local_file_path, gcs_path)
+                    file_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{gcs_path}"
+                    # Remove local file after successful GCS upload
+                    try:
+                        os.remove(local_file_path)
+                    except OSError:
+                        pass
+                    logger.info(f"CV uploaded to GCS: {gcs_path}")
+                except Exception as e:
+                    logger.warning(f"GCS upload failed, keeping local: {e}")
+                    gcs_path = None
+            
             # Create CV upload record
             cv_upload = {
                 'cv_id': cv_id,
                 'filename': original_filename,
                 'file_path': file_path,
+                'gcs_path': gcs_path,
                 'extracted_text': extracted_text,
                 'upload_date': datetime.utcnow(),
                 'is_primary': is_primary or len(cv_uploads) == 0,  # First CV is always primary
@@ -266,10 +286,14 @@ class CVController:
             
             was_primary = cv.get('is_primary', False)
             
-            # Delete file
+            # Delete file from GCS and/or local
             try:
-                if os.path.exists(cv['file_path']):
-                    os.remove(cv['file_path'])
+                gcs_path = cv.get('gcs_path')
+                if gcs_path and gcs_service.is_gcs_configured():
+                    gcs_service.delete_file(gcs_path)
+                local_path = cv.get('file_path', '')
+                if local_path and not local_path.startswith('gs://') and os.path.exists(local_path):
+                    os.remove(local_path)
             except Exception as e:
                 logger.warning(f"Failed to delete CV file: {e}")
             
@@ -395,3 +419,54 @@ class CVController:
         except Exception as e:
             logger.error(f"Error getting CV by ID: {e}")
             return None
+    
+    def get_cv_download_url(self, user_id, cv_id):
+        """
+        Get a download URL for a CV. Returns a signed GCS URL or local file path.
+        
+        Args:
+            user_id: User ID
+            cv_id: CV ID
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
+        try:
+            user = self.users_collection.find_one({'_id': ObjectId(user_id)})
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            cv_uploads = user.get('cv_uploads', [])
+            cv = next((c for c in cv_uploads if c.get('cv_id') == cv_id), None)
+            
+            if not cv:
+                return {'error': 'CV not found'}, 404
+            
+            gcs_path = cv.get('gcs_path')
+            if gcs_path and gcs_service.is_gcs_configured():
+                try:
+                    signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
+                    return {
+                        'download_url': signed_url,
+                        'filename': cv.get('filename', f'{cv_id}.pdf'),
+                        'source': 'gcs'
+                    }, 200
+                except Exception as e:
+                    logger.error(f"Failed to generate signed URL: {e}")
+                    return {'error': 'Failed to generate download link'}, 500
+            
+            # Fallback to local file path
+            local_path = cv.get('file_path', '')
+            if local_path and not local_path.startswith('gs://') and os.path.exists(local_path):
+                return {
+                    'download_url': None,
+                    'local_path': local_path,
+                    'filename': cv.get('filename', f'{cv_id}.pdf'),
+                    'source': 'local'
+                }, 200
+            
+            return {'error': 'CV file not available'}, 404
+            
+        except Exception as e:
+            logger.error(f"Error getting CV download URL: {e}")
+            return {'error': f'Failed to get download URL: {str(e)}'}, 500
