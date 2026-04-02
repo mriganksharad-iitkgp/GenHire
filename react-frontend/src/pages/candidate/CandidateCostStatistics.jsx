@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "../recruiter/RecruiterCostStatistics.module.css";
+import {
+  addMonths,
+  buildContinuousMonthlySeries,
+  clampMonthRange,
+  getMaxMonthToAllowed,
+} from "../../utils/monthRange";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -64,7 +70,40 @@ const CandidateCostStatistics = () => {
 
         const data = await response.json();
         if (data.success) {
-          setCostData(data.data);
+          let mergedData = data.data;
+
+          const hasExpiry = Boolean(data?.data?.plan?.expires_at);
+          const isPaidPlan = !String(data?.data?.plan?.name || "").toLowerCase().includes("free");
+
+          // Fallback: hydrate expires_at from active subscription endpoint when cost-stats payload misses it.
+          if (!hasExpiry && isPaidPlan) {
+            try {
+              const subRes = await fetch(
+                `${API_BASE_URL}/api/payment/subscriptions/me`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                },
+              );
+              const subData = await subRes.json().catch(() => null);
+              const fallbackExpiry = subData?.data?.subscription?.expires_at;
+              if (fallbackExpiry) {
+                mergedData = {
+                  ...data.data,
+                  plan: {
+                    ...(data.data?.plan || {}),
+                    expires_at: fallbackExpiry,
+                  },
+                };
+              }
+            } catch (e) {
+              // Keep original payload if fallback fetch fails.
+            }
+          }
+
+          setCostData(mergedData);
         } else {
           setCostData(generateFallbackData());
         }
@@ -88,11 +127,26 @@ const CandidateCostStatistics = () => {
   const planCreditsRemaining = Math.max(0, plan.plan_interviews_remaining ?? 0);
   const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
   const isFreeTier = String(plan.name || "").toLowerCase().includes("free");
+  const planMonthlyPracticeInterviews = !isFreeTier
+    ? Math.max(0, Number(plan.plan_interviews_allowed ?? 0))
+    : interviewsAllowed;
+  const displayedMonthlyPracticeInterviews =
+    !isFreeTier && planMonthlyPracticeInterviews > 0
+      ? planMonthlyPracticeInterviews
+      : interviewsAllowed;
   const usagePercentage =
     interviewsAllowed > 0
       ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100))
       : 0;
   const isNearLimit = usagePercentage >= 80;
+  const expiresAt = plan.expires_at;
+  const daysUntilExpiry = (() => {
+    if (!expiresAt) return null;
+    const expDate = new Date(expiresAt);
+    const now = new Date();
+    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  })();
 
   const monthlySeries = useMemo(() => {
     const series = safeData.monthlyUsage || [];
@@ -103,23 +157,40 @@ const CandidateCostStatistics = () => {
 
   const currentMonthKey = new Date().toISOString().slice(0, 7);
 
-  useEffect(() => {
-    if (!monthlySeries.length) {
-      setMonthFrom(currentMonthKey);
-      setMonthTo(currentMonthKey);
-      return;
-    }
+  const maxMonthToAllowed = useMemo(() => {
+    return getMaxMonthToAllowed(monthFrom, currentMonthKey);
+  }, [monthFrom, currentMonthKey]);
 
-    if (!monthFrom) setMonthFrom(monthlySeries[0].month);
-    if (!monthTo) setMonthTo(monthlySeries[monthlySeries.length - 1].month);
-  }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
+  const handleMonthFromChange = (nextFrom) => {
+    setMonthFrom(nextFrom);
+
+    if (!nextFrom) return;
+
+    const autoTo = addMonths(nextFrom, 2);
+    const cappedAutoTo = autoTo < currentMonthKey ? autoTo : currentMonthKey;
+    setMonthTo(cappedAutoTo);
+  };
+
+  useEffect(() => {
+    const defaultFrom = addMonths(currentMonthKey, -2);
+    if (!monthFrom) setMonthFrom(defaultFrom);
+    if (!monthTo) setMonthTo(currentMonthKey);
+  }, [monthFrom, monthTo, currentMonthKey]);
+
+  useEffect(() => {
+    if (!monthFrom || !monthTo) return;
+
+    const nextMonthTo = clampMonthRange(monthFrom, monthTo, currentMonthKey);
+    if (nextMonthTo !== monthTo) {
+      setMonthTo(nextMonthTo);
+    }
+  }, [monthFrom, monthTo, currentMonthKey]);
 
   const filteredMonthlySeries = useMemo(() => {
-    if (!monthlySeries.length) return [{ month: currentMonthKey, interviews: interviewsUsed }];
-    return monthlySeries.filter(
-      (item) => item.month >= (monthFrom || item.month) && item.month <= (monthTo || item.month),
-    );
-  }, [monthlySeries, monthFrom, monthTo, currentMonthKey, interviewsUsed]);
+    const from = monthFrom || addMonths(currentMonthKey, -2);
+    const to = monthTo || currentMonthKey;
+    return buildContinuousMonthlySeries(monthlySeries, from, to);
+  }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
 
   const maxMonthlyUsage = Math.max(
     ...filteredMonthlySeries.map((item) => item.interviews),
@@ -218,8 +289,8 @@ const CandidateCostStatistics = () => {
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLabel}>Plan</span>
-                <span className={styles.overviewValue}>{plan.name || "Free Tier"}</span>
+                <span className={styles.overviewLabel}>{daysUntilExpiry !== null ? "Expires In" : "Plan"}</span>
+                <span className={styles.overviewValue}>{daysUntilExpiry !== null ? `${daysUntilExpiry} days` : (plan.name || "Free Tier")}</span>
               </div>
             </div>
           </div>
@@ -231,7 +302,7 @@ const CandidateCostStatistics = () => {
                 <p className={styles.creditsSubtitle}>
                   {plan.name || "Free Tier"} — {isFreeTier
                     ? "2 one-time free interviews at signup (lifetime)"
-                    : `${interviewsAllowed} practice interviews/month`}
+                    : `${displayedMonthlyPracticeInterviews} practice interviews/month`}
                 </p>
 
                 <div className={styles.creditsNumbers}>
@@ -261,6 +332,14 @@ const CandidateCostStatistics = () => {
                     <strong>{freeCreditsRemaining}</strong>
                   </div>
                 </div>
+
+                {expiresAt && (
+                  <div className={styles.renewalInfo}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Expires on {new Date(expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    {daysUntilExpiry !== null && <span> ({daysUntilExpiry} days left)</span>}
+                  </div>
+                )}
 
                 {isNearLimit && (
                   <div className={styles.upgradePrompt}>
@@ -317,7 +396,7 @@ const CandidateCostStatistics = () => {
                     id="monthFrom"
                     type="month"
                     value={monthFrom}
-                    onChange={(e) => setMonthFrom(e.target.value)}
+                    onChange={(e) => handleMonthFromChange(e.target.value)}
                     max={currentMonthKey}
                   />
                 </div>
@@ -329,7 +408,7 @@ const CandidateCostStatistics = () => {
                     value={monthTo}
                     onChange={(e) => setMonthTo(e.target.value)}
                     min={monthFrom || undefined}
-                    max={currentMonthKey}
+                    max={maxMonthToAllowed || undefined}
                   />
                 </div>
 

@@ -2,6 +2,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "./RecruiterCostStatistics.module.css";
+import {
+  addMonths,
+  buildContinuousMonthlySeries,
+  clampMonthRange,
+  getMaxMonthToAllowed,
+} from "../../utils/monthRange";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -107,12 +113,19 @@ const RecruiterCostStatistics = () => {
   const planName = plan.name || "Free Tier";
   const isUnlimited = interviewsAllowed === -1;
   const isFreeTier = String(planName || "").toLowerCase().includes("free");
+  const planMonthlyInterviews = !isFreeTier
+    ? Math.max(0, Number(plan.plan_interviews_allowed ?? 0))
+    : interviewsAllowed;
+  const displayedMonthlyInterviews =
+    !isFreeTier && planMonthlyInterviews > 0
+      ? planMonthlyInterviews
+      : interviewsAllowed;
   const usagePercentage = isUnlimited ? 0 : (interviewsAllowed > 0 ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100)) : 0);
   const isNearLimit = !isUnlimited && usagePercentage >= 80;
   const expiresAt = plan.expires_at;
 
-  // Calculate days until renewal
-  const daysUntilRenewal = (() => {
+  // Calculate days until expiry
+  const daysUntilExpiry = (() => {
     if (!expiresAt) return null;
     const expDate = new Date(expiresAt);
     const now = new Date();
@@ -123,24 +136,6 @@ const RecruiterCostStatistics = () => {
   // Usage history (source data)
   const usageHistory = safeCostData.usageHistory || [];
   const currentMonthKey = new Date().toISOString().slice(0, 7);
-
-  const monthToIndex = (monthKey) => {
-    const [year, month] = String(monthKey || "").split("-").map(Number);
-    if (!year || !month) return null;
-    return year * 12 + (month - 1);
-  };
-
-  const indexToMonth = (index) => {
-    const year = Math.floor(index / 12);
-    const month = (index % 12) + 1;
-    return `${year}-${String(month).padStart(2, "0")}`;
-  };
-
-  const addMonths = (monthKey, monthsToAdd) => {
-    const base = monthToIndex(monthKey);
-    if (base === null) return monthKey;
-    return indexToMonth(base + monthsToAdd);
-  };
 
   const monthlySeries = useMemo(() => {
     const monthlyMap = new Map();
@@ -173,9 +168,7 @@ const RecruiterCostStatistics = () => {
   }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
 
   const maxMonthToAllowed = useMemo(() => {
-    if (!monthFrom) return currentMonthKey;
-    const cappedByRange = addMonths(monthFrom, 12);
-    return cappedByRange < currentMonthKey ? cappedByRange : currentMonthKey;
+    return getMaxMonthToAllowed(monthFrom, currentMonthKey);
   }, [monthFrom, currentMonthKey]);
 
   const handleMonthFromChange = (nextFrom) => {
@@ -191,23 +184,9 @@ const RecruiterCostStatistics = () => {
   useEffect(() => {
     if (!monthFrom || !monthTo) return;
 
-    const startIdx = monthToIndex(monthFrom);
-    const endIdx = monthToIndex(monthTo);
-    if (startIdx === null || endIdx === null) return;
-
-    if (endIdx < startIdx) {
-      setMonthTo(monthFrom);
-      return;
-    }
-
-    if (endIdx - startIdx > 12) {
-      setMonthTo(addMonths(monthFrom, 12));
-      return;
-    }
-
-    const currentIdx = monthToIndex(currentMonthKey);
-    if (currentIdx !== null && endIdx > currentIdx) {
-      setMonthTo(currentMonthKey);
+    const nextMonthTo = clampMonthRange(monthFrom, monthTo, currentMonthKey);
+    if (nextMonthTo !== monthTo) {
+      setMonthTo(nextMonthTo);
     }
   }, [monthFrom, monthTo, currentMonthKey]);
 
@@ -216,32 +195,7 @@ const RecruiterCostStatistics = () => {
 
     const from = monthFrom || monthlySeries[0].month;
     const to = monthTo || monthlySeries[monthlySeries.length - 1].month;
-    if (from > to) return [];
-
-    const valueMap = new Map(monthlySeries.map((item) => [item.month, item.interviews]));
-    const result = [];
-
-    const [fromYear, fromMonth] = from.split("-").map(Number);
-    const [toYear, toMonth] = to.split("-").map(Number);
-
-    let year = fromYear;
-    let month = fromMonth;
-
-    while (year < toYear || (year === toYear && month <= toMonth)) {
-      const key = `${year}-${String(month).padStart(2, "0")}`;
-      result.push({
-        month: key,
-        interviews: Number(valueMap.get(key) || 0),
-      });
-
-      month += 1;
-      if (month > 12) {
-        month = 1;
-        year += 1;
-      }
-    }
-
-    return result;
+    return buildContinuousMonthlySeries(monthlySeries, from, to);
   }, [monthlySeries, monthFrom, monthTo]);
 
   const maxMonthlyUsage = Math.max(
@@ -344,8 +298,8 @@ const RecruiterCostStatistics = () => {
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLabel}>{daysUntilRenewal !== null ? 'Renewal In' : 'Plan'}</span>
-                <span className={styles.overviewValue}>{daysUntilRenewal !== null ? `${daysUntilRenewal} days` : planName}</span>
+                <span className={styles.overviewLabel}>{daysUntilExpiry !== null ? 'Expires In' : 'Plan'}</span>
+                <span className={styles.overviewValue}>{daysUntilExpiry !== null ? `${daysUntilExpiry} days` : planName}</span>
               </div>
             </div>
           </div>
@@ -360,7 +314,7 @@ const RecruiterCostStatistics = () => {
                     ? 'Unlimited interviews'
                     : isFreeTier
                       ? '2 one-time free interviews at signup (lifetime)'
-                      : `${interviewsAllowed} interviews/month`}
+                      : `${displayedMonthlyInterviews} interviews/month`}
                 </p>
                 
                 <div className={styles.creditsNumbers}>
@@ -396,8 +350,8 @@ const RecruiterCostStatistics = () => {
                 {expiresAt && (
                   <div className={styles.renewalInfo}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    Renews on {new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {daysUntilRenewal !== null && <span> ({daysUntilRenewal} days left)</span>}
+                    Expires on {new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {daysUntilExpiry !== null && <span> ({daysUntilExpiry} days left)</span>}
                   </div>
                 )}
 
