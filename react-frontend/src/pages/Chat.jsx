@@ -216,22 +216,6 @@ export default function Chat({ interviewId }) {
         gazeStartTimeRef.current = Date.now();
         setGazeRecorderStatus('tracking');
 
-        // Set a safety timer: stop gaze tracking gracefully before the 60s demo limit expires.
-        // This prevents the GazeCloudAPI from forcibly showing its recalibration overlay.
-        setTimeout(() => {
-          if (gazeRecorderTrackingRef.current) {
-            console.warn('⚠️ Proactively stopping gaze tracking before demo limit expires.');
-            try {
-              window.GazeRecorderAPI.StopRec();
-              window.GazeCloudAPI.StopEyeTracking();
-            } catch (e) { /* already stopped */ }
-            gazeRecorderTrackingRef.current = false;
-            gazeEndedAtMsRef.current = Date.now();
-            // Keep status as 'tracking' or set to 'failed' — interview continues either way
-            // since the initial greeting useEffect checks for 'tracking' OR 'failed'
-            setGazeRecorderStatus('failed');
-          }
-        }, 55000); // Stop at 55s to be safe before the 60s demo limit
       };
 
       // Handle camera denial / errors from GazeCloudAPI
