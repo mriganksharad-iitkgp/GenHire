@@ -513,7 +513,11 @@ def end_interview(current_user, session_id):
             "final_score": None
         }
 
-    # Get proctoring data from external service
+    session_doc = interviews_collection.find_one(
+        {"session_id": session_id, "user_id": str(current_user["_id"])}
+    )
+
+    # Get proctoring data from external service (GPU / live gaze pipeline)
     proctoring_service_url = os.getenv("PROCTORING_SERVICE_URL", "http://localhost:5001")
     try:
         import requests
@@ -542,14 +546,39 @@ def end_interview(current_user, session_id):
         manual_infractions = []
         gaze_times = None
         gaze_plot_path = None
+
+    # Merge WebGazer / heatmap session analysis (stored at upload) with live proctoring
+    gaze_rec_score = None
+    if session_doc:
+        gaze_rec_score = session_doc.get("gaze_recorder_score")
+    if gaze_rec_score is not None:
+        try:
+            gaze_rec_score = int(gaze_rec_score)
+            proctoring_score = min(int(proctoring_score), gaze_rec_score)
+        except (TypeError, ValueError):
+            pass
+
+    manual_infractions = list(manual_infractions or [])
+    gaze_analysis = (session_doc or {}).get("gaze_recorder_analysis") or {}
+    for region in gaze_analysis.get("suspiciousRegions") or []:
+        sev = region.get("severity")
+        if sev not in ("high", "medium"):
+            continue
+        manual_infractions.append({
+            "type": "webgazer_suspicious_landmark",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "regionId": region.get("id"),
+            "severity": sev,
+            "visits": region.get("visits"),
+            "percentage": region.get("percentage"),
+            "landmarkNormalized": region.get("landmarkNormalized"),
+            "centerNormalized": region.get("centerNormalized"),
+        })
     
     suspicious_activity_time = 0 # Not tracking this explicitly anymore in app.py
 
     # Calculate total interview duration for logging
     interview_duration = 0
-    session_doc = interviews_collection.find_one(
-        {"session_id": session_id, "user_id": str(current_user["_id"])}
-    )
     if session_doc and "created_at" in session_doc:
         start_time = session_doc["created_at"]
         end_time = datetime.datetime.utcnow()
@@ -698,6 +727,8 @@ def upload_gaze_recorder_results(current_user, session_id):
         gaze_points=gaze_points
     )
 
+    provider = (recording_data or {}).get('provider', 'unknown')
+
     interviews_collection.update_one(
         {'session_id': session_id, 'user_id': str(current_user['_id'])},
         {'$set': {
@@ -706,14 +737,13 @@ def upload_gaze_recorder_results(current_user, session_id):
             'gaze_recorder_points_path': file_paths['points_path'],
             'gaze_recorder_analysis': analysis_result,
             'gaze_recorder_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
-            'proctoring_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
-            'proctoring_source': 'gaze_recorder_api',
+            'gaze_tracking_provider': provider,
             'updated_at': datetime.datetime.utcnow()
         }}
     )
 
     return jsonify({
-        'message': 'GazeRecorder results saved successfully',
+        'message': 'Gaze tracking results saved (heatmap / suspicious regions)',
         'analysis': analysis_result
     }), 200
 
