@@ -1675,26 +1675,30 @@ export default function Chat({ interviewId }) {
                     marginBottom: "8px",
                   }}
                 >
-                  Interview Score
+                  Answer Evaluation
                 </div>
                 <div style={{ fontSize: "32px", fontWeight: "bold" }}>
                   {(() => {
                     // Handle different evaluation data structures
                     let score = null;
 
-                    // Try quantitative.average_relevance_score (from interview_system.py)
-                    if (evaluation?.quantitative?.average_relevance_score) {
+                    // Try quantitative_scores.answer_score (new format)
+                    if (evaluation?.quantitative_scores?.answer_score) {
+                      score = evaluation.quantitative_scores.answer_score;
+                    }
+                    // Fallback to average_relevance_score
+                    else if (evaluation?.quantitative?.average_relevance_score) {
                       score = evaluation.quantitative.average_relevance_score;
                     }
-                    // Try quantitative_scores (from session_manager.py)
+                    // Try quantitative_scores (numeric or object fallback)
                     else if (evaluation?.quantitative_scores) {
                       if (typeof evaluation.quantitative_scores === "number") {
                         score = evaluation.quantitative_scores;
                       } else if (
                         typeof evaluation.quantitative_scores === "object"
                       ) {
-                        // If it's an object, try to get average or overall score
                         score =
+                          evaluation.quantitative_scores.answer_score ||
                           evaluation.quantitative_scores.average ||
                           evaluation.quantitative_scores.overall ||
                           Object.values(evaluation.quantitative_scores)[0];
@@ -1710,7 +1714,7 @@ export default function Chat({ interviewId }) {
                       }
                     }
 
-                    return "85%"; // Fallback
+                    return "N/A";
                   })()}
                 </div>
               </div>
@@ -1733,32 +1737,35 @@ export default function Chat({ interviewId }) {
                     marginBottom: "8px",
                   }}
                 >
-                  Communication Score
+                  Language Evaluation
                 </div>
                 <div style={{ fontSize: "32px", fontWeight: "bold" }}>
                   {(() => {
-                    // Extract communication score from evaluation
-                    let commScore = null;
+                    // Extract language score from evaluation
+                    let langScore = null;
 
-                    // Try to get communication score from quantitative_scores
-                    if (evaluation?.quantitative_scores?.communication) {
-                      commScore = evaluation.quantitative_scores.communication;
+                    // Try to get language score from quantitative_scores (new format)
+                    if (evaluation?.quantitative_scores?.language_score) {
+                      langScore = evaluation.quantitative_scores.language_score;
                     }
-                    // Fallback: check if it's stored differently
+                    // Fallback to communication
+                    else if (evaluation?.quantitative_scores?.communication) {
+                      langScore = evaluation.quantitative_scores.communication;
+                    }
                     else if (evaluation?.quantitative?.communication) {
-                      commScore = evaluation.quantitative.communication;
+                      langScore = evaluation.quantitative.communication;
                     }
 
                     // Convert to percentage if score is decimal (0-1 range)
-                    if (commScore !== null) {
-                      if (commScore <= 1) {
-                        return `${Math.round(commScore * 100)}%`;
+                    if (langScore !== null) {
+                      if (langScore <= 1) {
+                        return `${Math.round(langScore * 100)}%`;
                       } else {
-                        return `${Math.round(commScore)}%`;
+                        return `${Math.round(langScore)}%`;
                       }
                     }
 
-                    return "80%"; // Fallback
+                    return "N/A";
                   })()}
                 </div>
               </div>

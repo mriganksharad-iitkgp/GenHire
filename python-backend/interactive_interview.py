@@ -49,41 +49,32 @@ def display_answer_evaluation(evaluation_result):
     print("\n" + "📊" + " " * 3 + "Answer Evaluation" + " " * 3 + "📊")
     print("-" * 40)
 
-    # Overall score with color coding
-    overall_score = evaluation_result.get("overall_score", 0.0)
-    score_percentage = int(overall_score * 100)
+    # Detailed scores
+    if "answer_score" in evaluation_result:
+        ans_score = int(evaluation_result["answer_score"] * 100)
+        
+        # Color coding for answer score
+        if evaluation_result["answer_score"] >= 0.8:
+            ans_emoji = "🌟"
+        elif evaluation_result["answer_score"] >= 0.6:
+            ans_emoji = "✅"
+        else:
+            ans_emoji = "⚡"
+            
+        print(f"{ans_emoji} Answer Evaluation: {ans_score}%")
 
-    # Color coding based on score
-    if overall_score >= 0.8:
-        score_emoji = "🌟"
-        score_label = "Excellent"
-    elif overall_score >= 0.6:
-        score_emoji = "✅"
-        score_label = "Good"
-    elif overall_score >= 0.4:
-        score_emoji = "⚡"
-        score_label = "Satisfactory"
-    elif overall_score >= 0.2:
-        score_emoji = "📈"
-        score_label = "Needs Improvement"
-    else:
-        score_emoji = "🔍"
-        score_label = "Poor"
-
-    print(f"{score_emoji} Overall Score: {score_percentage}% ({score_label})")
-
-    # Detailed scores if available
-    if "relevance_score" in evaluation_result:
-        rel_score = int(evaluation_result["relevance_score"] * 100)
-        print(f"   🎯 Relevance: {rel_score}%")
-
-    if "technical_accuracy_score" in evaluation_result:
-        tech_score = int(evaluation_result["technical_accuracy_score"] * 100)
-        print(f"   🔧 Technical Accuracy: {tech_score}%")
-
-    if "communication_score" in evaluation_result:
-        comm_score = int(evaluation_result["communication_score"] * 100)
-        print(f"   💬 Communication: {comm_score}%")
+    if "language_score" in evaluation_result:
+        lang_score = int(evaluation_result["language_score"] * 100)
+        
+        # Color coding for language score
+        if evaluation_result["language_score"] >= 0.8:
+            lang_emoji = "💬"
+        elif evaluation_result["language_score"] >= 0.6:
+            lang_emoji = "📝"
+        else:
+            lang_emoji = "✍️"
+            
+        print(f"{lang_emoji} Language Evaluation: {lang_score}%")
 
     # Show evaluation method
     eval_method = evaluation_result.get("evaluation_method", "standard")
@@ -100,14 +91,6 @@ def display_answer_evaluation(evaluation_result):
     reasoning = evaluation_result.get("reasoning", "")
     if reasoning and len(reasoning) > 20:  # Only show if meaningful
         print(f"\n💡 Feedback: {reasoning}")
-
-    # Show score breakdown if available (from rubrics system)
-    if "score_breakdown" in evaluation_result:
-        breakdown = evaluation_result["score_breakdown"]
-        print(f"\n📋 Score Breakdown:")
-        for category, score in breakdown.items():
-            if isinstance(score, (int, float)):
-                print(f"   • {category.replace('_', ' ').title()}: {int(score * 100)}%")
 
     # Show cost and usage
     tracker = CostTracker()

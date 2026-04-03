@@ -412,15 +412,10 @@ class InterviewSessionManager:
         evaluations = [item["evaluation"] for item in session.interview_data]
 
         avg_scores = {
-            "relevance": sum(e["relevance_score"] for e in evaluations)
+            "answer_score": sum(e.get("answer_score", e.get("technical_accuracy_score", 0)) for e in evaluations)
             / len(evaluations),
-            "technical_accuracy": sum(
-                e["technical_accuracy_score"] for e in evaluations
-            )
+            "language_score": sum(e.get("language_score", e.get("communication_score", 0)) for e in evaluations)
             / len(evaluations),
-            "communication": sum(e["communication_score"] for e in evaluations)
-            / len(evaluations),
-            "overall": sum(e["overall_score"] for e in evaluations) / len(evaluations),
         }
 
         # Generate qualitative assessment
@@ -429,10 +424,8 @@ class InterviewSessionManager:
         
         Number of questions: {session.questions_asked}
         Average scores:
-        - Relevance: {avg_scores['relevance']:.2f}
-        - Technical Accuracy: {avg_scores['technical_accuracy']:.2f}
-        - Communication: {avg_scores['communication']:.2f}
-        - Overall: {avg_scores['overall']:.2f}
+        - Answer Content: {avg_scores['answer_score']:.2f}
+        - Language Proficiency: {avg_scores['language_score']:.2f}
         
         Interview transcript:
         {session.interview_history}
@@ -491,13 +484,14 @@ class InterviewSessionManager:
         else:
             quality = "poor"
 
-        reasoning = f"Answer evaluated using rubrics-based system. Overall quality: {quality} (score: {normalized_score:.2f})"
+        reasoning = f"Answer evaluated using rubrics-based system. Quality: {quality} (score: {normalized_score:.2f})"
 
         return {
+            "answer_score": normalized_score,
+            "language_score": normalized_score,  # If only one score, use for both
             "relevance_score": normalized_score,
             "technical_accuracy_score": normalized_score,
             "communication_score": normalized_score,
-            "overall_score": normalized_score,
             "reasoning": reasoning,
             "evaluation_method": "rubrics-eval",
         }
@@ -523,17 +517,16 @@ class InterviewSessionManager:
         else:
             communication_normalized = max(0.0, min(1.0, communication_score))
 
-        # Calculate overall score as average of technical and communication
-        overall_score = (technical_normalized + communication_normalized) / 2
-
         # Generate reasoning
-        reasoning = f"Technical: {technical_score:.1f}/100, Communication: {communication_score:.1f}/100, Overall: {overall_score:.2f}"
+        reasoning = f"Answer Score: {technical_score:.1f}/100, Language Score: {communication_score:.1f}/100"
 
         return {
+            "answer_score": technical_normalized,
+            "language_score": communication_normalized,
             "relevance_score": technical_normalized,
             "technical_accuracy_score": technical_normalized,
             "communication_score": communication_normalized,
-            "overall_score": overall_score,
+            "overall_score": technical_normalized, # Use technical score as proxy for overall logic if needed
             "reasoning": reasoning,
             "evaluation_method": "rubrics-eval-with-communication",
         }
@@ -585,13 +578,15 @@ class InterviewSessionManager:
             if keyword in answer_lower:
                 relevance_boost += 0.1
 
-        final_score = min(1.0, score + relevance_boost)
+        final_answer_score = min(1.0, score + relevance_boost)
 
         return {
-            "relevance_score": final_score,
-            "technical_accuracy_score": final_score,
+            "answer_score": final_answer_score,
+            "language_score": score,
+            "relevance_score": final_answer_score,
+            "technical_accuracy_score": final_answer_score,
             "communication_score": score,  # Based on length/structure
-            "overall_score": final_score,
+            "overall_score": final_answer_score,
             "reasoning": f"{reasoning} Relevance check: {relevance_boost:.1f} boost applied.",
             "evaluation_method": "fallback",
         }
