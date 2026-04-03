@@ -292,6 +292,9 @@ def get_candidate_cost_statistics(current_user):
         db = db_config.get_db()
 
         quota = get_candidate_practice_quota(db, candidate_id)
+        subscription = None
+        if quota.get('subscription_id'):
+            subscription = db.subscriptions.find_one({'_id': quota['subscription_id']})
 
         six_months_ago = datetime.utcnow() - timedelta(days=180)
         practice_sessions = list(db.practice_sessions.find({
@@ -362,7 +365,7 @@ def get_candidate_cost_statistics(current_user):
                 'free_interviews_allowed': int(quota.get('free_interviews_allowed', 0) or 0),
                 'free_interviews_used': int(quota.get('free_interviews_used', 0) or 0),
                 'free_interviews_remaining': int(quota.get('free_interviews_remaining', 0) or 0),
-                'expires_at': None,
+                'expires_at': subscription.get('expires_at').strftime('%Y-%m-%d') if subscription and subscription.get('expires_at') else None,
             },
             'monthlyUsage': monthly_usage,
             'recentActivity': recent_activity,
