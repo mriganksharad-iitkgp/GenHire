@@ -12,6 +12,13 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import {
+  getCostStatistics,
+  getCandidateUsageSummary,
+  getCandidateUsageLines,
+  getRecruiterUsageSummary,
+  getRecruiterUsageLines,
+} from '../../services/adminApi';
 
 const formatInrNumber = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatInrCompact = (value) => {
@@ -22,6 +29,12 @@ const formatInrCompact = (value) => {
   if (absAmount >= 100000) return `₹${(amount / 100000).toFixed(2)}L`;
   if (absAmount >= 1000) return `₹${(amount / 1000).toFixed(2)}K`;
   return `₹${amount.toFixed(2)}`;
+};
+
+const truncateTo2Decimals = (value) => {
+  const numericValue = Number(value || 0);
+  const truncatedValue = Math.trunc(numericValue * 100) / 100;
+  return truncatedValue.toFixed(2);
 };
 
 const chartValueLabelPlugin = {
@@ -125,8 +138,6 @@ const chartValueLabelPlugin = {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, chartValueLabelPlugin);
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
-
 const formatDateInput = (date) => {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -169,6 +180,16 @@ const CostStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [costData, setCostData] = useState(null);
+  const [candidateUsageRows, setCandidateUsageRows] = useState([]);
+  const [recruiterUsageRows, setRecruiterUsageRows] = useState([]);
+  const [expandedCandidates, setExpandedCandidates] = useState({});
+  const [expandedRecruiters, setExpandedRecruiters] = useState({});
+  const [candidateUsageLines, setCandidateUsageLines] = useState({});
+  const [recruiterUsageLines, setRecruiterUsageLines] = useState({});
+  const [candidateLineLoading, setCandidateLineLoading] = useState({});
+  const [recruiterLineLoading, setRecruiterLineLoading] = useState({});
+  const [candidateLineError, setCandidateLineError] = useState({});
+  const [recruiterLineError, setRecruiterLineError] = useState({});
 
   const endDate = formatDateInput(todayDate);
 
@@ -178,34 +199,44 @@ const CostStatistics = () => {
       setError(null);
 
       try {
-        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || 'token');
-        if (!token) {
-          setError('Please login to view cost statistics.');
-          setLoading(false);
-          return;
-        }
-
-        const query = new URLSearchParams({
+        const queryParams = {
           start_date: startDate,
           end_date: endDate,
-        });
+        };
 
-        const response = await fetch(`${API_BASE_URL}/api/admin/cost-statistics?${query.toString()}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const [costStatsResult, candidateUsageResult, recruiterUsageResult] = await Promise.allSettled([
+          getCostStatistics(queryParams),
+          getCandidateUsageSummary(queryParams),
+          getRecruiterUsageSummary(queryParams),
+        ]);
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch admin cost statistics.');
+        if (costStatsResult.status !== 'fulfilled') {
+          throw costStatsResult.reason;
         }
 
-        setCostData(data);
+        setCostData(costStatsResult.value);
+        setCandidateUsageRows(candidateUsageResult.status === 'fulfilled' ? (candidateUsageResult.value?.rows || []) : []);
+        setRecruiterUsageRows(recruiterUsageResult.status === 'fulfilled' ? (recruiterUsageResult.value?.rows || []) : []);
+
+        const usageFetchErrors = [];
+        if (candidateUsageResult.status === 'rejected') usageFetchErrors.push('candidate usage');
+        if (recruiterUsageResult.status === 'rejected') usageFetchErrors.push('recruiter usage');
+        if (usageFetchErrors.length > 0) {
+          setError(`Loaded core cost statistics, but ${usageFetchErrors.join(' and ')} data is currently unavailable (backend may need restart/deploy).`);
+        }
+        setExpandedCandidates({});
+        setExpandedRecruiters({});
+        setCandidateUsageLines({});
+        setRecruiterUsageLines({});
+        setCandidateLineLoading({});
+        setRecruiterLineLoading({});
+        setCandidateLineError({});
+        setRecruiterLineError({});
       } catch (fetchError) {
         setError(fetchError.message || 'Failed to fetch admin cost statistics.');
+        setCostData(null);
+        setCandidateUsageRows([]);
+        setRecruiterUsageRows([]);
       } finally {
         setLoading(false);
       }
@@ -404,10 +435,141 @@ const CostStatistics = () => {
     rows.push(['Profitability', 'Net Profit', profitability?.profit_net_inr || 0, '', '', '', '', '']);
     rows.push(['Profitability', 'Net Margin %', profitability?.margin_net_pct || 0, '', '', '', '', '']);
 
+    candidateUsageRows.forEach((row) => {
+      rows.push([
+        'Candidate Usage',
+        row.name || '',
+        row.total_usage_cost_inr || 0,
+        row.enrolled_plan || '',
+        row.total_actions || 0,
+        row.avg_usage_cost_inr || 0,
+        '',
+        'Practice interview + practice evaluation totals in selected timeline',
+      ]);
+    });
+
+    recruiterUsageRows.forEach((row) => {
+      rows.push([
+        'Recruiter Usage',
+        row.name || '',
+        row.total_usage_cost_inr || 0,
+        row.enrolled_plan || '',
+        row.total_actions || 0,
+        row.avg_usage_cost_inr || 0,
+        '',
+        'Real interview + eval + AI JD + CV score totals in selected timeline',
+      ]);
+    });
+
     const safeStart = String(timeline.start_date || startDate).slice(0, 10);
     const safeEnd = String(timeline.end_date || endDate).slice(0, 10);
     downloadCsv(`admin-cost-statistics-${safeStart}-to-${safeEnd}.csv`, rows);
   };
+
+  const toggleCandidateExpand = async (candidateId) => {
+    const nextExpanded = !expandedCandidates[candidateId];
+    setExpandedCandidates((previous) => ({ ...previous, [candidateId]: nextExpanded }));
+    if (!nextExpanded || candidateUsageLines[candidateId] || candidateLineLoading[candidateId]) return;
+
+    try {
+      setCandidateLineLoading((previous) => ({ ...previous, [candidateId]: true }));
+      setCandidateLineError((previous) => ({ ...previous, [candidateId]: null }));
+      const response = await getCandidateUsageLines(candidateId, {
+        start_date: startDate,
+        end_date: endDate,
+      });
+      setCandidateUsageLines((previous) => ({ ...previous, [candidateId]: response }));
+    } catch (lineError) {
+      setCandidateLineError((previous) => ({
+        ...previous,
+        [candidateId]: lineError.message || 'Failed to fetch candidate usage lines.',
+      }));
+    } finally {
+      setCandidateLineLoading((previous) => ({ ...previous, [candidateId]: false }));
+    }
+  };
+
+  const toggleRecruiterExpand = async (recruiterId) => {
+    const nextExpanded = !expandedRecruiters[recruiterId];
+    setExpandedRecruiters((previous) => ({ ...previous, [recruiterId]: nextExpanded }));
+    if (!nextExpanded || recruiterUsageLines[recruiterId] || recruiterLineLoading[recruiterId]) return;
+
+    try {
+      setRecruiterLineLoading((previous) => ({ ...previous, [recruiterId]: true }));
+      setRecruiterLineError((previous) => ({ ...previous, [recruiterId]: null }));
+      const response = await getRecruiterUsageLines(recruiterId, {
+        start_date: startDate,
+        end_date: endDate,
+      });
+      setRecruiterUsageLines((previous) => ({ ...previous, [recruiterId]: response }));
+    } catch (lineError) {
+      setRecruiterLineError((previous) => ({
+        ...previous,
+        [recruiterId]: lineError.message || 'Failed to fetch recruiter usage lines.',
+      }));
+    } finally {
+      setRecruiterLineLoading((previous) => ({ ...previous, [recruiterId]: false }));
+    }
+  };
+
+  const renderUsageCategories = (categories = []) => (
+    <div className={styles.usageLineWrap}>
+      {categories.map((category) => (
+        (() => {
+          const showSpeechColumns = ['ai_interview', 'practice_interview'].includes(category.key);
+          const emptyColSpan = showSpeechColumns ? 9 : 7;
+
+          return (
+        <div key={category.key} className={styles.usageCategoryCard}>
+          <div className={styles.usageCategoryHeader}>
+            <strong>{category.title}</strong>
+            <span>
+              Count: {category.count} | Avg: {formatMoney(category.avg_cost_inr)} | Total: {formatMoney(category.total_cost_inr)}
+            </span>
+          </div>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Source</th>
+                  <th>Model</th>
+                  <th>Prompt Tokens</th>
+                  <th>Completion Tokens</th>
+                  {showSpeechColumns && <th>STT (sec, answer-token derived)</th>}
+                  {showSpeechColumns && <th>TTS (question-token proxy)</th>}
+                  <th>Formula</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(category.lines || []).map((line) => (
+                  <tr key={`${category.key}-${line.id}-${line.timestamp || 'na'}`}>
+                    <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN') : '-'}</td>
+                    <td>{line.source?.label || line.source?.type || '-'}</td>
+                    <td>{line.model || '-'}</td>
+                    <td>{line.prompt_tokens || 0}</td>
+                    <td>{line.completion_tokens || 0}</td>
+                    {showSpeechColumns && <td>{truncateTo2Decimals(line.stt_seconds)}</td>}
+                    {showSpeechColumns && <td>{line.tts_characters || 0}</td>}
+                    <td>{line.formula}</td>
+                    <td>{formatMoney(line.cost_inr)}</td>
+                  </tr>
+                ))}
+                {!category.lines?.length && (
+                  <tr>
+                    <td colSpan={emptyColSpan} className={styles.emptyCell}>No rows found for this category in selected timeline.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+          );
+        })()
+      ))}
+    </div>
+  );
 
   return (
     <AdminLayout activeTab="cost-statistics">
@@ -606,6 +768,146 @@ const CostStatistics = () => {
             </section>
 
             <section className={styles.card}>
+              <h2>Actual Usage by Candidate</h2>
+              <p className={styles.subText}>Per-candidate practice interview usage with count, average, total, and row-level transparency. STT is shown as answer-token-derived seconds, and TTS uses question-token proxy.</p>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Expand</th>
+                      <th>Candidate</th>
+                      <th>Practice Interview Count</th>
+                      <th>Practice Interview Avg</th>
+                      <th>Practice Interview Total</th>
+                      <th>Practice Interview Eval Count</th>
+                      <th>Practice Interview Eval Avg</th>
+                      <th>Practice Interview Eval Total</th>
+                      <th>Total Usage Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidateUsageRows.map((row) => (
+                      <React.Fragment key={row.candidate_id}>
+                        <tr>
+                          <td>
+                            <button
+                              type="button"
+                              className={styles.expandBtn}
+                              onClick={() => toggleCandidateExpand(row.candidate_id)}
+                            >
+                              {expandedCandidates[row.candidate_id] ? 'Hide' : 'Show'}
+                            </button>
+                          </td>
+                          <td>
+                            <div>{row.name}</div>
+                            <small>{row.email}</small>
+                          </td>
+                          <td>{row.practice_interview_count}</td>
+                          <td>{formatMoney(row.practice_interview_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.practice_interview_total_cost_inr)}</td>
+                          <td>{row.practice_interview_evaluation_count}</td>
+                          <td>{formatMoney(row.practice_interview_evaluation_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.practice_interview_evaluation_total_cost_inr)}</td>
+                          <td>{formatMoney(row.total_usage_cost_inr)}</td>
+                        </tr>
+                        {expandedCandidates[row.candidate_id] && (
+                          <tr>
+                            <td colSpan={9} className={styles.expandPanelCell}>
+                              {candidateLineLoading[row.candidate_id] && <div className={styles.inlineStatus}>Loading candidate rows...</div>}
+                              {candidateLineError[row.candidate_id] && <div className={styles.inlineError}>{candidateLineError[row.candidate_id]}</div>}
+                              {!candidateLineLoading[row.candidate_id] && !candidateLineError[row.candidate_id] && renderUsageCategories(candidateUsageLines[row.candidate_id]?.categories || [])}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {!candidateUsageRows.length && (
+                      <tr>
+                        <td colSpan={9} className={styles.emptyCell}>No candidate usage rows for selected timeline.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Actual Usage by Recruiter</h2>
+              <p className={styles.subText}>Per-recruiter real interview, evaluation, CV scoring, and AI JD generation usage with row-level transparency.</p>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Expand</th>
+                      <th>Recruiter</th>
+                      <th>Real Interview Count</th>
+                      <th>Real Interview Avg</th>
+                      <th>Real Interview Total</th>
+                      <th>Real Eval Count</th>
+                      <th>Real Eval Avg</th>
+                      <th>Real Eval Total</th>
+                      <th>AI JD Count</th>
+                      <th>AI JD Avg</th>
+                      <th>AI JD Total</th>
+                      <th>CV Score Count</th>
+                      <th>CV Score Avg</th>
+                      <th>CV Score Total</th>
+                      <th>Total Usage Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recruiterUsageRows.map((row) => (
+                      <React.Fragment key={row.recruiter_id}>
+                        <tr>
+                          <td>
+                            <button
+                              type="button"
+                              className={styles.expandBtn}
+                              onClick={() => toggleRecruiterExpand(row.recruiter_id)}
+                            >
+                              {expandedRecruiters[row.recruiter_id] ? 'Hide' : 'Show'}
+                            </button>
+                          </td>
+                          <td>
+                            <div>{row.name}</div>
+                            <small>{row.email}</small>
+                          </td>
+                          <td>{row.real_interview_count}</td>
+                          <td>{formatMoney(row.real_interview_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.real_interview_total_cost_inr)}</td>
+                          <td>{row.real_interview_evaluation_count}</td>
+                          <td>{formatMoney(row.real_interview_evaluation_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.real_interview_evaluation_total_cost_inr)}</td>
+                          <td>{row.ai_jd_generation_count}</td>
+                          <td>{formatMoney(row.ai_jd_generation_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.ai_jd_generation_total_cost_inr)}</td>
+                          <td>{row.cv_score_count}</td>
+                          <td>{formatMoney(row.cv_score_avg_cost_inr)}</td>
+                          <td>{formatMoney(row.cv_score_total_cost_inr)}</td>
+                          <td>{formatMoney(row.total_usage_cost_inr)}</td>
+                        </tr>
+                        {expandedRecruiters[row.recruiter_id] && (
+                          <tr>
+                            <td colSpan={15} className={styles.expandPanelCell}>
+                              {recruiterLineLoading[row.recruiter_id] && <div className={styles.inlineStatus}>Loading recruiter rows...</div>}
+                              {recruiterLineError[row.recruiter_id] && <div className={styles.inlineError}>{recruiterLineError[row.recruiter_id]}</div>}
+                              {!recruiterLineLoading[row.recruiter_id] && !recruiterLineError[row.recruiter_id] && renderUsageCategories(recruiterUsageLines[row.recruiter_id]?.categories || [])}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {!recruiterUsageRows.length && (
+                      <tr>
+                        <td colSpan={15} className={styles.emptyCell}>No recruiter usage rows for selected timeline.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className={styles.card}>
               <h2>Net Incoming & Profitability</h2>
               <div className={styles.kpiGrid}>
                 <div className={styles.kpiCard}>
@@ -640,6 +942,7 @@ const CostStatistics = () => {
                 </div>
               </div>
             </section>
+
           </>
         )}
       </div>

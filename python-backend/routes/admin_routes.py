@@ -315,3 +315,57 @@ def get_admin_cost_statistics(current_user):
     end_date = request.args.get('end_date')
     result, status = admin_controller.get_cost_statistics(current_user, period, start_date, end_date)
     return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/candidates/usage', methods=['GET'])
+@token_required
+@admin_required
+def get_candidate_usage_summary(current_user):
+    """Get timeline-based usage summary for each candidate."""
+    period = request.args.get('period', 'month')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_candidate_usage_summary(current_user, period, start_date, end_date)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/candidates/<candidate_id>/usage-lines', methods=['GET'])
+@token_required
+@admin_required
+def get_candidate_usage_lines(current_user, candidate_id):
+    """Get timeline-based usage line items for one candidate."""
+    period = request.args.get('period', 'month')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    page = request.args.get('page', 1)
+    limit = request.args.get('limit', 50)
+    search = request.args.get('search', '')
+    result, status = admin_controller.get_candidate_usage_lines(current_user, candidate_id, period, start_date, end_date, page, limit, search)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/recruiters/usage', methods=['GET'])
+@token_required
+@admin_required
+def get_recruiter_usage_summary(current_user):
+    """Get timeline-based usage summary for each recruiter."""
+    period = request.args.get('period', 'month')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_recruiter_usage_summary(current_user, period, start_date, end_date)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/recruiters/<recruiter_id>/usage-lines', methods=['GET'])
+@token_required
+@admin_required
+def get_recruiter_usage_lines(current_user, recruiter_id):
+    """Get timeline-based usage line items for one recruiter."""
+    period = request.args.get('period', 'month')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    page = request.args.get('page', 1)
+    limit = request.args.get('limit', 50)
+    search = request.args.get('search', '')
+    result, status = admin_controller.get_recruiter_usage_lines(current_user, recruiter_id, period, start_date, end_date, page, limit, search)
+    return jsonify(result), status

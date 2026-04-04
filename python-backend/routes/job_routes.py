@@ -79,7 +79,7 @@ def generate_jd_with_ai(current_user):
     if len(prompt_text) > 2000:
         return jsonify({'error': 'Prompt too long. Please keep it under 2000 characters.'}), 400
     
-    result, status_code = job_controller.generate_jd_with_ai(prompt_text)
+    result, status_code = job_controller.generate_jd_with_ai(prompt_text, str(current_user.get('_id')))
     return jsonify(result), status_code
 
 @job_bp.route('/jobs/<job_id>', methods=['GET'])

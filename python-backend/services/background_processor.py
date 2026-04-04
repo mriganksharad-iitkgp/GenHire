@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Callable
 from bson import ObjectId
+from services.usage_telemetry_service import record_usage_event
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ class BackgroundProcessor:
             # Calculate CV score
             cv_score = 75.0  # fallback
             cv_score_breakdown = None
+            scoring_result = {}
             
             cv_text = cv_data.get('cv_text')
             cv_details = cv_data.get('cv_details')
@@ -165,6 +167,11 @@ class BackgroundProcessor:
                 application_status = 'rejected'
                 status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
             
+            usage_data = (scoring_result or {}).get('usage', {}) if isinstance(scoring_result, dict) else {}
+            prompt_tokens = usage_data.get('prompt_tokens')
+            completion_tokens = usage_data.get('completion_tokens')
+            usage_source = usage_data.get('usage_source', 'assumed')
+
             # Update application with results
             update_result = applications_collection.update_one(
                 {'_id': ObjectId(application_id)},
@@ -177,6 +184,13 @@ class BackgroundProcessor:
                         'processing_status': 'completed',
                         'is_visible': True,  # Now visible to users
                         'cv_score_calculated_at': datetime.utcnow(),
+                        'cv_scoring_usage': {
+                            'prompt_tokens': int(prompt_tokens or 0),
+                            'completion_tokens': int(completion_tokens or 0),
+                            'usage_source': usage_source,
+                        },
+                        'prompt_tokens': int(prompt_tokens or 0),
+                        'completion_tokens': int(completion_tokens or 0),
                         'updated_at': datetime.utcnow(),
                         'auto_processed': True
                     }
@@ -200,6 +214,27 @@ class BackgroundProcessor:
                         )
                 
                 logger.info(f"Application {application_id} scored successfully: {cv_score} -> {application_status}")
+
+                record_usage_event(
+                    db_collections,
+                    action_type='cv_scoring',
+                    actor_type='recruiter',
+                    actor_id=str((jd_data.get('job') or {}).get('created_by') or ''),
+                    model='gemini-1.5-flash-latest',
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    usage_source='actual' if usage_source == 'actual' else 'assumed',
+                    occurred_at=datetime.utcnow(),
+                    source={
+                        'type': 'application',
+                        'id': application_id,
+                        'label': (jd_data.get('job') or {}).get('title') or 'Application CV Scoring',
+                    },
+                    metadata={
+                        'job_id': jd_data.get('job_id'),
+                        'cv_score': cv_score,
+                    }
+                )
             else:
                 logger.warning(f"Application {application_id} not found or not updated")
                 

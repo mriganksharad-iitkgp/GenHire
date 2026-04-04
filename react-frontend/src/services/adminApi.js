@@ -149,6 +149,61 @@ export const deleteCandidateCV = (candidateId) =>
 // System Stats
 export const getSystemStats = () => request("/admin/system/stats");
 
+// Cost Statistics (detailed usage transparency)
+export const getCostStatistics = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(`/admin/cost-statistics?${query.toString()}`);
+};
+
+export const getCandidateUsageSummary = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(`/admin/cost-statistics/candidates/usage?${query.toString()}`);
+};
+
+export const getCandidateUsageLines = (candidateId, params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/candidates/${candidateId}/usage-lines?${query.toString()}`,
+  );
+};
+
+export const getRecruiterUsageSummary = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(`/admin/cost-statistics/recruiters/usage?${query.toString()}`);
+};
+
+export const getRecruiterUsageLines = (recruiterId, params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/recruiters/${recruiterId}/usage-lines?${query.toString()}`,
+  );
+};
+
 // Permissions
 export const getAvailablePermissions = () => request("/admin/permissions");
 

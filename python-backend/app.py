@@ -50,6 +50,7 @@ from services.interview_quota_service import (
     get_recruiter_interview_quota,
     consume_interview_credit,
 )
+from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
@@ -558,6 +559,14 @@ def end_interview(current_user, session_id):
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
 
+    # Derive actual media usage from the transcript/session timing
+    tts_characters = sum(
+        len((item.get('text') or '').strip())
+        for item in interview_transcript
+        if item.get('role') == 'assistant'
+    )
+    stt_seconds = max(0.0, float(interview_duration or 0.0))
+
     # --- NEW: Generate and save the gaze plot ---
     gaze_plot_path = None
     # Gaze plot generation is now handled by the external service
@@ -605,6 +614,9 @@ def end_interview(current_user, session_id):
                     "$set": {
                         "interview_score": interview_score,  # Store interview performance score
                         "proctoring_score": proctoring_score,  # Store proctoring behavior score
+                        "stt_seconds": stt_seconds,
+                        "tts_characters": int(tts_characters or 0),
+                        "usage_source": "actual",
                         "status": "interviewed",
                         "updated_at": datetime.datetime.utcnow(),
                     }
@@ -628,6 +640,47 @@ def end_interview(current_user, session_id):
             
             if result.modified_count == 0:
                 print(f"❌ Warning: Application {application_id} was not updated (no documents modified)")
+
+            recruiter_actor_id = str(existing_app.get('recruiter_id') or '')
+
+            record_usage_event(
+                collections,
+                action_type='ai_interview',
+                actor_type='recruiter',
+                actor_id=recruiter_actor_id,
+                model='gpt-4o',
+                stt_seconds=stt_seconds,
+                tts_characters=int(tts_characters or 0),
+                usage_source='actual',
+                source={
+                    'type': 'application',
+                    'id': str(application_id),
+                    'label': existing_app.get('job_title') or 'Interview',
+                },
+                occurred_at=datetime.datetime.utcnow(),
+                metadata={
+                    'session_id': session_id,
+                    'proctoring_score': proctoring_score,
+                }
+            )
+
+            record_usage_event(
+                collections,
+                action_type='ai_interview_evaluation',
+                actor_type='recruiter',
+                actor_id=recruiter_actor_id,
+                model='gpt-5-mini',
+                usage_source='assumed',
+                source={
+                    'type': 'application',
+                    'id': str(application_id),
+                    'label': existing_app.get('job_title') or 'Interview Evaluation',
+                },
+                occurred_at=datetime.datetime.utcnow(),
+                metadata={
+                    'session_id': session_id,
+                }
+            )
                 
         except Exception as e:
             print(f"❌ Error updating application: {e}")

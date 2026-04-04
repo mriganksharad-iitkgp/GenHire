@@ -12,6 +12,7 @@ from services.candidate_practice_quota_service import (
     get_candidate_practice_quota,
     consume_candidate_practice_credit,
 )
+from services.usage_telemetry_service import record_usage_event
 
 logger = logging.getLogger(__name__)
 
@@ -538,6 +539,18 @@ class PracticeController:
                     })
             
             logger.info(f"Built transcript with {len(transcript)} messages from interview_data")
+
+            created_at = session.get('created_at')
+            completed_at = datetime.utcnow()
+            stt_seconds = 0.0
+            if isinstance(created_at, datetime):
+                stt_seconds = max(0.0, (completed_at - created_at).total_seconds())
+
+            tts_characters = sum(
+                len(((item.get('text') or item.get('content') or '')).strip())
+                for item in transcript
+                if item.get('role') == 'assistant'
+            )
             
             # Calculate interview score from evaluation (same logic as real interviews)
             interview_score = 85  # Default score
@@ -576,15 +589,51 @@ class PracticeController:
                     '$set': {
                         'status': 'completed',
                         'updated_at': datetime.utcnow(),
-                        'completed_at': datetime.utcnow(),
+                        'completed_at': completed_at,
                         'evaluation': final_evaluation,
                         'interview_score': interview_score,
                         'proctoring_score': proctoring_score,
+                        'stt_seconds': stt_seconds,
+                        'tts_characters': int(tts_characters or 0),
+                        'usage_source': 'actual',
                         'final_score': interview_score,  # Overall performance
                         'transcript': transcript  # Store properly formatted transcript
                     }
                 }
             )
+
+            record_usage_event(
+                self.collections,
+                action_type='practice_interview',
+                actor_type='candidate',
+                actor_id=user_id,
+                model='gpt-4o',
+                stt_seconds=stt_seconds,
+                tts_characters=int(tts_characters or 0),
+                usage_source='actual',
+                source={
+                    'type': 'practice_session',
+                    'id': session_id,
+                    'label': session.get('role') or 'Practice Interview',
+                },
+                occurred_at=completed_at,
+            )
+
+            if final_evaluation:
+                record_usage_event(
+                    self.collections,
+                    action_type='practice_interview_evaluation',
+                    actor_type='candidate',
+                    actor_id=user_id,
+                    model='gpt-5-mini',
+                    usage_source='assumed',
+                    source={
+                        'type': 'practice_session',
+                        'id': session_id,
+                        'label': session.get('role') or 'Practice Evaluation',
+                    },
+                    occurred_at=completed_at,
+                )
             
             logger.info(f"Practice interview {session_id} completed - CV: {cv_score}, Interview: {interview_score}%, Transcript messages: {len(transcript)}")
             
