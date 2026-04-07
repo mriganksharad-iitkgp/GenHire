@@ -25,7 +25,9 @@ const RecruiterCostStatistics = () => {
       setError(null);
 
       try {
-        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "token");
+        const token = localStorage.getItem(
+          process.env.REACT_APP_TOKEN_KEY || "token",
+        );
         if (!token) {
           setError("Please login to view your usage dashboard");
           setLoading(false);
@@ -112,7 +114,9 @@ const RecruiterCostStatistics = () => {
   const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
   const planName = plan.name || "Free Tier";
   const isUnlimited = interviewsAllowed === -1;
-  const isFreeTier = String(planName || "").toLowerCase().includes("free");
+  const isFreeTier = String(planName || "")
+    .toLowerCase()
+    .includes("free");
   const planMonthlyInterviews = !isFreeTier
     ? Math.max(0, Number(plan.plan_interviews_allowed ?? 0))
     : interviewsAllowed;
@@ -120,7 +124,11 @@ const RecruiterCostStatistics = () => {
     !isFreeTier && planMonthlyInterviews > 0
       ? planMonthlyInterviews
       : interviewsAllowed;
-  const usagePercentage = isUnlimited ? 0 : (interviewsAllowed > 0 ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100)) : 0);
+  const usagePercentage = isUnlimited
+    ? 0
+    : interviewsAllowed > 0
+      ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100))
+      : 0;
   const isNearLimit = !isUnlimited && usagePercentage >= 80;
   const expiresAt = plan.expires_at;
 
@@ -161,7 +169,10 @@ const RecruiterCostStatistics = () => {
     if (!monthlySeries.length) return;
 
     const firstMonth = monthlySeries[0].month;
-    const defaultTo = addMonths(firstMonth, 2) < currentMonthKey ? addMonths(firstMonth, 2) : currentMonthKey;
+    const defaultTo =
+      addMonths(firstMonth, 2) < currentMonthKey
+        ? addMonths(firstMonth, 2)
+        : currentMonthKey;
 
     if (!monthFrom) setMonthFrom(firstMonth);
     if (!monthTo) setMonthTo(defaultTo);
@@ -215,7 +226,10 @@ const RecruiterCostStatistics = () => {
   const formatMonthLabel = (monthKey) => {
     const [year, month] = monthKey.split("-").map(Number);
     const date = new Date(year, month - 1, 1);
-    return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    });
   };
 
   if (loading) {
@@ -247,7 +261,9 @@ const RecruiterCostStatistics = () => {
 
   // Interview usage ring
   const circumference = 2 * Math.PI * 54;
-  const ringOffset = isUnlimited ? 0 : circumference - (usagePercentage / 100) * circumference;
+  const ringOffset = isUnlimited
+    ? 0
+    : circumference - (usagePercentage / 100) * circumference;
 
   return (
     <>
@@ -259,7 +275,8 @@ const RecruiterCostStatistics = () => {
             <div className={styles.headerContent}>
               <h1>Usage Dashboard</h1>
               <p>
-                Welcome, {costData.recruiter?.name || "Recruiter"} — {planName} Plan
+                Welcome, {costData.recruiter?.name || "Recruiter"} — {planName}{" "}
+                Plan
               </p>
             </div>
           </div>
@@ -267,39 +284,115 @@ const RecruiterCostStatistics = () => {
           {/* Overview Cards */}
           <div className={styles.overviewCards}>
             <div className={styles.overviewCard}>
-              <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <div
+                className={styles.overviewIcon}
+                style={{
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                }}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
               </div>
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>Active Jobs</span>
-                <span className={styles.overviewValue}>{costData.summary?.activeJobs || 0}</span>
+                <span className={styles.overviewValue}>
+                  {costData.summary?.activeJobs || 0}
+                </span>
               </div>
             </div>
             <div className={styles.overviewCard}>
-              <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div
+                className={styles.overviewIcon}
+                style={{
+                  background: "linear-gradient(135deg, #10b981, #34d399)",
+                }}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
               </div>
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>Total Applicants</span>
-                <span className={styles.overviewValue}>{costData.summary?.totalApplicants || 0}</span>
+                <span className={styles.overviewValue}>
+                  {costData.summary?.totalApplicants || 0}
+                </span>
               </div>
             </div>
             <div className={styles.overviewCard}>
-              <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #f59e0b, #fbbf24)' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <div
+                className={styles.overviewIcon}
+                style={{
+                  background: "linear-gradient(135deg, #f59e0b, #fbbf24)",
+                }}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
               </div>
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLabel}>Interviews (Last Month)</span>
-                <span className={styles.overviewValue}>{costData.summary?.totalInterviews || 0}</span>
+                <span className={styles.overviewLabel}>
+                  Interviews (Last Month)
+                </span>
+                <span className={styles.overviewValue}>
+                  {costData.summary?.totalInterviews || 0}
+                </span>
               </div>
             </div>
             <div className={styles.overviewCard}>
-              <div className={styles.overviewIcon} style={{ background: 'linear-gradient(135deg, #8b5cf6, #a78bfa)' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div
+                className={styles.overviewIcon}
+                style={{
+                  background: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+                }}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
               </div>
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLabel}>{daysUntilExpiry !== null ? 'Expires In' : 'Plan'}</span>
-                <span className={styles.overviewValue}>{daysUntilExpiry !== null ? `${daysUntilExpiry} days` : planName}</span>
+                <span className={styles.overviewLabel}>
+                  {daysUntilExpiry !== null ? "Expires In" : "Plan"}
+                </span>
+                <span className={styles.overviewValue}>
+                  {daysUntilExpiry !== null
+                    ? `${daysUntilExpiry} days`
+                    : planName}
+                </span>
               </div>
             </div>
           </div>
@@ -310,26 +403,33 @@ const RecruiterCostStatistics = () => {
               <div className={styles.creditsLeft}>
                 <h2>Interview Credits</h2>
                 <p className={styles.creditsSubtitle}>
-                  {planName} — {isUnlimited
-                    ? 'Unlimited interviews'
+                  {planName} —{" "}
+                  {isUnlimited
+                    ? "Unlimited interviews"
                     : isFreeTier
-                      ? '2 one-time free interviews at signup (lifetime)'
+                      ? "2 one-time free interviews at signup (lifetime)"
                       : `${displayedMonthlyInterviews} interviews/month`}
                 </p>
-                
+
                 <div className={styles.creditsNumbers}>
                   <div className={styles.creditsStat}>
-                    <span className={styles.creditsStatValue}>{interviewsUsed}</span>
+                    <span className={styles.creditsStatValue}>
+                      {interviewsUsed}
+                    </span>
                     <span className={styles.creditsStatLabel}>Used</span>
                   </div>
                   <div className={styles.creditsDivider}></div>
                   <div className={styles.creditsStat}>
-                    <span className={styles.creditsStatValue}>{isUnlimited ? '∞' : interviewsRemaining}</span>
+                    <span className={styles.creditsStatValue}>
+                      {isUnlimited ? "∞" : interviewsRemaining}
+                    </span>
                     <span className={styles.creditsStatLabel}>Remaining</span>
                   </div>
                   <div className={styles.creditsDivider}></div>
                   <div className={styles.creditsStat}>
-                    <span className={styles.creditsStatValue}>{isUnlimited ? '∞' : interviewsAllowed}</span>
+                    <span className={styles.creditsStatValue}>
+                      {isUnlimited ? "∞" : interviewsAllowed}
+                    </span>
                     <span className={styles.creditsStatLabel}>Total</span>
                   </div>
                 </div>
@@ -349,9 +449,26 @@ const RecruiterCostStatistics = () => {
 
                 {expiresAt && (
                   <div className={styles.renewalInfo}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    Expires on {new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {daysUntilExpiry !== null && <span> ({daysUntilExpiry} days left)</span>}
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    Expires on{" "}
+                    {new Date(expiresAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {daysUntilExpiry !== null && (
+                      <span> ({daysUntilExpiry} days left)</span>
+                    )}
                   </div>
                 )}
 
@@ -360,7 +477,11 @@ const RecruiterCostStatistics = () => {
                     <div className={styles.upgradeText}>
                       <strong>Running low on interview credits!</strong>
                       <p>
-                        You've used {usagePercentage}% of {isFreeTier ? 'your lifetime free interviews' : 'your monthly interviews'}. Upgrade to get more.
+                        You've used {usagePercentage}% of{" "}
+                        {isFreeTier
+                          ? "your lifetime free interviews"
+                          : "your monthly interviews"}
+                        . Upgrade to get more.
                       </p>
                     </div>
                     <button
@@ -376,17 +497,33 @@ const RecruiterCostStatistics = () => {
               <div className={styles.creditsRight}>
                 <div className={styles.ringContainer}>
                   <svg className={styles.ringChart} viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="12" />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="54"
+                      fill="none"
+                      stroke="#e2e8f0"
+                      strokeWidth="12"
+                    />
                     {!isUnlimited && (
                       <circle
-                        cx="60" cy="60" r="54" fill="none"
-                        stroke={usagePercentage >= 90 ? '#ef4444' : usagePercentage >= 70 ? '#f59e0b' : '#6366f1'}
+                        cx="60"
+                        cy="60"
+                        r="54"
+                        fill="none"
+                        stroke={
+                          usagePercentage >= 90
+                            ? "#ef4444"
+                            : usagePercentage >= 70
+                              ? "#f59e0b"
+                              : "#6366f1"
+                        }
                         strokeWidth="12"
                         strokeLinecap="round"
                         strokeDasharray={circumference}
                         strokeDashoffset={ringOffset}
                         transform="rotate(-90 60 60)"
-                        style={{ transition: 'stroke-dashoffset 1s ease' }}
+                        style={{ transition: "stroke-dashoffset 1s ease" }}
                       />
                     )}
                   </svg>
@@ -398,13 +535,100 @@ const RecruiterCostStatistics = () => {
                       </>
                     ) : (
                       <>
-                        <span className={styles.ringValue}>{interviewsRemaining}</span>
+                        <span className={styles.ringValue}>
+                          {interviewsRemaining}
+                        </span>
                         <span className={styles.ringLabel}>remaining</span>
                       </>
                     )}
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Recent Activity Table */}
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Recent Hiring Activities</h2>
+              <p>
+                Detailed breakdown of your recent activity and associated credit
+                costs
+              </p>
+            </div>
+            <div className={styles.activityTableSection}>
+              {costData.recentActivity && costData.recentActivity.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Action</th>
+                      <th>Job</th>
+                      <th>Service</th>
+                      <th>Credits Used</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costData.recentActivity.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className={styles.activityTimestamp}>
+                          {activity.timestamp}
+                        </td>
+                        <td className={styles.activityAction}>
+                          {activity.action}
+                        </td>
+                        <td className={styles.activityRole}>{activity.job}</td>
+                        <td>
+                          <span
+                            style={{
+                              background:
+                                activity.service === "cloudflare"
+                                  ? "#dbeafe"
+                                  : activity.service === "nlp"
+                                    ? "#dcfce7"
+                                    : activity.service === "llm"
+                                      ? "#fef3c7"
+                                      : "#f1f5f9",
+                              color:
+                                activity.service === "cloudflare"
+                                  ? "#1e40af"
+                                  : activity.service === "nlp"
+                                    ? "#166534"
+                                    : activity.service === "llm"
+                                      ? "#92400e"
+                                      : "#475569",
+                              padding: "0.35rem 0.65rem",
+                              borderRadius: "8px",
+                              fontSize: "0.75rem",
+                              fontWeight: "600",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {activity.service}
+                          </span>
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.credits || 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className={styles.emptyState}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                  </svg>
+                  <p>
+                    No recent activities yet. Start hiring to see your usage!
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -464,7 +688,9 @@ const RecruiterCostStatistics = () => {
                           style={{ height: `${Math.max(barHeight, 4)}%` }}
                         ></div>
                       </div>
-                      <div className={styles.barLabel}>{formatMonthLabel(item.month)}</div>
+                      <div className={styles.barLabel}>
+                        {formatMonthLabel(item.month)}
+                      </div>
                     </div>
                   );
                 })}
@@ -477,25 +703,45 @@ const RecruiterCostStatistics = () => {
             <div className={styles.planInfoCard}>
               <div className={styles.planInfoLeft}>
                 <div className={styles.planBadge}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
                   Current Plan: {planName}
                 </div>
                 <p className={styles.planDescription}>
-                  {planName === 'Free Tier'
-                    ? 'Get started with 2 one-time free interviews at signup. Upgrade to unlock monthly interview credits and advanced features.'
-                    : planName.includes('Pro')
-                      ? 'You have 100 interviews per month with advanced analytics and priority support.'
-                        : planName.includes('Max')
-                        ? 'You have 300 interviews per month with custom integrations and advanced support.'
-                        : 'Manage your subscription to get the most out of GenHire.'}
+                  {planName === "Free Tier"
+                    ? "Get started with 2 one-time free interviews at signup. Upgrade to unlock monthly interview credits and advanced features."
+                    : planName.includes("Pro")
+                      ? "You have 100 interviews per month with advanced analytics and priority support."
+                      : planName.includes("Max")
+                        ? "You have 300 interviews per month with custom integrations and advanced support."
+                        : "Manage your subscription to get the most out of GenHire."}
                 </p>
               </div>
               <button
                 className={styles.managePlanBtn}
                 onClick={() => navigate("/subscription")}
               >
-                {planName === 'Free Tier' || planName.includes('Pro') ? 'Upgrade Plan' : 'Manage Plan'}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                {planName === "Free Tier" || planName.includes("Pro")
+                  ? "Upgrade Plan"
+                  : "Manage Plan"}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
               </button>
             </div>
           </div>

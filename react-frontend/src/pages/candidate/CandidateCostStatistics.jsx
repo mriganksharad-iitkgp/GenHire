@@ -587,6 +587,80 @@ const CandidateCostStatistics = () => {
           </div>
 
           <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Recent Practice Sessions</h2>
+              <p>Detailed breakdown of your recent practice interview costs</p>
+            </div>
+            <div className={styles.activityTableSection}>
+              {safeData.recentActivity && safeData.recentActivity.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Credits Used</th>
+                      <th>Cost (USD)</th>
+                      <th>Converted Credits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {safeData.recentActivity.map((activity) => {
+                      const CREDIT_PER_USD = 1000;
+                      const creditsFromCost = Math.round(
+                        (activity.usage_cost_usd || 0) * CREDIT_PER_USD,
+                      );
+                      return (
+                        <tr key={activity.id}>
+                          <td className={styles.activityTimestamp}>
+                            {activity.timestamp}
+                          </td>
+                          <td className={styles.activityRole}>
+                            {activity.role || "General"}
+                          </td>
+                          <td>
+                            <span
+                              className={`${
+                                styles.activityStatus
+                              } ${styles[activity.status || "pending"]}`}
+                            >
+                              {activity.status || "Pending"}
+                            </span>
+                          </td>
+                          <td className={styles.creditCost}>
+                            {activity.credits_deducted || 0}
+                          </td>
+                          <td className={styles.usdCost}>
+                            ${(activity.usage_cost_usd || 0).toFixed(4)}
+                          </td>
+                          <td className={styles.creditCost}>
+                            {creditsFromCost}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className={styles.emptyState}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                  </svg>
+                  <p>
+                    No practice sessions yet. Start practicing to see your
+                    usage!
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.section}>
             <div className={styles.planInfoCard}>
               <div className={styles.planInfoLeft}>
                 <div className={styles.planBadge}>
