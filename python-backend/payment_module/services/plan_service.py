@@ -43,6 +43,8 @@ class PlanService:
         self._seed_default_plans()
         self._ensure_default_plans_exist()
         self._backfill_plan_audience()
+        self._remove_plan_usage_fields()
+        self._migrate_legacy_candidate_plans()
         self._migrate_legacy_enterprise_to_recruiter_max()
 
     def _ensure_indexes(self):
@@ -132,6 +134,101 @@ class PlanService:
                 )
         except Exception as e:
             logger.error(f"Error backfilling plan audience: {str(e)}")
+
+    def _migrate_legacy_candidate_plans(self):
+        """Normalize legacy candidate plans to the current credit-based defaults."""
+        try:
+            now = datetime.utcnow()
+            candidate_defaults = {
+                "candidate-free": {
+                    "name": "Free Tier",
+                    "description": "Free plan with 1,500 practice credits per month",
+                    "credits_allocated": 1500,
+                    "price_paise": 0,
+                    "features": [
+                        "1,500 Practice Credits/month",
+                        "Smart practice feedback",
+                        "Basic interview analytics",
+                    ],
+                    "is_popular": False,
+                    "display_order": 1,
+                },
+                "candidate-pro": {
+                    "name": "Candidate Pro",
+                    "description": "30,000 practice credits per month for active preparation",
+                    "credits_allocated": 30000,
+                    "price_paise": 99900,
+                    "features": [
+                        "30,000 Practice Credits/month",
+                        "Detailed interview scoring",
+                        "Priority report generation",
+                    ],
+                    "is_popular": True,
+                    "display_order": 2,
+                },
+                "candidate-max": {
+                    "name": "Candidate Max",
+                    "description": "70,000 practice credits per month for intensive preparation",
+                    "credits_allocated": 70000,
+                    "price_paise": 149900,
+                    "features": [
+                        "70,000 Practice Credits/month",
+                        "Advanced analytics dashboard",
+                        "Priority support",
+                    ],
+                    "is_popular": False,
+                    "display_order": 3,
+                },
+            }
+
+            for slug, defaults in candidate_defaults.items():
+                result = self.collection.update_one(
+                    {"slug": slug, "audience": "candidate"},
+                    {
+                        "$set": {
+                            "name": defaults["name"],
+                            "description": defaults["description"],
+                            "price_paise": defaults["price_paise"],
+                            "credits_allocated": defaults["credits_allocated"],
+                            "interviews_allowed": defaults["credits_allocated"],
+                            "validity_days": 30,
+                            "features": defaults["features"],
+                            "is_popular": defaults["is_popular"],
+                            "display_order": defaults["display_order"],
+                            "updated_at": now,
+                        }
+                    },
+                )
+
+                if result.modified_count:
+                    logger.info(f"Normalized candidate plan defaults for {slug}")
+        except Exception as e:
+            logger.error(f"Error normalizing candidate plans: {str(e)}")
+
+    def _remove_plan_usage_fields(self):
+        """Remove runtime usage fields from plan templates; these belong to subscriptions."""
+        try:
+            result = self.collection.update_many(
+                {
+                    "$or": [
+                        {"credits_remaining": {"$exists": True}},
+                        {"credits_used": {"$exists": True}},
+                    ]
+                },
+                {
+                    "$unset": {
+                        "credits_remaining": "",
+                        "credits_used": "",
+                    },
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+            )
+            if result.modified_count:
+                logger.info(
+                    f"Removed runtime usage fields from {result.modified_count} plan template(s)"
+                )
+        except Exception as e:
+            logger.error(f"Error removing plan usage fields: {str(e)}")
 
     def _migrate_legacy_enterprise_to_recruiter_max(self):
         """Remove legacy recruiter enterprise plans and enforce recruiter-max defaults."""

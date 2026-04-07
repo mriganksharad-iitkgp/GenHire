@@ -145,9 +145,6 @@ class Subscription:
                 if isinstance(self.status, SubscriptionStatus)
                 else self.status
             ),
-            "interviews_allowed": self.interviews_allowed,
-            "interviews_remaining": self.interviews_remaining,
-            "interviews_used": self.interviews_used,
             "credits_allocated": self.interviews_allowed,
             "credits_remaining": self.interviews_remaining,
             "credits_used": self.interviews_used,

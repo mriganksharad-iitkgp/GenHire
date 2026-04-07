@@ -63,16 +63,6 @@ class Plan:
         """Legacy alias kept for compatibility."""
         return self.credits_allocated
 
-    @property
-    def credits_remaining(self) -> int:
-        """Plan templates do not track remaining credits; mirror allocation for display."""
-        return self.credits_allocated
-
-    @property
-    def credits_used(self) -> int:
-        """Plan templates do not track used credits."""
-        return 0
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage"""
         data = {
@@ -81,8 +71,6 @@ class Plan:
             "description": self.description,
             "price_paise": self.price_paise,
             "credits_allocated": self.credits_allocated,
-            "credits_remaining": self.credits_remaining,
-            "credits_used": self.credits_used,
             "interviews_allowed": self.interviews_allowed,
             "validity_days": self.validity_days,
             "features": self.features,
@@ -108,8 +96,6 @@ class Plan:
             "price_paise": self.price_paise,
             "currency": "INR",
             "credits_allocated": self.credits_allocated,
-            "credits_remaining": self.credits_remaining,
-            "credits_used": self.credits_used,
             "interviews_allowed": self.interviews_allowed,
             "is_unlimited": self.is_unlimited,
             "validity_days": self.validity_days,

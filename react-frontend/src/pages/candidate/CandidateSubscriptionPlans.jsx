@@ -143,17 +143,6 @@ const CandidateSubscriptionPlans = () => {
           String(plan?.slug || "").startsWith("candidate-"),
       );
 
-      normalizedPlans = normalizedPlans.map((plan) => {
-        const slug = String(plan?.slug || "").toLowerCase();
-        if (slug === "candidate-free") {
-          return {
-            ...plan,
-            description: "1,500 practice credits per month",
-          };
-        }
-        return plan;
-      });
-
       if (!normalizedPlans || normalizedPlans.length === 0) {
         normalizedPlans = [];
         setError("No candidate subscription plans available right now.");
