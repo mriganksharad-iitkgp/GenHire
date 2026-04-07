@@ -62,6 +62,10 @@ class Subscription:
     interviews_allowed: int = 0
     interviews_remaining: int = 0
     interviews_used: int = 0
+    credits_allocated: int = 0
+    credits_remaining: int = 0
+    credits_used: int = 0
+    usage_cost_total_usd: float = 0.0
     started_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     payment_id: Optional[ObjectId] = None
@@ -90,6 +94,8 @@ class Subscription:
         """Check if employer can conduct another interview"""
         if not self.is_active:
             return False
+        if self.credits_remaining > 0:
+            return True
         if self.is_unlimited:
             return True
         return self.interviews_remaining > 0
@@ -108,6 +114,10 @@ class Subscription:
             "interviews_allowed": self.interviews_allowed,
             "interviews_remaining": self.interviews_remaining,
             "interviews_used": self.interviews_used,
+            "credits_allocated": self.credits_allocated,
+            "credits_remaining": self.credits_remaining,
+            "credits_used": self.credits_used,
+            "usage_cost_total_usd": self.usage_cost_total_usd,
             "started_at": self.started_at,
             "expires_at": self.expires_at,
             "payment_id": self.payment_id,
@@ -133,6 +143,10 @@ class Subscription:
                 "slug": self.plan_snapshot.get("slug"),
                 "price": price_in_smallest / 100,
                 "currency": "INR",
+                "monthly_credits": int(
+                    self.plan_snapshot.get("monthly_credits", self.credits_allocated)
+                    or 0
+                ),
             },
             "status": (
                 self.status.value
@@ -142,6 +156,10 @@ class Subscription:
             "interviews_allowed": self.interviews_allowed,
             "interviews_remaining": self.interviews_remaining,
             "interviews_used": self.interviews_used,
+            "credits_allocated": self.credits_allocated,
+            "credits_remaining": self.credits_remaining,
+            "credits_used": self.credits_used,
+            "usage_cost_total_usd": round(float(self.usage_cost_total_usd or 0.0), 6),
             "is_unlimited": self.is_unlimited,
             "is_active": self.is_active,
             "can_use_interview": self.can_use_interview,
@@ -165,6 +183,14 @@ class Subscription:
             interviews_allowed=data.get("interviews_allowed", 0),
             interviews_remaining=data.get("interviews_remaining", 0),
             interviews_used=data.get("interviews_used", 0),
+            credits_allocated=data.get(
+                "credits_allocated", data.get("interviews_allowed", 0)
+            ),
+            credits_remaining=data.get(
+                "credits_remaining", data.get("interviews_remaining", 0)
+            ),
+            credits_used=data.get("credits_used", 0),
+            usage_cost_total_usd=float(data.get("usage_cost_total_usd", 0.0) or 0.0),
             started_at=data.get("started_at"),
             expires_at=data.get("expires_at"),
             payment_id=data.get("payment_id"),

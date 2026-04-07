@@ -43,6 +43,7 @@ class PlanService:
         self._seed_default_plans()
         self._ensure_default_plans_exist()
         self._backfill_plan_audience()
+        self._backfill_plan_monthly_credits()
         self._migrate_legacy_enterprise_to_recruiter_max()
 
     def _ensure_indexes(self):
@@ -74,6 +75,7 @@ class PlanService:
                     description=plan_data["description"],
                     price_paise=plan_data["price_paise"],
                     interviews_allowed=plan_data["interviews_allowed"],
+                    monthly_credits=plan_data["monthly_credits"],
                     validity_days=plan_data["validity_days"],
                     features=plan_data["features"],
                     is_active=plan_data["is_active"],
@@ -102,6 +104,7 @@ class PlanService:
                     description=plan_data["description"],
                     price_paise=plan_data["price_paise"],
                     interviews_allowed=plan_data["interviews_allowed"],
+                    monthly_credits=plan_data["monthly_credits"],
                     validity_days=plan_data["validity_days"],
                     features=plan_data["features"],
                     audience=plan_data.get("audience", "recruiter"),
@@ -123,7 +126,9 @@ class PlanService:
                 {"$set": {"audience": "recruiter", "updated_at": datetime.utcnow()}},
             )
             if result.modified_count:
-                logger.info(f"Backfilled audience on {result.modified_count} legacy plans")
+                logger.info(
+                    f"Backfilled audience on {result.modified_count} legacy plans"
+                )
         except Exception as e:
             logger.error(f"Error backfilling plan audience: {str(e)}")
 
@@ -140,6 +145,7 @@ class PlanService:
                         "description": "Advanced recruiter plan with 300 interviews per month",
                         "price_paise": 999900,
                         "interviews_allowed": 300,
+                        "monthly_credits": 60000,
                         "validity_days": 30,
                         "audience": "recruiter",
                         "display_order": 3,
@@ -167,9 +173,45 @@ class PlanService:
             if max_result.modified_count:
                 logger.info("Normalized recruiter-max plan defaults")
             if delete_result.deleted_count:
-                logger.info(f"Deleted {delete_result.deleted_count} legacy enterprise plan(s)")
+                logger.info(
+                    f"Deleted {delete_result.deleted_count} legacy enterprise plan(s)"
+                )
         except Exception as e:
             logger.error(f"Error normalizing recruiter plans: {str(e)}")
+
+    def _backfill_plan_monthly_credits(self):
+        """Backfill missing monthly credits from defaults (or interview limits as fallback)."""
+        try:
+            defaults_by_slug = {
+                payload["slug"]: int(
+                    payload.get("monthly_credits", payload.get("interviews_allowed", 0))
+                    or 0
+                )
+                for payload in PaymentConfig.DEFAULT_PLANS.values()
+            }
+
+            updated = 0
+            for plan in self.collection.find(
+                {"monthly_credits": {"$exists": False}},
+                {"_id": 1, "slug": 1, "interviews_allowed": 1},
+            ):
+                fallback = int(plan.get("interviews_allowed", 0) or 0)
+                credits = int(defaults_by_slug.get(plan.get("slug"), fallback))
+                result = self.collection.update_one(
+                    {"_id": plan["_id"]},
+                    {
+                        "$set": {
+                            "monthly_credits": credits,
+                            "updated_at": datetime.utcnow(),
+                        }
+                    },
+                )
+                updated += result.modified_count
+
+            if updated:
+                logger.info(f"Backfilled monthly credits on {updated} legacy plans")
+        except Exception as e:
+            logger.error(f"Error backfilling monthly credits: {str(e)}")
 
     @staticmethod
     def _audience_filter(audience: Optional[str]) -> Dict[str, Any]:
@@ -184,7 +226,9 @@ class PlanService:
             return {"audience": "candidate"}
         return {}
 
-    def get_all_active_plans(self, audience: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_all_active_plans(
+        self, audience: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get all active plans sorted by display order.
 
@@ -204,7 +248,9 @@ class PlanService:
             logger.error(f"Error fetching plans: {str(e)}")
             return []
 
-    def get_plan_by_id(self, plan_id: str, audience: Optional[str] = None) -> Optional[Plan]:
+    def get_plan_by_id(
+        self, plan_id: str, audience: Optional[str] = None
+    ) -> Optional[Plan]:
         """
         Get plan by ID.
 
@@ -227,7 +273,9 @@ class PlanService:
             logger.error(f"Error fetching plan {plan_id}: {str(e)}")
             return None
 
-    def get_plan_by_slug(self, slug: str, audience: Optional[str] = None) -> Optional[Plan]:
+    def get_plan_by_slug(
+        self, slug: str, audience: Optional[str] = None
+    ) -> Optional[Plan]:
         """
         Get plan by slug identifier.
 
@@ -258,6 +306,7 @@ class PlanService:
         price_paise: int,
         interviews_allowed: int,
         validity_days: int,
+        monthly_credits: Optional[int] = None,
         features=None,
         display_order: int = 0,
         audience: str = "recruiter",
@@ -292,6 +341,11 @@ class PlanService:
                 description=description,
                 price_paise=price_paise,
                 interviews_allowed=interviews_allowed,
+                monthly_credits=(
+                    monthly_credits
+                    if monthly_credits is not None
+                    else interviews_allowed
+                ),
                 validity_days=validity_days,
                 features=features or [],
                 display_order=display_order,

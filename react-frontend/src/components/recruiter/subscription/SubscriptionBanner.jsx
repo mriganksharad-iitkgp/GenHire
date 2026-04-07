@@ -28,6 +28,12 @@ const SubscriptionBanner = ({
 
   // Default to free tier if no subscription
   const planName = subscription?.plan?.name || "Free Tier";
+  const creditsRemaining = Number(
+    subscription?.credits_remaining ?? subscription?.interviews_remaining ?? 2,
+  );
+  const creditsAllowed = Number(
+    subscription?.credits_allocated ?? subscription?.interviews_allowed ?? 2,
+  );
   const interviewsRemaining = subscription?.interviews_remaining ?? 2;
   const interviewsAllowed = subscription?.interviews_allowed ?? 2;
   const isUnlimited = subscription?.is_unlimited || false;
@@ -41,11 +47,13 @@ const SubscriptionBanner = ({
         0,
         Math.min(
           100,
-          ((interviewsAllowed - interviewsRemaining) / interviewsAllowed) * 100
-        )
+          ((creditsAllowed - creditsRemaining) / Math.max(creditsAllowed, 1)) *
+            100,
+        ),
       );
-  const isLowUsage = !isUnlimited && interviewsRemaining <= 2;
-  const isOutOfInterviews = !isUnlimited && interviewsRemaining <= 0;
+  const lowThreshold = Math.max(5, Math.ceil(creditsAllowed * 0.1));
+  const isLowUsage = !isUnlimited && creditsRemaining <= lowThreshold;
+  const isOutOfInterviews = !isUnlimited && creditsRemaining <= 0;
 
   // Format expiry date
   const formatDate = (dateStr) => {
@@ -101,7 +109,7 @@ const SubscriptionBanner = ({
 
         <div className={styles.usageSection}>
           <div className={styles.usageInfo}>
-            <span className={styles.usageLabel}>Interviews</span>
+            <span className={styles.usageLabel}>Credits</span>
             <span className={styles.usageValue}>
               {isUnlimited ? (
                 <>
@@ -118,9 +126,9 @@ const SubscriptionBanner = ({
                 </>
               ) : (
                 <>
-                  <strong>{interviewsRemaining}</strong>
+                  <strong>{creditsRemaining}</strong>
                   <span className={styles.usageDivider}>/</span>
-                  {interviewsAllowed}
+                  {creditsAllowed}
                 </>
               )}
             </span>
@@ -151,7 +159,7 @@ const SubscriptionBanner = ({
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              You've used all interviews. Upgrade to continue.
+              You've used all credits. Upgrade to continue.
             </p>
           ) : isLowUsage ? (
             <p className={styles.ctaText}>
@@ -165,11 +173,11 @@ const SubscriptionBanner = ({
                 <line x1="12" y1="9" x2="12" y2="13" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
-              Running low on interviews
+              Running low on credits
             </p>
           ) : (
             <p className={styles.ctaText}>
-              Unlock more interviews with our Recruiter Max plan
+              Unlock more usage credits with our Recruiter Max plan
             </p>
           )}
           <button className={styles.upgradeButton} onClick={onUpgrade}>

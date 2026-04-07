@@ -18,6 +18,7 @@ from .prompt_based_question_generator import (
     ConversationContext,
     QuestionMetadata,
 )
+from .cost_tracker import CostTracker
 
 
 @dataclass
@@ -59,6 +60,9 @@ class InterviewSessionManager:
     ) -> Dict[str, Any]:
         """Create a new interview session with natural conversation flow."""
         session_id = str(uuid.uuid4())
+        cost_tracker = CostTracker()
+        cost_tracker.start_session(session_id)
+        token = cost_tracker.set_session_context(session_id)
 
         try:
             # Load documents
@@ -111,6 +115,8 @@ class InterviewSessionManager:
 
         except Exception as e:
             return {"error": f"Failed to create session: {str(e)}"}
+        finally:
+            cost_tracker.clear_session_context(token)
 
     def submit_answer(
         self, session_id: str, question: str, answer: str
@@ -124,6 +130,8 @@ class InterviewSessionManager:
             return {"error": "Interview is already complete"}
 
         try:
+            cost_tracker = CostTracker()
+            token = cost_tracker.set_session_context(session_id)
             # Evaluate the answer using rubrics-eval system
             if self.evaluation_system:
                 try:
@@ -175,7 +183,7 @@ class InterviewSessionManager:
             # Generate next question using natural conversation flow
             if session.conversation_context is None:
                 return {"error": "Conversation context not initialized"}
-                
+
             next_question, next_metadata = self.question_generator.get_next_question(
                 session.conversation_context,
                 last_answer=answer,
@@ -208,12 +216,36 @@ class InterviewSessionManager:
                     "next_question": next_question,
                     "question_metadata": asdict(next_metadata),
                     "conversation_context": {
-                        "current_topic": session.conversation_context.current_topic if session.conversation_context else "unknown",
-                        "depth_level": session.conversation_context.depth_level.value if session.conversation_context else "beginner",
-                        "topics_covered": session.conversation_context.topics_covered if session.conversation_context else [],
-                        "candidate_skill_level": session.conversation_context.candidate_skill_level if session.conversation_context else "unknown",
-                        "conversation_energy": session.conversation_context.conversation_energy if session.conversation_context else "neutral",
-                        "interview_phase": session.conversation_context.interview_phase.value if session.conversation_context else "greeting",
+                        "current_topic": (
+                            session.conversation_context.current_topic
+                            if session.conversation_context
+                            else "unknown"
+                        ),
+                        "depth_level": (
+                            session.conversation_context.depth_level.value
+                            if session.conversation_context
+                            else "beginner"
+                        ),
+                        "topics_covered": (
+                            session.conversation_context.topics_covered
+                            if session.conversation_context
+                            else []
+                        ),
+                        "candidate_skill_level": (
+                            session.conversation_context.candidate_skill_level
+                            if session.conversation_context
+                            else "unknown"
+                        ),
+                        "conversation_energy": (
+                            session.conversation_context.conversation_energy
+                            if session.conversation_context
+                            else "neutral"
+                        ),
+                        "interview_phase": (
+                            session.conversation_context.interview_phase.value
+                            if session.conversation_context
+                            else "greeting"
+                        ),
                     },
                     "progress": {
                         "questions_asked": session.questions_asked,
@@ -225,6 +257,9 @@ class InterviewSessionManager:
 
         except Exception as e:
             return {"error": f"Failed to process answer: {str(e)}"}
+        finally:
+            if "cost_tracker" in locals() and "token" in locals():
+                cost_tracker.clear_session_context(token)
 
     def get_session_status(self, session_id: str) -> Dict[str, Any]:
         """Get current status of an interview session."""
@@ -355,7 +390,10 @@ class InterviewSessionManager:
                 return False
 
         # Check topic coverage - require more topics before ending
-        if session.conversation_context and len(session.conversation_context.topics_covered) >= 8:
+        if (
+            session.conversation_context
+            and len(session.conversation_context.topics_covered) >= 8
+        ):
             return False
 
         return True
@@ -372,7 +410,11 @@ class InterviewSessionManager:
         scores = [
             item["evaluation"]["overall_score"] for item in session.interview_data
         ]
-        topics_explored = session.conversation_context.topics_covered if session.conversation_context else []
+        topics_explored = (
+            session.conversation_context.topics_covered
+            if session.conversation_context
+            else []
+        )
 
         conversation_trend = "neutral"
         if len(scores) >= 3:
@@ -393,10 +435,18 @@ class InterviewSessionManager:
         return {
             "topics_covered": topics_explored,
             "conversation_trend": conversation_trend,
-            "final_skill_assessment": session.conversation_context.candidate_skill_level if session.conversation_context else "unknown",
+            "final_skill_assessment": (
+                session.conversation_context.candidate_skill_level
+                if session.conversation_context
+                else "unknown"
+            ),
             "total_questions": session.questions_asked,
             "average_score": sum(scores) / len(scores) if scores else 0,
-            "conversation_energy": session.conversation_context.conversation_energy if session.conversation_context else "neutral",
+            "conversation_energy": (
+                session.conversation_context.conversation_energy
+                if session.conversation_context
+                else "neutral"
+            ),
         }
 
     def _get_session(self, session_id: str) -> Optional[InterviewSession]:
@@ -412,9 +462,15 @@ class InterviewSessionManager:
         evaluations = [item["evaluation"] for item in session.interview_data]
 
         avg_scores = {
-            "answer_score": sum(e.get("answer_score", e.get("technical_accuracy_score", 0)) for e in evaluations)
+            "answer_score": sum(
+                e.get("answer_score", e.get("technical_accuracy_score", 0))
+                for e in evaluations
+            )
             / len(evaluations),
-            "language_score": sum(e.get("language_score", e.get("communication_score", 0)) for e in evaluations)
+            "language_score": sum(
+                e.get("language_score", e.get("communication_score", 0))
+                for e in evaluations
+            )
             / len(evaluations),
         }
 
@@ -526,7 +582,7 @@ class InterviewSessionManager:
             "relevance_score": technical_normalized,
             "technical_accuracy_score": technical_normalized,
             "communication_score": communication_normalized,
-            "overall_score": technical_normalized, # Use technical score as proxy for overall logic if needed
+            "overall_score": technical_normalized,  # Use technical score as proxy for overall logic if needed
             "reasoning": reasoning,
             "evaluation_method": "rubrics-eval-with-communication",
         }

@@ -11,7 +11,7 @@ import styles from "./PlanCard.module.css";
 const formatPrice = (price) => {
   if (price === 0) return "Free";
   // Format for Indian Rupees
-  return `₹${price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `₹${price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 /**
@@ -20,16 +20,27 @@ const formatPrice = (price) => {
  */
 const getPlanFeatures = (plan) => {
   const features = [];
+  const monthlyCredits = Number(plan.monthly_credits ?? 0);
 
-  // Interview quota
-  if (plan.interviews_allowed === -1 || plan.is_unlimited) {
-    features.push({ text: "Unlimited AI Interviews", included: true });
+  // Credit quota (usage-based billing)
+  if (monthlyCredits > 0) {
+    features.push({
+      text: `${monthlyCredits.toLocaleString("en-IN")} Usage Credits/month`,
+      included: true,
+    });
+  } else if (plan.interviews_allowed === -1 || plan.is_unlimited) {
+    features.push({ text: "Unlimited Usage Credits", included: true });
   } else {
     features.push({
       text: `${plan.interviews_allowed} AI Interviews`,
       included: true,
     });
   }
+
+  features.push({
+    text: "Credits deducted by LLM + STT/TTS usage",
+    included: true,
+  });
 
   // Standard features based on price tier
   features.push({ text: "Smart CV Matching", included: true });
@@ -106,7 +117,7 @@ const PlanCard = ({ plan, isCurrent, isPopular, isLoading, onSelect }) => {
         ) : (
           <>
             <StarIcon />
-            {plan.price === 0 ? "Select Plan" : "Upgrade Now"}
+            {plan.price === 0 ? "Choose Plan" : "Upgrade Credits"}
           </>
         )}
       </button>

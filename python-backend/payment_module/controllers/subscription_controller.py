@@ -166,6 +166,9 @@ class SubscriptionController:
                     "data": {
                         "interviews_remaining": result["interviews_remaining"],
                         "interviews_used": result["interviews_used"],
+                        "credits_remaining": result.get("credits_remaining"),
+                        "credits_used": result.get("credits_used"),
+                        "credits_allocated": result.get("credits_allocated"),
                         "is_unlimited": result.get("is_unlimited", False),
                     },
                 }, 200
@@ -209,7 +212,11 @@ class SubscriptionController:
             if audience not in {"recruiter", "candidate"}:
                 return {
                     "success": True,
-                    "data": {"can_interview": False, "can_practice": False, "reason": "unsupported_user_type"},
+                    "data": {
+                        "can_interview": False,
+                        "can_practice": False,
+                        "reason": "unsupported_user_type",
+                    },
                 }, 200
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
@@ -251,6 +258,9 @@ class SubscriptionController:
                 "data": {
                     "can_interview": audience == "recruiter",
                     "can_practice": audience == "candidate",
+                    "credits_remaining": subscription.credits_remaining,
+                    "credits_used": subscription.credits_used,
+                    "credits_allocated": subscription.credits_allocated,
                     "interviews_remaining": (
                         subscription.interviews_remaining
                         if not subscription.is_unlimited

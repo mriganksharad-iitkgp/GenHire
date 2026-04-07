@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class SpeechController:
     def __init__(self):
         self.speech_service = GoogleSpeechService()
@@ -27,10 +28,17 @@ class SpeechController:
             sample_rate_hertz = int(data.get("sample_rate_hertz", 16000))
             language_code = data.get("language_code", "en-US")
             encoding = data.get("encoding", "WEBM_OPUS")
+            session_id = data.get("session_id")
 
-            logger.info(f"Received transcription request: {len(audio_base64)} chars base64, encoding: {encoding}")
+            logger.info(
+                f"Received transcription request: {len(audio_base64)} chars base64, encoding: {encoding}"
+            )
             transcript = self.speech_service.speech_to_text(
-                audio_base64, sample_rate_hertz, language_code, encoding
+                audio_base64,
+                sample_rate_hertz,
+                language_code,
+                encoding,
+                session_id=session_id,
             )
 
             if transcript is not None:
@@ -60,10 +68,14 @@ class SpeechController:
             # Optionally handle parameters from the request
             language_code = data.get("language_code", "en-US")
             voice_name = data.get("voice_name", "en-US-Standard-C")
+            session_id = data.get("session_id")
 
             logger.info(f"Received synthesis request for text: '{text[:50]}...'")
             audio_base64 = self.speech_service.text_to_speech(
-                text, language_code, voice_name
+                text,
+                language_code,
+                voice_name,
+                session_id=session_id,
             )
 
             if audio_base64:

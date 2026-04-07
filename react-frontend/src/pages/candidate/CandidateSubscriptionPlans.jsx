@@ -55,6 +55,37 @@ const LoadingState = ({ message = "Loading..." }) => (
   </div>
 );
 
+const CreditSummary = ({ subscription }) => {
+  const creditsRemaining = Number(subscription?.credits_remaining ?? 0);
+  const creditsAllocated = Number(subscription?.credits_allocated ?? 0);
+  const creditsUsed = Number(subscription?.credits_used ?? 0);
+  const usageCost = Number(subscription?.usage_cost_total_usd ?? 0);
+
+  const stats = [
+    {
+      label: "Credits Remaining",
+      value: creditsRemaining.toLocaleString("en-IN"),
+    },
+    { label: "Credits Used", value: creditsUsed.toLocaleString("en-IN") },
+    {
+      label: "Credits Allocated",
+      value: creditsAllocated.toLocaleString("en-IN"),
+    },
+    { label: "Usage Cost", value: `$${usageCost.toFixed(4)}` },
+  ];
+
+  return (
+    <section className={styles.creditSummary}>
+      {stats.map((item) => (
+        <article key={item.label} className={styles.creditStatCard}>
+          <p>{item.label}</p>
+          <h3>{item.value}</h3>
+        </article>
+      ))}
+    </section>
+  );
+};
+
 const PlansGrid = ({ plans, subscription, loadingPlanId, onSelectPlan }) => {
   const isCurrentPlan = (plan) => {
     if (!subscription?.plan) return plan.slug === "candidate-free";
@@ -90,7 +121,8 @@ const Footer = () => (
 
 const CandidateSubscriptionPlans = () => {
   const navigate = useNavigate();
-  const { subscription, refresh: refreshSubscription } = useCandidateSubscription();
+  const { subscription, refresh: refreshSubscription } =
+    useCandidateSubscription();
 
   const [plans, setPlans] = useState([]);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -126,48 +158,48 @@ const CandidateSubscriptionPlans = () => {
       id: "candidate-free",
       slug: "candidate-free",
       name: "Free Tier",
-      description: "Free plan with 2 practice interviews per month",
+      description: "Free plan with 250 monthly credits",
       price: 0,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "2 Practice Interviews", included: true },
+        { name: "250 Monthly Credits", included: true },
         { name: "Smart Practice Feedback", included: true },
         { name: "Basic Analytics", included: true },
       ],
-      interviews_allowed: 2,
+      monthly_credits: 250,
       is_popular: false,
     },
     {
       id: "candidate-pro",
       slug: "candidate-pro",
       name: "Candidate Pro",
-      description: "50 practice interviews per month",
+      description: "10,000 monthly credits",
       price: 999,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "50 Practice Interviews/month", included: true },
+        { name: "10,000 Monthly Credits", included: true },
         { name: "Detailed Score Insights", included: true },
         { name: "Priority Report Generation", included: true },
       ],
-      interviews_allowed: 50,
+      monthly_credits: 10000,
       is_popular: true,
     },
     {
       id: "candidate-max",
       slug: "candidate-max",
       name: "Candidate Max",
-      description: "100 practice interviews per month",
+      description: "25,000 monthly credits",
       price: 1499,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "100 Practice Interviews/month", included: true },
+        { name: "25,000 Monthly Credits", included: true },
         { name: "Advanced Analytics", included: true },
         { name: "Priority Support", included: true },
       ],
-      interviews_allowed: 100,
+      monthly_credits: 25000,
       is_popular: false,
     },
   ];
@@ -259,7 +291,11 @@ const CandidateSubscriptionPlans = () => {
 
         <TabNav activeView={activeView} onChangeView={setActiveView} />
 
-        {displayError && <ErrorAlert message={displayError} onRetry={handleRetry} />}
+        <CreditSummary subscription={subscription} />
+
+        {displayError && (
+          <ErrorAlert message={displayError} onRetry={handleRetry} />
+        )}
 
         {loading ? (
           <LoadingState message="Loading candidate subscription data..." />

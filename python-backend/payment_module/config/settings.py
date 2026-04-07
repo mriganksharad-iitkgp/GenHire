@@ -45,6 +45,12 @@ class PaymentConfig:
     # Interview settings
     UNLIMITED_INTERVIEWS = -1  # Sentinel value for unlimited plans
 
+    # Usage credit economics
+    # Credits are integer billing units consumed from measured USD cost.
+    CREDIT_PER_USD = float(os.getenv("CREDIT_PER_USD", "1000"))
+    MIN_USAGE_CREDITS = int(os.getenv("MIN_USAGE_CREDITS", "1"))
+    START_INTERVIEW_MIN_CREDITS = int(os.getenv("START_INTERVIEW_MIN_CREDITS", "1"))
+
     # Default Plans Configuration
     # These are seeded if no plans exist in the database
     # Prices in paise (1 INR = 100 paise)
@@ -58,6 +64,7 @@ class PaymentConfig:
             "description": "Starter free tier with limited interviews",
             "price_paise": 0,  # Free plan
             "interviews_allowed": 2,
+            "monthly_credits": 250,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
             "audience": "recruiter",
             "features": [
@@ -74,6 +81,7 @@ class PaymentConfig:
             "description": "Professional plan for growing teams with 100 interviews per month",
             "price_paise": 499900,  # ₹4,999.00
             "interviews_allowed": 100,
+            "monthly_credits": 20000,
             "validity_days": 30,  # 1 month validity
             "audience": "recruiter",
             "features": [
@@ -93,6 +101,7 @@ class PaymentConfig:
             "description": "Advanced recruiter plan with 300 interviews per month",
             "price_paise": 999900,  # ₹9,999.00
             "interviews_allowed": 300,
+            "monthly_credits": 60000,
             "validity_days": 30,  # 1 month validity
             "audience": "recruiter",
             "features": [
@@ -111,6 +120,7 @@ class PaymentConfig:
             "description": "Free plan with 2 practice interviews per month",
             "price_paise": 0,
             "interviews_allowed": 2,
+            "monthly_credits": 250,
             "validity_days": 30,
             "audience": "candidate",
             "features": [
@@ -127,6 +137,7 @@ class PaymentConfig:
             "description": "50 practice interviews per month for active preparation",
             "price_paise": 99900,
             "interviews_allowed": 50,
+            "monthly_credits": 10000,
             "validity_days": 30,
             "audience": "candidate",
             "features": [
@@ -144,6 +155,7 @@ class PaymentConfig:
             "description": "100 practice interviews per month for intensive preparation",
             "price_paise": 149900,
             "interviews_allowed": 100,
+            "monthly_credits": 25000,
             "validity_days": 30,
             "audience": "candidate",
             "features": [

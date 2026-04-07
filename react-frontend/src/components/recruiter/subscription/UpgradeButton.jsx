@@ -13,6 +13,7 @@ const UpgradeButton = () => {
     subscription,
     loading,
     isFreeTier,
+    creditsRemaining,
     interviewsRemaining,
     isLowUsage,
     isOutOfInterviews,
@@ -34,9 +35,12 @@ const UpgradeButton = () => {
   // Get status indicator
   const getStatusText = () => {
     if (loading) return "Loading...";
-    if (isOutOfInterviews) return "No interviews left";
+    if (isOutOfInterviews) return "No credits left";
     if (subscription?.is_unlimited) return "Unlimited";
-    return `${interviewsRemaining} left`;
+    const value = Number.isFinite(creditsRemaining)
+      ? creditsRemaining
+      : interviewsRemaining;
+    return `${value} credits left`;
   };
 
   return (

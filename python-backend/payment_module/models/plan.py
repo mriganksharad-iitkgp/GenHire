@@ -38,6 +38,7 @@ class Plan:
     description: str
     price_paise: int
     interviews_allowed: int
+    monthly_credits: int
     validity_days: int
     features: List[str] = field(default_factory=list)
     audience: str = "recruiter"
@@ -66,6 +67,7 @@ class Plan:
             "description": self.description,
             "price_paise": self.price_paise,
             "interviews_allowed": self.interviews_allowed,
+            "monthly_credits": self.monthly_credits,
             "validity_days": self.validity_days,
             "features": self.features,
             "audience": self.audience,
@@ -90,6 +92,7 @@ class Plan:
             "price_paise": self.price_paise,
             "currency": "INR",
             "interviews_allowed": self.interviews_allowed,
+            "monthly_credits": self.monthly_credits,
             "is_unlimited": self.is_unlimited,
             "validity_days": self.validity_days,
             "features": self.features,
@@ -109,6 +112,9 @@ class Plan:
             description=data.get("description", ""),
             price_paise=price,
             interviews_allowed=data.get("interviews_allowed", 0),
+            monthly_credits=data.get(
+                "monthly_credits", data.get("interviews_allowed", 0)
+            ),
             validity_days=data.get("validity_days", 30),
             features=data.get("features", []),
             audience=data.get("audience", "recruiter"),

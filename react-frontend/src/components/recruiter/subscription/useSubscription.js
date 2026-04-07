@@ -5,7 +5,7 @@ import { getCurrentSubscription } from "../../../services/payment";
  * useSubscription - Custom hook for managing subscription state
  * Provides subscription data, loading state, and refresh functionality
  *
- * @returns {Object} - { subscription, loading, error, refresh, isFreeTier, interviewsRemaining }
+ * @returns {Object} - { subscription, loading, error, refresh, isFreeTier, creditsRemaining }
  */
 const useSubscription = () => {
   const [subscription, setSubscription] = useState(null);
@@ -50,6 +50,18 @@ const useSubscription = () => {
                 ? "free"
                 : "paid",
             },
+            credits_remaining: Math.max(
+              0,
+              Number(
+                plan?.credits_remaining ?? plan?.interviews_remaining ?? 0,
+              ),
+            ),
+            credits_allocated: Number(
+              plan?.credits_allocated ?? plan?.interviews_allowed ?? 2,
+            ),
+            credits_used: Number(
+              plan?.credits_used ?? plan?.interviews_used ?? 0,
+            ),
             interviews_remaining: isUnlimited
               ? -1
               : Math.max(0, Number(plan?.interviews_remaining ?? 0)),
@@ -92,6 +104,9 @@ const useSubscription = () => {
   // Helper to get default free tier
   const getDefaultFreeTier = () => ({
     plan: { name: "Free Tier", slug: "free" },
+    credits_remaining: 250,
+    credits_allocated: 250,
+    credits_used: 0,
     interviews_remaining: 2,
     interviews_allowed: 2,
     interviews_used: 0,
@@ -101,11 +116,17 @@ const useSubscription = () => {
 
   // Computed properties
   const isFreeTier = !subscription || subscription?.plan?.slug === "free";
+  const creditsRemaining =
+    subscription?.credits_remaining ?? subscription?.interviews_remaining ?? 2;
+  const creditsAllowed =
+    subscription?.credits_allocated ?? subscription?.interviews_allowed ?? 2;
   const interviewsRemaining = subscription?.interviews_remaining ?? 2;
   const interviewsAllowed = subscription?.interviews_allowed ?? 2;
-  const isLowUsage = !subscription?.is_unlimited && interviewsRemaining <= 2;
+  const isLowUsage =
+    !subscription?.is_unlimited &&
+    creditsRemaining <= Math.max(5, Math.ceil(creditsAllowed * 0.1));
   const isOutOfInterviews =
-    !subscription?.is_unlimited && interviewsRemaining <= 0;
+    !subscription?.is_unlimited && creditsRemaining <= 0;
 
   return {
     subscription,
@@ -114,6 +135,8 @@ const useSubscription = () => {
     refresh: loadSubscription,
     update: setSubscription,
     isFreeTier,
+    creditsRemaining,
+    creditsAllowed,
     interviewsRemaining,
     interviewsAllowed,
     isLowUsage,

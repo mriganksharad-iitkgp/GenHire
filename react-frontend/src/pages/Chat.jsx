@@ -74,6 +74,7 @@ export default function Chat({ interviewId }) {
   const gazeEndedAtMsRef = useRef(null);
   const gazeStartTimeRef = useRef(null);
   const gazeRecordingDataRef = useRef(null);
+  const gazeMessageGuardHandlerRef = useRef(null);
 
   // --- MODIFICATION --- Add refs for the timer and the latest transcript
   const timerRef = useRef(null);
@@ -97,6 +98,29 @@ export default function Chat({ interviewId }) {
   useEffect(() => {
     isTimerRunningRef.current = isTimerRunning;
   }, [isTimerRunning]); // --- PROCTORING FOR TAB/WINDOW SWITCHING (No changes needed) ---
+
+  useEffect(() => {
+    // GazeRecorderAPI expects event.data to be a string in message handlers.
+    // Block non-string payloads once GazeRecorder scripts are loaded.
+    const handleWindowMessageGuard = (event) => {
+      if (!gazeRecorderScriptsLoadedRef.current) return;
+      if (typeof event?.data === "string") return;
+      event.stopImmediatePropagation();
+    };
+
+    gazeMessageGuardHandlerRef.current = handleWindowMessageGuard;
+    window.addEventListener("message", handleWindowMessageGuard, true);
+
+    return () => {
+      if (gazeMessageGuardHandlerRef.current) {
+        window.removeEventListener(
+          "message",
+          gazeMessageGuardHandlerRef.current,
+          true,
+        );
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -146,7 +170,7 @@ export default function Chat({ interviewId }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [interviewStatus, proctoringAlert.active, warningCount]); 
+  }, [interviewStatus, proctoringAlert.active, warningCount]);
 
   const loadScript = useCallback((src) => {
     return new Promise((resolve, reject) => {
@@ -156,11 +180,15 @@ export default function Chat({ interviewId }) {
           resolve();
           return;
         }
-        existing.addEventListener('load', () => resolve(), { once: true });
-        existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener(
+          "error",
+          () => reject(new Error(`Failed to load ${src}`)),
+          { once: true },
+        );
         return;
       }
-      const script = document.createElement('script');
+      const script = document.createElement("script");
       script.src = src;
       script.async = true;
       script.onload = () => {
@@ -175,7 +203,7 @@ export default function Chat({ interviewId }) {
   const startInlineGazeRecorder = useCallback(async () => {
     if (gazeRecorderTrackingRef.current) return;
     try {
-      setGazeRecorderStatus('calibrating');
+      setGazeRecorderStatus("calibrating");
       if (!gazeRecorderScriptsLoadedRef.current) {
         await loadScript("https://app.gazerecorder.com/GazeCloudAPI.js");
         await loadScript("https://app.gazerecorder.com/GazeRecorderAPI.js");
@@ -184,7 +212,7 @@ export default function Chat({ interviewId }) {
       }
 
       if (!window.GazeCloudAPI || !window.GazeRecorderAPI) {
-        throw new Error('GazeRecorder scripts not available.');
+        throw new Error("GazeRecorder scripts not available.");
       }
 
       gazePointsRef.current = [];
@@ -198,7 +226,7 @@ export default function Chat({ interviewId }) {
         gazePointsRef.current.push({
           timestamp: (Date.now() - gazeStartTimeRef.current) / 1000,
           x: gazeData?.docX || 0,
-          y: gazeData?.docY || 0
+          y: gazeData?.docY || 0,
         });
       };
 
@@ -206,13 +234,13 @@ export default function Chat({ interviewId }) {
         window.GazeRecorderAPI.Rec();
         gazeRecorderTrackingRef.current = true;
         gazeStartTimeRef.current = Date.now();
-        setGazeRecorderStatus('tracking');
+        setGazeRecorderStatus("tracking");
       };
 
       window.GazeCloudAPI.StartEyeTracking();
     } catch (error) {
-      console.error('Failed to start inline GazeRecorder:', error);
-      setGazeRecorderStatus('failed');
+      console.error("Failed to start inline GazeRecorder:", error);
+      setGazeRecorderStatus("failed");
     }
   }, [loadScript]);
 
@@ -230,36 +258,41 @@ export default function Chat({ interviewId }) {
       }
 
       if (!gazePointsRef.current.length) {
-        console.warn('No GazeRecorder points captured.');
+        console.warn("No GazeRecorder points captured.");
         return;
       }
 
       const token = localStorage.getItem("companyxyz-token");
-      const apiBase = (process.env.REACT_APP_API_URL || '').replace(/\/$/, '');
-      const response = await fetch(`${apiBase}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const apiBase = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+      const response = await fetch(
+        `${apiBase}/api/interviews/${currentSessionId}/gaze-recorder-results`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            session_id: currentSessionId,
+            recordingData: gazeRecordingDataRef.current,
+            gazePoints: gazePointsRef.current,
+            startedAtMs: gazeStartedAtMsRef.current,
+            endedAtMs: gazeEndedAtMsRef.current,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+          }),
         },
-        body: JSON.stringify({
-          session_id: currentSessionId,
-          recordingData: gazeRecordingDataRef.current,
-          gazePoints: gazePointsRef.current,
-          startedAtMs: gazeStartedAtMsRef.current,
-          endedAtMs: gazeEndedAtMsRef.current,
-          viewport: { width: window.innerWidth, height: window.innerHeight }
-        })
-      });
+      );
 
       if (!response.ok) {
-        throw new Error((await response.json()).error || 'Failed to submit GazeRecorder data');
+        throw new Error(
+          (await response.json()).error || "Failed to submit GazeRecorder data",
+        );
       }
 
-      setGazeRecorderStatus('submitted');
+      setGazeRecorderStatus("submitted");
     } catch (error) {
-      console.error('Failed to finalize inline GazeRecorder:', error);
-      setGazeRecorderStatus('failed');
+      console.error("Failed to finalize inline GazeRecorder:", error);
+      setGazeRecorderStatus("failed");
     }
   }, []);
 
@@ -277,7 +310,7 @@ export default function Chat({ interviewId }) {
       console.log("📡 Signaling mobile to START...");
       socket.emit("control_mobile_recording", {
         session_id: currentSessionId,
-        action: "start"
+        action: "start",
       });
       socket.on("gaze_data", (data) => {
         setGazeDirection(data.gaze_direction);
@@ -311,7 +344,7 @@ export default function Chat({ interviewId }) {
             0,
             0,
             canvas.width,
-            canvas.height
+            canvas.height,
           );
           const imageData = canvas.toDataURL("image/jpeg", 0.5);
           socket.emit("proctoring_frame", {
@@ -377,19 +410,21 @@ export default function Chat({ interviewId }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ image: imageData }),
-        }
+        },
       );
       if (!response.ok)
         throw new Error(
-          (await response.json()).message || "Face registration failed."
+          (await response.json()).message || "Face registration failed.",
         );
 
-      console.log("✅ Face registered successfully, starting live proctoring...");
+      console.log(
+        "✅ Face registered successfully, starting live proctoring...",
+      );
       await startInlineGazeRecorder();
 
       // IMPORTANT: Start live proctoring AFTER successful face registration
       // startLiveProctoring();
-      
+
       setInterviewStatus("active");
     } catch (error) {
       console.error("Face registration error:", error);
@@ -397,57 +432,60 @@ export default function Chat({ interviewId }) {
     }
   }, [startInlineGazeRecorder]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
-  const uploadRecording = useCallback(async (blob) => {
-    const currentSessionId = sessionIdRef.current;
-    if (!currentSessionId) throw new Error("Session ID not available.");
-    setUploadStatus("uploading");
-    const ffmpeg = ffmpegRef.current;
-    try {
-      if (!ffmpeg.loaded) {
-        const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-        await ffmpeg.load({
-          coreURL: await toBlobURL(
-            `${baseURL}/ffmpeg-core.js`,
-            "text/javascript"
-          ),
-          wasmURL: await toBlobURL(
-            `${baseURL}/ffmpeg-core.wasm`,
-            "application/wasm"
-          ),
-        });
-      }
-      await ffmpeg.writeFile(
-        "input.webm",
-        new Uint8Array(await blob.arrayBuffer())
-      );
-      await ffmpeg.exec(["-i", "input.webm", "-c", "copy", "output.mp4"]);
-      const data = await ffmpeg.readFile("output.mp4");
-      const formData = new FormData();
-      formData.append(
-        "recording",
-        new Blob([data.buffer], { type: "video/mp4" }),
-        `interview_${currentSessionId}.mp4`
-      );
-      const token = localStorage.getItem("companyxyz-token");
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+  const uploadRecording = useCallback(
+    async (blob) => {
+      const currentSessionId = sessionIdRef.current;
+      if (!currentSessionId) throw new Error("Session ID not available.");
+      setUploadStatus("uploading");
+      const ffmpeg = ffmpegRef.current;
+      try {
+        if (!ffmpeg.loaded) {
+          const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+          await ffmpeg.load({
+            coreURL: await toBlobURL(
+              `${baseURL}/ffmpeg-core.js`,
+              "text/javascript",
+            ),
+            wasmURL: await toBlobURL(
+              `${baseURL}/ffmpeg-core.wasm`,
+              "application/wasm",
+            ),
+          });
         }
-      );
-      if (!response.ok)
-        throw new Error((await response.json()).error || "Upload failed");
+        await ffmpeg.writeFile(
+          "input.webm",
+          new Uint8Array(await blob.arrayBuffer()),
+        );
+        await ffmpeg.exec(["-i", "input.webm", "-c", "copy", "output.mp4"]);
+        const data = await ffmpeg.readFile("output.mp4");
+        const formData = new FormData();
+        formData.append(
+          "recording",
+          new Blob([data.buffer], { type: "video/mp4" }),
+          `interview_${currentSessionId}.mp4`,
+        );
+        const token = localStorage.getItem("companyxyz-token");
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          },
+        );
+        if (!response.ok)
+          throw new Error((await response.json()).error || "Upload failed");
 
-      // Existing proctoring upload completed; also finalize inline GazeRecorder submission.
-      await finalizeInlineGazeRecorder();
-      setUploadStatus("success");
-    } catch (error) {
-      setUploadStatus("error");
-      throw error;
-    }
-  }, [finalizeInlineGazeRecorder]);
+        // Existing proctoring upload completed; also finalize inline GazeRecorder submission.
+        await finalizeInlineGazeRecorder();
+        setUploadStatus("success");
+      } catch (error) {
+        setUploadStatus("error");
+        throw error;
+      }
+    },
+    [finalizeInlineGazeRecorder],
+  );
 
   const stopAndUploadRecording = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -486,9 +524,13 @@ export default function Chat({ interviewId }) {
 
       // Fully reset the video element
       if (videoRef.current) {
-        try { videoRef.current.pause(); } catch (e) { }
+        try {
+          videoRef.current.pause();
+        } catch (e) {}
         videoRef.current.removeAttribute("src");
-        try { videoRef.current.load(); } catch (e) { }
+        try {
+          videoRef.current.load();
+        } catch (e) {}
       }
     } catch (e) {
       // no-op
@@ -549,7 +591,11 @@ export default function Chat({ interviewId }) {
 
     if ((interviewId || isDirectStart) && interviewStatus === "starting") {
       // For practice mode, if session was already created, use it directly
-      if (isPracticeMode && location.state?.sessionId && location.state?.initialQuestion) {
+      if (
+        isPracticeMode &&
+        location.state?.sessionId &&
+        location.state?.initialQuestion
+      ) {
         // Session already created by Practice page
         setSessionId(location.state.sessionId);
         sessionIdRef.current = location.state.sessionId;
@@ -579,7 +625,9 @@ export default function Chat({ interviewId }) {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
             const message =
-              data?.error || data?.message || "Could not start interview session.";
+              data?.error ||
+              data?.message ||
+              "Could not start interview session.";
             const error = new Error(message);
             error.status = res.status;
             throw error;
@@ -621,7 +669,7 @@ export default function Chat({ interviewId }) {
       } catch (err) {
         console.error("Webcam access error:", err);
         alert(
-          "Could not access the camera. Please check your browser permissions and ensure your camera is not in use by another application. Redirecting to the dashboard."
+          "Could not access the camera. Please check your browser permissions and ensure your camera is not in use by another application. Redirecting to the dashboard.",
         );
         navigate("/profile#applications");
       }
@@ -646,7 +694,7 @@ export default function Chat({ interviewId }) {
       setChatContent({
         0: {
           response: `Your CV has a ${Math.round(
-            similarityScore * 100
+            similarityScore * 100,
           )}% match.`,
         },
         1: { response: currentQuestion },
@@ -666,7 +714,7 @@ export default function Chat({ interviewId }) {
       console.log("📡 Signaling mobile to STOP...");
       socketRef.current.emit("control_mobile_recording", {
         session_id: sessionIdRef.current,
-        action: "stop"
+        action: "stop",
       });
     }
     const currentSessionId = sessionIdRef.current;
@@ -686,7 +734,10 @@ export default function Chat({ interviewId }) {
     clearInterval(silenceTimerRef.current);
 
     // Stop speech recording
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       try {
         mediaRecorderRef.current.stop();
       } catch (e) {
@@ -777,7 +828,7 @@ export default function Chat({ interviewId }) {
               body: JSON.stringify({
                 interview_score: interviewScore,
               }),
-            }
+            },
           );
           console.log(`✅ Interview score updated: ${interviewScore}%`);
         } catch (scoreError) {
@@ -867,7 +918,13 @@ export default function Chat({ interviewId }) {
         setIsSubmittingAnswer(false);
       }
     },
-    [currentQuestion, interviewStatus, endInterview, questionCount, location.state]
+    [
+      currentQuestion,
+      interviewStatus,
+      endInterview,
+      questionCount,
+      location.state,
+    ],
   );
 
   // --- FIXED --- Only silence detection, no 30-second timer
@@ -886,9 +943,7 @@ export default function Chat({ interviewId }) {
         setSilenceTimer(Math.floor(timeSinceLastSpeech));
 
         // Auto-submit after 3 seconds of silence
-        if (
-          timeSinceLastSpeech >= 3
-        ) {
+        if (timeSinceLastSpeech >= 3) {
           clearInterval(silenceTimerRef.current);
           setIsTimerRunning(false);
 
@@ -921,21 +976,27 @@ export default function Chat({ interviewId }) {
     const initMediaRecorder = async () => {
       try {
         console.log("🎤 Requesting audio permissions...");
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
         console.log("✅ Audio permissions granted.");
 
         // Find supported mime type
         const mimeTypes = [
-          'audio/webm;codecs=opus',
-          'audio/webm',
-          'audio/ogg;codecs=opus',
-          'audio/wav',
-          'audio/mp4'
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/wav",
+          "audio/mp4",
         ];
-        const supportedMimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+        const supportedMimeType = mimeTypes.find((type) =>
+          MediaRecorder.isTypeSupported(type),
+        );
         console.log(`🎤 Supported MimeType: ${supportedMimeType}`);
 
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedMimeType });
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: supportedMimeType,
+        });
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (event) => {
@@ -950,46 +1011,68 @@ export default function Chat({ interviewId }) {
         };
 
         mediaRecorder.onstop = async () => {
-          console.log(`🎤 MediaRecorder stopped. Total chunks: ${audioChunksRef.current.length}`);
-          const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType || 'audio/webm' });
+          console.log(
+            `🎤 MediaRecorder stopped. Total chunks: ${audioChunksRef.current.length}`,
+          );
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: supportedMimeType || "audio/webm",
+          });
           audioChunksRef.current = [];
-          console.log(`🎤 Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+          console.log(
+            `🎤 Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`,
+          );
 
           if (audioBlob.size < 100) {
-            console.warn("⚠️ Audio blob is too small, transcription might fail.");
+            console.warn(
+              "⚠️ Audio blob is too small, transcription might fail.",
+            );
           }
 
           // Send to backend for transcription
           const reader = new FileReader();
           reader.readAsDataURL(audioBlob);
           reader.onloadend = async () => {
-            const base64Audio = reader.result.split(',')[1];
+            const base64Audio = reader.result.split(",")[1];
             console.log("🎤 Sending audio to backend for transcription...");
             try {
-              const sampleRate = stream.getAudioTracks()[0].getSettings().sampleRate || 48000;
-              const encoding = supportedMimeType.includes('opus') ? (supportedMimeType.includes('webm') ? 'WEBM_OPUS' : 'OGG_OPUS') : 'LINEAR16';
-              const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+              const sampleRate =
+                stream.getAudioTracks()[0].getSettings().sampleRate || 48000;
+              const encoding = supportedMimeType.includes("opus")
+                ? supportedMimeType.includes("webm")
+                  ? "WEBM_OPUS"
+                  : "OGG_OPUS"
+                : "LINEAR16";
+              const apiUrl =
+                process.env.REACT_APP_API_URL || "http://localhost:5000";
 
               const response = await fetch(`${apiUrl}/api/speech/transcribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   audio_base64: base64Audio,
                   sample_rate_hertz: sampleRate,
-                  encoding: encoding
+                  encoding: encoding,
+                  session_id: sessionIdRef.current,
                 }),
               });
 
               if (!response.ok) {
                 const errorData = await response.json();
-                console.error(`❌ Transcription API error: ${response.status}`, errorData);
+                console.error(
+                  `❌ Transcription API error: ${response.status}`,
+                  errorData,
+                );
                 return;
               }
 
               const data = await response.json();
               console.log("✅ Transcription response:", data);
               if (data.transcript) {
-                const finalTranscript = (transcriptRef.current + " " + data.transcript).trim();
+                const finalTranscript = (
+                  transcriptRef.current +
+                  " " +
+                  data.transcript
+                ).trim();
                 setInput(finalTranscript);
                 transcriptRef.current = finalTranscript;
 
@@ -1025,7 +1108,10 @@ export default function Chat({ interviewId }) {
     initMediaRecorder();
 
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== "inactive"
+      ) {
         mediaRecorderRef.current.stop();
       }
     };
@@ -1046,7 +1132,9 @@ export default function Chat({ interviewId }) {
 
       // Start volume-based silence detection
       const stream = mediaRecorderRef.current.stream;
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
       audioContextRef.current = audioContext;
       const analyser = audioContext.createAnalyser();
       analyserRef.current = analyser;
@@ -1072,7 +1160,6 @@ export default function Chat({ interviewId }) {
           }
         }
       }, 100);
-
     } catch (e) {
       console.error("Error starting MediaRecorder or volume detection:", e);
     }
@@ -1119,14 +1206,14 @@ export default function Chat({ interviewId }) {
     setDisplayedText(""); // Reset displayed text
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
       console.log(`🔊 Fetching TTS from: ${apiUrl}/api/speech/synthesize`);
       const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, session_id: sessionIdRef.current }),
       });
 
       if (!response.ok) {
@@ -1139,7 +1226,10 @@ export default function Chat({ interviewId }) {
 
       const data = await response.json();
       if (data.audio_base64) {
-        console.log("✅ TTS audio received, base64 length:", data.audio_base64.length);
+        console.log(
+          "✅ TTS audio received, base64 length:",
+          data.audio_base64.length,
+        );
         const audioSrc = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioSrc);
         currentAudioRef.current = audio;
@@ -1154,19 +1244,24 @@ export default function Chat({ interviewId }) {
 
           // Estimate speech duration from audio length if possible
           // Otherwise use a default word-based timing
-          const intervalDelay = audio.duration ? (audio.duration * 1000 / words.length) : 300;
+          const intervalDelay = audio.duration
+            ? (audio.duration * 1000) / words.length
+            : 300;
           console.log(`🔊 Text animation interval: ${intervalDelay}ms`);
 
-          typingIntervalRef.current = setInterval(() => {
-            if (currentIndex < words.length) {
-              const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
-              setDisplayedText(wordsToShow);
-              currentIndex++;
-            } else {
-              clearInterval(typingIntervalRef.current);
-              setDisplayedText(text);
-            }
-          }, Math.max(intervalDelay, 150));
+          typingIntervalRef.current = setInterval(
+            () => {
+              if (currentIndex < words.length) {
+                const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
+                setDisplayedText(wordsToShow);
+                currentIndex++;
+              } else {
+                clearInterval(typingIntervalRef.current);
+                setDisplayedText(text);
+              }
+            },
+            Math.max(intervalDelay, 150),
+          );
         };
 
         audio.onended = () => {
@@ -1177,7 +1272,9 @@ export default function Chat({ interviewId }) {
           setDisplayedText(text);
 
           if (interviewStatus === "active") {
-            console.log("🎤 AI finished speaking. Starting silence detection & recording...");
+            console.log(
+              "🎤 AI finished speaking. Starting silence detection & recording...",
+            );
             setSilenceTimer(0);
             lastSpeechTimeRef.current = Date.now();
             setIsTimerRunning(true);
@@ -1193,7 +1290,7 @@ export default function Chat({ interviewId }) {
           setDisplayedText(text);
         };
 
-        audio.play().catch(e => {
+        audio.play().catch((e) => {
           console.error("❌ Audio play() failed:", e);
           // Auto-resume if blocked by browser policy (common issue)
           setIsSpeaking(false);
@@ -1222,7 +1319,7 @@ export default function Chat({ interviewId }) {
       console.log("🔊 Speaking initial greeting and first question...");
       setTimeout(() => {
         const initialMessage = `Your CV has a ${Math.round(
-          similarityScore * 100
+          similarityScore * 100,
         )}% match. ${currentQuestion}`;
         speakResponse(initialMessage);
       }, 1000);
@@ -1234,7 +1331,7 @@ export default function Chat({ interviewId }) {
     if (interviewStatus === "active" && interviewStartTimeRef.current) {
       const timer = setInterval(() => {
         const elapsed = Math.floor(
-          (Date.now() - interviewStartTimeRef.current) / 1000
+          (Date.now() - interviewStartTimeRef.current) / 1000,
         );
         setInterviewElapsedTime(elapsed);
       }, 1000);
@@ -1249,12 +1346,16 @@ export default function Chat({ interviewId }) {
       clearInterval(typingIntervalRef.current);
       stopLiveProctoring();
       stopCamera();
-      if (gazeRecorderTrackingRef.current && window.GazeCloudAPI && window.GazeRecorderAPI) {
+      if (
+        gazeRecorderTrackingRef.current &&
+        window.GazeCloudAPI &&
+        window.GazeRecorderAPI
+      ) {
         try {
           window.GazeRecorderAPI.StopRec();
           window.GazeCloudAPI.StopEyeTracking();
         } catch (error) {
-          console.warn('Cleanup error for GazeRecorder:', error);
+          console.warn("Cleanup error for GazeRecorder:", error);
         }
       }
     };
@@ -1296,7 +1397,10 @@ export default function Chat({ interviewId }) {
         }
 
         // Stop speech recording
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state !== "inactive"
+        ) {
           try {
             mediaRecorderRef.current.stop();
           } catch (e) {
@@ -1304,12 +1408,16 @@ export default function Chat({ interviewId }) {
           }
         }
 
-        if (gazeRecorderTrackingRef.current && window.GazeCloudAPI && window.GazeRecorderAPI) {
+        if (
+          gazeRecorderTrackingRef.current &&
+          window.GazeCloudAPI &&
+          window.GazeRecorderAPI
+        ) {
           try {
             window.GazeRecorderAPI.StopRec();
             window.GazeCloudAPI.StopEyeTracking();
           } catch (error) {
-            console.warn('Cleanup error for GazeRecorder:', error);
+            console.warn("Cleanup error for GazeRecorder:", error);
           }
         }
 
@@ -1366,36 +1474,72 @@ export default function Chat({ interviewId }) {
 
     return (
       <div className={Styles.registrationContainer}>
-        <h2 className={Styles.registrationHeader}>Camera Setup & Security Check</h2>
+        <h2 className={Styles.registrationHeader}>
+          Camera Setup & Security Check
+        </h2>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '40px', marginTop: '20px' }}>
-
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "40px",
+            marginTop: "20px",
+          }}
+        >
           {/* LEFT: QR CODE SECTION */}
-          <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '300px' }}>
-            <h4 style={{ color: '#333', marginBottom: '10px' }}>📱 Step 1: Connect Phone</h4>
-            <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>
-              Scan to enable 360° environment view. Place phone to show your side profile.
+          <div
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "12px",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+              textAlign: "center",
+              maxWidth: "300px",
+            }}
+          >
+            <h4 style={{ color: "#333", marginBottom: "10px" }}>
+              📱 Step 1: Connect Phone
+            </h4>
+            <p
+              style={{ color: "#666", fontSize: "13px", marginBottom: "15px" }}
+            >
+              Scan to enable 360° environment view. Place phone to show your
+              side profile.
             </p>
-            <div style={{ background: 'white', padding: '10px', display: 'inline-block' }}>
+            <div
+              style={{
+                background: "white",
+                padding: "10px",
+                display: "inline-block",
+              }}
+            >
               <QRCode value={mobileUrl} size={140} />
             </div>
           </div>
 
           {/* RIGHT: WEBCAM SECTION */}
-          <div style={{ textAlign: 'center' }}>
-            <h4 style={{ color: '#fff', marginBottom: '10px' }}>💻 Step 2: Face Registration</h4>
+          <div style={{ textAlign: "center" }}>
+            <h4 style={{ color: "#fff", marginBottom: "10px" }}>
+              💻 Step 2: Face Registration
+            </h4>
             <video
               ref={videoRef}
               autoPlay
               muted
               playsInline
               className={Styles.registrationVideo}
-              style={{ width: '320px', height: '240px', borderRadius: '8px', border: '2px solid #667eea' }}
+              style={{
+                width: "320px",
+                height: "240px",
+                borderRadius: "8px",
+                border: "2px solid #667eea",
+              }}
             />
             <button
               onClick={handleFaceRegistration}
               className={Styles.registerButton}
-              style={{ marginTop: '20px' }}
+              style={{ marginTop: "20px" }}
             >
               Start Interview
             </button>
@@ -1443,7 +1587,8 @@ export default function Chat({ interviewId }) {
               marginTop: "8px",
             }}
           >
-            No action is required from you as a candidate. Please contact the recruiter to reopen interview availability for this role.
+            No action is required from you as a candidate. Please contact the
+            recruiter to reopen interview availability for this role.
           </p>
         )}
 
@@ -1481,8 +1626,7 @@ export default function Chat({ interviewId }) {
             </div>
           )}
         </div>
-      )}
-      {" "}
+      )}{" "}
       {proctoringAlert.active && (
         <div className={Styles.modalOverlay}>
           {" "}
@@ -1493,17 +1637,13 @@ export default function Chat({ interviewId }) {
               onClick={() => setProctoringAlert({ active: false, message: "" })}
             >
               Acknowledge
-            </button>
-            {" "}
-          </div>
-          {" "}
+            </button>{" "}
+          </div>{" "}
         </div>
-      )}
-      {" "}
+      )}{" "}
       <div className={Styles["video-preview"]}>
         <video ref={videoRef} autoPlay muted playsInline />       {" "}
-      </div>
-      {" "}
+      </div>{" "}
       <div className={Styles["avatar-container"]}>
         <Avatar />       {" "}
       </div>
@@ -1620,8 +1760,7 @@ export default function Chat({ interviewId }) {
             </>
           )}
         </button>
-      </div>
-      {" "}
+      </div>{" "}
       {interviewStatus === "completed" && evaluation && (
         <div className={Styles["evaluation-overlay"]}>
           {" "}
@@ -1687,7 +1826,9 @@ export default function Chat({ interviewId }) {
                       score = evaluation.quantitative_scores.answer_score;
                     }
                     // Fallback to average_relevance_score
-                    else if (evaluation?.quantitative?.average_relevance_score) {
+                    else if (
+                      evaluation?.quantitative?.average_relevance_score
+                    ) {
                       score = evaluation.quantitative.average_relevance_score;
                     }
                     // Try quantitative_scores (numeric or object fallback)
@@ -1751,8 +1892,7 @@ export default function Chat({ interviewId }) {
                     // Fallback to communication
                     else if (evaluation?.quantitative_scores?.communication) {
                       langScore = evaluation.quantitative_scores.communication;
-                    }
-                    else if (evaluation?.quantitative?.communication) {
+                    } else if (evaluation?.quantitative?.communication) {
                       langScore = evaluation.quantitative.communication;
                     }
 
@@ -1819,10 +1959,8 @@ export default function Chat({ interviewId }) {
                       Questions Answered
                     </div>
                     <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                      {evaluation.quantitative.number_of_questions}
-                      {" "}
-                    </div>
-                    {" "}
+                      {evaluation.quantitative.number_of_questions}{" "}
+                    </div>{" "}
                   </div>
                 )}
             </div>
@@ -1860,8 +1998,7 @@ export default function Chat({ interviewId }) {
                       <p key={index} style={{ marginBottom: "8px" }}>
                         {line}
                       </p>
-                    ))}
-                  {" "}
+                    ))}{" "}
                 </div>
               </div>
             )}
@@ -1870,7 +2007,9 @@ export default function Chat({ interviewId }) {
                 className={Styles["back-to-dashboard"]}
                 onClick={() => {
                   const isPracticeMode = location.state?.isPractice || false;
-                  const redirectPath = isPracticeMode ? "/practice" : "/profile#applications";
+                  const redirectPath = isPracticeMode
+                    ? "/practice"
+                    : "/profile#applications";
                   navigate(redirectPath);
                 }}
                 style={{
@@ -1897,15 +2036,14 @@ export default function Chat({ interviewId }) {
                     "0 4px 15px rgba(102, 126, 234, 0.4)";
                 }}
               >
-                {location.state?.isPractice ? "Back to Practice" : "Go to Dashboard"}
+                {location.state?.isPractice
+                  ? "Back to Practice"
+                  : "Go to Dashboard"}
               </button>
-            </div>
-            {" "}
-          </div>
-          {" "}
+            </div>{" "}
+          </div>{" "}
         </div>
-      )}
-      {" "}
+      )}{" "}
     </div>
   );
 }

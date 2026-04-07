@@ -3,7 +3,8 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 
-CANDIDATE_FREE_MONTHLY_CREDITS = 2
+CANDIDATE_FREE_MONTHLY_CREDITS = 250
+MIN_FREE_CANDIDATE_CREDITS = 250
 CANDIDATE_USAGE_COLLECTION = "candidate_practice_credit_usage"
 
 
@@ -103,7 +104,9 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
         snapshot = subscription.get("plan_snapshot") or {}
         plan_name = snapshot.get("name") or "Candidate Plan"
         plan_interviews_allowed = int(
-            subscription.get("interviews_allowed", snapshot.get("interviews_allowed", 0))
+            subscription.get(
+                "interviews_allowed", snapshot.get("interviews_allowed", 0)
+            )
             or 0
         )
 
@@ -118,7 +121,7 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
         quota_mode = "paid"
     else:
         plan_remaining = 0
-        free_allowed = CANDIDATE_FREE_MONTHLY_CREDITS
+        free_allowed = max(CANDIDATE_FREE_MONTHLY_CREDITS, MIN_FREE_CANDIDATE_CREDITS)
         free_remaining = max(0, free_allowed - free_used)
         total_allowed = free_allowed
         total_used = free_used
@@ -131,6 +134,10 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
     if not can_start:
         error_code = "CANDIDATE_PRACTICE_LIMIT_REACHED"
         error_message = "You've reached your monthly practice interview limit. Upgrade your plan to continue."
+
+    credits_allocated = int(total_allowed)
+    credits_used = int(total_used)
+    credits_remaining = int(total_remaining)
 
     return {
         "quota_mode": quota_mode,
@@ -146,6 +153,10 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
         "free_interviews_allowed": free_allowed,
         "free_interviews_used": free_used,
         "free_interviews_remaining": free_remaining,
+        "credits_allocated": credits_allocated,
+        "credits_used": credits_used,
+        "credits_remaining": credits_remaining,
+        "monthly_credits": credits_allocated,
         "interviews_allowed": total_allowed,
         "interviews_used": total_used,
         "interviews_remaining": total_remaining,
@@ -184,7 +195,9 @@ def consume_candidate_practice_credit(
     if not quota.get("can_start_interview", False):
         return False
 
-    source = "plan" if int(quota.get("plan_interviews_remaining", 0) or 0) > 0 else "free"
+    source = (
+        "plan" if int(quota.get("plan_interviews_remaining", 0) or 0) > 0 else "free"
+    )
 
     document = {
         "candidate_id": candidate_str,

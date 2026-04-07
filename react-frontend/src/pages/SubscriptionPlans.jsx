@@ -69,6 +69,43 @@ const LoadingState = ({ message = "Loading..." }) => (
   </div>
 );
 
+const CreditSummary = ({ subscription }) => {
+  const creditsRemaining = Number(
+    subscription?.credits_remaining ?? subscription?.interviews_remaining ?? 0,
+  );
+  const creditsAllocated = Number(
+    subscription?.credits_allocated ?? subscription?.interviews_allowed ?? 0,
+  );
+  const creditsUsed = Number(
+    subscription?.credits_used ?? subscription?.interviews_used ?? 0,
+  );
+  const usageCost = Number(subscription?.usage_cost_total_usd ?? 0);
+
+  const stats = [
+    {
+      label: "Credits Remaining",
+      value: creditsRemaining.toLocaleString("en-IN"),
+    },
+    { label: "Credits Used", value: creditsUsed.toLocaleString("en-IN") },
+    {
+      label: "Credits Allocated",
+      value: creditsAllocated.toLocaleString("en-IN"),
+    },
+    { label: "Usage Cost", value: `$${usageCost.toFixed(4)}` },
+  ];
+
+  return (
+    <section className={styles.creditSummary}>
+      {stats.map((item) => (
+        <article key={item.label} className={styles.creditStatCard}>
+          <p>{item.label}</p>
+          <h3>{item.value}</h3>
+        </article>
+      ))}
+    </section>
+  );
+};
+
 /**
  * Empty Plans State Component
  */
@@ -183,13 +220,15 @@ const SubscriptionPlans = () => {
         { name: "API Access", included: false },
       ],
       interviews_allowed: 2,
+      monthly_credits: 250,
       is_popular: false,
     },
     {
       id: "professional",
       slug: "professional",
       name: "Recruiter Pro",
-      description: "Professional plan for growing teams with 100 interviews per month",
+      description:
+        "Professional plan for growing teams with 100 interviews per month",
       price: 4999,
       currency: "INR",
       interval: "month",
@@ -202,6 +241,7 @@ const SubscriptionPlans = () => {
         { name: "Priority Support", included: true },
       ],
       interviews_allowed: 100,
+      monthly_credits: 20000,
       is_popular: true,
     },
     {
@@ -221,6 +261,7 @@ const SubscriptionPlans = () => {
         { name: "API Access", included: true },
       ],
       interviews_allowed: 300,
+      monthly_credits: 60000,
       is_popular: false,
     },
   ];
@@ -243,19 +284,23 @@ const SubscriptionPlans = () => {
         plansRes?.data?.plans ||
         plansRes?.plans ||
         (Array.isArray(plansRes) ? plansRes : []);
-      
+
       // Use fallback plans if API returned empty or failed
       if (!normalizedPlans || normalizedPlans.length === 0) {
         normalizedPlans = getFallbackPlans();
       }
-      
-      const allowedRecruiterPlanSlugs = new Set(["free", "professional", "recruiter-max"]);
+
+      const allowedRecruiterPlanSlugs = new Set([
+        "free",
+        "professional",
+        "recruiter-max",
+      ]);
       const recruiterPlans = normalizedPlans.filter((plan) =>
         allowedRecruiterPlanSlugs.has(String(plan?.slug || "").toLowerCase()),
       );
 
       setPlans(recruiterPlans);
-      console.log("Fetched plans:", normalizedPlans); 
+      console.log("Fetched plans:", normalizedPlans);
       console.log("Fetched plansres:", plansRes);
 
       // Normalize history response
@@ -329,6 +374,8 @@ const SubscriptionPlans = () => {
 
         {/* Tab Navigation */}
         <TabNav activeView={activeView} onChangeView={setActiveView} />
+
+        <CreditSummary subscription={subscription} />
 
         {/* Error Display */}
         {displayError && (
