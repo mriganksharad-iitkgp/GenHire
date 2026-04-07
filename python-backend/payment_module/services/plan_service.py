@@ -73,7 +73,9 @@ class PlanService:
                     slug=plan_data["slug"],
                     description=plan_data["description"],
                     price_paise=plan_data["price_paise"],
-                    interviews_allowed=plan_data["interviews_allowed"],
+                    credits_allocated=plan_data.get(
+                        "credits_allocated", plan_data.get("interviews_allowed", 0)
+                    ),
                     validity_days=plan_data["validity_days"],
                     features=plan_data["features"],
                     is_active=plan_data["is_active"],
@@ -101,7 +103,9 @@ class PlanService:
                     slug=plan_data["slug"],
                     description=plan_data["description"],
                     price_paise=plan_data["price_paise"],
-                    interviews_allowed=plan_data["interviews_allowed"],
+                    credits_allocated=plan_data.get(
+                        "credits_allocated", plan_data.get("interviews_allowed", 0)
+                    ),
                     validity_days=plan_data["validity_days"],
                     features=plan_data["features"],
                     audience=plan_data.get("audience", "recruiter"),
@@ -123,7 +127,9 @@ class PlanService:
                 {"$set": {"audience": "recruiter", "updated_at": datetime.utcnow()}},
             )
             if result.modified_count:
-                logger.info(f"Backfilled audience on {result.modified_count} legacy plans")
+                logger.info(
+                    f"Backfilled audience on {result.modified_count} legacy plans"
+                )
         except Exception as e:
             logger.error(f"Error backfilling plan audience: {str(e)}")
 
@@ -137,15 +143,15 @@ class PlanService:
                     "$set": {
                         "name": "Recruiter Max",
                         "slug": "recruiter-max",
-                        "description": "Advanced recruiter plan with 300 interviews per month",
+                        "description": "Advanced recruiter plan with 180,000 credits per month",
                         "price_paise": 999900,
-                        "interviews_allowed": 300,
+                        "credits_allocated": 180000,
                         "validity_days": 30,
                         "audience": "recruiter",
                         "display_order": 3,
                         "updated_at": now,
                         "features": [
-                            "300 AI-powered interviews/month",
+                            "180,000 AI usage credits/month",
                             "Custom integrations",
                             "Advanced analytics and reporting",
                             "Custom branding",
@@ -167,7 +173,9 @@ class PlanService:
             if max_result.modified_count:
                 logger.info("Normalized recruiter-max plan defaults")
             if delete_result.deleted_count:
-                logger.info(f"Deleted {delete_result.deleted_count} legacy enterprise plan(s)")
+                logger.info(
+                    f"Deleted {delete_result.deleted_count} legacy enterprise plan(s)"
+                )
         except Exception as e:
             logger.error(f"Error normalizing recruiter plans: {str(e)}")
 
@@ -184,7 +192,9 @@ class PlanService:
             return {"audience": "candidate"}
         return {}
 
-    def get_all_active_plans(self, audience: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_all_active_plans(
+        self, audience: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get all active plans sorted by display order.
 
@@ -204,7 +214,9 @@ class PlanService:
             logger.error(f"Error fetching plans: {str(e)}")
             return []
 
-    def get_plan_by_id(self, plan_id: str, audience: Optional[str] = None) -> Optional[Plan]:
+    def get_plan_by_id(
+        self, plan_id: str, audience: Optional[str] = None
+    ) -> Optional[Plan]:
         """
         Get plan by ID.
 
@@ -227,7 +239,9 @@ class PlanService:
             logger.error(f"Error fetching plan {plan_id}: {str(e)}")
             return None
 
-    def get_plan_by_slug(self, slug: str, audience: Optional[str] = None) -> Optional[Plan]:
+    def get_plan_by_slug(
+        self, slug: str, audience: Optional[str] = None
+    ) -> Optional[Plan]:
         """
         Get plan by slug identifier.
 
@@ -271,7 +285,7 @@ class PlanService:
             slug: URL-friendly identifier
             description: Marketing description
             price_paise: Price in paise (100 paise = 1 INR)
-            interviews_allowed: Number of interviews (-1 for unlimited)
+            interviews_allowed: Legacy alias for credits_allocated (-1 for unlimited)
             validity_days: Plan validity period
             features: List of feature strings
             display_order: Sort order
@@ -291,7 +305,7 @@ class PlanService:
                 slug=slug,
                 description=description,
                 price_paise=price_paise,
-                interviews_allowed=interviews_allowed,
+                credits_allocated=interviews_allowed,
                 validity_days=validity_days,
                 features=features or [],
                 display_order=display_order,

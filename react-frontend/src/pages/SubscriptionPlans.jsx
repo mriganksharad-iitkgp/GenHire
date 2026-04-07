@@ -170,57 +170,61 @@ const SubscriptionPlans = () => {
       id: "free",
       slug: "free",
       name: "Free Tier",
-      description: "2 one-time free interviews at signup (lifetime)",
+      description: "2,000 credits per month",
       price: 0,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "2 AI Interviews", included: true },
+        { name: "2,000 AI Usage Credits/month", included: true },
         { name: "Smart CV Matching", included: true },
         { name: "Basic Analytics", included: true },
         { name: "Priority Support", included: false },
         { name: "Custom Branding", included: false },
         { name: "API Access", included: false },
       ],
-      interviews_allowed: 2,
+      credits_allocated: 2000,
+      interviews_allowed: 2000,
       is_popular: false,
     },
     {
       id: "professional",
       slug: "professional",
       name: "Recruiter Pro",
-      description: "Professional plan for growing teams with 100 interviews per month",
+      description:
+        "Professional plan for growing teams with 75,000 credits per month",
       price: 4999,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "100 AI Interviews/month", included: true },
+        { name: "75,000 AI Usage Credits/month", included: true },
         { name: "Smart CV Matching", included: true },
         { name: "Advanced Analytics", included: true },
         { name: "CV Screening & Ranking", included: true },
         { name: "Proctoring Features", included: true },
         { name: "Priority Support", included: true },
       ],
-      interviews_allowed: 100,
+      credits_allocated: 75000,
+      interviews_allowed: 75000,
       is_popular: true,
     },
     {
       id: "recruiter-max",
       slug: "recruiter-max",
       name: "Recruiter Max",
-      description: "Advanced recruiter plan with 300 interviews per month",
+      description: "Advanced recruiter plan with 180,000 credits per month",
       price: 9999,
       currency: "INR",
       interval: "month",
       features: [
-        { name: "300 AI Interviews/month", included: true },
+        { name: "180,000 AI Usage Credits/month", included: true },
         { name: "Custom Integrations", included: true },
         { name: "Advanced Analytics & Reporting", included: true },
         { name: "Custom Branding", included: true },
         { name: "Priority Support", included: true },
         { name: "API Access", included: true },
       ],
-      interviews_allowed: 300,
+      credits_allocated: 180000,
+      interviews_allowed: 180000,
       is_popular: false,
     },
   ];
@@ -243,19 +247,23 @@ const SubscriptionPlans = () => {
         plansRes?.data?.plans ||
         plansRes?.plans ||
         (Array.isArray(plansRes) ? plansRes : []);
-      
+
       // Use fallback plans if API returned empty or failed
       if (!normalizedPlans || normalizedPlans.length === 0) {
         normalizedPlans = getFallbackPlans();
       }
-      
-      const allowedRecruiterPlanSlugs = new Set(["free", "professional", "recruiter-max"]);
+
+      const allowedRecruiterPlanSlugs = new Set([
+        "free",
+        "professional",
+        "recruiter-max",
+      ]);
       const recruiterPlans = normalizedPlans.filter((plan) =>
         allowedRecruiterPlanSlugs.has(String(plan?.slug || "").toLowerCase()),
       );
 
       setPlans(recruiterPlans);
-      console.log("Fetched plans:", normalizedPlans); 
+      console.log("Fetched plans:", normalizedPlans);
       console.log("Fetched plansres:", plansRes);
 
       // Normalize history response

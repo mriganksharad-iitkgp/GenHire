@@ -44,24 +44,27 @@ class PaymentConfig:
 
     # Interview settings
     UNLIMITED_INTERVIEWS = -1  # Sentinel value for unlimited plans
+    CREDIT_PER_USD = int(os.getenv("CREDIT_PER_USD", "1000"))
+    MIN_USAGE_CREDITS = int(os.getenv("MIN_USAGE_CREDITS", "1"))
+    START_INTERVIEW_MIN_CREDITS = int(os.getenv("START_INTERVIEW_MIN_CREDITS", "1"))
 
     # Default Plans Configuration
     # These are seeded if no plans exist in the database
     # Prices in paise (1 INR = 100 paise)
-    # - Free Tier: 2 free interviews
-    # - Recruiter Pro: ₹4,999/month, 100 interviews
-    # - Recruiter Max: ₹9,999/month, 300 interviews
+    # - Free Tier: 2,000 credits
+    # - Recruiter Pro: ₹4,999/month, 75,000 credits
+    # - Recruiter Max: ₹9,999/month, 180,000 credits
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
         "free": {
             "name": "Free Tier",
             "slug": "free",
-            "description": "Starter free tier with limited interviews",
+            "description": "Starter free tier with limited credits",
             "price_paise": 0,  # Free plan
-            "interviews_allowed": 2,
+            "credits_allocated": 2000,
             "validity_days": 365,  # Keep free tier valid for 1 year by default
             "audience": "recruiter",
             "features": [
-                "2 AI-powered interviews",
+                "2,000 AI usage credits",
                 "Basic candidate analytics",
                 "Smart CV matching",
             ],
@@ -71,13 +74,13 @@ class PaymentConfig:
         "professional": {
             "name": "Recruiter Pro",
             "slug": "professional",
-            "description": "Professional plan for growing teams with 100 interviews per month",
+            "description": "Professional plan for growing teams with 75,000 credits per month",
             "price_paise": 499900,  # ₹4,999.00
-            "interviews_allowed": 100,
+            "credits_allocated": 75000,
             "validity_days": 30,  # 1 month validity
             "audience": "recruiter",
             "features": [
-                "100 AI-powered interviews/month",
+                "75,000 AI usage credits/month",
                 "Advanced analytics & reporting",
                 "CV screening & ranking",
                 "Proctoring features",
@@ -90,13 +93,13 @@ class PaymentConfig:
         "recruiter_max": {
             "name": "Recruiter Max",
             "slug": "recruiter-max",
-            "description": "Advanced recruiter plan with 300 interviews per month",
+            "description": "Advanced recruiter plan with 180,000 credits per month",
             "price_paise": 999900,  # ₹9,999.00
-            "interviews_allowed": 300,
+            "credits_allocated": 180000,
             "validity_days": 30,  # 1 month validity
             "audience": "recruiter",
             "features": [
-                "300 AI-powered interviews/month",
+                "180,000 AI usage credits/month",
                 "Custom integrations",
                 "Advanced analytics and reporting",
                 "Custom branding",
@@ -108,13 +111,13 @@ class PaymentConfig:
         "candidate_free": {
             "name": "Free Tier",
             "slug": "candidate-free",
-            "description": "Free plan with 2 practice interviews per month",
+            "description": "Free plan with 1,500 practice credits per month",
             "price_paise": 0,
-            "interviews_allowed": 2,
+            "credits_allocated": 1500,
             "validity_days": 30,
             "audience": "candidate",
             "features": [
-                "2 Practice Interviews/month",
+                "1,500 Practice Credits/month",
                 "Smart practice feedback",
                 "Basic interview analytics",
             ],
@@ -124,13 +127,13 @@ class PaymentConfig:
         "candidate_pro": {
             "name": "Candidate Pro",
             "slug": "candidate-pro",
-            "description": "50 practice interviews per month for active preparation",
+            "description": "30,000 practice credits per month for active preparation",
             "price_paise": 99900,
-            "interviews_allowed": 50,
+            "credits_allocated": 30000,
             "validity_days": 30,
             "audience": "candidate",
             "features": [
-                "50 Practice Interviews/month",
+                "30,000 Practice Credits/month",
                 "Detailed interview scoring",
                 "Priority report generation",
             ],
@@ -141,13 +144,13 @@ class PaymentConfig:
         "candidate_max": {
             "name": "Candidate Max",
             "slug": "candidate-max",
-            "description": "100 practice interviews per month for intensive preparation",
+            "description": "70,000 practice credits per month for intensive preparation",
             "price_paise": 149900,
-            "interviews_allowed": 100,
+            "credits_allocated": 70000,
             "validity_days": 30,
             "audience": "candidate",
             "features": [
-                "100 Practice Interviews/month",
+                "70,000 Practice Credits/month",
                 "Advanced analytics dashboard",
                 "Priority support",
             ],

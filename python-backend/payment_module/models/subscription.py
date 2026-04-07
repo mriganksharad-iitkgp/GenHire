@@ -126,6 +126,12 @@ class Subscription:
         price_in_smallest = self.plan_snapshot.get(
             "price_paise", self.plan_snapshot.get("price_cents", 0)
         )
+        usage_cost_total = 0.0
+        if isinstance(self.metadata, dict):
+            usage_cost_total = float(
+                self.metadata.get("usage_cost_total_usd", 0.0) or 0.0
+            )
+
         return {
             "id": str(self._id) if self._id else None,
             "plan": {
@@ -142,6 +148,10 @@ class Subscription:
             "interviews_allowed": self.interviews_allowed,
             "interviews_remaining": self.interviews_remaining,
             "interviews_used": self.interviews_used,
+            "credits_allocated": self.interviews_allowed,
+            "credits_remaining": self.interviews_remaining,
+            "credits_used": self.interviews_used,
+            "usage_cost_total_usd": round(usage_cost_total, 6),
             "is_unlimited": self.is_unlimited,
             "is_active": self.is_active,
             "can_use_interview": self.can_use_interview,

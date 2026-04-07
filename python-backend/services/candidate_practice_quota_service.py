@@ -3,7 +3,7 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 
-CANDIDATE_FREE_LIFETIME_CREDITS = 2
+CANDIDATE_FREE_LIFETIME_CREDITS = 1500
 CANDIDATE_USAGE_COLLECTION = "candidate_practice_credit_usage"
 
 
@@ -77,13 +77,18 @@ def _find_active_candidate_subscription(db, candidate_id, now):
 
 def _usage_counts(db, candidate_id, month_key):
     usage_collection = db[CANDIDATE_USAGE_COLLECTION]
-    base_plan = {"candidate_id": str(candidate_id), "usage_month": month_key, "source": "plan"}
+    base_plan = {
+        "candidate_id": str(candidate_id),
+        "usage_month": month_key,
+        "source": "plan",
+    }
     base_free = {"candidate_id": str(candidate_id), "source": "free"}
 
     return {
         "plan_used": usage_collection.count_documents(base_plan),
         "free_used": usage_collection.count_documents(base_free),
     }
+
 
 def get_candidate_practice_quota(db, candidate_id, now=None):
     now = now or datetime.datetime.utcnow()
@@ -103,7 +108,15 @@ def get_candidate_practice_quota(db, candidate_id, now=None):
         snapshot = subscription.get("plan_snapshot") or {}
         plan_name = snapshot.get("name") or "Candidate Plan"
         plan_interviews_allowed = int(
-            subscription.get("interviews_allowed", snapshot.get("interviews_allowed", 0))
+            subscription.get(
+                "interviews_allowed",
+                subscription.get(
+                    "credits_allocated",
+                    snapshot.get(
+                        "interviews_allowed", snapshot.get("credits_allocated", 0)
+                    ),
+                ),
+            )
             or 0
         )
 
@@ -184,7 +197,9 @@ def consume_candidate_practice_credit(
     if not quota.get("can_start_interview", False):
         return False
 
-    source = "plan" if int(quota.get("plan_interviews_remaining", 0) or 0) > 0 else "free"
+    source = (
+        "plan" if int(quota.get("plan_interviews_remaining", 0) or 0) > 0 else "free"
+    )
 
     document = {
         "candidate_id": candidate_str,

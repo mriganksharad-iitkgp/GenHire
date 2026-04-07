@@ -1,5 +1,6 @@
 import os
 import warnings
+
 # Suppress pydantic warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
@@ -13,7 +14,7 @@ ch = logging.StreamHandler()
 ch.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(ch)
 # Suppress TensorFlow and mediapipe warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warn, 3=error
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # 0=all, 1=info, 2=warn, 3=error
 warnings.filterwarnings("ignore", category=UserWarning)
 
 from flask import Flask, request, jsonify, Response
@@ -46,12 +47,10 @@ from routes.admin_routes import admin_bp, init_admin_routes
 from routes.speech_routes import speech_bp
 
 from services.cv_scoring_service import CVScoringService
-from services.interview_quota_service import (
-    get_recruiter_interview_quota,
-    consume_interview_credit,
-)
 from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
+from payment_module.services.subscription_service import SubscriptionService
+from interview.core.cost_tracker import CostTracker
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
 # try:
@@ -68,6 +67,7 @@ RECORDING_ANALYZER_AVAILABLE = False
 # Import payment module
 try:
     from payment_module.routes import payment_bp, init_payment_routes
+
     PAYMENT_MODULE_AVAILABLE = True
     print("[OK] Payment module loaded successfully")
 except ImportError as e:
@@ -78,7 +78,6 @@ except ImportError as e:
 load_dotenv()
 
 
-
 # Initialize Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
@@ -87,14 +86,23 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # Configure CORS to allow all origins
-CORS(app, 
-     resources={r"/*": {
-         "origins": "*",
-         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
-         "supports_credentials": True,
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-         "expose_headers": ["Content-Type", "Authorization"]
-     }})
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": "*",
+            "allow_headers": [
+                "Content-Type",
+                "Authorization",
+                "Access-Control-Allow-Credentials",
+            ],
+            "supports_credentials": True,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+            "expose_headers": ["Content-Type", "Authorization"],
+        }
+    },
+)
+
 
 # Handle preflight OPTIONS requests
 @app.before_request
@@ -102,22 +110,30 @@ def handle_preflight():
     if request.method == "OPTIONS":
         response = app.make_default_options_response()
         headers = response.headers
-        headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
-        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Access-Control-Allow-Credentials'
-        headers['Access-Control-Allow-Credentials'] = 'true'
+        headers["Access-Control-Allow-Origin"] = request.headers.get("Origin", "*")
+        headers["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        )
+        headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, Access-Control-Allow-Credentials"
+        )
+        headers["Access-Control-Allow-Credentials"] = "true"
         return response
+
 
 # Add CORS headers to all responses
 @app.after_request
 def after_request(response):
-    origin = request.headers.get('Origin')
+    origin = request.headers.get("Origin")
     if origin:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        )
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+
 
 # Initialize database
 db = db_config.connect()
@@ -131,6 +147,7 @@ jobs_collection = collections["jobs"]
 
 # Initialize and start background processor for CV scoring
 from services.background_processor import get_background_processor
+
 background_processor = get_background_processor()
 background_processor.start()
 logger.info("[OK] Background processor started for async CV scoring")
@@ -145,13 +162,13 @@ app.register_blueprint(practice_bp)
 
 # Register CV routes (requires collections, so created after database initialization)
 cv_bp = create_cv_routes(collections)
-app.register_blueprint(cv_bp, url_prefix='/api/cv')
+app.register_blueprint(cv_bp, url_prefix="/api/cv")
 
 # Initialize and register admin routes
 admin_controller = AdminController(collections)
 init_admin_routes(admin_controller)
-app.register_blueprint(admin_bp, url_prefix='/api/admin')
-app.register_blueprint(speech_bp, url_prefix='/api/speech')
+app.register_blueprint(admin_bp, url_prefix="/api/admin")
+app.register_blueprint(speech_bp, url_prefix="/api/speech")
 logger.info("[OK] Admin routes registered at /api/admin")
 
 # Define a dictionary to hold a detector instance for each session
@@ -189,7 +206,7 @@ os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
 M_RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "mobile_recordings")
 os.makedirs(RECORDING_FOLDER, exist_ok=True)
-os.makedirs(M_RECORDING_FOLDER, exist_ok=True)  
+os.makedirs(M_RECORDING_FOLDER, exist_ok=True)
 TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
 os.makedirs(TMP_FOLDER, exist_ok=True)
 
@@ -231,37 +248,70 @@ def _format_cv_from_details(cv_details: dict) -> str:
     pi = cv_details.get("personalInfo", {})
     if pi:
         parts.append("PERSONAL INFORMATION")
-        for k in ["fullName","email","phone","location","linkedin","github"]:
+        for k in ["fullName", "email", "phone", "location", "linkedin", "github"]:
             v = pi.get(k)
-            if v: parts.append(str(v))
+            if v:
+                parts.append(str(v))
     if cv_details.get("professionalSummary"):
         parts.append(cv_details.get("professionalSummary"))
     for edu in cv_details.get("education", []) or []:
-        line = " ".join(filter(None, [edu.get("degree"), edu.get("institution"), str(edu.get("year") or "")]))
-        if line.strip(): parts.append(line)
-        if edu.get("description"): parts.append(edu["description"])
+        line = " ".join(
+            filter(
+                None,
+                [edu.get("degree"), edu.get("institution"), str(edu.get("year") or "")],
+            )
+        )
+        if line.strip():
+            parts.append(line)
+        if edu.get("description"):
+            parts.append(edu["description"])
     for exp in cv_details.get("workExperience", []) or []:
-        line = " ".join(filter(None, [exp.get("jobTitle"), exp.get("company"), str(exp.get("duration") or "")]))
-        if line.strip(): parts.append(line)
-        if exp.get("description"): parts.append(exp["description"])
+        line = " ".join(
+            filter(
+                None,
+                [
+                    exp.get("jobTitle"),
+                    exp.get("company"),
+                    str(exp.get("duration") or ""),
+                ],
+            )
+        )
+        if line.strip():
+            parts.append(line)
+        if exp.get("description"):
+            parts.append(exp["description"])
     skills = cv_details.get("skills", {})
     for key in ["technical", "soft", "languages"]:
         arr = skills.get(key)
-        if arr: parts.append(", ".join(arr))
+        if arr:
+            parts.append(", ".join(arr))
     for proj in cv_details.get("projects", []) or []:
-        if proj.get("title"): parts.append(proj["title"])
-        if proj.get("description"): parts.append(proj["description"])
+        if proj.get("title"):
+            parts.append(proj["title"])
+        if proj.get("description"):
+            parts.append(proj["description"])
     return "\n".join(parts)
+
 
 def _format_job_from_doc(job: dict) -> str:
     if not isinstance(job, dict):
         return ""
     parts = []
-    for k in ["title","company","department","location","type","experience","salary"]:
+    for k in [
+        "title",
+        "company",
+        "department",
+        "location",
+        "type",
+        "experience",
+        "salary",
+    ]:
         v = job.get(k)
-        if v: parts.append(str(v))
-    if job.get("description"): parts.append(job["description"])
-    for sec in ["skills","responsibilities","requirements","benefits"]:
+        if v:
+            parts.append(str(v))
+    if job.get("description"):
+        parts.append(job["description"])
+    for sec in ["skills", "responsibilities", "requirements", "benefits"]:
         vals = job.get(sec) or []
         if isinstance(vals, list) and vals:
             parts.append("\n".join([str(x) for x in vals]))
@@ -277,10 +327,12 @@ if PAYMENT_MODULE_AVAILABLE:
     except Exception as e:
         print(f"[WARN] Failed to initialize payment module: {e}")
 
+
 # health check route
-@app.route('/health', methods=['GET'])
+@app.route("/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "healthy"}), 200
+
 
 # basic index route
 @app.route("/")
@@ -313,33 +365,34 @@ def start_interview(current_user):
     student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
-    # --- Interview quota enforcement ---
+    # --- Interview start credit pre-check (deduction occurs at interview end) ---
     if job:
         recruiter_id = job.get("created_by")
         if recruiter_id:
             db = db_config.get_db()
-            quota = get_recruiter_interview_quota(db, recruiter_id)
+            subscription_service = SubscriptionService(db)
+            availability = subscription_service.check_credit_availability(
+                employer_id=str(recruiter_id),
+                audience="recruiter",
+            )
 
-            if not quota.get("can_start_interview", False):
-                return jsonify(
-                    {
-                        "error": quota.get("error_message")
-                        or "Interview is currently unavailable for this job.",
-                        "error_code": quota.get("error_code")
-                        or "RECRUITER_INTERVIEW_LIMIT_REACHED",
-                        "plan_owner": quota.get("plan_owner", "recruiter"),
-                    }
-                ), 403
-
-            # Consume credit idempotently for this application/month.
-            if not consume_interview_credit(db, recruiter_id, application_id, quota_snapshot=quota):
-                return jsonify(
-                    {
-                        "error": "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan.",
-                        "error_code": "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
-                        "plan_owner": "recruiter",
-                    }
-                ), 403
+            if not availability.get("can_start_interview", False):
+                return (
+                    jsonify(
+                        {
+                            "error": availability.get("error")
+                            or "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan.",
+                            "error_code": availability.get("error_code")
+                            or "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
+                            "plan_owner": "recruiter",
+                            "can_start_interview": False,
+                            "credits_remaining": availability.get(
+                                "credits_remaining", 0
+                            ),
+                        }
+                    ),
+                    402,
+                )
 
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -350,14 +403,19 @@ def start_interview(current_user):
 
     # Build plain-text CV and JD from stored structured data
     cv_text = (
-        cv_service.format_cv_details(cv_details) if cv_service else _format_cv_from_details(cv_details)
+        cv_service.format_cv_details(cv_details)
+        if cv_service
+        else _format_cv_from_details(cv_details)
     )
     jd_text = (
-        cv_service.format_job_description(job) if cv_service else _format_job_from_doc(job)
+        cv_service.format_job_description(job)
+        if cv_service
+        else _format_job_from_doc(job)
     )
 
     # Persist as temporary .txt files for the interview document pipeline
     import uuid as _uuid
+
     cv_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_cv.txt")
     jd_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_jd.txt")
     with open(cv_txt_path, "w", encoding="utf-8") as f:
@@ -373,7 +431,9 @@ def start_interview(current_user):
         return jsonify(session_details), 400
 
     cv_score = app_doc.get("cv_score")
-    sim_score = (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
+    sim_score = (
+        (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
+    )
 
     interview_doc = {
         "user_id": str(current_user["_id"]),
@@ -473,61 +533,64 @@ def end_interview(current_user, session_id):
     session = interview_manager.sessions.get(session_id)
     final_evaluation = {}
     interview_transcript = []
-    
+
     # HARDCODED SCORES - To be replaced with actual model calculations
     interview_score = 85  # Hardcoded interview score
-    
+
     if session and session.is_complete:
         # Generate evaluation from the session manager instead of accessing session attribute
         final_evaluation = interview_manager._generate_final_evaluation(session)
-        
+
         # Extract transcript from interview data
-        if hasattr(session, 'interview_data') and session.interview_data:
+        if hasattr(session, "interview_data") and session.interview_data:
             for qa in session.interview_data:
-                interview_transcript.append({
-                    'role': 'assistant',
-                    'text': qa.get('question', '')
-                })
-                interview_transcript.append({
-                    'role': 'user',
-                    'text': qa.get('answer', '')
-                })
-            
+                interview_transcript.append(
+                    {"role": "assistant", "text": qa.get("question", "")}
+                )
+                interview_transcript.append(
+                    {"role": "user", "text": qa.get("answer", "")}
+                )
+
     elif session:
         # If ended prematurely, generate evaluation now
         final_evaluation = interview_manager._generate_final_evaluation(session)
-        
+
         # Extract transcript
-        if hasattr(session, 'interview_data') and session.interview_data:
+        if hasattr(session, "interview_data") and session.interview_data:
             for qa in session.interview_data:
-                interview_transcript.append({
-                    'role': 'assistant',
-                    'text': qa.get('question', '')
-                })
-                interview_transcript.append({
-                    'role': 'user',
-                    'text': qa.get('answer', '')
-                })
+                interview_transcript.append(
+                    {"role": "assistant", "text": qa.get("question", "")}
+                )
+                interview_transcript.append(
+                    {"role": "user", "text": qa.get("answer", "")}
+                )
     else:
         final_evaluation = {
             "summary": "Evaluation not computed in this build.",
-            "final_score": None
+            "final_score": None,
         }
 
     # Get proctoring data from external service
-    proctoring_service_url = os.getenv("PROCTORING_SERVICE_URL", "http://localhost:5001")
+    proctoring_service_url = os.getenv(
+        "PROCTORING_SERVICE_URL", "http://localhost:5001"
+    )
     try:
         import requests
-        resp = requests.get(f"{proctoring_service_url}/api/session/{session_id}/stats", timeout=2)
+
+        resp = requests.get(
+            f"{proctoring_service_url}/api/session/{session_id}/stats", timeout=2
+        )
         if resp.status_code == 200:
             stats = resp.json()
             proctoring_score = stats.get("proctoring_score", 90)
             manual_infractions = stats.get("manual_infractions", [])
             gaze_times = stats.get("gaze_times")
             gaze_plot_filename = stats.get("gaze_plot_filename")
-            
+
             if gaze_plot_filename:
-                gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], gaze_plot_filename)
+                gaze_plot_path = os.path.join(
+                    app.config["PROCTORING_FOLDER"], gaze_plot_filename
+                )
             else:
                 gaze_plot_path = None
         else:
@@ -543,8 +606,8 @@ def end_interview(current_user, session_id):
         manual_infractions = []
         gaze_times = None
         gaze_plot_path = None
-    
-    suspicious_activity_time = 0 # Not tracking this explicitly anymore in app.py
+
+    suspicious_activity_time = 0  # Not tracking this explicitly anymore in app.py
 
     # Calculate total interview duration for logging
     interview_duration = 0
@@ -555,38 +618,95 @@ def end_interview(current_user, session_id):
         start_time = session_doc["created_at"]
         end_time = datetime.datetime.utcnow()
         interview_duration = (end_time - start_time).total_seconds()
-        
+
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
 
     # Derive actual media usage from the transcript/session timing
     tts_characters = sum(
-        len((item.get('text') or '').strip())
+        len((item.get("text") or "").strip())
         for item in interview_transcript
-        if item.get('role') == 'assistant'
+        if item.get("role") == "assistant"
     )
     stt_seconds = max(0.0, float(interview_duration or 0.0))
+
+    usage_summary = CostTracker().end_session(
+        session_id,
+        clear_events=True,
+        fallback={
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_stt_seconds": stt_seconds,
+            "total_tts_characters": int(tts_characters or 0),
+            "model": "llama-3.3-70b-versatile",
+        },
+    )
+
+    recruiter_owner_id = None
+    existing_app = None
+    if session_doc and session_doc.get("application_id"):
+        try:
+            existing_app = applications_collection.find_one(
+                {"_id": ObjectId(session_doc["application_id"])}
+            )
+            if existing_app and existing_app.get("job_id"):
+                job_doc_for_billing = jobs_collection.find_one(
+                    {"_id": ObjectId(existing_app["job_id"])},
+                    {"created_by": 1},
+                )
+                if job_doc_for_billing:
+                    recruiter_owner_id = str(
+                        job_doc_for_billing.get("created_by") or ""
+                    )
+        except Exception:
+            recruiter_owner_id = None
+
+    if recruiter_owner_id:
+        subscription_service = SubscriptionService(db_config.get_db())
+        usage_deduction = subscription_service.consume_usage_credits(
+            employer_id=recruiter_owner_id,
+            audience="recruiter",
+            usage_summary=usage_summary,
+            idempotency_key=f"interview-session:{session_id}",
+            metadata={
+                "session_id": session_id,
+                "application_id": str(session_doc.get("application_id") or ""),
+                "source": "interview_session",
+            },
+        )
+    else:
+        usage_deduction = {
+            "success": False,
+            "credits_deducted": 0,
+            "usage_cost_usd": float(usage_summary.get("total_cost", 0.0) or 0.0),
+            "error": "Unable to resolve recruiter owner for billing.",
+            "error_code": "missing_recruiter_owner",
+        }
 
     # --- NEW: Generate and save the gaze plot ---
     gaze_plot_path = None
     # Gaze plot generation is now handled by the external service
 
-
-
     # Update the database record with final data
     interviews_collection.update_one(
-        {'session_id': session_id, 'user_id': str(current_user['_id'])},
-        {'$set': {
-            'status': 'completed',
-            'evaluation': final_evaluation,
-            'final_score': interview_score,  # Store calculated interview score
-            'proctoring_score': proctoring_score,  # Store calculated proctoring score
-            'transcript': interview_transcript,  # Store conversation transcript
-            'manual_infractions': manual_infractions,
-            'gaze_metrics': gaze_times,
-            'gaze_plot_path': gaze_plot_path,
-            'updated_at': datetime.datetime.utcnow()
-        }}
+        {"session_id": session_id, "user_id": str(current_user["_id"])},
+        {
+            "$set": {
+                "status": "completed",
+                "evaluation": final_evaluation,
+                "final_score": interview_score,  # Store calculated interview score
+                "proctoring_score": proctoring_score,  # Store calculated proctoring score
+                "transcript": interview_transcript,  # Store conversation transcript
+                "manual_infractions": manual_infractions,
+                "gaze_metrics": gaze_times,
+                "gaze_plot_path": gaze_plot_path,
+                "stt_seconds": stt_seconds,
+                "tts_characters": int(tts_characters or 0),
+                "usage_summary": usage_summary,
+                "usage_deduction": usage_deduction,
+                "updated_at": datetime.datetime.utcnow(),
+            }
+        },
     )
 
     # Also update the related application with both scores if linked
@@ -594,20 +714,28 @@ def end_interview(current_user, session_id):
         try:
             application_id = session_doc["application_id"]
             # First, check if the application exists
-            existing_app = applications_collection.find_one({"_id": ObjectId(application_id)})
+            existing_app = existing_app or applications_collection.find_one(
+                {"_id": ObjectId(application_id)}
+            )
             if not existing_app:
-                print(f"❌ ERROR: Application with ID {application_id} NOT FOUND in database!")
-                return jsonify({
-                    'status': 'interview_ended',
-                    'evaluation': final_evaluation,
-                    'interview_score': interview_score,
-                    'proctoring_score': proctoring_score,
-                    'transcript': interview_transcript,
-                    'error': 'Application not found'
-                })
+                print(
+                    f"❌ ERROR: Application with ID {application_id} NOT FOUND in database!"
+                )
+                return jsonify(
+                    {
+                        "status": "interview_ended",
+                        "evaluation": final_evaluation,
+                        "interview_score": interview_score,
+                        "proctoring_score": proctoring_score,
+                        "transcript": interview_transcript,
+                        "usage_summary": usage_summary,
+                        "usage_deduction": usage_deduction,
+                        "error": "Application not found",
+                    }
+                )
 
             previous_status = str(existing_app.get("status", "pending")).lower()
-            
+
             result = applications_collection.update_one(
                 {"_id": ObjectId(application_id)},
                 {
@@ -630,155 +758,176 @@ def end_interview(current_user, session_id):
             if previous_status in status_counters and previous_status != "interviewed":
                 job_counter_update[previous_status] = -1
             if previous_status != "interviewed":
-                job_counter_update["interviewed"] = job_counter_update.get("interviewed", 0) + 1
+                job_counter_update["interviewed"] = (
+                    job_counter_update.get("interviewed", 0) + 1
+                )
 
             if job_counter_update:
                 jobs_collection.update_one(
                     {"_id": ObjectId(existing_app["job_id"])},
                     {"$inc": job_counter_update},
                 )
-            
-            if result.modified_count == 0:
-                print(f"❌ Warning: Application {application_id} was not updated (no documents modified)")
 
-            recruiter_actor_id = str(existing_app.get('recruiter_id') or '')
+            if result.modified_count == 0:
+                print(
+                    f"❌ Warning: Application {application_id} was not updated (no documents modified)"
+                )
+
+            recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
 
             record_usage_event(
                 collections,
-                action_type='ai_interview',
-                actor_type='recruiter',
+                action_type="ai_interview",
+                actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model='gpt-4o',
+                model="gpt-4o",
                 stt_seconds=stt_seconds,
                 tts_characters=int(tts_characters or 0),
-                usage_source='actual',
+                usage_source="actual",
                 source={
-                    'type': 'application',
-                    'id': str(application_id),
-                    'label': existing_app.get('job_title') or 'Interview',
+                    "type": "application",
+                    "id": str(application_id),
+                    "label": existing_app.get("job_title") or "Interview",
                 },
                 occurred_at=datetime.datetime.utcnow(),
                 metadata={
-                    'session_id': session_id,
-                    'proctoring_score': proctoring_score,
-                }
+                    "session_id": session_id,
+                    "proctoring_score": proctoring_score,
+                },
             )
 
             record_usage_event(
                 collections,
-                action_type='ai_interview_evaluation',
-                actor_type='recruiter',
+                action_type="ai_interview_evaluation",
+                actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model='gpt-5-mini',
-                usage_source='assumed',
+                model="gpt-5-mini",
+                usage_source="assumed",
                 source={
-                    'type': 'application',
-                    'id': str(application_id),
-                    'label': existing_app.get('job_title') or 'Interview Evaluation',
+                    "type": "application",
+                    "id": str(application_id),
+                    "label": existing_app.get("job_title") or "Interview Evaluation",
                 },
                 occurred_at=datetime.datetime.utcnow(),
                 metadata={
-                    'session_id': session_id,
-                }
+                    "session_id": session_id,
+                },
             )
-                
+
         except Exception as e:
             print(f"❌ Error updating application: {e}")
             import traceback
+
             traceback.print_exc()
     else:
         print(f"⚠️ WARNING: No application_id found in session document!")
-        print(f"⚠️ Session doc keys: {session_doc.keys() if session_doc else 'No session doc'}")
-            
-    return jsonify({
-        'status': 'interview_ended',
-        'evaluation': final_evaluation,
-        'interview_score': interview_score,
-        'proctoring_score': proctoring_score,
-        'transcript': interview_transcript
-    })
+        print(
+            f"⚠️ Session doc keys: {session_doc.keys() if session_doc else 'No session doc'}"
+        )
+
+    return jsonify(
+        {
+            "status": "interview_ended",
+            "evaluation": final_evaluation,
+            "interview_score": interview_score,
+            "proctoring_score": proctoring_score,
+            "transcript": interview_transcript,
+            "usage_summary": usage_summary,
+            "usage_deduction": usage_deduction,
+        }
+    )
+
 
 # ... (rest of app.py remains the same)
 
 
-@app.route('/api/interviews/<session_id>/gaze-recorder-page', methods=['GET'])
+@app.route("/api/interviews/<session_id>/gaze-recorder-page", methods=["GET"])
 def get_gaze_recorder_page(session_id):
     """
     Serves a GazeRecorder + heatmap analysis page using the exact browser API flow.
     Optional query param: ?token=<jwt> for result submission.
     """
-    auth_token = request.args.get('token', '')
+    auth_token = request.args.get("token", "")
     submit_url = f"{request.host_url.rstrip('/')}/api/interviews/{session_id}/gaze-recorder-results"
     html = gaze_recorder_service.build_session_page(
-        session_id=session_id,
-        submit_url=submit_url,
-        auth_token=auth_token
+        session_id=session_id, submit_url=submit_url, auth_token=auth_token
     )
-    return Response(html, mimetype='text/html')
+    return Response(html, mimetype="text/html")
 
 
-@app.route('/api/interviews/<session_id>/gaze-recorder-results', methods=['POST'])
+@app.route("/api/interviews/<session_id>/gaze-recorder-results", methods=["POST"])
 @token_required
 def upload_gaze_recorder_results(current_user, session_id):
     """
     Receives raw GazeRecorder payloads and stores smart heatmap analysis.
     """
     data = request.get_json() or {}
-    recording_data = data.get('recordingData')
-    gaze_points = data.get('gazePoints', [])
-    started_at_ms = data.get('startedAtMs')
-    ended_at_ms = data.get('endedAtMs')
-    viewport = data.get('viewport', {})
-    width = int(viewport.get('width', 1920) or 1920)
-    height = int(viewport.get('height', 1080) or 1080)
+    recording_data = data.get("recordingData")
+    gaze_points = data.get("gazePoints", [])
+    started_at_ms = data.get("startedAtMs")
+    ended_at_ms = data.get("endedAtMs")
+    viewport = data.get("viewport", {})
+    width = int(viewport.get("width", 1920) or 1920)
+    height = int(viewport.get("height", 1080) or 1080)
 
     if not isinstance(gaze_points, list) or len(gaze_points) == 0:
-        return jsonify({'error': 'gazePoints are required'}), 400
+        return jsonify({"error": "gazePoints are required"}), 400
 
     analysis_result = gaze_recorder_service.analyze_gaze_patterns(
         gaze_points=gaze_points,
         window_width=width,
         window_height=height,
         started_at_ms=started_at_ms,
-        ended_at_ms=ended_at_ms
+        ended_at_ms=ended_at_ms,
     )
 
     file_paths = gaze_recorder_service.save_payload_files(
         session_id=session_id,
-        user_id=str(current_user['_id']),
+        user_id=str(current_user["_id"]),
         recording_data=recording_data,
         analysis_result=analysis_result,
-        gaze_points=gaze_points
+        gaze_points=gaze_points,
     )
 
     interviews_collection.update_one(
-        {'session_id': session_id, 'user_id': str(current_user['_id'])},
-        {'$set': {
-            'gaze_recorder_recording_path': file_paths.get('recording_path'),
-            'gaze_recorder_analysis_path': file_paths['analysis_path'],
-            'gaze_recorder_points_path': file_paths['points_path'],
-            'gaze_recorder_analysis': analysis_result,
-            'gaze_recorder_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
-            'proctoring_score': max(0, 100 - analysis_result.get('cheatingScore', 0)),
-            'proctoring_source': 'gaze_recorder_api',
-            'updated_at': datetime.datetime.utcnow()
-        }}
+        {"session_id": session_id, "user_id": str(current_user["_id"])},
+        {
+            "$set": {
+                "gaze_recorder_recording_path": file_paths.get("recording_path"),
+                "gaze_recorder_analysis_path": file_paths["analysis_path"],
+                "gaze_recorder_points_path": file_paths["points_path"],
+                "gaze_recorder_analysis": analysis_result,
+                "gaze_recorder_score": max(
+                    0, 100 - analysis_result.get("cheatingScore", 0)
+                ),
+                "proctoring_score": max(
+                    0, 100 - analysis_result.get("cheatingScore", 0)
+                ),
+                "proctoring_source": "gaze_recorder_api",
+                "updated_at": datetime.datetime.utcnow(),
+            }
+        },
     )
 
-    return jsonify({
-        'message': 'GazeRecorder results saved successfully',
-        'analysis': analysis_result
-    }), 200
+    return (
+        jsonify(
+            {
+                "message": "GazeRecorder results saved successfully",
+                "analysis": analysis_result,
+            }
+        ),
+        200,
+    )
 
 
-@app.route('/api/interviews/<session_id>/upload-recording', methods=['POST'])
+@app.route("/api/interviews/<session_id>/upload-recording", methods=["POST"])
 @token_required
 def upload_recording(current_user, session_id):
-    if 'recording' not in request.files:
-        return jsonify({'error': 'No recording file part'}), 400
-    file = request.files['recording']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    if "recording" not in request.files:
+        return jsonify({"error": "No recording file part"}), 400
+    file = request.files["recording"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
     if file:
         filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
         filepath = os.path.join(app.config["RECORDING_FOLDER"], filename)
@@ -789,7 +938,7 @@ def upload_recording(current_user, session_id):
             {"$set": {"recording_path": filepath}},
         )
         if recording_analyzer:
-            # Note: This might take some time to process. 
+            # Note: This might take some time to process.
             # For a production app, this should be a background task (Celery/Redis).
             try:
                 recording_analyzer.run_full_analysis(filepath)
@@ -805,30 +954,29 @@ def upload_recording(current_user, session_id):
 
 # In app.py (add near your existing upload-recording route)
 
-@app.route('/api/interviews/<session_id>/upload-mobile-recording', methods=['POST'])
+
+@app.route("/api/interviews/<session_id>/upload-mobile-recording", methods=["POST"])
 # @token_required  <-- NOTE: You might need to relax auth or pass a temporary token via URL for the mobile device
 def upload_mobile_recording(session_id):
-    if 'recording' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['recording']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-        
+    if "recording" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files["recording"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
     if file:
         # Save with a specific suffix to distinguish from webcam
         filename = secure_filename(f"{session_id}_mobile_env.webm")
         filepath = os.path.join(app.config["M_RECORDING_FOLDER"], filename)
         file.save(filepath)
-        
+
         # Update database with mobile recording path
         interviews_collection.update_one(
-            {"session_id": session_id},
-            {"$set": {"mobile_recording_path": filepath}}
+            {"session_id": session_id}, {"$set": {"mobile_recording_path": filepath}}
         )
-        
-        return jsonify({"message": "Mobile recording uploaded"}), 200
 
+        return jsonify({"message": "Mobile recording uploaded"}), 200
 
 
 @app.route("/api/interviews", methods=["GET"])
@@ -880,15 +1028,15 @@ def get_user_interviews(current_user):
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
 def register_face(current_user, session_id):
-    # This might now be handled by the proctoring service directly, 
+    # This might now be handled by the proctoring service directly,
     # OR we just acknowledge it here if the frontend still calls this for status updates.
     # For now, we'll just update status and let the proctoring service handle the image if the frontend calls it there too.
-    
-    # If the frontend calls THIS endpoint with the image, we might need to forward it or just ignore it 
+
+    # If the frontend calls THIS endpoint with the image, we might need to forward it or just ignore it
     # if the frontend calls the proctoring service separately.
-    # Assuming frontend will be updated to call proctoring service for face reg, 
+    # Assuming frontend will be updated to call proctoring service for face reg,
     # but we still need to set status to active.
-    
+
     # Update the interview status in the database
     interviews_collection.update_one(
         {"session_id": session_id, "user_id": str(current_user["_id"])},
@@ -896,7 +1044,7 @@ def register_face(current_user, session_id):
     )
     return jsonify({"message": "Interview activated"}), 200
 
-# def register_face(current_user, session_id):_OLD
+    # def register_face(current_user, session_id):_OLD
     data = request.get_json()
     if "image" not in data:
         return jsonify({"error": "No image data provided"}), 400
@@ -928,39 +1076,47 @@ def register_face(current_user, session_id):
 @socketio.on("connect")
 def handle_connect():
     from flask import request
+
     pass
 
-@socketio.on("disconnect")  
+
+@socketio.on("disconnect")
 def handle_disconnect():
-    from flask import request  
+    from flask import request
+
     # Clean up any sessions associated with this client
     # Note: In SocketIO, we don't have direct access to sid in these handlers
     # We'll need to handle cleanup differently
     pass
 
+
 # Socket handlers for proctoring have been moved to proctoring_server.py
+
 
 @socketio.on("join_mobile_session")
 def handle_mobile_join(data):
     session_id = data.get("session_id")
     # Join the specific room for this interview session
     from flask_socketio import join_room
+
     join_room(session_id)
     # Notify the desktop client that mobile is connected
     socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
 
+
 @socketio.on("control_mobile_recording")
 def handle_mobile_control(data):
     session_id = data.get("session_id")
-    action = data.get("action") # 'start' or 'stop'
-    
+    action = data.get("action")  # 'start' or 'stop'
+
     # Relay the command to the mobile device in the room
     socketio.emit("mobile_recording_action", {"action": action}, room=session_id)
+
 
 @socketio.on("mobile_status_update")
 def handle_mobile_status(data):
     session_id = data.get("session_id")
-    status = data.get("status") # e.g., 'recording', 'uploading', 'completed'
+    status = data.get("status")  # e.g., 'recording', 'uploading', 'completed'
     # Relay status back to desktop to show user
     socketio.emit("mobile_status_dashboard", {"status": status}, room=session_id)
 

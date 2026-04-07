@@ -3,9 +3,9 @@ import { getCurrentSubscription } from "../../../services/payment";
 
 const getDefaultFreeTier = () => ({
   plan: { name: "Free Tier", slug: "candidate-free" },
-  interviews_remaining: 2,
-  interviews_allowed: 2,
-  interviews_used: 0,
+  credits_remaining: 0,
+  credits_allocated: 0,
+  credits_used: 0,
   is_unlimited: false,
   status: "active",
 });
@@ -49,12 +49,9 @@ const useCandidateSubscription = () => {
                     .replace(/\s+/g, "-")
                 : "candidate-free",
             },
-            interviews_remaining: Math.max(
-              0,
-              Number(plan.interviews_remaining ?? 0),
-            ),
-            interviews_allowed: Number(plan.interviews_allowed ?? 2),
-            interviews_used: Number(plan.interviews_used ?? 0),
+            credits_remaining: Math.max(0, Number(plan.credits_remaining ?? 0)),
+            credits_allocated: Number(plan.credits_allocated ?? 0),
+            credits_used: Number(plan.credits_used ?? 0),
             is_unlimited: false,
             status: "active",
           });
@@ -81,8 +78,8 @@ const useCandidateSubscription = () => {
     loadSubscription();
   }, [loadSubscription]);
 
-  const interviewsRemaining = subscription?.interviews_remaining ?? 2;
-  const interviewsAllowed = subscription?.interviews_allowed ?? 2;
+  const interviewsRemaining = subscription?.credits_remaining ?? 0;
+  const interviewsAllowed = subscription?.credits_allocated ?? 0;
   const isFreeTier =
     !subscription ||
     subscription?.plan?.slug === "candidate-free" ||

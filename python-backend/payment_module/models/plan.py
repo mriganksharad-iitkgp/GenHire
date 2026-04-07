@@ -3,7 +3,7 @@ Plan Model - Represents pricing plans for the hiring platform
 
 Design Decisions:
 1. Price stored in paise (integer) to avoid floating point issues (1 INR = 100 paise)
-2. interviews_allowed = -1 indicates unlimited interviews
+2. credits_allocated = -1 indicates unlimited credits
 3. Soft delete via is_active flag for data integrity
 4. Compound index on (slug, is_active) for efficient lookups
 """
@@ -24,7 +24,7 @@ class Plan:
         slug: URL-friendly identifier (e.g., "free", "professional", "recruiter-max")
         description: Marketing description
         price_paise: Price in paise (99900 = ₹999.00)
-        interviews_allowed: Number of interviews, -1 for unlimited
+        credits_allocated: Number of credits, -1 for unlimited
         validity_days: How long the plan is valid after purchase
         features: List of feature descriptions for display
         is_active: Whether plan is available for purchase
@@ -37,7 +37,7 @@ class Plan:
     slug: str
     description: str
     price_paise: int
-    interviews_allowed: int
+    credits_allocated: int
     validity_days: int
     features: List[str] = field(default_factory=list)
     audience: str = "recruiter"
@@ -55,8 +55,23 @@ class Plan:
 
     @property
     def is_unlimited(self) -> bool:
-        """Check if plan has unlimited interviews"""
-        return self.interviews_allowed == -1
+        """Check if plan has unlimited credits"""
+        return self.credits_allocated == -1
+
+    @property
+    def interviews_allowed(self) -> int:
+        """Legacy alias kept for compatibility."""
+        return self.credits_allocated
+
+    @property
+    def credits_remaining(self) -> int:
+        """Plan templates do not track remaining credits; mirror allocation for display."""
+        return self.credits_allocated
+
+    @property
+    def credits_used(self) -> int:
+        """Plan templates do not track used credits."""
+        return 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage"""
@@ -65,6 +80,9 @@ class Plan:
             "slug": self.slug,
             "description": self.description,
             "price_paise": self.price_paise,
+            "credits_allocated": self.credits_allocated,
+            "credits_remaining": self.credits_remaining,
+            "credits_used": self.credits_used,
             "interviews_allowed": self.interviews_allowed,
             "validity_days": self.validity_days,
             "features": self.features,
@@ -89,6 +107,9 @@ class Plan:
             "price": self.price_rupees,
             "price_paise": self.price_paise,
             "currency": "INR",
+            "credits_allocated": self.credits_allocated,
+            "credits_remaining": self.credits_remaining,
+            "credits_used": self.credits_used,
             "interviews_allowed": self.interviews_allowed,
             "is_unlimited": self.is_unlimited,
             "validity_days": self.validity_days,
@@ -108,7 +129,10 @@ class Plan:
             slug=data.get("slug", ""),
             description=data.get("description", ""),
             price_paise=price,
-            interviews_allowed=data.get("interviews_allowed", 0),
+            credits_allocated=data.get(
+                "credits_allocated",
+                data.get("interviews_allowed", 0),
+            ),
             validity_days=data.get("validity_days", 30),
             features=data.get("features", []),
             audience=data.get("audience", "recruiter"),

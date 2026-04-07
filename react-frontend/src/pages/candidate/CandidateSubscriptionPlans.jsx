@@ -90,7 +90,8 @@ const Footer = () => (
 
 const CandidateSubscriptionPlans = () => {
   const navigate = useNavigate();
-  const { subscription, refresh: refreshSubscription } = useCandidateSubscription();
+  const { subscription, refresh: refreshSubscription } =
+    useCandidateSubscription();
 
   const [plans, setPlans] = useState([]);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -121,57 +122,6 @@ const CandidateSubscriptionPlans = () => {
 
   const displayError = error || paymentError;
 
-  const getFallbackPlans = () => [
-    {
-      id: "candidate-free",
-      slug: "candidate-free",
-      name: "Free Tier",
-      description: "2 one-time free practice interviews at signup (lifetime)",
-      price: 0,
-      currency: "INR",
-      interval: "month",
-      features: [
-        { name: "2 Practice Interviews", included: true },
-        { name: "Smart Practice Feedback", included: true },
-        { name: "Basic Analytics", included: true },
-      ],
-      interviews_allowed: 2,
-      is_popular: false,
-    },
-    {
-      id: "candidate-pro",
-      slug: "candidate-pro",
-      name: "Candidate Pro",
-      description: "50 practice interviews per month",
-      price: 999,
-      currency: "INR",
-      interval: "month",
-      features: [
-        { name: "50 Practice Interviews/month", included: true },
-        { name: "Detailed Score Insights", included: true },
-        { name: "Priority Report Generation", included: true },
-      ],
-      interviews_allowed: 50,
-      is_popular: true,
-    },
-    {
-      id: "candidate-max",
-      slug: "candidate-max",
-      name: "Candidate Max",
-      description: "100 practice interviews per month",
-      price: 1499,
-      currency: "INR",
-      interval: "month",
-      features: [
-        { name: "100 Practice Interviews/month", included: true },
-        { name: "Advanced Analytics", included: true },
-        { name: "Priority Support", included: true },
-      ],
-      interviews_allowed: 100,
-      is_popular: false,
-    },
-  ];
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -198,14 +148,15 @@ const CandidateSubscriptionPlans = () => {
         if (slug === "candidate-free") {
           return {
             ...plan,
-            description: "2 one-time free practice interviews at signup (lifetime)",
+            description: "1,500 practice credits per month",
           };
         }
         return plan;
       });
 
       if (!normalizedPlans || normalizedPlans.length === 0) {
-        normalizedPlans = getFallbackPlans();
+        normalizedPlans = [];
+        setError("No candidate subscription plans available right now.");
       }
 
       setPlans(normalizedPlans);
@@ -217,7 +168,7 @@ const CandidateSubscriptionPlans = () => {
       setPaymentHistory(normalizedHistory);
     } catch (err) {
       console.error("Error loading candidate subscription data:", err);
-      setPlans(getFallbackPlans());
+      setPlans([]);
       setError("Failed to load subscription data. Please try again.");
     } finally {
       setLoading(false);
@@ -270,7 +221,9 @@ const CandidateSubscriptionPlans = () => {
 
         <TabNav activeView={activeView} onChangeView={setActiveView} />
 
-        {displayError && <ErrorAlert message={displayError} onRetry={handleRetry} />}
+        {displayError && (
+          <ErrorAlert message={displayError} onRetry={handleRetry} />
+        )}
 
         {loading ? (
           <LoadingState message="Loading candidate subscription data..." />
