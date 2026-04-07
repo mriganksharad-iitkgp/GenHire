@@ -61,9 +61,15 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
           <button onClick={onClose} className={styles.closeButton}>&times;</button>
         </div>
         <div className={styles.modalBody}>
-          <h4>Gaze Plot</h4>
-          <Scatter options={options} data={chartData} />
-          <hr />
+          {report.gaze_proctoring === false ? (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: '#6b7280' }}>
+              <h3>Proctoring is off by company</h3>
+            </div>
+          ) : (
+            <>
+              <h4>Gaze Plot</h4>
+              <Scatter options={options} data={chartData} />
+              <hr />
           <h4>Proctoring Summary</h4>
           <p><strong>Proctoring Score:</strong> {report.proctoring_score !== undefined ? `${report.proctoring_score}%` : 'N/A'}</p>
           <p><strong>Manual Infractions:</strong></p>
@@ -73,6 +79,8 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
             ))}
              {(report.manual_infractions || []).length === 0 && <p>No manual infractions recorded.</p>}
           </ul>
+            </>
+          )}
         </div>
         <div className={styles.modalFooter}>
           <button onClick={onClose} className={styles.secondaryButton}>Close</button>

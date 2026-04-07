@@ -306,8 +306,13 @@ class ApplicationController:
                     sort=[('updated_at', -1)]
                 )
                 
+                # Check if job has gaze proctoring enabled
+                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                
                 # Prioritize scores stored directly in the application (from interview end process)
-                if 'proctoring_score' not in app or app.get('proctoring_score') is None:
+                if not gaze_proctoring_enabled:
+                    app['proctoring_score'] = None
+                elif 'proctoring_score' not in app or app.get('proctoring_score') is None:
                     # Fallback to interview collection if not in application
                     if completed_interview and completed_interview.get('proctoring_score'):
                         proctoring_score = completed_interview.get('proctoring_score')
@@ -372,7 +377,13 @@ class ApplicationController:
                     {'application_id': app['_id'], 'status': 'completed'},
                     sort=[('updated_at', -1)]
                 )
-                if completed_interview and completed_interview.get('proctoring_score'):
+                
+                # Check if job has gaze proctoring enabled
+                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                
+                if not gaze_proctoring_enabled:
+                    app['proctoring_score'] = None
+                elif completed_interview and completed_interview.get('proctoring_score'):
                     proctoring_score = completed_interview.get('proctoring_score')
                     # Handle both numeric and string values, exclude 'N/A'
                     if isinstance(proctoring_score, (int, float)):
@@ -496,6 +507,7 @@ class ApplicationController:
         if user_type in ['candidate', 'student']:
             if app_doc.get('student_id') != user_id:
                 return {'error': 'Unauthorized'}, 403
+            job = self.jobs_collection.find_one({'_id': ObjectId(app_doc['job_id'])})
         elif user_type == 'recruiter':
             job = self.jobs_collection.find_one({'_id': ObjectId(app_doc['job_id'])})
             if not job or job.get('created_by') != user_id:
@@ -511,12 +523,14 @@ class ApplicationController:
             return {'error': 'Report not found'}, 404
 
         # Return complete report with transcript
+        gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
         payload = {
             'session_id': report.get('session_id'),
             'final_score': report.get('final_score'),
-            'proctoring_score': report.get('proctoring_score'),
+            'proctoring_score': report.get('proctoring_score') if gaze_proctoring_enabled else None,
             'evaluation': report.get('evaluation'),
-            'transcript': report.get('transcript', [])  # Include conversation transcript
+            'transcript': report.get('transcript', []),  # Include conversation transcript
+            'gaze_proctoring': gaze_proctoring_enabled
         }
         return payload, 200
     

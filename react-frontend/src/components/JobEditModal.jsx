@@ -86,7 +86,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
     requirements: '',
     benefits: '',
     status: 'draft',
-    minimum_cv_score: 50
+    minimum_cv_score: 50,
+    gaze_proctoring: false
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,7 +121,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
         requirements: toString(initialJobData.requirements),
         benefits: toString(initialJobData.benefits),
         status: initialJobData.status || 'draft',
-        minimum_cv_score: initialJobData?.minimum_cv_score || 50
+        minimum_cv_score: initialJobData?.minimum_cv_score || 50,
+        gaze_proctoring: initialJobData?.gaze_proctoring || false
       });
     }
   }, [isOpen, initialJobData]);
@@ -233,10 +235,10 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
 
   // Handle input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setJobData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -519,6 +521,23 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
               />
               <div className={styles.helpText}>
                 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
+              </div>
+            </div>
+
+            {/* Gaze Proctoring */}
+            <div className={styles.formGroup}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  name="gaze_proctoring"
+                  checked={jobData.gaze_proctoring}
+                  onChange={handleInputChange}
+                  className={styles.checkboxInput}
+                />
+                Enable Gaze Heat Map Proctoring
+              </label>
+              <div className={styles.helpText} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
+                <i className="fa fa-exclamation-triangle"></i> Warning: Enabling proctoring will cost you more credits.
               </div>
             </div>
 

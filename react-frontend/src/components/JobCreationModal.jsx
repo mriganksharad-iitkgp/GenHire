@@ -169,7 +169,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     requirements: [],
     benefits: [],
     deadline: '',
-    minimum_cv_score: 50  // Default minimum CV score
+    minimum_cv_score: 50,  // Default minimum CV score
+    gaze_proctoring: false
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -240,7 +241,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
         requirements: Array.isArray(ai.requirements) ? ai.requirements.join('\n') : '',
         benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
         status: 'draft',
-        minimum_cv_score: ai.minimum_cv_score || 50
+        minimum_cv_score: ai.minimum_cv_score || 50,
+        gaze_proctoring: false
       });
       setAiPrompt('');
     } catch (err) {
@@ -362,10 +364,10 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   }, [isOpen]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setJobData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -450,7 +452,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       requirements: '',
       benefits: '',
       status: 'draft', // Reset to draft status
-      minimum_cv_score: 50 // Reset to default minimum CV score
+      minimum_cv_score: 50, // Reset to default minimum CV score
+      gaze_proctoring: false
     });
     setSkillInput('');
     setFilteredSuggestions([]);
@@ -802,6 +805,23 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               />
               <div className={styles.helpText}>
                 Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
+              </div>
+            </div>
+
+            {/* Gaze Proctoring */}
+            <div className={styles.formGroup}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  name="gaze_proctoring"
+                  checked={jobData.gaze_proctoring}
+                  onChange={handleInputChange}
+                  className={styles.checkboxInput}
+                />
+                Enable Gaze Heat Map Proctoring
+              </label>
+              <div className={styles.helpText} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
+                <i className="fa fa-exclamation-triangle"></i> Warning: Enabling proctoring will cost you more credits.
               </div>
             </div>
 
