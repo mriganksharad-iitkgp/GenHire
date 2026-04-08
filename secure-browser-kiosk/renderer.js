@@ -21,9 +21,25 @@ let gazeAlerts = 0;
 let objectAlerts = 0;
 let voiceAlerts = 0;
 
-let warningCount = 0; 3
+let warningCount = 0;
 let currentSessionId = null;
 let socket = null;
+
+// Violation Debouncing State
+let lastViolationTimes = {};
+const VIOLATION_DEBOUNCE_MS = 10000; // 10 seconds
+
+function emitViolation(type) {
+    if (!socket || !socket.connected || !currentSessionId) return;
+    const now = Date.now();
+    if (now - (lastViolationTimes[type] || 0) > VIOLATION_DEBOUNCE_MS) {
+        lastViolationTimes[type] = now;
+        socket.emit("proctoring_violation", {
+            session_id: currentSessionId,
+            type: type
+        });
+    }
+}
 
 let isInterviewActive = false;
 let clockInterval = null;
@@ -31,6 +47,7 @@ let clockInterval = null;
 // API Data
 let apiToken = null;
 let apiUrl = null;
+let proctoringUrl = null;
 let globalSessionData = null; // Store deep link payload globally
 let currentQuestion = "";
 let questionCount = 0;
@@ -216,6 +233,7 @@ async function startInterview() {
 
     apiToken = payload.token;
     apiUrl = payload.apiUrl;
+    proctoringUrl = payload.proctoringUrl || "http://localhost:5001";
 
     // Switch Views to Testing Overlay!
     btnStart.disabled = true;
@@ -311,7 +329,7 @@ function finalizeStartInterview() {
 
     // Start Socket connection
     if (!socket) {
-        socket = io(apiUrl);
+        socket = io(proctoringUrl);
         socket.on("connect", () => {
             console.log("WebSocket connected.");
             socket.emit("start_proctoring", { session_id: currentSessionId });
@@ -726,8 +744,9 @@ async function loadModels() {
     myvad = await vad.MicVAD.new({
         stream: video.srcObject,
         onSpeechStart: () => {
-            if (isInterviewActive) {
+            if (isInterviewActive && !isRecording && !isSubmittingAnswer) {
                 voiceAlerts++;
+                emitViolation("voice_anomaly");
                 // We don't trigger a blocking modal for voice since the user is supposed to talk,
                 // but we count it anyway for demonstration/proctoring metrics. 
             }
@@ -751,9 +770,11 @@ async function objectLoop() {
 
         if (cellPhoneDetected) {
             objectAlerts++;
+            emitViolation("phone_detected");
             showProctoringWarning("📱 Cell Phone Detected in Frame. Please remove it.");
         } else if (personCount > 1) {
             objectAlerts++;
+            emitViolation("multiple_people");
             showProctoringWarning(`Multiple people (${personCount}) detected in frame.`);
         } else if (personCount === 0) {
             // Missing person could just be head turning too far

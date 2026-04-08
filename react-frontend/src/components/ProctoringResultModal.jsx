@@ -36,6 +36,14 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
   const voiceInfractions = infractions.filter(i => ['silence_warning', 'voice_anomaly'].includes(i.type));
   const gazeInfractions = infractions.filter(i => !['phone_detected', 'multiple_people', 'object_detected', 'silence_warning', 'voice_anomaly'].includes(i.type));
 
+  const countInfractions = (infractionList) => {
+    const counts = {};
+    infractionList.forEach(inf => {
+      counts[inf.type] = (counts[inf.type] || 0) + 1;
+    });
+    return Object.entries(counts).map(([type, count]) => ({ type, count }));
+  };
+
   const enabledCount = Object.values(config).filter(Boolean).length;
 
   return (
@@ -48,30 +56,6 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
             <span className={styles.enabledBadge}>{enabledCount}/4 modules active</span>
           </div>
           <button onClick={onClose} className={styles.closeBtn}>&times;</button>
-        </div>
-
-        {/* Overall Score */}
-        <div className={styles.scoreSection}>
-          <div className={styles.scoreCircle}>
-            <svg viewBox="0 0 120 120" className={styles.scoreSvg}>
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#1e293b" strokeWidth="8" />
-              <circle
-                cx="60" cy="60" r="50" fill="none"
-                stroke={report.proctoring_score >= 70 ? '#10b981' : report.proctoring_score >= 40 ? '#f59e0b' : '#ef4444'}
-                strokeWidth="8"
-                strokeDasharray={`${(report.proctoring_score || 0) / 100 * 314} 314`}
-                strokeLinecap="round"
-                transform="rotate(-90 60 60)"
-                style={{ transition: 'stroke-dasharray 1s ease' }}
-              />
-            </svg>
-            <span className={styles.scoreValue}>
-              {report.proctoring_score !== undefined && report.proctoring_score !== null
-                ? `${Math.round(report.proctoring_score)}%`
-                : 'N/A'}
-            </span>
-          </div>
-          <div className={styles.scoreLabel}>Overall Proctoring Score</div>
         </div>
 
         {/* Feature Cards */}
@@ -110,10 +94,10 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                     <>
                       {voiceInfractions.length > 0 ? (
                         <ul className={styles.infractionList}>
-                          {voiceInfractions.map((inf, i) => (
-                            <li key={i}>
-                              <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                          {countInfractions(voiceInfractions).map(({ type, count }, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '8px' }}>
+                              <span className={styles.infractionType} style={{ color: '#fff', textTransform: 'capitalize' }}>{type.replace(/_/g, ' ')}</span>
+                              <span className={styles.infractionTime} style={{ color: '#f87171', fontWeight: 'bold' }}>Detected {count} time(s)</span>
                             </li>
                           ))}
                         </ul>
@@ -128,10 +112,10 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                     <>
                       {objectInfractions.length > 0 ? (
                         <ul className={styles.infractionList}>
-                          {objectInfractions.map((inf, i) => (
-                            <li key={i}>
-                              <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                          {countInfractions(objectInfractions).map(({ type, count }, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '8px' }}>
+                              <span className={styles.infractionType} style={{ color: '#fff', textTransform: 'capitalize' }}>{type.replace(/_/g, ' ')}</span>
+                              <span className={styles.infractionTime} style={{ color: '#f87171', fontWeight: 'bold' }}>Detected {count} time(s)</span>
                             </li>
                           ))}
                         </ul>
@@ -153,15 +137,12 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                       )}
                       {gazeInfractions.length > 0 && (
                         <ul className={styles.infractionList}>
-                          {gazeInfractions.slice(0, 5).map((inf, i) => (
-                            <li key={i}>
-                              <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                          {countInfractions(gazeInfractions).map(({ type, count }, i) => (
+                            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '8px' }}>
+                              <span className={styles.infractionType} style={{ color: '#fff', textTransform: 'capitalize' }}>{type.replace(/_/g, ' ')}</span>
+                              <span className={styles.infractionTime} style={{ color: '#f87171', fontWeight: 'bold' }}>Detected {count} time(s)</span>
                             </li>
                           ))}
-                          {gazeInfractions.length > 5 && (
-                            <li className={styles.moreItems}>+{gazeInfractions.length - 5} more...</li>
-                          )}
                         </ul>
                       )}
                     </>

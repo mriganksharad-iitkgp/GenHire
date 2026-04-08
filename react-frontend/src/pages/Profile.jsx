@@ -298,7 +298,8 @@ const Profile = () => {
 			const payload = {
 				applicationId: application.id,
 				token: localStorage.getItem("companyxyz-token"),
-				apiUrl: process.env.REACT_APP_API_URL || window.location.origin
+				apiUrl: process.env.REACT_APP_API_URL || window.location.origin,
+				proctoringUrl: process.env.REACT_APP_PROCTORING_URL || "http://localhost:5001"
 			};
 			const encodedPayload = btoa(JSON.stringify(payload));
 			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
