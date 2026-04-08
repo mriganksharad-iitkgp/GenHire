@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import styles from "../../pages/Profile.module.css";
 import { Link } from "react-router-dom";
+import Pagination from "../Pagination";
 
 export default function ApplicationsList({
   applications,
@@ -14,14 +15,26 @@ export default function ApplicationsList({
   onOpenReport,
   onGiveInterview, // Add new prop for interview action
 }) {
-  // Debug log to see applications data
-  console.log('ApplicationsList received applications:', applications);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+  
   const filtered = applications.filter((app) => {
     const matchesCompany = companyFilter === "" || app.company.toLowerCase().includes(companyFilter.toLowerCase());
     const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesCompany && matchesStatus;
   });
   const sorted = [...filtered].sort((a, b) => new Date(b.appliedDate) - new Date(a.appliedDate));
+  
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [companyFilter, statusFilter]);
+  
+  // Pagination logic
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedApplications = sorted.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(sorted.length / itemsPerPage);
 
   // Helper function to determine which buttons to show based on status
   const getButtonsForStatus = (status) => {
@@ -83,8 +96,8 @@ export default function ApplicationsList({
       </div>
 
       <div className={styles.applicationsList}>
-        {sorted.length > 0 ? (
-          sorted.map((app) => {
+        {paginatedApplications.length > 0 ? (
+          paginatedApplications.map((app) => {
             const statusKey = app.status.toLowerCase().replace(/\s+/g, "");
             return (
               <div key={app.id} className={styles.applicationCard} data-status={statusKey}>
@@ -134,7 +147,12 @@ export default function ApplicationsList({
 
                 <div className={styles.applicationActions}>
                   <div className={styles.scoresRow}>
-                    {app.cvScore !== null && (
+                    {app.processingStatus && app.processingStatus !== 'completed' ? (
+                      <div className={styles.scorePill} title="CV scoring in progress">
+                        <span className={styles.pillLabel}>CV Score</span>
+                        <span className={styles.pillValue}><i className="fa fa-spinner fa-spin"></i> Processing...</span>
+                      </div>
+                    ) : app.cvScore !== null && (
                       <div className={styles.scorePill} title="CV Match Score">
                         <span className={styles.pillLabel}>CV Score</span>
                         <span className={styles.pillValue}>{app.cvScore}%</span>
@@ -160,11 +178,11 @@ export default function ApplicationsList({
                         <div className={`${styles.miniBar} ${styles.miniBarSuccess}`}><div style={{ width: `${app.interviewScore}%` }} /></div>
                       </div>
                     )}
-                    {app.interviewScore !== null && (
+                    {app.proctoringScore !== null && (
                       <div className={`${styles.scorePill} ${styles.scorePillWarning}`} title="Proctoring Score">
                         <span className={styles.pillLabel}>Proctoring</span>
-                        <span className={styles.pillValue}>{app.proctoringScore || 85}%</span>
-                        <div className={`${styles.miniBar} ${styles.miniBarWarning}`}><div style={{ width: `${app.proctoringScore || 85}%` }} /></div>
+                        <span className={styles.pillValue}>{app.proctoringScore}%</span>
+                        <div className={`${styles.miniBar} ${styles.miniBarWarning}`}><div style={{ width: `${app.proctoringScore}%` }} /></div>
                       </div>
                     )}
                   </div>
@@ -227,6 +245,17 @@ export default function ApplicationsList({
           <p className={styles.noApplications}>No job applications yet.</p>
         )}
       </div>
+      
+      {/* Pagination */}
+      {sorted.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={sorted.length}
+          itemsPerPage={itemsPerPage}
+        />
+      )}
     </section>
   );
 }

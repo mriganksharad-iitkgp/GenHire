@@ -1,0 +1,49 @@
+Job Title: DevOps Engineer
+
+Company Overview:
+We are a technology company focused on delivering reliable, scalable, and secure cloud-based solutions. We believe in automation, continuous improvement, and infrastructure as code.
+
+Job Description:
+We are seeking an experienced DevOps Engineer to help us build and maintain our infrastructure, automate deployments, and improve system reliability. You will work closely with development teams to streamline our software delivery process.
+
+Key Responsibilities:
+- Design, implement, and maintain CI/CD pipelines
+- Automate infrastructure provisioning using IaC tools
+- Monitor system performance and implement improvements
+- Manage cloud infrastructure (AWS, Azure, or GCP)
+- Implement security best practices and compliance requirements
+- Troubleshoot production issues and perform root cause analysis
+- Configure and manage containerization and orchestration platforms
+- Develop scripts and tools to automate operational tasks
+- Collaborate with development teams on deployment strategies
+- Participate in on-call rotation for production support
+
+Required Qualifications:
+- Bachelor's degree in Computer Science, Engineering, or related field
+- 3+ years of DevOps or SRE experience
+- Strong experience with cloud platforms (AWS, Azure, or GCP)
+- Proficiency in scripting languages (Python, Bash, PowerShell)
+- Experience with containerization (Docker) and orchestration (Kubernetes)
+- Knowledge of CI/CD tools (Jenkins, GitLab CI, GitHub Actions)
+- Familiarity with infrastructure as code (Terraform, CloudFormation, Ansible)
+- Understanding of networking, security, and system administration
+- Experience with monitoring and logging tools (Prometheus, Grafana, ELK stack)
+- Strong troubleshooting and problem-solving skills
+
+Preferred Qualifications:
+- Relevant certifications (AWS Certified DevOps Engineer, CKA)
+- Experience with service mesh technologies (Istio, Linkerd)
+- Knowledge of database administration and optimization
+- Familiarity with GitOps practices
+- Experience with serverless architectures
+- Understanding of compliance frameworks (SOC 2, ISO 27001)
+- Background in software development
+
+What We Offer:
+- Competitive compensation package
+- Cutting-edge technology stack
+- Remote work options
+- Professional development and certification support
+- Collaborative team environment
+- Comprehensive health benefits
+- Flexible PTO policy

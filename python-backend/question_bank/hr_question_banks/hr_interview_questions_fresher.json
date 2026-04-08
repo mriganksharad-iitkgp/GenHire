@@ -1,0 +1,292 @@
+[
+  {
+    "question": "Tell me about yourself.",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What are your strengths?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What are your weaknesses?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you handle stress and pressure?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Do you prefer working alone or in a team?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you deal with criticism?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you prioritize your tasks?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you handle failure?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a time when you worked with a difficult team member. How did you handle the situation?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you had to adapt to a significant change. How did you handle it?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What motivates you?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How would you rate yourself on a scale of 1 to 10?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you were not satisfied with your performance?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you were made to work under close supervision.",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Can you tell me about a time where you were happy with your work and what was your reaction?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a challenging work situation and how you overcame it.",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you ensure that you treat everyone fairly and without prejudice?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you stay objective and fair in all your professional dealings?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Would you call yourself an organized person? How so?",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Do you have good time management skills? Tell me how you use them on a typical day.",
+    "seniority_level": "fresher",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Why do you want to work for our company?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Where do you see yourself in the next 5 years?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Why are you interested in this job?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What are your career goals?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What would you like to learn more about in your field of expertise?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Do you plan to pursue additional education? If so, what field would you choose?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What skills or knowledge would make you better at your current role?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What are you looking for in your next position?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Do you think this position aligns with your professional goals? In which ways?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What do you hope to accomplish in your career?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How does this role fit into your long-term career plans?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What attracted you to this industry?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Why should we hire you?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What value can you bring to this position?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What do you know about our company?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How can you contribute to our company?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What sets you apart from other candidates?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How do you align with our company's values?",
+    "seniority_level": "fresher",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Describe a time when you faced an ethical dilemma. How did you handle it?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you define integrity, and why do you believe it is important in the workplace?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What would you do if you witnessed a coworker doing something unethical?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you handle a situation where your personal interests conflict with integrity?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What would you do if a manager or supervisor asked you to do something against your own ethics?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Have you ever witnessed a situation where someone's integrity was compromised? How did you react?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What would you do if you were working under a bad boss?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Will you lie for the company under any circumstances?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What would you prefer - being liked or being feared?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you ensure you maintain ethical standards even when facing pressure?",
+    "seniority_level": "fresher",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What is your current salary?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "What is your salary expectation?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "How much do you think you should be paid by looking at your qualifications?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "Is this salary open to negotiations?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "How did you calculate this salary offer?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "What factors are most important to you in a compensation package?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "Would you be willing to accept this position at a lower salary than expected?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "Are you comfortable discussing salary expectations?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "What benefits are most important to you besides salary?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  },
+  {
+    "question": "Would you like to work overtime or odd hours?",
+    "seniority_level": "fresher",
+    "question_type": "salary"
+  }
+]

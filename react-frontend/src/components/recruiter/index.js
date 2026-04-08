@@ -1,3 +1,4 @@
+// Core recruiter components
 export { default as Tabs } from "./Tabs";
 export { default as SectionHeader } from "./SectionHeader";
 export { default as OverviewMetrics } from "./OverviewMetrics";
@@ -7,3 +8,11 @@ export { default as CandidatesList } from "./CandidatesList";
 export { default as ProfileForm } from "./ProfileForm";
 export { default as RecentActivity } from "./RecentActivity";
 export { default as StatusBadge } from "./StatusBadge";
+
+// Subscription module - decoupled in separate folder
+export {
+  SubscriptionBanner,
+  UpgradePlanModal,
+  UpgradeButton,
+  useSubscription,
+} from "./subscription";

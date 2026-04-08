@@ -1,0 +1,297 @@
+[
+  {
+    "question": "Why did you leave your last job?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about the gap in your resume.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Is there anything that makes you different from other candidates?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you experienced difficulty at work while working on a project?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you handle disagreements with your manager?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me how you will handle it if suddenly the priorities of a project were changed?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time where you displayed leadership skills.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Was there any point in your career where you made any mistake? Tell me about it.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What did you like most about your last job?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What did you dislike about your last job?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe your ideal work environment.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you resolved a conflict.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you handle constructive criticism?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a time when you had to manage multiple projects simultaneously.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you had to meet a tight deadline.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you ensure your team delivers quality work within the specified timeframe and budget?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you motivate an under-performing team member?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about your approach to delegation.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you stay updated with industry trends?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a situation where you had to work with a difficult client.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Tell me about a time when you had to learn a new skill quickly.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "How do you balance work and personal life?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "What do you do to ensure that a certain number of tasks is completed effectively?",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Describe a time when you had to make an unpopular decision.",
+    "seniority_level": "intermediate",
+    "question_type": "behavioral"
+  },
+  {
+    "question": "Why are you looking for a change?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What is your biggest achievement so far?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Where do you see yourself in 10 years?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What are your future career goals and what do you plan to do to achieve them?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What made you look for a new job?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How long do you think you will be working for us if you are hired?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What is your dream company like?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What does motivation mean to you?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Do you prefer becoming an expert in your field or broadening your knowledge of different disciplines? Why?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What do you do to achieve your professional goals?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What are your short-term and long-term career objectives?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "How has your career progressed so far compared to your initial plans?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What skills do you want to develop in the next few years?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Are you willing to relocate/travel for this position?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "What would make you leave this position in the future?",
+    "seniority_level": "intermediate",
+    "question_type": "goal-related"
+  },
+  {
+    "question": "Can you provide an example of a time when you had to make a decision that tested your integrity?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Have you ever made a career choice based on your sense of integrity?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What do you think are the consequences of a lack of integrity in the workplace?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Describe a time when you had to report unethical behavior.",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you handle confidential information?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What would you do if an employer asked you to misrepresent information?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How do you ensure ethical practices are followed in your team?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "Tell me about a time when you had to choose between personal gain and doing the right thing.",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "How would you handle a situation where a colleague asks you to cover for their mistake?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What role does ethics play in your decision-making process?",
+    "seniority_level": "intermediate",
+    "question_type": "ethical"
+  },
+  {
+    "question": "What are your salary expectations for this role?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "How do you justify your salary expectations?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "What was the reason behind this specific salary figure?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "Are you open to discussing the salary? Or is this salary non-negotiable?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "What benefits package are you looking for?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "How do you evaluate a job offer beyond just the salary?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "Would you accept this position if the salary was slightly lower than your expectation?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "Consider the scenario - You win a million-dollar lottery. Would you still be working?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "What is more important to you: salary or job satisfaction?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  },
+  {
+    "question": "How does this salary compare to your previous position?",
+    "seniority_level": "intermediate",
+    "question_type": "salary"
+  }
+]

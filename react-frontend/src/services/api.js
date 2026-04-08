@@ -1,10 +1,13 @@
 // Centralized API layer for dashboard (recruiter & candidate)
 // Keeps endpoints and headers in one place, enabling easy swap later
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+const API_BASE =
+  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function authHeaders() {
-  const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+  const token = localStorage.getItem(
+    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
+  );
   return {
     Authorization: `Bearer ${token}`,
   };
@@ -73,8 +76,9 @@ export const updateCvDetails = (payload) =>
 // File uploads (candidate)
 export const uploadCV = (file) => {
   const formData = new FormData();
-  formData.append("cv", file);
-  return request("/upload-cv", { method: "POST", body: formData });
+  formData.append("cv_file", file); // Changed from 'cv' to 'cv_file' for new CV management system
+  formData.append("is_primary", "false"); // Don't set as primary automatically
+  return request("/cv/upload", { method: "POST", body: formData }); // New endpoint
 };
 
 export const uploadPhoto = (file) => {
@@ -94,6 +98,11 @@ export const createJob = (payload) =>
   request("/jobs", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+export const generateJobWithAI = (prompt) =>
+  request("/jobs/generate-ai", {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
   });
 export const updateJob = (jobId, payload) =>
   request(`/jobs/${jobId}`, {
@@ -125,8 +134,9 @@ export const startInterview = (applicationId) =>
       application_id: applicationId,
       cv_path: "uploads/cv/Data Science_resume_juanjosecarin.pdf",
       jd_path: "uploads/jd/Data_Scientist_Job_Description.pdf",
-      reference_paths: ["uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf"
-        , "uploads/reference/Machine Learning For Absolute Beginners.pdf"
+      reference_paths: [
+        "uploads/reference/Artificial Intelligence, Machine Learning, and Deep Learning.pdf",
+        "uploads/reference/Machine Learning For Absolute Beginners.pdf",
       ],
     }),
   });

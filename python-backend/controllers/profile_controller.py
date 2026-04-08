@@ -29,12 +29,13 @@ class ProfileController:
         # Add company information for recruiters
         if user.get('user_type') == 'recruiter':
             profile_data.update({
-                'company_name': user.get('company_name', 'TechCorp Solutions'),
+                'company_name': user.get('company_name', ''),
                 'company_logo': user.get('company_logo', ''),
                 'company_description': user.get('company_description', ''),
                 'company_website': user.get('company_website', ''),
                 'company_size': user.get('company_size', ''),
-                'company_industry': user.get('company_industry', 'Technology')
+                'company_industry': user.get('company_industry', ''),
+                'company_location': user.get('company_location', '') or user.get('location', '')
             })
         
         return profile_data, 200
@@ -67,7 +68,7 @@ class ProfileController:
         
         # Update company fields that are provided
         update_fields = {}
-        for field in ['company_name', 'company_logo', 'company_description', 'company_website', 'company_size', 'company_industry']:
+        for field in ['company_name', 'company_logo', 'company_description', 'company_website', 'company_size', 'company_industry', 'company_location']:
             if field in company_data:
                 update_fields[field] = company_data[field]
         

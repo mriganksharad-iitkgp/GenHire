@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import styles from "../../pages/Profile.module.css";
 import CVDetailsForm from "./CVDetailsForm";
+import CVList from "./CVList";
+import CVDetailsModal from "./CVDetailsModal";
 
 export default function SidebarProfile({
   photoUrl,
@@ -14,9 +16,20 @@ export default function SidebarProfile({
   uploadingCV,
   cvDetails,
   onSaveCvDetails,
+  showToast,
   children,
 }) {
   const [showCvDetailsForm, setShowCvDetailsForm] = useState(false);
+  const [showCvDetailsModal, setShowCvDetailsModal] = useState(false);
+  const [cvRefreshTrigger, setCvRefreshTrigger] = useState(0);
+
+  // Refresh CV list when upload completes
+  React.useEffect(() => {
+    if (!uploadingCV && cvPath) {
+      setCvRefreshTrigger(prev => prev + 1);
+    }
+  }, [uploadingCV, cvPath]);
+  
   return (
     <div className={styles.sidebar}>
       <div className={styles.profilePicSection}>
@@ -68,6 +81,9 @@ export default function SidebarProfile({
               )}
             </button>
           </form>
+          
+          {/* CV List Component */}
+          <CVList onCVClick={onViewCV} showToast={showToast} refreshTrigger={cvRefreshTrigger} />
         </div>
 
         {/* CV Details Entry Section */}
@@ -97,6 +113,17 @@ export default function SidebarProfile({
             <i className="fa fa-edit" aria-hidden="true"></i>
             {cvDetails ? "Edit CV Details" : "Enter CV Details"}
           </button>
+          
+          {cvDetails && (
+            <button 
+              type="button" 
+              onClick={() => setShowCvDetailsModal(true)} 
+              className={styles.viewDetailsButton}
+            >
+              <i className="fa fa-eye" aria-hidden="true"></i>
+              View Profile CV Details
+            </button>
+          )}
         </div>
       </div>
       
@@ -110,7 +137,16 @@ export default function SidebarProfile({
           onClose={() => setShowCvDetailsForm(false)}
         />
       )}
-  {children}
+      
+      {showCvDetailsModal && (
+        <CVDetailsModal
+          isOpen={showCvDetailsModal}
+          onClose={() => setShowCvDetailsModal(false)}
+          cvDetails={cvDetails}
+        />
+      )}
+      
+      {children}
     </div>
   );
 }

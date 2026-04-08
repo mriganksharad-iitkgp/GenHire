@@ -1,0 +1,11 @@
+# Rubrics Evaluation System - Core Requirements
+# Pinned versions to ensure reproducibility and avoid conflicts
+
+# AI/ML Framework Dependencies
+langchain-openai==0.1.25
+langchain-core==0.2.43
+# openai==1.44.1
+
+# Type Support
+typing-extensions==4.12.2
+

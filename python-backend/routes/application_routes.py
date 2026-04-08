@@ -17,7 +17,13 @@ application_controller = ApplicationController(collections)
 @cross_origin()
 @token_required
 def apply_for_job(current_user, job_id):
-    """Apply for a job (candidates only)"""
+    """
+    Apply for a job (candidates only)
+    
+    Request Body:
+        cover_letter: str - Optional cover letter
+        cv_id: str - Optional CV ID to use for application (if not provided, uses primary CV or manual entry)
+    """
     # Normalize user_type with backward compatibility (missing -> candidate)
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
     if user_type not in ['candidate', 'student']:
@@ -26,7 +32,16 @@ def apply_for_job(current_user, job_id):
     data = request.get_json() or {}
     user_id = str(current_user['_id'])
     
-    result, status_code = application_controller.apply_for_job(job_id, user_id, data, current_user)
+    # Extract optional cv_id from request data
+    cv_id = data.get('cv_id')  # None if not provided
+    
+    result, status_code = application_controller.apply_for_job(
+        job_id, 
+        user_id, 
+        data, 
+        current_user,
+        cv_id=cv_id  # Pass cv_id to controller
+    )
     return jsonify(result), status_code
 
 @application_bp.route('/jobs/<job_id>/withdraw', methods=['DELETE'])
@@ -140,6 +155,29 @@ def recalculate_cv_score(current_user, application_id):
     
     result, status_code = application_controller.recalculate_cv_score(application_id, user_id, user_type)
     return jsonify(result), status_code
+
+@application_bp.route('/applications/<application_id>/update-score', methods=['PUT'])
+@cross_origin()
+@token_required
+def update_interview_score(current_user, application_id):
+    """Update interview score for an application"""
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    user_id = str(current_user['_id'])
+    
+    try:
+        data = request.get_json()
+        interview_score = data.get('interview_score')
+        
+        if interview_score is None:
+            return jsonify({'error': 'interview_score is required'}), 400
+            
+        if not isinstance(interview_score, (int, float)) or interview_score < 0 or interview_score > 100:
+            return jsonify({'error': 'interview_score must be a number between 0 and 100'}), 400
+        
+        result, status_code = application_controller.update_interview_score(application_id, user_id, user_type, interview_score)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Debug endpoints
 @application_bp.route('/debug/applications', methods=['GET'])

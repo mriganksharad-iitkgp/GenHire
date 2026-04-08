@@ -1,0 +1,650 @@
+import React, { useMemo, useState, useEffect } from 'react';
+import AdminLayout from '../../components/admin/AdminLayout';
+import styles from './CostStatistics.module.css';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+const formatInrNumber = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatInrCompact = (value) => {
+  const amount = Number(value || 0);
+  const absAmount = Math.abs(amount);
+
+  if (absAmount >= 10000000) return `₹${(amount / 10000000).toFixed(2)}Cr`;
+  if (absAmount >= 100000) return `₹${(amount / 100000).toFixed(2)}L`;
+  if (absAmount >= 1000) return `₹${(amount / 1000).toFixed(2)}K`;
+  return `₹${amount.toFixed(2)}`;
+};
+
+const chartValueLabelPlugin = {
+  id: 'chartValueLabelPlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const chartType = chart.config.type;
+
+    if (chartType === 'bar') {
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const meta = chart.getDatasetMeta(datasetIndex);
+        if (meta.hidden) return;
+
+        meta.data.forEach((element, dataIndex) => {
+          const rawValue = Number(dataset.data[dataIndex] || 0);
+          const valueText = formatInrNumber(rawValue);
+          const x = element.x;
+          const y = rawValue >= 0 ? element.y - 8 : element.y + 16;
+
+          ctx.save();
+          ctx.font = '600 11px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#0f172a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(valueText, x, y);
+          ctx.restore();
+        });
+      });
+    }
+
+    if (chartType === 'doughnut') {
+      const dataset = chart.data.datasets?.[0];
+      if (!dataset) return;
+      const meta = chart.getDatasetMeta(0);
+      if (meta.hidden) return;
+
+      const values = dataset.data?.map((value) => Number(value || 0)) || [];
+      const total = values.reduce((sum, value) => sum + value, 0);
+      const chartTop = chart.chartArea?.top ?? 0;
+      const chartBottom = chart.chartArea?.bottom ?? chart.height;
+
+      const labelPoints = meta.data.map((arc, index) => {
+        const rawValue = values[index] || 0;
+        const angle = (arc.startAngle + arc.endAngle) / 2;
+        const ratio = total > 0 ? rawValue / total : 0;
+        const isTinySlice = ratio > 0 && ratio < 0.06;
+        const side = Math.cos(angle) >= 0 ? 'right' : 'left';
+
+        return {
+          arc,
+          side,
+          text: isTinySlice ? formatInrCompact(rawValue) : formatInrNumber(rawValue),
+          lineStartX: arc.x + Math.cos(angle) * (arc.outerRadius + 2),
+          lineStartY: arc.y + Math.sin(angle) * (arc.outerRadius + 2),
+          lineMidX: arc.x + Math.cos(angle) * (arc.outerRadius + 16),
+          lineMidY: arc.y + Math.sin(angle) * (arc.outerRadius + 16),
+          textX: arc.x + Math.cos(angle) * (arc.outerRadius + (isTinySlice ? 36 : 28)),
+          textY: arc.y + Math.sin(angle) * (arc.outerRadius + (isTinySlice ? 26 : 18)),
+        };
+      });
+
+      ['left', 'right'].forEach((side) => {
+        const points = labelPoints
+          .filter((point) => point.side === side)
+          .sort((first, second) => first.textY - second.textY);
+
+        const minGap = 14;
+        for (let index = 1; index < points.length; index += 1) {
+          if (points[index].textY - points[index - 1].textY < minGap) {
+            points[index].textY = points[index - 1].textY + minGap;
+          }
+        }
+
+        points.forEach((point) => {
+          point.textY = Math.max(chartTop + 10, Math.min(chartBottom - 10, point.textY));
+        });
+      });
+
+      labelPoints.forEach((point) => {
+        const lineEndX = point.side === 'right' ? point.textX - 6 : point.textX + 6;
+
+        ctx.save();
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(point.lineStartX, point.lineStartY);
+        ctx.lineTo(point.lineMidX, point.lineMidY);
+        ctx.lineTo(lineEndX, point.textY);
+        ctx.stroke();
+
+        ctx.font = '600 10px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#0f172a';
+        ctx.textAlign = point.side === 'right' ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(point.text, point.textX, point.textY);
+        ctx.restore();
+      });
+    }
+  },
+};
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, chartValueLabelPlugin);
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+const formatDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatMoney = (value) => formatInrNumber(value);
+
+const planIncomingPalette = ['#8b5cf6', '#7c3aed', '#0ea5e9', '#0284c7', '#16a34a', '#15803d'];
+
+const toCsvValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const stringValue = String(value).replace(/"/g, '""');
+  return `"${stringValue}"`;
+};
+
+const downloadCsv = (filename, rows) => {
+  const csvContent = rows.map((row) => row.map((cell) => toCsvValue(cell)).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const CostStatistics = () => {
+  const todayDate = useMemo(() => new Date(), []);
+  const defaultStartDate = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return formatDateInput(date);
+  }, []);
+
+  const [startDate, setStartDate] = useState(defaultStartDate);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [costData, setCostData] = useState(null);
+
+  const endDate = formatDateInput(todayDate);
+
+  useEffect(() => {
+    const fetchCostStats = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || 'token');
+        if (!token) {
+          setError('Please login to view cost statistics.');
+          setLoading(false);
+          return;
+        }
+
+        const query = new URLSearchParams({
+          start_date: startDate,
+          end_date: endDate,
+        });
+
+        const response = await fetch(`${API_BASE_URL}/api/admin/cost-statistics?${query.toString()}`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch admin cost statistics.');
+        }
+
+        setCostData(data);
+      } catch (fetchError) {
+        setError(fetchError.message || 'Failed to fetch admin cost statistics.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCostStats();
+  }, [startDate, endDate]);
+
+  const aiCostRows = useMemo(() => costData?.cost_statistics?.ai_costs || [], [costData]);
+  const infraCosts = useMemo(() => costData?.cost_statistics?.infrastructure_costs || {}, [costData]);
+  const incoming = useMemo(() => costData?.incoming_money || {}, [costData]);
+  const profitability = useMemo(() => costData?.profitability || {}, [costData]);
+
+  const overviewBarData = useMemo(() => ({
+    labels: ['Total Incoming', 'Net Incoming', 'Total Cost', 'Gross Profit', 'Net Profit'],
+    datasets: [
+      {
+        label: 'INR',
+        data: [
+          incoming?.total_incoming_inr || 0,
+          incoming?.net_incoming_after_refunds_inr || 0,
+          costData?.cost_statistics?.total_cost_inr || 0,
+          profitability?.profit_gross_inr || 0,
+          profitability?.profit_net_inr || 0,
+        ],
+        backgroundColor: ['#6366f1', '#8b5cf6', '#ef4444', '#22c55e', '#16a34a'],
+        borderRadius: 8,
+      },
+    ],
+  }), [incoming, profitability, costData]);
+
+  const aiMixData = useMemo(() => ({
+    labels: aiCostRows.map((item) => item.title),
+    datasets: [
+      {
+        data: aiCostRows.map((item) => item.total_cost_inr || 0),
+        backgroundColor: ['#6366f1', '#8b5cf6', '#0ea5e9', '#06b6d4', '#10b981', '#f59e0b'],
+        borderWidth: 0,
+      },
+    ],
+  }), [aiCostRows]);
+
+  const planIncomingData = useMemo(() => {
+    const candidatePlans = incoming?.candidate?.plans || [];
+    const recruiterPlans = incoming?.recruiter?.plans || [];
+
+    const matchAmount = (plans, candidateSlugs = [], candidateNames = []) => {
+      const row = plans.find((plan) => {
+        const slug = String(plan.plan_slug || '').toLowerCase();
+        const name = String(plan.plan_name || '').toLowerCase();
+        const slugMatched = candidateSlugs.some((value) => slug.includes(value));
+        const nameMatched = candidateNames.some((value) => name.includes(value));
+        return slugMatched || nameMatched;
+      });
+      return row?.incoming_amount_inr || 0;
+    };
+
+    const candidateProIncoming = matchAmount(candidatePlans, ['candidate-pro'], ['candidate pro']);
+    const candidateMaxIncoming = matchAmount(candidatePlans, ['candidate-max'], ['candidate max']);
+    const recruiterProIncoming = matchAmount(recruiterPlans, ['professional', 'recruiter-pro'], ['recruiter pro', 'professional']);
+    const recruiterMaxIncoming = matchAmount(recruiterPlans, ['recruiter-max'], ['recruiter max']);
+
+    return {
+      labels: [
+        'Candidate Pro',
+        'Candidate Max',
+        'Recruiter Pro',
+        'Recruiter Max',
+        'Candidate Total',
+        'Recruiter Total',
+      ],
+      datasets: [
+        {
+          label: 'Incoming INR',
+          data: [
+            candidateProIncoming,
+            candidateMaxIncoming,
+            recruiterProIncoming,
+            recruiterMaxIncoming,
+            incoming?.candidate?.total_incoming_inr || 0,
+            incoming?.recruiter?.total_incoming_inr || 0,
+          ],
+          backgroundColor: planIncomingPalette,
+          borderRadius: 8,
+        },
+      ],
+    };
+  }, [incoming]);
+
+  const sharedBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 24,
+      },
+    },
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 18,
+        right: 32,
+        bottom: 18,
+        left: 32,
+      },
+    },
+    plugins: {
+      legend: {
+        position: 'bottom',
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `${context.label}: ${formatInrNumber(context.raw)}`,
+        },
+      },
+    },
+  };
+
+  const handleExportCsv = () => {
+    if (!costData) return;
+
+    const timeline = costData.timeline || {};
+    const rows = [
+      ['Section', 'Metric', 'Value', 'Model', 'Count', 'Avg Cost INR', 'Total Cost INR', 'Formula'],
+      ['Timeline', 'Start Date', timeline.start_date || '', '', '', '', '', ''],
+      ['Timeline', 'End Date', timeline.end_date || '', '', '', '', '', ''],
+      ['Timeline', 'Days', timeline.days || 0, '', '', '', '', ''],
+    ];
+
+    (costData?.cost_statistics?.ai_costs || []).forEach((item) => {
+      rows.push([
+        'AI Costs',
+        item.title || item.key,
+        '',
+        item.model || '',
+        item.count || 0,
+        item.avg_cost_inr || 0,
+        item.total_cost_inr || 0,
+        item.formula || '',
+      ]);
+    });
+
+    rows.push(['AI Costs', 'Total AI Cost', '', '', '', '', costData?.cost_statistics?.total_ai_cost_inr || 0, '']);
+    rows.push(['Infrastructure', 'Cloudflare Monthly Assumption', infraCosts?.cloudflare?.monthly_assumption_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'Cloudflare Pro-rated', infraCosts?.cloudflare?.prorated_cost_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'MongoDB Monthly Assumption', infraCosts?.mongodb?.monthly_assumption_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'MongoDB Pro-rated', infraCosts?.mongodb?.prorated_cost_inr || 0, '', '', '', '', '']);
+    rows.push(['Infrastructure', 'Total Infrastructure Cost', infraCosts?.total_infrastructure_cost_inr || 0, '', '', '', '', '']);
+
+    (incoming?.candidate?.plans || []).forEach((plan) => {
+      rows.push([
+        'Incoming Candidate',
+        plan.plan_name || '',
+        plan.incoming_amount_inr || 0,
+        '',
+        plan.succeeded_payment_count || 0,
+        '',
+        '',
+        'Succeeded payments in selected timeline',
+      ]);
+    });
+    rows.push(['Incoming Candidate', 'Candidate Total Incoming', incoming?.candidate?.total_incoming_inr || 0, '', incoming?.candidate?.succeeded_payment_count || 0, '', '', '']);
+
+    (incoming?.recruiter?.plans || []).forEach((plan) => {
+      rows.push([
+        'Incoming Recruiter',
+        plan.plan_name || '',
+        plan.incoming_amount_inr || 0,
+        '',
+        plan.succeeded_payment_count || 0,
+        '',
+        '',
+        'Succeeded payments in selected timeline',
+      ]);
+    });
+    rows.push(['Incoming Recruiter', 'Recruiter Total Incoming', incoming?.recruiter?.total_incoming_inr || 0, '', incoming?.recruiter?.succeeded_payment_count || 0, '', '', '']);
+    rows.push(['Incoming Total', 'Total Incoming', incoming?.total_incoming_inr || 0, '', '', '', '', '']);
+    rows.push(['Incoming Total', 'Refunded Total', incoming?.refund_adjustments?.total_refunded_inr || 0, '', incoming?.refund_adjustments?.refund_events_count || 0, '', '', '']);
+    rows.push(['Incoming Total', 'Net Incoming After Refunds', incoming?.net_incoming_after_refunds_inr || 0, '', '', '', '', '']);
+
+    rows.push(['Profitability', 'Total Cost', profitability?.cost_total_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Gross Profit', profitability?.profit_gross_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Gross Margin %', profitability?.margin_gross_pct || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Net Profit', profitability?.profit_net_inr || 0, '', '', '', '', '']);
+    rows.push(['Profitability', 'Net Margin %', profitability?.margin_net_pct || 0, '', '', '', '', '']);
+
+    const safeStart = String(timeline.start_date || startDate).slice(0, 10);
+    const safeEnd = String(timeline.end_date || endDate).slice(0, 10);
+    downloadCsv(`admin-cost-statistics-${safeStart}-to-${safeEnd}.csv`, rows);
+  };
+
+  return (
+    <AdminLayout activeTab="cost-statistics">
+      <div className={styles.wrapper}>
+        <div className={styles.headerBlock}>
+          <h1>Admin Cost Statistics</h1>
+          <p>Select a timeline and review complete cost, incoming money, and profitability.</p>
+        </div>
+
+        <section className={styles.card}>
+          <div className={styles.sectionTitleRow}>
+            <h2>Timeline</h2>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={handleExportCsv}
+              disabled={loading || !costData}
+            >
+              Export CSV
+            </button>
+          </div>
+          <div className={styles.timelineGrid}>
+            <label className={styles.field}>
+              <span>From Date</span>
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>To Date (Present)</span>
+              <input type="date" value={endDate} disabled />
+            </label>
+          </div>
+          {costData?.timeline && (
+            <div className={styles.timelineMeta}>
+              <span>Applied Range: {new Date(costData.timeline.start_date).toLocaleDateString('en-IN')} - {new Date(costData.timeline.end_date).toLocaleDateString('en-IN')}</span>
+              <span>Days: {costData.timeline.days}</span>
+            </div>
+          )}
+        </section>
+
+        {loading && <div className={styles.status}>Loading cost statistics...</div>}
+        {error && <div className={`${styles.status} ${styles.error}`}>{error}</div>}
+
+        {!loading && !error && (
+          <>
+            <section className={styles.card}>
+              <h2>Visual Overview</h2>
+              <p className={styles.subText}>Quick visual insight for cost, incoming, AI mix, and top plans in selected timeline.</p>
+              <div className={styles.vizGrid}>
+                <div className={styles.chartCard}>
+                  <h3>Incoming vs Cost vs Profit</h3>
+                  <div className={styles.chartWrap}>
+                    <Bar data={overviewBarData} options={sharedBarOptions} />
+                  </div>
+                </div>
+                <div className={styles.chartCard}>
+                  <h3>AI Cost Share</h3>
+                  <div className={`${styles.chartWrap} ${styles.doughnutWrap}`}>
+                    <Doughnut data={aiMixData} options={doughnutOptions} />
+                  </div>
+                </div>
+                <div className={`${styles.chartCard} ${styles.fullWidthChart}`}>
+                  <h3>Plan-Wise Incoming (Candidate + Recruiter)</h3>
+                  <div className={styles.chartWrap}>
+                    <Bar data={planIncomingData} options={sharedBarOptions} />
+                  </div>
+                  <div className={styles.planLegend}>
+                    {planIncomingData.labels.map((label, index) => (
+                      <div key={label} className={styles.planLegendItem}>
+                        <span
+                          className={styles.planLegendDot}
+                          style={{ backgroundColor: planIncomingPalette[index] || '#94a3b8' }}
+                        />
+                        <span>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>AI Cost Lines</h2>
+              <p className={styles.subText}>Each line includes count, model, average cost, and total cost for selected timeline.</p>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Cost Category</th>
+                      <th>Model</th>
+                      <th>Count</th>
+                      <th>Avg Cost</th>
+                      <th>Total Cost</th>
+                      <th>Formula</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiCostRows.map((row) => (
+                      <tr key={row.key}>
+                        <td>{row.title}</td>
+                        <td>{row.model}</td>
+                        <td>{row.count}</td>
+                        <td>{formatMoney(row.avg_cost_inr)}</td>
+                        <td>{formatMoney(row.total_cost_inr)}</td>
+                        <td>{row.formula}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>Total AI Cost: <strong>{formatMoney(costData?.cost_statistics?.total_ai_cost_inr)}</strong></div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Infrastructure Cost</h2>
+              <div className={styles.kpiGrid}>
+                <div className={styles.kpiCard}>
+                  <h3>Cloudflare (Monthly Assumption)</h3>
+                  <p>{formatMoney(infraCosts?.cloudflare?.monthly_assumption_inr)}</p>
+                  <small>Pro-rated: {formatMoney(infraCosts?.cloudflare?.prorated_cost_inr)}</small>
+                  <small>Derived GPU share: {formatMoney(infraCosts?.cloudflare?.gpu_component_inr)}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>MongoDB (Monthly Assumption)</h3>
+                  <p>{formatMoney(infraCosts?.mongodb?.monthly_assumption_inr)}</p>
+                  <small>Pro-rated: {formatMoney(infraCosts?.mongodb?.prorated_cost_inr)}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Total Infrastructure Cost</h3>
+                  <p>{formatMoney(infraCosts?.total_infrastructure_cost_inr)}</p>
+                  <small>Cloudflare + MongoDB</small>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Incoming Money - Candidates</h2>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Plan</th>
+                      <th>Plan Price</th>
+                      <th>Succeeded Payments</th>
+                      <th>Incoming Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(incoming?.candidate?.plans || []).map((plan) => (
+                      <tr key={`${plan.plan_slug}-${plan.plan_price_inr}`}>
+                        <td>{plan.plan_name}</td>
+                        <td>{formatMoney(plan.plan_price_inr)}</td>
+                        <td>{plan.succeeded_payment_count}</td>
+                        <td>{formatMoney(plan.incoming_amount_inr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>
+                Candidate Incoming Total: <strong>{formatMoney(incoming?.candidate?.total_incoming_inr)}</strong>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Incoming Money - Recruiters</h2>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Plan</th>
+                      <th>Plan Price</th>
+                      <th>Succeeded Payments</th>
+                      <th>Incoming Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(incoming?.recruiter?.plans || []).map((plan) => (
+                      <tr key={`${plan.plan_slug}-${plan.plan_price_inr}`}>
+                        <td>{plan.plan_name}</td>
+                        <td>{formatMoney(plan.plan_price_inr)}</td>
+                        <td>{plan.succeeded_payment_count}</td>
+                        <td>{formatMoney(plan.incoming_amount_inr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.totalLine}>
+                Recruiter Incoming Total: <strong>{formatMoney(incoming?.recruiter?.total_incoming_inr)}</strong>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Net Incoming & Profitability</h2>
+              <div className={styles.kpiGrid}>
+                <div className={styles.kpiCard}>
+                  <h3>Total Incoming</h3>
+                  <p>{formatMoney(incoming?.total_incoming_inr)}</p>
+                  <small>Candidate + Recruiter succeeded payments</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Refund Adjustments</h3>
+                  <p>{formatMoney(incoming?.refund_adjustments?.total_refunded_inr)}</p>
+                  <small>Refund events: {incoming?.refund_adjustments?.refund_events_count || 0}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Net Incoming (After Refunds)</h3>
+                  <p>{formatMoney(incoming?.net_incoming_after_refunds_inr)}</p>
+                  <small>Gross incoming - refunds</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Total Cost (AI + Infra)</h3>
+                  <p>{formatMoney(costData?.cost_statistics?.total_cost_inr)}</p>
+                  <small>Selected timeline total cost</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Gross)</h3>
+                  <p className={profitability?.profit_gross_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_gross_inr)}</p>
+                  <small>Margin: {profitability?.margin_gross_pct || 0}%</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Net)</h3>
+                  <p className={profitability?.profit_net_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_net_inr)}</p>
+                  <small>Margin: {profitability?.margin_net_pct || 0}%</small>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </AdminLayout>
+  );
+};
+
+export default CostStatistics;

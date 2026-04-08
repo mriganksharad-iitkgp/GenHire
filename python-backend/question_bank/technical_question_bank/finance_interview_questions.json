@@ -1,0 +1,1622 @@
+[
+  {
+    "question": "What is finance?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are the three main financial statements?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an income statement?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a balance sheet?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a cash flow statement?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "How are the three financial statements connected?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is revenue?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is profit?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between profit and revenue?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is gross profit?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is net profit?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is EBITDA?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is working capital?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between current assets and non-current assets?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a liability?",
+    "role": "Finance Analyst",
+    "topic": "Finance Fundamentals",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is double-entry bookkeeping?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a debit and credit?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is depreciation?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is amortization?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is accrual accounting?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is cash accounting?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between accrual and cash accounting?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is accounts receivable?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is accounts payable?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is inventory?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is goodwill in accounting?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is retained earnings?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is shareholders' equity?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a fiscal year?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a dividend?",
+    "role": "Finance Analyst",
+    "topic": "Basic Accounting",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a financial ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the current ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the quick ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the debt-to-equity ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is return on equity (ROE)?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is return on assets (ROA)?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the profit margin?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is gross margin?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is operating margin?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the asset turnover ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the price-to-earnings (P/E) ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is earnings per share (EPS)?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the dividend yield?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is liquidity?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is solvency?",
+    "role": "Finance Analyst",
+    "topic": "Financial Ratios",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an investment?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a stock?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a bond?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between stocks and bonds?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is equity?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is debt?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a mutual fund?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an ETF?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is diversification?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is risk and return?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the relationship between risk and return?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is market capitalization?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a bull market?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a bear market?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is portfolio management?",
+    "role": "Finance Analyst",
+    "topic": "Investment Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is corporate finance?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is capital budgeting?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a capital expenditure (CapEx)?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an operating expenditure (OpEx)?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between CapEx and OpEx?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is cash flow from operations?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is free cash flow?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the time value of money?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is present value?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is future value?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is discounting?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is compounding?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an interest rate?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is simple interest?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is compound interest?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the stock market?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a stock exchange?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is IPO (Initial Public Offering)?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a primary market?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a secondary market?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is market volatility?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a market index?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the S&P 500?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the Dow Jones?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is trading volume?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is bid and ask price?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a spread?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a market order?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a limit order?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is insider trading?",
+    "role": "Finance Analyst",
+    "topic": "Market Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "How do you perform a company's financial health analysis?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is vertical analysis of financial statements?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is horizontal analysis of financial statements?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you analyze cash flow statements?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the cash conversion cycle?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you calculate days sales outstanding (DSO)?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is inventory turnover ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you interpret a company's debt levels?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is interest coverage ratio?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the DuPont analysis?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you evaluate a company's profitability?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between operating and non-operating income?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you analyze a company's capital structure?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is financial leverage?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How does leverage affect ROE?",
+    "role": "Finance Analyst",
+    "topic": "Financial Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is company valuation?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is discounted cash flow (DCF) analysis?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you calculate WACC?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the cost of equity?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the cost of debt?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Capital Asset Pricing Model (CAPM)?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is beta in finance?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is comparable company analysis?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is precedent transaction analysis?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is enterprise value?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between equity value and enterprise value?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you calculate terminal value?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Gordon Growth Model?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a leveraged buyout (LBO)?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you value a private company?",
+    "role": "Finance Analyst",
+    "topic": "Valuation",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is fundamental analysis?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is technical analysis?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between fundamental and technical analysis?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the efficient market hypothesis?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is alpha in investing?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Sharpe ratio?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is standard deviation in finance?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is correlation in portfolio management?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Capital Market Line?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the Security Market Line?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is arbitrage?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is hedging?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a derivative?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an option?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a futures contract?",
+    "role": "Finance Analyst",
+    "topic": "Investment Analysis",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is financial modeling?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are the components of a three-statement model?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you build an income statement projection?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you forecast revenue?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are different revenue forecasting methods?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you model depreciation?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is straight-line depreciation?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you link the three financial statements?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a sensitivity analysis?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is scenario analysis?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Monte Carlo simulation in finance?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you model working capital?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a debt schedule?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you model interest expense?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a merger model?",
+    "role": "Finance Analyst",
+    "topic": "Financial Modeling",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the pecking order theory?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the trade-off theory of capital structure?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you evaluate a capital budgeting project?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is net present value (NPV)?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is internal rate of return (IRR)?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between NPV and IRR?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the payback period?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the profitability index?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle mutually exclusive projects?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the optimal capital structure?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is dividend policy?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the dividend discount model?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a stock buyback?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is M&A (Mergers and Acquisitions)?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are synergies in M&A?",
+    "role": "Finance Analyst",
+    "topic": "Corporate Finance",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is financial risk management?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are different types of financial risks?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is credit risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is market risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is operational risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is liquidity risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Value at Risk (VaR)?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you calculate VaR?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is stress testing?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is duration in fixed income?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is convexity?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is credit default swap (CDS)?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is currency risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you hedge currency risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is interest rate risk?",
+    "role": "Finance Analyst",
+    "topic": "Risk Management",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you value a company with negative cash flows?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform a sum-of-the-parts valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the adjusted present value (APV) method?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you value a cyclical company?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you incorporate synergies in an M&A valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the venture capital method of valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you value a startup with no revenue?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you value financial institutions?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the challenges in valuing banks?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you value REITs?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform a breakup analysis?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is real options valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you value intangible assets?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you incorporate country risk in valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the H-model for valuation?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Valuation",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build an LBO model from scratch?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the importance of returns analysis in LBO?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model a merger or acquisition?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are accretion/dilution analyses?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build a consolidated financial model?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model earnouts in M&A?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you create a project finance model?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a recapitalization model?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model convertible debt?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you incorporate options pricing in models?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Black-Scholes model?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model employee stock options?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build a restructuring model?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a leveraged recapitalization?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model complex capital structures?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Financial Modeling",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain the put-call parity relationship.",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you price a European option?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you price an American option?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between European and American options?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the Greeks in options trading?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is delta hedging?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is gamma in options?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is vega and volatility risk?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is theta in options?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is implied volatility?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you construct an options trading strategy?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a straddle strategy?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is an iron condor?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a butterfly spread?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do swaps work in derivatives?",
+    "role": "Finance Analyst",
+    "topic": "Derivatives & Options",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "Explain Modern Portfolio Theory (MPT).",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you construct an efficient frontier?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the optimal portfolio according to MPT?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you calculate portfolio variance?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is systematic vs unsystematic risk?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a factor model?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Fama-French three-factor model?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is momentum investing?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is value investing?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform attribution analysis?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is risk parity strategy?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a long-short equity strategy?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is market-neutral strategy?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you rebalance a portfolio?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is tactical vs strategic asset allocation?",
+    "role": "Finance Analyst",
+    "topic": "Portfolio Management",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you determine optimal dividend policy?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Modigliani-Miller theorem?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are the assumptions of MM theorem?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How does taxation affect capital structure?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is financial distress cost?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model bankruptcy probability?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Altman Z-score?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you evaluate a spin-off transaction?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a carve-out?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you analyze leveraged recapitalization?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a rights offering?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you evaluate a tender offer?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a poison pill defense?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What are anti-takeover provisions?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you analyze dilution from equity issuance?",
+    "role": "Finance Analyst",
+    "topic": "Advanced Corporate Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is stochastic calculus in finance?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Brownian motion in finance?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you derive the Black-Scholes equation?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Ito's lemma?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a binomial tree model?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Monte Carlo simulation for derivatives pricing?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model interest rate term structure?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the Heath-Jarrow-Morton framework?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is credit risk modeling?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement a Merton model for credit risk?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is copula in risk management?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you model default correlation?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is conditional value at risk (CVaR)?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement GARCH models for volatility?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is high-frequency trading and market microstructure?",
+    "role": "Finance Analyst",
+    "topic": "Quantitative Finance",
+    "difficulty": "Hard"
+  }
+]

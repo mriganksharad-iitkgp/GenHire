@@ -1,0 +1,47 @@
+{
+  "name": "genhire-secure-browser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "electron-builder --win",
+    "dist": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.genhire.securebrowser",
+    "productName": "Genhire Secure Browser",
+    "protocols": {
+      "name": "Genhire Secure Interview URL",
+      "schemes": [
+        "secure-interview"
+      ]
+    },
+    "asar": true,
+    "compression": "maximum",
+    "forceCodeSigning": false,
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "keywords": [],
+  "author": "CompanyXYZ",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^40.6.1",
+    "electron-builder": "^23.6.0"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "^7.3.0",
+    "@google-cloud/text-to-speech": "^6.4.0",
+    "electron-localshortcut": "^3.2.1"
+  }
+}

@@ -1,0 +1,332 @@
+.cvList {
+  margin-top: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header h4 i {
+  color: #667eea;
+}
+
+.header small {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cvCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: 70px;
+}
+
+.cvCard:hover {
+  border-color: #667eea;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  transform: translateY(-2px);
+}
+
+.cvCard.primary {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.cvIcon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-radius: 8px;
+  color: white;
+  font-size: 20px;
+}
+
+.cvInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.cvFileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.cvName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+
+.fileName {
+  color: #111827 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  display: inline-block !important;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 80px;
+}
+
+.cvName > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 200px;
+  color: #111827;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.primaryBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.primaryBadge i {
+  font-size: 9px;
+}
+
+.cvMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.cvMeta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cvMeta i {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.cvActions {
+  display: flex;
+  align-items: center;
+}
+
+.primaryButton {
+  padding: 6px 12px;
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 6px;
+  color: #667eea;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #667eea;
+  color: white;
+  transform: scale(1.02);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primaryButton i {
+  font-size: 11px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px;
+  color: #6b7280;
+}
+
+.loading i {
+  font-size: 28px;
+  color: #667eea;
+}
+
+.loading span {
+  font-size: 14px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 32px 16px;
+  color: #6b7280;
+}
+
+.emptyState i {
+  font-size: 40px;
+  color: #d1d5db;
+  margin-bottom: 12px;
+}
+
+.emptyState p {
+  margin: 8px 0 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.emptyState small {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.footer {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.footer i {
+  color: #f59e0b;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.footer small {
+  line-height: 1.5;
+}
+
+/* Dark mode support */
+:global(.dark) .cvCard {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+:global(.dark) .cvCard:hover {
+  background: #111827;
+  border-color: #667eea;
+}
+
+:global(.dark) .cvName {
+  color: #f3f4f6;
+}
+
+:global(.dark) .cvFileName {
+  color: #f9fafb;
+}
+
+:global(.dark) .cvName > span:first-child {
+  color: #f9fafb;
+}
+
+:global(.dark) .fileName {
+  color: #f9fafb !important;
+}
+
+:global(.dark) .cvMeta {
+  color: #9ca3af;
+}
+
+:global(.dark) .primaryButton {
+  background: #374151;
+  border-color: #667eea;
+}
+
+:global(.dark) .primaryButton:hover:not(:disabled) {
+  background: #667eea;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cvCard {
+    padding: 12px;
+  }
+
+  .cvFileName {
+    font-size: 13px;
+  }
+
+  .primaryButton {
+    font-size: 10px;
+    padding: 5px 10px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

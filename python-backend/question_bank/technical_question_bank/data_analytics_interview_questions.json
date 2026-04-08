@@ -1,0 +1,1622 @@
+[
+  {
+    "question": "What is data analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between data analytics and data science?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between data analyst and data scientist?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are the types of data analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is descriptive analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is diagnostic analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is predictive analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is prescriptive analytics?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is structured data?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is unstructured data?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is semi-structured data?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is quantitative data?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is qualitative data?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a dataset?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data cleaning?",
+    "role": "Data Analyst",
+    "topic": "Data Analytics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is statistics?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is descriptive statistics?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is inferential statistics?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is mean?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is median?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is mode?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between mean, median, and mode?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is variance?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is standard deviation?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a normal distribution?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a probability?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is correlation?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between correlation and causation?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a sample?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a population?",
+    "role": "Data Analyst",
+    "topic": "Statistics Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data collection?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are different data collection methods?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a survey?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is primary data?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is secondary data?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data quality?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is missing data?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "How do you handle missing data?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data imputation?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is an outlier?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "How do you detect outliers?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data validation?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data transformation?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data normalization?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data standardization?",
+    "role": "Data Analyst",
+    "topic": "Data Collection & Cleaning",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is SQL?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a database?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a table in SQL?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a primary key?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a foreign key?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is SELECT statement?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is WHERE clause?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is GROUP BY?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is ORDER BY?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is DISTINCT?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is COUNT function?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is SUM function?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is AVG function?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is MAX and MIN functions?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a NULL value?",
+    "role": "Data Analyst",
+    "topic": "SQL Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Microsoft Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a cell in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a formula in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a function in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is the difference between formula and function?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is SUM function in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is AVERAGE function in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is VLOOKUP?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is HLOOKUP?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is IF function in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a pivot table?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is conditional formatting?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data filtering in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data sorting in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a chart in Excel?",
+    "role": "Data Analyst",
+    "topic": "Excel Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data visualization?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "Why is data visualization important?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a bar chart?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a line chart?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a pie chart?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a scatter plot?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a histogram?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a box plot?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a heat map?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Tableau?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is Power BI?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is a dashboard?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What makes a good data visualization?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is data storytelling?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What are best practices for creating dashboards?",
+    "role": "Data Analyst",
+    "topic": "Visualization Basics",
+    "difficulty": "Easy"
+  },
+  {
+    "question": "What is hypothesis testing?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a null hypothesis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is an alternative hypothesis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a p-value?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is statistical significance?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Type I error?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Type II error?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a confidence interval?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the t-test?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is ANOVA?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is chi-square test?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is regression analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is linear regression?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the coefficient of determination (R-squared)?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is multicollinearity?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a JOIN in SQL?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is INNER JOIN?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is LEFT JOIN?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is RIGHT JOIN?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is FULL OUTER JOIN?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a self-join?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a subquery?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a CTE (Common Table Expression)?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a window function?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is ROW_NUMBER function?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is RANK function?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is PARTITION BY?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between WHERE and HAVING?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is CASE statement in SQL?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you optimize SQL queries?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Why is Python popular for data analytics?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is pandas in Python?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a DataFrame in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is NumPy?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between pandas and NumPy?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you read a CSV file in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data filtering in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is groupby in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is merge in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is join in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is matplotlib?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is seaborn?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you handle missing values in pandas?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data aggregation?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a lambda function in Python?",
+    "role": "Data Analyst",
+    "topic": "Python for Analytics",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are the steps in data analysis?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is exploratory data analysis (EDA)?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data profiling?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data mining?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is the difference between data mining and data analysis?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a data pipeline?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is ETL (Extract, Transform, Load)?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data warehousing?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is OLAP vs OLTP?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data modeling?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a star schema?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a snowflake schema?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data governance?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is metadata?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data lineage?",
+    "role": "Data Analyst",
+    "topic": "Data Analysis Process",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is business intelligence?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is KPI (Key Performance Indicator)?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are metrics in analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is cohort analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is funnel analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is A/B testing?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is customer segmentation?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is RFM analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is churn analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is basket analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is time series analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is trend analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is customer lifetime value (CLV)?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is conversion rate?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is data-driven decision making?",
+    "role": "Data Analyst",
+    "topic": "Business Intelligence",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is INDEX-MATCH in Excel?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is SUMIF and SUMIFS?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is COUNTIF and COUNTIFS?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are array formulas in Excel?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Power Query?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Power Pivot?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is DAX in Power BI?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "How do you create calculated columns in Power BI?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a measure in Power BI?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What are relationships in Power BI?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is Google Analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a dimension in Google Analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a metric in Google Analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is a segment in analytics tools?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "What is drill-down analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Excel & Tools",
+    "difficulty": "Medium"
+  },
+  {
+    "question": "Explain multiple linear regression in detail.",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is logistic regression and when do you use it?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you interpret logistic regression coefficients?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is polynomial regression?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is ridge regression?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is lasso regression?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is elastic net regression?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is the difference between ridge and lasso?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is principal component analysis (PCA)?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform dimensionality reduction?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is factor analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is cluster analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is hierarchical clustering?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is k-means clustering?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you determine the optimal number of clusters?",
+    "role": "Data Analyst",
+    "topic": "Advanced Statistics & ML",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is time series data?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is stationarity in time series?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you test for stationarity?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is autocorrelation?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is partial autocorrelation?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is ARIMA model?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you determine ARIMA parameters?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is seasonal decomposition?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is exponential smoothing?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is moving average in time series?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is trend and seasonality?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle seasonality in forecasting?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Prophet for time series?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is anomaly detection in time series?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you forecast with multiple time series?",
+    "role": "Data Analyst",
+    "topic": "Time Series Analysis",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you write complex nested queries?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is query optimization?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is indexing and how does it improve performance?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is database partitioning?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is sharding?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle slowly changing dimensions?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Type 1, Type 2, Type 3 SCD?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is a fact table vs dimension table?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you design a data warehouse?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is normalized vs denormalized data?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is materialized view?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle large-scale data processing?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is distributed computing for analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Apache Spark?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform analytics on big data?",
+    "role": "Data Analyst",
+    "topic": "Advanced SQL & Databases",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is predictive modeling?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build a predictive model?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is feature engineering in analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle categorical variables in modeling?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is cross-validation in predictive modeling?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is ensemble methods in analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is random forest for analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is gradient boosting for analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you handle imbalanced data in classification?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is cost-sensitive learning?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is survival analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is cohort retention analysis?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform causal inference?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is propensity score matching?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is experimental design in analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Analytics Techniques",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build a comprehensive KPI dashboard?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is attribution modeling in marketing analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is multi-touch attribution?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you measure marketing ROI?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is customer journey analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform pricing analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is price elasticity analysis?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you optimize inventory using analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is demand forecasting?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you perform supply chain analytics?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is financial forecasting?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build a revenue model?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is churn prediction modeling?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you calculate customer acquisition cost (CAC)?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is LTV:CAC ratio?",
+    "role": "Data Analyst",
+    "topic": "Business Analytics",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement real-time analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is streaming analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Apache Kafka for analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you build automated reporting systems?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is data orchestration?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Apache Airflow?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you version control analytics code?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is dbt (data build tool)?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement data quality checks?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is data observability?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you scale analytics infrastructure?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is cloud analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is Snowflake for analytics?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "What is BigQuery?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  },
+  {
+    "question": "How do you implement analytics in production?",
+    "role": "Data Analyst",
+    "topic": "Advanced Tools & Technologies",
+    "difficulty": "Hard"
+  }
+]

@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
+import Pagination from "../components/Pagination";
+import CVSelectionModal from "../components/CVSelectionModal";
+import { useCandidateData } from "../contexts/CandidateDataContext";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
+	const { jobs: cachedJobs, loadJobsCached, invalidateJobs, applications: cachedApplications, loadApplicationsCached, invalidateApplications } = useCandidateData();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState("");
 	const [locationFilter, setLocationFilter] = useState("");
@@ -16,6 +20,15 @@ const Dashboard = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [applications, setApplications] = useState([]);
+	const [applyingJobId, setApplyingJobId] = useState(null); // Track which job is being applied to
+	const [withdrawingJobId, setWithdrawingJobId] = useState(null); // Track which job is being withdrawn
+	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
+	const [showCVModal, setShowCVModal] = useState(false);
+	const [selectedJobForApplication, setSelectedJobForApplication] = useState(null);
+	
+	// Pagination state
+	const [currentPage, setCurrentPage] = useState(1);
+	const itemsPerPage = 10;
 	
 	// Toast state
 	const [toast, setToast] = useState(null);
@@ -25,13 +38,39 @@ const Dashboard = () => {
 		setToast({ message, type });
 	};
 
-	// Load jobs from backend
+	// Reset page when filters change
 	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchQuery, typeFilter, locationFilter, experienceFilter, jobRoleFilter, companyFilter, skillsFilter]);
+
+	// Single useEffect for authentication and initial data load (ONLY ONCE)
+	useEffect(() => {
+		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
+		if (!isLoggedIn) {
+			navigate("/login");
+			return;
+		}
+		
+		// Load data only once on mount
 		loadJobs();
 		loadApplications();
-	}, []);
+	}, []); // Empty dependency array - run only once
 
-	const loadJobs = async () => {
+	// Poll for application updates when there are pending/processing applications
+	useEffect(() => {
+		const hasPending = applications.some(
+			app => app.processing_status === 'pending' || app.processing_status === 'processing'
+		);
+		if (!hasPending) return;
+
+		const interval = setInterval(() => {
+			loadApplications(true);
+		}, 5000);
+
+		return () => clearInterval(interval);
+	}, [applications]);
+
+	const loadJobs = async (force = false) => {
 		try {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) {
@@ -39,19 +78,24 @@ const Dashboard = () => {
 				return;
 			}
 
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'Content-Type': 'application/json'
+			// Use cached data if available
+			const jobs = await loadJobsCached(force, async () => {
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.ok) {
+					return await response.json();
+				} else {
+					throw new Error('Failed to load jobs');
 				}
 			});
 
-			if (response.ok) {
-				const jobs = await response.json();
-				setJobOpenings(jobs);
-			} else {
-				setError('Failed to load jobs');
-			}
+			setJobOpenings(jobs);
+			setError(null);
 		} catch (error) {
 			console.error('Error loading jobs:', error);
 			setError('Failed to load jobs');
@@ -75,38 +119,62 @@ const Dashboard = () => {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) return;
 
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'Content-Type': 'application/json'
+			// Use cached data if available
+			const apps = await loadApplicationsCached(force, async () => {
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.ok) {
+					return await response.json();
+				} else {
+					throw new Error('Failed to load applications');
 				}
 			});
 
-			if (response.ok) {
-				const apps = await response.json();
-				setApplications(apps);
-			}
+			setApplications(apps);
 		} catch (error) {
 			console.error('Error loading applications:', error);
 		}
 	};
 
-	const applyForJob = async (jobId) => {
+	const applyForJob = (jobId) => {
+		const token = localStorage.getItem('companyxyz-token');
+		const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
+		
+		if (!token) {
+			navigate('/login');
+			return;
+		}
+
+		// Prevent recruiters from applying
+		const role = (user?.user_type || user?.userType || 'candidate').toLowerCase();
+		if (role === 'recruiter') {
+			showToast('Recruiters cannot apply to jobs.', 'error');
+			return;
+		}
+
+		// Find the job to get its title
+		const job = jobOpenings.find(j => j._id === jobId);
+		setSelectedJobForApplication({ id: jobId, title: job?.title || 'this position' });
+		setShowCVModal(true);
+	};
+
+	const handleCVSelectionSubmit = async (cvSelection) => {
+		const jobId = selectedJobForApplication?.id;
+		if (!jobId) return;
+
+		setApplyingJobId(jobId);
+		
+		// Close modal immediately for better UX
+		setShowCVModal(false);
+		setSelectedJobForApplication(null);
+		
 		try {
 			const token = localStorage.getItem('companyxyz-token');
-			const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
-			if (!token) {
-				navigate('/login');
-				return;
-			}
-
-			// Prevent recruiters from applying
-			const role = (user?.user_type || user?.userType || 'candidate').toLowerCase();
-			if (role === 'recruiter') {
-				showToast('Recruiters cannot apply to jobs.', 'error');
-				return;
-			}
-
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
@@ -114,20 +182,39 @@ const Dashboard = () => {
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
+					cv_id: cvSelection.cv_id,
 					cover_letter: `I am interested in applying for this position and believe my skills align well with the requirements.`
 				})
 			});
 
+			const data = await response.json();
+
 			if (response.ok) {
-				showToast('Application submitted successfully!', 'success');
-				loadApplications(); // Reload applications
+				// Application successful - backend is processing CV score
+				console.log('Application submitted:', data);
+				showToast('Application submitted! CV scoring is being processed...', 'success');
+				// Optimistically add to local applications so button changes instantly
+				setApplications(prev => [...prev, {
+					job_id: jobId.toString(),
+					status: 'pending',
+					processing_status: 'pending',
+					applied_at: new Date().toISOString()
+				}]);
+				// Invalidate applications cache so next load gets fresh data
+				invalidateApplications();
 			} else {
-				const errorData = await response.json();
-				showToast(errorData.error || 'Failed to submit application', 'error');
+				showToast(data.error || 'Failed to submit application', 'error');
+				// If already applied, force-reload applications so the button state updates
+				if (data.error && data.error.toLowerCase().includes('already applied')) {
+					invalidateApplications();
+					await loadApplications(true);
+				}
 			}
 		} catch (error) {
 			console.error('Error applying for job:', error);
 			showToast('Failed to submit application', 'error');
+		} finally {
+			setApplyingJobId(null);
 		}
 	};
 
@@ -151,37 +238,52 @@ const Dashboard = () => {
 		const hasAppliedToJob = hasApplied(jobId);
 		const canWithdraw = canWithdrawApplication(jobId);
 		const isPendingWithdrawal = pendingWithdrawal === jobId;
+		const isApplying = applyingJobId === jobId;
 		
 		// State 1: Apply Now (not applied yet)
 		if (!hasAppliedToJob) {
 			return {
 				type: 'apply',
-				text: 'Apply Now',
+				text: isApplying ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Applying...
+					</>
+				) : 'Apply Now',
 				className: styles.applyButton,
 				onClick: () => applyForJob(jobId),
-				disabled: false
+				disabled: isApplying
 			};
 		}
 		
 		// State 2: Withdraw Application (applied and can withdraw, not pending)
 		if (hasAppliedToJob && canWithdraw && !isPendingWithdrawal) {
+			const isWithdrawing = withdrawingJobId === jobId;
 			return {
 				type: 'withdraw',
-				text: 'Withdraw Application',
+				text: isWithdrawing ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Withdrawing...
+					</>
+				) : 'Withdraw Application',
 				className: `${styles.applyButton} ${styles.withdrawButton}`,
 				onClick: () => withdrawApplication(jobId),
-				disabled: false
+				disabled: isWithdrawing
 			};
 		}
 		
 		// State 3: Confirm Withdrawal (applied, can withdraw, and pending confirmation)
 		if (hasAppliedToJob && canWithdraw && isPendingWithdrawal) {
+			const isWithdrawing = withdrawingJobId === jobId;
 			return {
 				type: 'confirm_withdraw',
-				text: 'Confirm Withdrawal',
+				text: isWithdrawing ? (
+					<>
+						<i className="fa fa-spinner fa-spin"></i> Withdrawing...
+					</>
+				) : 'Confirm Withdrawal',
 				className: `${styles.applyButton} ${styles.withdrawButton} ${styles.confirmWithdraw}`,
 				onClick: () => withdrawApplication(jobId),
-				disabled: false
+				disabled: isWithdrawing
 			};
 		}
 		
@@ -199,14 +301,16 @@ const Dashboard = () => {
 		// Fallback to Apply Now
 		return {
 			type: 'apply',
-			text: 'Apply Now',
+			text: isApplying ? (
+				<>
+					<i className="fa fa-spinner fa-spin"></i> Applying...
+				</>
+			) : 'Apply Now',
 			className: styles.applyButton,
 			onClick: () => applyForJob(jobId),
-			disabled: false
+			disabled: isApplying
 		};
 	};
-
-	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 
 	const withdrawApplication = async (jobId) => {
 		try {
@@ -230,6 +334,8 @@ const Dashboard = () => {
 			}
 
 			// This is the confirmation step (second click)
+			setWithdrawingJobId(jobId);
+			
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 				method: 'DELETE',
 				headers: {
@@ -240,16 +346,20 @@ const Dashboard = () => {
 
 			if (response.ok) {
 				showToast('Application withdrawn successfully!', 'success');
-				loadApplications(); // Reload applications
+				// Invalidate cache and reload
+				invalidateApplications();
+				await loadApplications(true); // Force reload
 			} else {
 				const errorData = await response.json();
 				showToast(errorData.error || 'Failed to withdraw application', 'error');
 			}
 			setPendingWithdrawal(null);
+			setWithdrawingJobId(null);
 		} catch (error) {
 			console.error('Error withdrawing application:', error);
 			showToast('Failed to withdraw application', 'error');
 			setPendingWithdrawal(null);
+			setWithdrawingJobId(null);
 		}
 	};
 
@@ -475,16 +585,23 @@ const Dashboard = () => {
 								const unappliedJobs = filteredJobs.filter(job => !hasApplied(job._id));
 								const appliedJobs = filteredJobs.filter(job => hasApplied(job._id));
 								
+								// Pagination logic
+								const startIndex = (currentPage - 1) * itemsPerPage;
+								const endIndex = startIndex + itemsPerPage;
+								const paginatedUnappliedJobs = unappliedJobs.slice(startIndex, endIndex);
+								const paginatedAppliedJobs = appliedJobs.slice(Math.max(0, startIndex - unappliedJobs.length), Math.max(0, endIndex - unappliedJobs.length));
+								const totalPages = Math.ceil(filteredJobs.length / itemsPerPage);
+								
 								return (
 									<>
 										{/* Available Jobs First */}
-										{unappliedJobs.length > 0 && (
+										{paginatedUnappliedJobs.length > 0 && (
 											<div className={styles.jobSection}>
 												<h4 style={{color: '#27ae60', marginBottom: '1rem'}}>
 													<i className="fa fa-circle" style={{marginRight: '8px'}}></i>
 													Available Jobs ({unappliedJobs.length})
 												</h4>
-												{unappliedJobs.map((job) => (
+												{paginatedUnappliedJobs.map((job) => (
 													<div key={job._id} className={styles.jobCard}>
 														<div className={styles.jobMain}>
 															<div className={styles.jobTitleSection}>
@@ -566,13 +683,13 @@ const Dashboard = () => {
 										)}
 										
 										{/* Applied Jobs Section */}
-										{appliedJobs.length > 0 && (
+										{paginatedAppliedJobs.length > 0 && (
 											<div className={styles.jobSection} style={{marginTop: '2rem'}}>
 												<h4 style={{color: '#3498db', marginBottom: '1rem'}}>
 													<i className="fa fa-check-circle" style={{marginRight: '8px'}}></i>
 													Your Applications ({appliedJobs.length})
 												</h4>
-												{appliedJobs.map((job) => (
+												{paginatedAppliedJobs.map((job) => (
 													<div key={job._id} className={`${styles.jobCard} ${styles.appliedJobCard}`}>
 														<div className={styles.jobMain}>
 															<div className={styles.jobTitleSection}>
@@ -640,6 +757,15 @@ const Dashboard = () => {
 												))}
 											</div>
 										)}
+										
+										{/* Pagination */}
+										<Pagination
+											currentPage={currentPage}
+											totalPages={totalPages}
+											onPageChange={setCurrentPage}
+											totalItems={filteredJobs.length}
+											itemsPerPage={itemsPerPage}
+										/>
 									</>
 								);
 							})()}
@@ -654,6 +780,18 @@ const Dashboard = () => {
 					onClose={() => setToast(null)}
 				/>
 			)}
+			
+			{/* CV Selection Modal */}
+			<CVSelectionModal
+				isOpen={showCVModal}
+				onClose={() => {
+					setShowCVModal(false);
+					setSelectedJobForApplication(null);
+				}}
+				onSubmit={handleCVSelectionSubmit}
+				jobTitle={selectedJobForApplication?.title}
+				mode="apply"
+			/>
 		</div>
 	);
 };

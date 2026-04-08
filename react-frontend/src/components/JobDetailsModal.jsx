@@ -33,7 +33,7 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 	return (
 		<div className={styles.modalOverlay} onClick={onClose}>
 			<div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-				{/* Beautiful Gradient Header */}
+				{/* Gradient Header */}
 				<div className={styles.modalHeader}>
 					<div className={styles.headerContent}>
 						<div className={styles.titleSection}>

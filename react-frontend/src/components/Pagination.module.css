@@ -1,0 +1,193 @@
+/* ===================================
+   PAGINATION COMPONENT STYLES
+   =================================== */
+
+.paginationContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-lg, 1.5rem);
+  padding: var(--spacing-xl, 2rem) 0;
+  margin-top: var(--spacing-2xl, 2.5rem);
+  border-top: 1px solid var(--gray-200, #e5e7eb);
+  flex-wrap: wrap;
+}
+
+body.dark .paginationContainer,
+:global(.dark) .paginationContainer {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}
+
+.paginationInfo {
+  color: var(--gray-600, #4b5563);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+body.dark .paginationInfo,
+:global(.dark) .paginationInfo {
+  color: #94a3b8;
+}
+
+.paginationInfo strong {
+  color: var(--gray-900, #111827);
+  font-weight: 600;
+}
+
+body.dark .paginationInfo strong,
+:global(.dark) .paginationInfo strong {
+  color: #f8fafc;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 0.75rem);
+}
+
+.pageNumbers {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 0.5rem);
+}
+
+.pageButton {
+  min-width: 40px;
+  height: 40px;
+  padding: 0 var(--spacing-md, 1rem);
+  border: 1px solid var(--gray-300, #d1d5db);
+  border-radius: var(--radius-lg, 0.75rem);
+  background: white;
+  color: var(--gray-700, #374151);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs, 0.5rem);
+}
+
+body.dark .pageButton,
+:global(.dark) .pageButton {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.pageButton:hover:not(:disabled):not(.active) {
+  border-color: var(--primary-500, #3b82f6);
+  background: var(--primary-50, #eff6ff);
+  color: var(--primary-700, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+body.dark .pageButton:hover:not(:disabled):not(.active),
+:global(.dark) .pageButton:hover:not(:disabled):not(.active) {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.pageButton.active {
+  background: linear-gradient(135deg, var(--primary-500, #3b82f6), var(--primary-600, #2563eb));
+  border-color: var(--primary-600, #2563eb);
+  color: white;
+  box-shadow: 0 4px 6px -1px rgb(59 130 246 / 0.3);
+  transform: translateY(-1px);
+}
+
+body.dark .pageButton.active,
+:global(.dark) .pageButton.active {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  border-color: #60a5fa;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgb(96 165 250 / 0.3);
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pageButton:disabled:hover {
+  border-color: var(--gray-300, #d1d5db);
+  background: white;
+  transform: none;
+}
+
+body.dark .pageButton:disabled:hover,
+:global(.dark) .pageButton:disabled:hover {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(51, 65, 85, 0.8);
+}
+
+.prevNext {
+  padding: 0 var(--spacing-lg, 1.5rem);
+  font-weight: 600;
+}
+
+.prevNext i {
+  font-size: 0.75rem;
+}
+
+.ellipsis {
+  color: var(--gray-400, #9ca3af);
+  font-weight: 600;
+  padding: 0 var(--spacing-xs, 0.5rem);
+  user-select: none;
+}
+
+body.dark .ellipsis,
+:global(.dark) .ellipsis {
+  color: #64748b;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .paginationContainer {
+    flex-direction: column;
+    gap: var(--spacing-md, 1rem);
+  }
+
+  .paginationInfo {
+    text-align: center;
+  }
+
+  .pageNumbers {
+    gap: var(--spacing-xs, 0.5rem);
+  }
+
+  .pageButton {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 var(--spacing-sm, 0.75rem);
+    font-size: 0.8125rem;
+  }
+
+  .prevNext span {
+    display: none;
+  }
+
+  .prevNext {
+    padding: 0 var(--spacing-md, 1rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .pageNumbers {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pageButton {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 var(--spacing-sm, 0.75rem);
+  }
+}
+

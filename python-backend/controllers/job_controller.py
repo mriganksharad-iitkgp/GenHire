@@ -1,10 +1,31 @@
 import datetime
+import os
+import uuid
+import json
+import re
+import logging
 from bson import ObjectId
+from werkzeug.utils import secure_filename
+from services.pdf_parser_service import get_pdf_parser
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 class JobController:
     def __init__(self, db_collections):
         self.jobs_collection = db_collections['jobs']
         self.applications_collection = db_collections['applications']
+        self.upload_folder = 'uploads/jds'
+        
+        # Ensure upload directory exists
+        os.makedirs(self.upload_folder, exist_ok=True)
+        
+        # Initialize PDF parser
+        try:
+            self.pdf_parser = get_pdf_parser()
+        except Exception as e:
+            logger.warning(f"PDF parser initialization failed: {e}")
+            self.pdf_parser = None
         
     def get_jobs(self, user_type, user_id):
         """Retrieve jobs based on user type and permissions"""
@@ -12,6 +33,38 @@ class JobController:
             # Return all jobs for recruiters
             jobs = list(self.jobs_collection.find({'created_by': user_id}))
             for job in jobs:
+                job_id_str = str(job['_id'])
+
+                # Derive counters from applications to avoid stale denormalized values
+                job_applications = list(
+                    self.applications_collection.find(
+                        {'job_id': job_id_str, 'is_visible': True},
+                        {'status': 1}
+                    )
+                )
+
+                interviewed_count = 0
+                selected_count = 0
+                rejected_count = 0
+                pending_count = 0
+
+                for app in job_applications:
+                    status = str(app.get('status', 'pending')).lower()
+                    if status == 'interviewed':
+                        interviewed_count += 1
+                    elif status == 'selected':
+                        selected_count += 1
+                    elif status == 'rejected':
+                        rejected_count += 1
+                    elif status in ['pending', 'reviewed', 'shortlisted']:
+                        pending_count += 1
+
+                job['applicants'] = len(job_applications)
+                job['interviewed'] = interviewed_count
+                job['selected'] = selected_count
+                job['rejected'] = rejected_count
+                job['pending'] = pending_count
+
                 job['_id'] = str(job['_id'])
             return jobs, 200
         else:
@@ -35,8 +88,19 @@ class JobController:
                 job.pop('created_by', None)
             return jobs, 200
         
-    def create_job(self, recruiter_id, job_data, recruiter_profile):
-        """Create new job posting"""
+    def create_job(self, recruiter_id, job_data, recruiter_profile, jd_file=None):
+        """
+        Create new job posting
+        
+        Args:
+            recruiter_id: ID of recruiter creating the job
+            job_data: Job data dictionary
+            recruiter_profile: Recruiter's profile data
+            jd_file: Optional JD PDF file (Phase 4)
+            
+        Returns:
+            tuple: (response_dict, status_code)
+        """
         required_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description']
         
         for field in required_fields:
@@ -54,6 +118,21 @@ class JobController:
                 return {'error': 'Minimum CV score must be a valid number'}, 400
         else:
             minimum_cv_score = 50.0  # Default minimum CV score
+
+        # Proctoring configuration — defaults all enabled
+        default_proctoring = {
+            'voice_detection': True,
+            'object_detection': True,
+            'eyeball_tracking': True,
+            'gaze_heatmap': True,
+        }
+        raw_proctoring = job_data.get('proctoring_config')
+        if isinstance(raw_proctoring, dict):
+            proctoring_config = {
+                k: bool(raw_proctoring.get(k, True)) for k in default_proctoring
+            }
+        else:
+            proctoring_config = default_proctoring
         
         # Check for unique job title
         job_title = job_data['title'].strip()
@@ -82,6 +161,42 @@ class JobController:
         # Get company information from recruiter's profile
         company_name = recruiter_profile.get('company_name') or job_data.get('company') or 'TechCorp Solutions'
         company_logo = recruiter_profile.get('company_logo') or job_data.get('logo') or None
+        
+        # Handle JD PDF upload (Phase 4)
+        jd_pdf_path = None
+        jd_extracted_text = None
+        jd_upload_date = None
+        
+        if jd_file and jd_file.filename:
+            try:
+                # Generate unique filename
+                job_id = str(uuid.uuid4())
+                file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
+                
+                # Validate file type
+                if file_extension not in ['pdf', 'txt']:
+                    logger.warning(f"Invalid JD file type: {file_extension}")
+                else:
+                    jd_filename = f"jd_{job_id}.{file_extension}"
+                    jd_pdf_path = os.path.join(self.upload_folder, jd_filename)
+                    
+                    # Save file
+                    jd_file.save(jd_pdf_path)
+                    jd_upload_date = datetime.datetime.utcnow()
+                    
+                    # Extract text from JD PDF/TXT
+                    if self.pdf_parser:
+                        try:
+                            jd_extracted_text = self.pdf_parser.extract_text(jd_pdf_path)
+                            logger.info(f"Extracted {len(jd_extracted_text)} characters from JD: {jd_filename}")
+                        except Exception as e:
+                            logger.error(f"Failed to extract text from JD: {e}")
+                            # Continue with job creation without extracted text
+                    else:
+                        logger.warning("PDF parser not available, JD text not extracted")
+            except Exception as e:
+                logger.error(f"Error processing JD file: {e}")
+                # Continue with job creation without JD file
 
         job_document = {
             'title': job_data['title'],
@@ -98,7 +213,8 @@ class JobController:
             'requirements': normalize_list_field(job_data.get('requirements', []), separator='\n'),
             'benefits': normalize_list_field(job_data.get('benefits', []), separator='\n'),
             'status': status,
-            'minimum_cv_score': minimum_cv_score,  # Add minimum CV score field
+            'minimum_cv_score': minimum_cv_score,
+            'proctoring_config': proctoring_config,
             'created_by': recruiter_id,
             'created_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
@@ -107,7 +223,11 @@ class JobController:
             'interviewed': 0,
             'selected': 0,
             'rejected': 0,
-            'pending': 0
+            'pending': 0,
+            # JD PDF fields (Phase 4)
+            'jd_pdf_path': jd_pdf_path,
+            'jd_extracted_text': jd_extracted_text,
+            'jd_upload_date': jd_upload_date
         }
         
         result = self.jobs_collection.insert_one(job_document)
@@ -152,7 +272,7 @@ class JobController:
                 return [p for p in parts if p]
             return []
         
-        allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline', 'minimum_cv_score']
+        allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline', 'minimum_cv_score', 'proctoring_config']
         for field in allowed_fields:
             if field in job_data:
                 if field == 'status':
@@ -175,6 +295,11 @@ class JobController:
                         update_fields[field] = cv_score
                     except (ValueError, TypeError):
                         return {'error': 'Minimum CV score must be a valid number'}, 400
+                elif field == 'proctoring_config':
+                    raw_pc = job_data.get(field, {})
+                    if isinstance(raw_pc, dict):
+                        valid_keys = {'voice_detection', 'object_detection', 'eyeball_tracking', 'gaze_heatmap'}
+                        update_fields[field] = {k: bool(raw_pc.get(k, True)) for k in valid_keys}
                 elif field in {'skills'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []))
                 elif field in {'responsibilities', 'requirements', 'benefits'}:
@@ -241,3 +366,87 @@ class JobController:
             },
             'applications': applications
         }, 200
+
+    def generate_jd_with_ai(self, prompt_text):
+        """Generate a complete job description using Groq AI"""
+        try:
+            load_dotenv()
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            if not groq_api_key:
+                return {'error': 'Groq API key not configured'}, 500
+
+            from groq import Groq
+
+            client = Groq(api_key=groq_api_key)
+
+            system_prompt = """You are an expert HR recruiter and job description writer. Based on the user's input, generate a complete, professional job posting.
+
+Return ONLY a valid JSON object (no markdown, no code fences, no explanation) with exactly these fields:
+
+{
+  "title": "Exact job title",
+  "department": "One of: Engineering, Product, Design, Data & Analytics, Marketing, Sales, Customer Success, Operations, Finance, Human Resources, Legal, Security, DevOps, Quality Assurance, Research & Development",
+  "location": "One of: Remote, Bangalore, Karnataka, Mumbai, Maharashtra, Delhi, NCR, Hyderabad, Telangana, Chennai, Tamil Nadu, Pune, Maharashtra, Kolkata, West Bengal, Remote (India), Remote (Global), or any other relevant location",
+  "type": "One of: Full-time, Part-time, Contract, Internship, Freelance, Remote",
+  "experience": "One of: Entry Level (0-1 years), 1-2 years, 2-4 years, 3-5 years, 4-6 years, 5-7 years, 6-8 years, 7+ years, 10+ years",
+  "salary": "Indian salary range format like ₹12,00,000 - ₹18,00,000. Pick from: ₹3,00,000 - ₹5,00,000, ₹5,00,000 - ₹8,00,000, ₹8,00,000 - ₹12,00,000, ₹12,00,000 - ₹18,00,000, ₹18,00,000 - ₹25,00,000, ₹25,00,000 - ₹35,00,000, ₹35,00,000 - ₹50,00,000, ₹50,00,000 - ₹75,00,000, ₹75,00,000 - ₹1,00,00,000, ₹1,00,00,000 - ₹1,50,00,000",
+  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+  "description": "A compelling 2-3 sentence job description paragraph",
+  "responsibilities": ["responsibility1", "responsibility2", "responsibility3", "responsibility4", "responsibility5"],
+  "requirements": ["requirement1", "requirement2", "requirement3", "requirement4", "requirement5"],
+  "benefits": ["benefit1", "benefit2", "benefit3", "benefit4", "benefit5"],
+  "minimum_cv_score": 50
+}
+
+Rules:
+- skills should have 4-8 relevant technical/soft skills
+- responsibilities, requirements, benefits should each have 4-6 items
+- description should be professional, engaging, and 2-3 sentences
+- All values must match the predefined options exactly where specified
+- If the user mentions specific details (salary, location, etc.), use those
+- Return ONLY the JSON object, nothing else"""
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Generate a complete job posting for: {prompt_text}"}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                response_format={"type": "json_object"}
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            
+            # Clean markdown code fences if present
+            if response_text.startswith('```'):
+                response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
+                response_text = re.sub(r'\s*```$', '', response_text)
+
+            job_data = json.loads(response_text)
+
+            # Validate required fields exist
+            required_fields = ['title', 'department', 'location', 'type', 'experience', 
+                             'salary', 'skills', 'description', 'responsibilities', 
+                             'requirements', 'benefits']
+            for field in required_fields:
+                if field not in job_data:
+                    return {'error': f'AI response missing field: {field}'}, 500
+
+            # Ensure array fields are lists
+            for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
+                if not isinstance(job_data[field], list):
+                    job_data[field] = [job_data[field]]
+
+            # Set defaults
+            job_data.setdefault('minimum_cv_score', 50)
+
+            return {'job_data': job_data}, 200
+
+        except json.JSONDecodeError as e:
+            logger.error(f"AI response JSON parse error: {e}")
+            return {'error': 'Failed to parse AI response. Please try again.'}, 500
+        except Exception as e:
+            logger.error(f"AI JD generation error: {e}")
+            return {'error': f'AI generation failed: {str(e)}'}, 500

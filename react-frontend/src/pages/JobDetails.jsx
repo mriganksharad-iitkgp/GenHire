@@ -2,14 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Toast from "../components/Toast";
 import JobEditModal from "../components/JobEditModal";
+import CVSelectionModal from "../components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
+import InterviewReportModal from '../components/InterviewReportModal';
 
 const JobDetails = () => {
 	const { jobId } = useParams();
 	const navigate = useNavigate();
 	const [job, setJob] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
-	const [applyModalOpen, setApplyModalOpen] = useState(false);
+	const [isApplying, setIsApplying] = useState(false);
+	const [showCVModal, setShowCVModal] = useState(false);
 	const [matchScoreModalOpen, setMatchScoreModalOpen] = useState(false);
 	const [matchScore, setMatchScore] = useState(null);
 	const [userType, setUserType] = useState("candidate");
@@ -222,12 +225,25 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		}, 1000);
 	};
 	// Apply for job from details page
-	const handleApply = async () => {
+	const handleCVSelectionSubmit = async (cvSelection) => {
 		const token = localStorage.getItem("companyxyz-token");
 		if (!token) {
 			navigate("/login");
 			return;
 		}
+		
+		setIsApplying(true);
+		
+		// Close modal and show success immediately for better UX
+		setShowCVModal(false);
+		showToast('Application submitted! CV scoring is being processed...', 'success');
+		
+		// Optimistically toggle applied state for immediate UX feedback
+		setHasApplied(true);
+		setAppliedAt(new Date().toISOString());
+		setApplicationStatus('pending');
+		setIsApplying(false);
+		
 		try {
 			const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
@@ -236,21 +252,26 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
+					cv_id: cvSelection.cv_id,
 					cover_letter: `I am interested in applying for ${job?.title}.`
 				})
 			});
 			const data = await res.json();
 			if (!res.ok) {
+				// Revert optimistic update on error
+				setHasApplied(false);
+				setAppliedAt(null);
+				setApplicationStatus(null);
 				showToast(data.error || 'Failed to submit application', 'error');
 				return;
 			}
-			showToast('Application submitted successfully!', 'success');
-			setApplyModalOpen(false);
-			// Optimistically toggle applied state for immediate UX feedback
-			setHasApplied(true);
-			setAppliedAt(new Date().toISOString());
-			setApplicationStatus('pending');
+			// Application successful - backend is processing CV score
+			console.log('Application submitted:', data);
 		} catch (e) {
+			// Revert optimistic update on error
+			setHasApplied(false);
+			setAppliedAt(null);
+			setApplicationStatus(null);
 			showToast('Failed to submit application', 'error');
 		}
 	};
@@ -433,7 +454,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 								) : (
 									<button
 										className={styles.applyButton}
-										onClick={() => setApplyModalOpen(true)}
+										onClick={() => setShowCVModal(true)}
 									>
 										Apply Now
 									</button>
@@ -723,7 +744,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 						<div className={styles.applyCard}>
 							{userType === 'recruiter' ? (
 								<>
-									<h3>🔧 Manage Job</h3>
+									<h3><i className="fa fa-cog"></i> Manage Job</h3>
 									<button
 										className={styles.editJobBtn}
 										onClick={() => setIsEditModalOpen(true)}
@@ -760,7 +781,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									) : (
 										<button
 											className={styles.applyNowBtn}
-											onClick={() => setApplyModalOpen(true)}
+											onClick={() => setShowCVModal(true)}
 										>
 											Apply Now
 										</button>
@@ -798,57 +819,14 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				</div>
 			</div>
 
-			{/* Application Modal - Placeholder for future implementation */}
-			{applyModalOpen && (
-				<div className={styles.modalOverlay}>
-					<div className={styles.modal}>
-						<div className={styles.modalHeader}>
-							<h3>Apply for {job.title}</h3>
-							<button
-								className={styles.closeButton}
-								onClick={() => setApplyModalOpen(false)}
-							>
-								<i className="fa fa-times"></i>
-							</button>
-						</div>
-						<div className={styles.modalBody}>
-							<p>
-								The application form will be implemented in a
-								future update.
-							</p>
-							<p>
-								For now, this is a placeholder to show the
-								application flow.
-							</p>
-							<div className={styles.formPlaceholder}>
-								<div className={styles.formField}></div>
-								<div className={styles.formField}></div>
-								<div className={styles.formField}></div>
-							</div>
-						</div>
-						<div className={styles.modalFooter}>
-							<button
-								className={styles.cancelButton}
-								onClick={() => setApplyModalOpen(false)}
-							>
-								Cancel
-							</button>
-							{userType === 'recruiter' ? (
-								<button className={styles.submitButton} disabled>
-									Recruiters cannot apply
-								</button>
-							) : (
-								<button
-									className={styles.submitButton}
-									onClick={handleApply}
-								>
-									Submit Application
-								</button>
-							)}
-						</div>
-					</div>
-				</div>
-			)}
+			{/* CV Selection Modal */}
+			<CVSelectionModal
+				isOpen={showCVModal}
+				onClose={() => setShowCVModal(false)}
+				onSubmit={handleCVSelectionSubmit}
+				jobTitle={job?.title}
+				mode="apply"
+			/>
 
 			{/* Match Score Modal - Simplified to just show percentage */}
 			{matchScoreModalOpen && (
@@ -897,7 +875,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 								className={styles.submitButton}
 								onClick={() => {
 									setMatchScoreModalOpen(false);
-									setApplyModalOpen(true);
+									setShowCVModal(true);
 								}}
 							>
 								Apply Now

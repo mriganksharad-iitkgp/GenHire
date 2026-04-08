@@ -2,26 +2,25 @@ import os
 import json
 import re
 from dotenv import load_dotenv
-import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict, Any, Optional
+from pydantic import SecretStr
 
 class CVScoringService:
     """Service for calculating CV-JD matching scores using AI"""
     
     def __init__(self):
         load_dotenv()
+        load_dotenv()
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         if not self.google_api_key:
             raise ValueError("GOOGLE_API_KEY not found in .env file")
-        
-        genai.configure(api_key=self.google_api_key)
+        # Use gemini-flash-latest for better stability and automatic model updates
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
-            google_api_key=self.google_api_key,
-            temperature=0.3  # Lower temperature for more consistent scoring
+            model="gemini-flash-latest",
+            temperature=0.3,  # Lower temperature for more consistent scoring
+            google_api_key=self.google_api_key
         )
-    
     def format_cv_details(self, cv_details: Dict[str, Any]) -> str:
         """Format CV details dictionary into readable text for AI processing"""
         if not cv_details:
@@ -221,8 +220,96 @@ class CVScoringService:
         
         return "\n".join(formatted_jd)
     
+    def calculate_cv_score_from_text(self, cv_text: str, jd_text: str) -> Dict[str, Any]:
+        """
+        Calculate CV-JD matching score using raw text (from PDF extraction)
+        
+        Args:
+            cv_text: Raw CV text (extracted from PDF or formatted manually)
+            jd_text: Raw JD text (extracted from PDF or formatted manually)
+            
+        Returns:
+            Dictionary containing score_breakdown and total_score
+        """
+        try:
+            if not cv_text or not cv_text.strip():
+                return self._get_fallback_score("Empty CV text provided")
+            
+            if not jd_text or not jd_text.strip():
+                return self._get_fallback_score("Empty JD text provided")
+            
+            # Build prompt
+            system_prompt = """You are an AI evaluator that compares a candidate's resume with a given job description. 
+                            Your task is to assess the technical alignment and compute a score out of 100, along with 
+                            a breakdown of the score per category. 
+
+                            You must strictly evaluate based on factual alignment between the candidate's resume 
+                            and the job description. Do not hallucinate skills or experience. 
+                            If information is missing in the resume, assume it is not present.
+
+                            Scoring should be based only on measurable, technical, and experience-based factors. 
+                            Exclude soft skills, leadership, communication, or cultural fit. 
+
+                            Provide your final output in JSON with two keys:
+                            1. "score_breakdown": { category: { "score": X, "reasoning": "..."} }
+                            2. "total_score": X"""
+            
+            user_prompt = f"""Compare the following Resume and Job Description. 
+                            Use the evaluation rubrics below. Assign a score out of 10 for each category with reasoning, 
+                            then compute the total score out of 100. 
+
+                            Resume:
+                            {cv_text}
+
+                            Job Description:
+                            {jd_text}
+
+                            Rubrics (10 points each):
+                            1. **Core Technical Skills** - Match between candidate's listed technical skills and JD requirements (e.g., programming languages, frameworks, tools).
+                            2. **Domain Knowledge** - Relevance of past experience or education to the specific industry/domain mentioned in JD.
+                            3. **Educational Background** - Alignment of degree(s), specialization, and academic level with JD requirements.
+                            4. **Work Experience Relevance** - Years of experience and alignment of roles/projects with JD expectations.
+                            5. **Project/Research Experience** - Quality and relevance of academic/industrial projects, internships, or research contributions.
+                            6. **Tools & Platforms** - Exposure to databases, cloud services, version control, ML/DL libraries, or other technical platforms required by the JD.
+                            7. **Certifications & Training** - Relevant professional certifications, coursework, or specialized training that enhance JD alignment.
+                            8. **Publications / Competitions / Achievements** - Evidence of technical depth via papers, hackathons, competitions, or notable technical recognition.
+                            9. **Problem-Solving & Analytical Skills** - Evidence from projects, coding competitions, or technical challenges solved.
+                            10. **Overall Fit for Role** - Aggregate judgment of how well candidate's background meets technical expectations of the JD.
+
+                            Rules:
+                            - Each category gets 0-10 points.
+                            - Provide reasoning for each score.
+                            - Output in strict JSON format."""
+            
+            input_prompt = f"""<s>[INST] <<SYS>>
+                            {system_prompt}
+                            <</SYS>>
+                        {user_prompt} [/INST]"""
+            
+            # Get AI response
+            response = self.llm.invoke(input_prompt)
+            
+            # Parse and clean response
+            response_content = response.content
+            if not isinstance(response_content, str):
+                response_content = str(response_content)
+            return self._parse_ai_response(response_content)
+            
+        except Exception as e:
+            print(f"Error in CV scoring from text: {str(e)}")
+            return self._get_fallback_score(str(e))
+    
     def calculate_cv_score(self, cv_details: Dict[str, Any], job_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate CV-JD matching score using AI"""
+        """
+        Calculate CV-JD matching score using structured data (manual CV entry)
+        
+        Args:
+            cv_details: Structured CV data from manual entry
+            job_data: Structured job data
+            
+        Returns:
+            Dictionary containing score_breakdown and total_score
+        """
         try:
             # Format inputs
             cv_text = self.format_cv_details(cv_details)
@@ -280,7 +367,10 @@ class CVScoringService:
             response = self.llm.invoke(input_prompt)
             
             # Parse and clean response
-            return self._parse_ai_response(response.content)
+            response_content = response.content
+            if not isinstance(response_content, str):
+                response_content = str(response_content)
+            return self._parse_ai_response(response_content)
             
         except Exception as e:
             print(f"Error in CV scoring: {str(e)}")

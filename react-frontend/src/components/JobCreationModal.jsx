@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { generateJobWithAI } from '../services/api';
 import styles from './JobCreationModal.module.css';
 
 // Predefined data for auto-suggestions
@@ -172,7 +173,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     requirements: [],
     benefits: [],
     deadline: '',
-    minimum_cv_score: 50  // Default minimum CV score
+    minimum_cv_score: 50,  // Default minimum CV score
+    proctoring_config: {
+      voice_detection: true,
+      object_detection: true,
+      eyeball_tracking: true,
+      gaze_heatmap: true,
+    }
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -180,6 +187,10 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [jdFile, setJdFile] = useState(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
   
   const dropdownRefs = {
     department: useRef(null),
@@ -216,6 +227,38 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle AI generation
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    setAiError('');
+    try {
+      const response = await generateJobWithAI(aiPrompt.trim());
+      const ai = response.job_data;
+      setJobData({
+        title: ai.title || '',
+        department: ai.department || '',
+        location: ai.location || 'Remote',
+        type: ai.type || 'Full-time',
+        experience: ai.experience || '',
+        salary: ai.salary || '',
+        deadline: getDefaultDeadline(),
+        skills: Array.isArray(ai.skills) ? ai.skills : [],
+        description: ai.description || '',
+        responsibilities: Array.isArray(ai.responsibilities) ? ai.responsibilities.join('\n') : '',
+        requirements: Array.isArray(ai.requirements) ? ai.requirements.join('\n') : '',
+        benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
+        status: 'draft',
+        minimum_cv_score: ai.minimum_cv_score || 50
+      });
+      setAiPrompt('');
+    } catch (err) {
+      setAiError(err.message || 'Failed to generate. Please try again.');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
 
   // Handle template selection
   const applyTemplate = (templateName) => {
@@ -379,6 +422,29 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     }, 1000);
   };
 
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        e.target.value = null;
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        alert('File size must be less than 10MB');
+        e.target.value = null;
+        return;
+      }
+      setJdFile(file);
+    }
+  };
+
+  const removeJdFile = () => {
+    setJdFile(null);
+    const fileInput = document.querySelector('input[type="file"][accept=".pdf"]');
+    if (fileInput) fileInput.value = '';
+  };
+
   const resetForm = () => {
     setJobData({
       title: '',
@@ -393,13 +459,22 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       responsibilities: '',
       requirements: '',
       benefits: '',
-      status: 'draft', // Reset to draft status
-      minimum_cv_score: 50 // Reset to default minimum CV score
+      status: 'draft',
+      minimum_cv_score: 50,
+      proctoring_config: {
+        voice_detection: true,
+        object_detection: true,
+        eyeball_tracking: true,
+        gaze_heatmap: true,
+      }
     });
     setSkillInput('');
     setFilteredSuggestions([]);
     setActiveDropdown(null);
     setShowTemplates(false);
+    setJdFile(null);
+    setAiPrompt('');
+    setAiError('');
   };
 
   const handleCancel = () => {
@@ -448,7 +523,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
           {/* Quick Templates Section */}
           <div className={styles.templateSection}>
             <div className={styles.templateHeader}>
-              <h3>🚀 Quick Start Templates</h3>
+              <h3><i className="fa fa-bolt"></i> Quick Start Templates</h3>
               <button
                 type="button"
                 className={styles.toggleTemplates}
@@ -468,9 +543,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     onClick={() => applyTemplate(templateName)}
                   >
                     <div className={styles.templateIcon}>
-                      {templateName.includes('Engineer') ? '💻' : 
-                       templateName.includes('Data') ? '📊' : 
-                       templateName.includes('Product') ? '📱' : '🎨'}
+                      <i className={`fa ${
+                        templateName.includes('Engineer') ? 'fa-code' : 
+                        templateName.includes('Data') ? 'fa-database' : 
+                        templateName.includes('Product') ? 'fa-cube' : 'fa-paint-brush'
+                      }`}></i>
                     </div>
                     <div className={styles.templateContent}>
                       <h4>{templateName}</h4>
@@ -483,10 +560,45 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
             )}
           </div>
 
+          {/* AI Job Description Generator */}
+          <div className={styles.aiSection}>
+            <div className={styles.aiHeader}>
+              <h3><i className="fa fa-magic"></i> Create with AI</h3>
+              <span className={styles.aiBadge}>Powered by AI</span>
+            </div>
+            <p className={styles.aiSubtext}>
+              Describe the role in a few words and AI will fill the entire form for you instantly.
+            </p>
+            <div className={styles.aiInputRow}>
+              <input
+                type="text"
+                className={styles.aiInput}
+                value={aiPrompt}
+                onChange={(e) => { setAiPrompt(e.target.value); setAiError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAiGenerate(); } }}
+                placeholder='e.g. "Senior React Developer with 5 years experience in Bangalore" or "Entry level data analyst"'
+                disabled={isAiGenerating}
+              />
+              <button
+                type="button"
+                className={styles.aiGenerateButton}
+                onClick={handleAiGenerate}
+                disabled={isAiGenerating || !aiPrompt.trim()}
+              >
+                {isAiGenerating ? (
+                  <><i className="fa fa-spinner fa-spin"></i> Generating...</>
+                ) : (
+                  <><i className="fa fa-magic"></i> Generate JD</>
+                )}
+              </button>
+            </div>
+            {aiError && <p className={styles.aiError}><i className="fa fa-exclamation-circle"></i> {aiError}</p>}
+          </div>
+
           <div className={styles.formGrid}>
             {/* Job Title with Smart Suggestions */}
             <div className={styles.formGroup}>
-              <label>Job Title * <span className={styles.smartIndicator}>🧠 Smart</span></label>
+              <label>Job Title *</label>
               <input
                 type="text"
                 name="title"
@@ -497,7 +609,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.smartInput}
               />
               <div className={styles.helpText}>
-                💡 Try typing: "Software Engineer", "Data Scientist", "Product Manager", or "UX Designer"
+                Try typing: "Software Engineer", "Data Scientist", "Product Manager", or "UX Designer"
               </div>
             </div>
 
@@ -579,7 +691,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 required
                 className={styles.enhancedSelect}
               >
-                <option value="Full-time">💼 Full-time</option>
+                <option value="Full-time">Full-time</option>
                 <option value="Part-time">⏰ Part-time</option>
                 <option value="Contract">📝 Contract</option>
                 <option value="Internship">🎓 Internship</option>
@@ -705,7 +817,51 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedInput}
               />
               <div className={styles.helpText}>
-                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
+                Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
+              </div>
+            </div>
+
+            {/* Proctoring Configuration */}
+            <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
+              <label>🛡️ Proctoring Configuration</label>
+              <div className={styles.proctoringSection}>
+                <div className={styles.creditWarning}>
+                  <i className="fa fa-exclamation-triangle"></i>
+                  Enabling proctoring features may consume additional credits from your plan.
+                </div>
+                {[
+                  { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
+                  { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
+                  { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
+                  { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
+                ].map(opt => (
+                  <div key={opt.key} className={styles.proctoringToggle}>
+                    <div className={styles.proctoringInfo}>
+                      <span className={styles.proctoringIcon}>{opt.icon}</span>
+                      <div>
+                        <strong>{opt.label}</strong>
+                        <p>{opt.desc}</p>
+                      </div>
+                    </div>
+                    <label className={styles.toggleSwitch}>
+                      <input
+                        type="checkbox"
+                        checked={jobData.proctoring_config[opt.key]}
+                        onChange={(e) => setJobData(prev => ({
+                          ...prev,
+                          proctoring_config: {
+                            ...prev.proctoring_config,
+                            [opt.key]: e.target.checked
+                          }
+                        }))}
+                      />
+                      <span className={styles.slider}></span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.helpText}>
+                Only selected proctoring modules will run during the interview. Disabled modules will show "Not enabled" in reports.
               </div>
             </div>
 
@@ -799,7 +955,55 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                💡 Tip: Include company mission, role impact, and growth opportunities
+                Tip: Include company mission, role impact, and growth opportunities
+              </div>
+            </div>
+
+            {/* JD PDF Upload */}
+            <div className={styles.formGroup}>
+              <label>
+                Job Description PDF 
+                <span className={styles.optional}>(Optional)</span>
+              </label>
+              <div className={styles.fileUploadSection}>
+                {!jdFile ? (
+                  <div className={styles.fileUploadBox}>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleJdFileChange}
+                      className={styles.fileInput}
+                      id="jd-file-input"
+                    />
+                    <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
+                      <i className="fa fa-cloud-upload"></i>
+                      <span>Upload JD PDF</span>
+                      <small>Click to browse or drag & drop (Max 10MB)</small>
+                    </label>
+                  </div>
+                ) : (
+                  <div className={styles.uploadedFile}>
+                    <div className={styles.fileInfo}>
+                      <i className="fa fa-file-pdf-o"></i>
+                      <div className={styles.fileDetails}>
+                        <span className={styles.fileName}>{jdFile.name}</span>
+                        <span className={styles.fileSize}>
+                          {(jdFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.removeFileButton}
+                      onClick={removeJdFile}
+                    >
+                      <i className="fa fa-times"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className={styles.helpText}>
+                Pro Tip: Upload a JD PDF for candidates to download and reference. Standard companies like LinkedIn and Indeed provide this option.
               </div>
             </div>
 
