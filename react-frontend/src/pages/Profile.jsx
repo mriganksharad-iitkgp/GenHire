@@ -283,17 +283,43 @@ const Profile = () => {
 	// Handle Give Interview action for shortlisted candidates
 	const handleGiveInterview = async (application) => {
 		try {
-			showToast(`Starting interview session for ${application.position}...`, 'info');
+			// Check if we are already inside the secure browser via Electron injected API
+			if (window.electronAPI) {
+				showToast(`Starting interview session for ${application.position}...`, 'info');
+				navigate(`/interview/start`, {
+					state: { applicationId: application.id }
+				});
+				return;
+			}
 
-			// Navigate directly to the interview page with application ID
-			// Chat.jsx will handle the API call to start the interview
-			navigate(`/interview/start`, {
-				state: { applicationId: application.id }
-			});
+			showToast(`Launching Secure Browser for ${application.position}...`, 'info');
+
+			// Generate the initialization payload identical to the manual copy-paste one
+			const payload = {
+				applicationId: application.id,
+				token: localStorage.getItem("companyxyz-token"),
+				apiUrl: process.env.REACT_APP_API_URL || window.location.origin
+			};
+			const encodedPayload = btoa(JSON.stringify(payload));
+			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
+
+			// Deep Link Attempt
+			const startTimeoutTime = Date.now();
+			window.location.href = customUri;
+
+			// Fallback if app isn't installed
+			setTimeout(() => {
+				const endTimeoutTime = Date.now();
+				if (endTimeoutTime - startTimeoutTime < 3000) {
+					console.log("Secure browser not installed. Showing download prompt.");
+					// In the future, swap this toast with: window.location.href = "/downloads/Installer.exe";
+					showToast('Secure Browser not detected. Please download and install the Secure Browser to proceed.', 'error');
+				}
+			}, 2500);
 
 		} catch (error) {
-			console.error('Error starting interview:', error);
-			showToast('Failed to start interview session. Please try again.', 'error');
+			console.error('Error launching secure browser:', error);
+			showToast('Failed to launch the secure browser session. Please try again.', 'error');
 		}
 	};
 

@@ -5,6 +5,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     enableKiosk: () => ipcRenderer.send('enable-kiosk'),
     disableKiosk: () => ipcRenderer.send('disable-kiosk'),
     
+    // Deep Link Intialization
+    onInitDeepLink: (callback) => {
+        ipcRenderer.removeAllListeners('init-from-deeplink');
+        ipcRenderer.on('init-from-deeplink', callback);
+    },
+    
     // Google Cloud Speech Additions
     synthesizeSpeech: (text) => ipcRenderer.invoke('synthesize-speech', text),
     startSTTStream: () => ipcRenderer.send('start-stt-stream'),

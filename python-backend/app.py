@@ -43,6 +43,12 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
+
+try:
+    from google.cloud import speech
+    print("--- DEBUG: google.cloud.speech imported before speech_routes in app.py ---")
+except ImportError as e:
+    print(f"--- DEBUG: google.cloud.speech FAILED before speech_routes in app.py: {e} ---")
 from routes.speech_routes import speech_bp
 
 from services.cv_scoring_service import CVScoringService
@@ -83,7 +89,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
 
 # Initialize extensions
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Configure CORS to allow all origins
 CORS(app, 

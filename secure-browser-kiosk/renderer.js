@@ -100,6 +100,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Setup Google Cloud STT Callbacks
     if (window.electronAPI) {
+        // Handle Deep Link Auto-Start
+        window.electronAPI.onInitDeepLink((event, initData) => {
+            console.log("Deep link received, auto-starting interview.");
+            if (inputData) {
+                inputData.value = initData;
+                // Since clicking the link might happen before models load, wait until btnStart is enabled
+                const attemptStart = setInterval(() => {
+                    if (!btnStart.disabled) {
+                        clearInterval(attemptStart);
+                        btnStart.click();
+                    }
+                }, 500);
+            }
+        });
+
         window.electronAPI.onTranscript((event, text, isFinal) => {
             if (isFinal) {
                 currentTranscript += text + " ";
@@ -189,7 +204,7 @@ async function startInterview() {
 
         if (!response.ok) {
             const errData = await response.json();
-            throw new Error(errData.message || "Failed to start interview");
+            throw new Error(errData.error || errData.message || "Failed to start interview");
         }
 
         const data = await response.json();

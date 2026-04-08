@@ -12,7 +12,14 @@
   "build": {
     "appId": "com.companyxyz.securekiosk",
     "productName": "Secure Interview Kiosk",
-    "asar": false,
+    "protocols": {
+      "name": "Secure Interview URL",
+      "schemes": [
+        "secure-interview"
+      ]
+    },
+    "asar": true,
+    "compression": "maximum",
     "forceCodeSigning": false,
     "win": {
       "target": "nsis"
@@ -35,13 +42,6 @@
   "dependencies": {
     "@google-cloud/speech": "^7.3.0",
     "@google-cloud/text-to-speech": "^6.4.0",
-    "@mediapipe/tasks-vision": "^0.10.22",
-    "@ricky0123/vad-web": "^0.0.30",
-    "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "^4.22.0",
-    "electron-localshortcut": "^3.2.1",
-    "html2canvas": "^1.4.1",
-    "onnxruntime-web": "^1.24.3",
-    "socket.io-client": "^4.8.3"
+    "electron-localshortcut": "^3.2.1"
   }
 }
