@@ -239,6 +239,7 @@ function blockInputHandler(event, input) {
 function createWindow() {
     // Start as a normal maximized window (NOT kiosk)
     mainWindow = new BrowserWindow({
+        title: 'Genhire Secure Browser',
         width: 1280,
         height: 800,
         fullscreen: false,

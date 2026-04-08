@@ -8,8 +8,8 @@ let faceLandmarker;
 let myvad;
 
 // UI Elements
-let loadingOverlay, startupView, interviewView, resultsView;
-let btnStart, inputData;
+let loadingOverlay, testingOverlay, startupView, interviewView, resultsView;
+let btnStart;
 let btnEndInterview, btnDownload;
 let timeDisplay, transcriptText;
 let gazeWarning, proctoringModal, warningCountEl, proctoringMsg;
@@ -31,6 +31,7 @@ let clockInterval = null;
 // API Data
 let apiToken = null;
 let apiUrl = null;
+let globalSessionData = null; // Store deep link payload globally
 let currentQuestion = "";
 let questionCount = 0;
 let isSubmittingAnswer = false;
@@ -85,12 +86,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     ctx = canvas.getContext('2d');
 
     loadingOverlay = document.getElementById('loading-overlay');
+    testingOverlay = document.getElementById('testing-overlay');
     startupView = document.getElementById('startup-view');
     interviewView = document.getElementById('interview-view');
     resultsView = document.getElementById('results-view');
 
     btnStart = document.getElementById('btn-start');
-    inputData = document.getElementById('initialization-data');
     btnEndInterview = document.getElementById('btn-end-interview');
     btnDownload = document.getElementById('btn-download');
 
@@ -116,17 +117,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.electronAPI) {
         // Handle Deep Link Auto-Start
         window.electronAPI.onInitDeepLink((event, initData) => {
-            console.log("Deep link received, auto-starting interview.");
-            if (inputData) {
-                inputData.value = initData;
-                // Since clicking the link might happen before models load, wait until btnStart is enabled
-                const attemptStart = setInterval(() => {
-                    if (!btnStart.disabled) {
-                        clearInterval(attemptStart);
+            console.log("Deep link received, session data ready.");
+            globalSessionData = initData;
+            
+            // Since clicking the link might happen before models load, wait until btnStart is enabled
+            const attemptStart = setInterval(() => {
+                if (!btnStart.disabled && btnStart.textContent === "Begin Interview Setup") {
+                    clearInterval(attemptStart);
+                    // Force a short delay so user actually sees the Startup logo
+                    setTimeout(() => {
                         btnStart.click();
-                    }
-                }, 500);
-            }
+                    }, 1000);
+                }
+            }, 500);
         });
 
         window.electronAPI.onTranscript((event, text, isFinal) => {
@@ -167,8 +170,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Models loaded, enable start button
         loadingOverlay.style.display = 'none';
-        btnStart.textContent = "Start Interview";
-        btnStart.disabled = false;
+        
+        // Only enable if we also have deep link data (or just enable it to let user click, but it requires link)
+        btnStart.textContent = "Begin Interview Setup";
+        if (globalSessionData) {
+            btnStart.disabled = false;
+        } else {
+            // Setup an interval to enable it once data drops in
+            const waitData = setInterval(() => {
+                if (globalSessionData) {
+                    btnStart.disabled = false;
+                    clearInterval(waitData);
+                }
+            }, 500);
+        }
 
     } catch (e) {
         console.error(e);
@@ -184,27 +199,28 @@ function formatTime(seconds) {
 }
 
 async function startInterview() {
-    const rawInput = inputData.value.trim();
-    if (!rawInput) {
-        alert("Please provide the initialization code.");
+    if (!globalSessionData) {
+        alert("Missing session data. Please launch this app directly from the Genhire Dashboard.");
         return;
     }
 
     let payload;
     try {
-        const decoded = atob(rawInput);
+        const decoded = atob(globalSessionData);
         payload = JSON.parse(decoded);
         if (!payload.applicationId || !payload.token) throw new Error("Invalid payload structure");
     } catch (e) {
-        alert("Invalid initialization code. Please copy the exact code from the dashboard.");
+        alert("Invalid initialization data.");
         return;
     }
 
     apiToken = payload.token;
     apiUrl = payload.apiUrl;
 
+    // Switch Views to Testing Overlay!
     btnStart.disabled = true;
-    btnStart.textContent = "Connecting to AI...";
+    startupView.style.display = 'none';
+    testingOverlay.style.display = 'flex';
 
     try {
         const response = await fetch(`${apiUrl}/api/interviews/start`, {
@@ -238,18 +254,16 @@ async function startInterview() {
         console.log(`================================\n`);
 
     } catch (err) {
+        testingOverlay.style.display = 'none';
+        startupView.style.display = 'flex';
         alert(`Error starting interview: ${err.message}`);
         btnStart.disabled = false;
-        btnStart.textContent = "Start Interview";
+        btnStart.textContent = "Begin Interview Setup";
         return;
     }
 
-    // Switch Views
-    startupView.style.display = 'none';
-
     // Start Gaze Calibration before proceeding to interview (only if gaze_heatmap enabled)
     if (proctoringConfig.gaze_heatmap && window.GazeCloudAPI && window.GazeRecorderAPI) {
-        btnStart.textContent = "Calibrating Gaze...";
         gazePointsTracker = [];
         gazeStartedAtMs = Date.now();
 
@@ -269,6 +283,9 @@ async function startInterview() {
             finalizeStartInterview();
         };
 
+        // Hide testing overlay so the Gaze calibration UI is visible
+        testingOverlay.style.display = 'none';
+
         window.GazeCloudAPI.StartEyeTracking();
     } else {
         if (!proctoringConfig.gaze_heatmap) {
@@ -281,6 +298,7 @@ async function startInterview() {
 }
 
 function finalizeStartInterview() {
+    testingOverlay.style.display = 'none';
     interviewView.style.display = 'block';
 
     isInterviewActive = true;
@@ -306,11 +324,31 @@ function finalizeStartInterview() {
         });
     }
 
-    // Automatic Speech Recording start (only if voice_detection enabled)
-    currentTranscript = "";
-    if (proctoringConfig.voice_detection && !speechNetworkFailed) {
-        startRecording();
-    } else if (!proctoringConfig.voice_detection) {
+    // Speak the very first question!
+    const finishSetupAndSpeak = async () => {
+        try {
+            const base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
+            const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
+            const audioObj = new Audio(audioDataUrl);
+
+            audioObj.onended = () => {
+                // start recording when TTS is done speaking FIRST question
+                if (isInterviewActive && !isRecording && !speechNetworkFailed) {
+                    if (proctoringConfig.voice_detection) startRecording();
+                }
+            };
+            audioObj.play();
+        } catch (err) {
+            console.error("Failed to speak first question", err);
+            // Fallback: Start immediately if speech fails
+            if (proctoringConfig.voice_detection && !speechNetworkFailed) {
+                startRecording();
+            }
+        }
+    };
+    finishSetupAndSpeak();
+
+    if (!proctoringConfig.voice_detection) {
         console.log("🔒 Voice Detection proctoring is disabled for this job.");
     }
 

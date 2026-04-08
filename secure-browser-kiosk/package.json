@@ -1,5 +1,5 @@
 {
-  "name": "secure-browser-kiosk",
+  "name": "genhire-secure-browser",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
@@ -10,10 +10,10 @@
     "dist": "electron-builder --win --x64"
   },
   "build": {
-    "appId": "com.companyxyz.securekiosk",
-    "productName": "Secure Interview Kiosk",
+    "appId": "com.genhire.securebrowser",
+    "productName": "Genhire Secure Browser",
     "protocols": {
-      "name": "Secure Interview URL",
+      "name": "Genhire Secure Interview URL",
       "schemes": [
         "secure-interview"
       ]
