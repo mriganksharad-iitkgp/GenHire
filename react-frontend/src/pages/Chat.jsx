@@ -1463,12 +1463,12 @@ export default function Chat({ interviewId }) {
     return (
       <div className={Styles.loadingContainer}>
         <div className={Styles.spinner}></div>
-        <h3 style={{ marginTop: "20px", color: "#667eea", fontSize: "24px" }}>
+        <h3 style={{ marginTop: "20px", color: "#4338ca", fontSize: "24px", fontWeight: "600" }}>
           Preparing Your Interview
         </h3>
         <p
           style={{
-            color: "#666",
+            color: "#475569",
             maxWidth: "400px",
             textAlign: "center",
             lineHeight: "1.6",
@@ -1477,7 +1477,7 @@ export default function Chat({ interviewId }) {
           We're analyzing your CV and the job description to generate
           personalized questions...
         </p>
-        <div style={{ marginTop: "15px", fontSize: "14px", color: "#999" }}>
+        <div style={{ marginTop: "15px", fontSize: "14px", color: "#94a3b8" }}>
           This usually takes 3-5 seconds
         </div>
       </div>
@@ -1491,34 +1491,40 @@ export default function Chat({ interviewId }) {
     return (
       <div className={Styles.registrationContainer}>
         <h2 className={Styles.registrationHeader}>
-          Camera Setup & Security Check
+          🔐 Camera Setup & Security Check
         </h2>
+        <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
+          Complete the steps below to verify your identity and begin your interview.
+        </p>
 
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",
-            gap: "40px",
-            marginTop: "20px",
+            gap: "32px",
+            marginTop: "8px",
           }}
         >
           {/* LEFT: QR CODE SECTION */}
           <div
             style={{
               background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 8px 32px rgba(102, 126, 234, 0.1), 0 1px 3px rgba(0,0,0,0.06)",
               textAlign: "center",
               maxWidth: "300px",
+              minWidth: "260px",
             }}
           >
-            <h4 style={{ color: "#333", marginBottom: "10px" }}>
-              📱 Step 1: Connect Phone
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>📱</div>
+            <h4 style={{ color: "#1e293b", marginBottom: "8px", fontSize: "1.1rem", fontWeight: "600" }}>
+              Step 1: Connect Phone
             </h4>
             <p
-              style={{ color: "#666", fontSize: "13px", marginBottom: "15px" }}
+              style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "18px", lineHeight: "1.5" }}
             >
               Scan to enable 360° environment view. Place phone to show your
               side profile.
@@ -1526,8 +1532,9 @@ export default function Chat({ interviewId }) {
             <div
               style={{
                 background: "white",
-                padding: "10px",
+                padding: "12px",
                 display: "inline-block",
+                borderRadius: "12px",
               }}
             >
               <QRCode value={mobileUrl} size={140} />
@@ -1535,9 +1542,20 @@ export default function Chat({ interviewId }) {
           </div>
 
           {/* RIGHT: WEBCAM SECTION */}
-          <div style={{ textAlign: "center" }}>
-            <h4 style={{ color: "#fff", marginBottom: "10px" }}>
-              💻 Step 2: Face Registration
+          <div
+            style={{
+              background: "white",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 8px 32px rgba(102, 126, 234, 0.1), 0 1px 3px rgba(0,0,0,0.06)",
+              textAlign: "center",
+              minWidth: "260px",
+            }}
+          >
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>💻</div>
+            <h4 style={{ color: "#1e293b", marginBottom: "14px", fontSize: "1.1rem", fontWeight: "600" }}>
+              Step 2: Face Registration
             </h4>
             <video
               ref={videoRef}
@@ -1548,17 +1566,18 @@ export default function Chat({ interviewId }) {
               style={{
                 width: "320px",
                 height: "240px",
-                borderRadius: "8px",
-                border: "2px solid #667eea",
+                borderRadius: "12px",
+                border: "2px solid rgba(102, 126, 234, 0.5)",
               }}
             />
-            <button
-              onClick={handleFaceRegistration}
-              className={Styles.registerButton}
-              style={{ marginTop: "20px" }}
-            >
-              Start Interview
-            </button>
+            <div style={{ marginTop: "20px" }}>
+              <button
+                onClick={handleFaceRegistration}
+                className={Styles.registerButton}
+              >
+                ▶ Start Interview
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1575,19 +1594,19 @@ export default function Chat({ interviewId }) {
 
     return (
       <div className={Styles.loadingContainer}>
-        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px" }}>
+        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px", fontWeight: "600" }}>
           Interview Could Not Start
         </h3>
         <p
           style={{
-            color: "#444",
+            color: "#991b1b",
             maxWidth: "560px",
             textAlign: "center",
             lineHeight: "1.6",
             marginTop: "12px",
             padding: "12px 14px",
             borderRadius: "10px",
-            background: "#fff1f2",
+            background: "#fef2f2",
             border: "1px solid #fecdd3",
           }}
         >
@@ -1597,7 +1616,7 @@ export default function Chat({ interviewId }) {
         {isQuotaError && (
           <p
             style={{
-              color: "#666",
+              color: "#64748b",
               maxWidth: "560px",
               textAlign: "center",
               lineHeight: "1.6",
@@ -1685,18 +1704,9 @@ export default function Chat({ interviewId }) {
           }}
         >
           <p className={Styles["transcript-display"]}>
-            {isSubmittingAnswer
-              ? "AI is thinking..."
-              : isRecording
-                ? input || "Listening..."
-                : isTimerRunning
-                  ? "Ready to speak..."
-                  : isSpeaking
-                    ? displayedText
-                    : currentQuestion || "Waiting for next question..."}
-          </p>
-          <p className={Styles["transcript-display"]}>
-            Proctoring Calibration: {gazeRecorderStatus}
+            {isSpeaking
+              ? displayedText
+              : currentQuestion || "Waiting for next question..."}
           </p>
           {input && input.trim().length > 0 && (
             <div
