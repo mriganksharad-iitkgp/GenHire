@@ -29,7 +29,7 @@ let recognizeStream = null;
 let KIOSK_HTTP_PORT = 0; // Set to 0 to auto-assign a free port to prevent EADDRINUSE
 
 // Disable Hardware Acceleration to prevent GPU crashes with WebGL/ML Models in Kiosk mode
-app.disableHardwareAcceleration();
+// app.disableHardwareAcceleration();
 
 // Enable speech recognition in Electron (needed for Google's speech servers)
 app.commandLine.appendSwitch('enable-speech-dispatcher');
@@ -37,6 +37,56 @@ app.commandLine.appendSwitch('enable-features', 'SpeechRecognition');
 
 let mainWindow;
 let isKioskActive = false;
+
+// ----------------------------------------------------
+// DEEP LINK & SINGLE INSTANCE LOCK HANDLING
+// ----------------------------------------------------
+if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('secure-interview', process.execPath, [path.resolve(process.argv[1])]);
+    }
+} else {
+    app.setAsDefaultProtocolClient('secure-interview');
+}
+
+function handleDeepLink(url) {
+    try {
+        const urlObj = new URL(url);
+        const initData = urlObj.searchParams.get('initData');
+        if (initData && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('init-from-deeplink', initData);
+        }
+    } catch (e) {
+        console.error("Failed to parse deep link URL:", url, e);
+    }
+}
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+        const url = commandLine.find(arg => arg.startsWith('secure-interview://'));
+        if (url) {
+            handleDeepLink(url);
+        }
+    });
+}
+
+// macOS deep link handling
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (app.isReady()) {
+        handleDeepLink(url);
+    } else {
+        app.once('ready', () => handleDeepLink(url));
+    }
+});
+// ----------------------------------------------------
 
 // Listen for the quit signal from the frontend renderer
 ipcMain.on('quit-app', () => {
@@ -275,6 +325,14 @@ app.whenReady().then(() => {
         KIOSK_HTTP_PORT = server.address().port;
         console.log(`✅ Kiosk HTTP server running on http://localhost:${KIOSK_HTTP_PORT}`);
         createWindow();
+        
+        // Handle deep link passed as arg on initial launch
+        mainWindow.webContents.once('did-finish-load', () => {
+            const url = process.argv.find(arg => arg.startsWith('secure-interview://'));
+            if (url) {
+                handleDeepLink(url);
+            }
+        });
     });
 
     app.on('activate', function () {
