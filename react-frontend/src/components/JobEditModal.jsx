@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './JobEditModal.module.css';
+import proctoringStyles from './JobCreationModal.module.css';
 
 // Predefined data for auto-suggestions
 const COMMON_SKILLS = [
@@ -90,7 +91,13 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
     requirements: '',
     benefits: '',
     status: 'draft',
-    minimum_cv_score: 50
+    minimum_cv_score: 50,
+    proctoring_config: {
+      voice_detection: true,
+      object_detection: true,
+      eyeball_tracking: true,
+      gaze_heatmap: true,
+    }
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,7 +131,13 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
         requirements: toString(initialJobData.requirements),
         benefits: toString(initialJobData.benefits),
         status: initialJobData.status || 'draft',
-        minimum_cv_score: initialJobData?.minimum_cv_score || 50
+        minimum_cv_score: initialJobData?.minimum_cv_score || 50,
+        proctoring_config: initialJobData?.proctoring_config || {
+          voice_detection: true,
+          object_detection: true,
+          eyeball_tracking: true,
+          gaze_heatmap: true,
+        }
       });
     }
   }, [isOpen, initialJobData]);
@@ -223,7 +236,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
         responsibilities: jobData.responsibilities.split('\n').filter(item => item.trim()),
         requirements: jobData.requirements.split('\n').filter(item => item.trim()),
         benefits: jobData.benefits.split('\n').filter(item => item.trim()),
-        status: jobData.status
+        status: jobData.status,
+        proctoring_config: jobData.proctoring_config
       });
       
       onClose();
@@ -523,6 +537,50 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
               />
               <div className={styles.helpText}>
                 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
+              </div>
+            </div>
+
+            {/* Proctoring Configuration */}
+            <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
+              <label>🛡️ Proctoring Configuration</label>
+              <div className={proctoringStyles.proctoringSection}>
+                <div className={proctoringStyles.creditWarning}>
+                  <i className="fa fa-exclamation-triangle"></i>
+                  Enabling proctoring features may consume additional credits from your plan.
+                </div>
+                {[
+                  { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
+                  { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
+                  { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
+                  { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
+                ].map(opt => (
+                  <div key={opt.key} className={proctoringStyles.proctoringToggle}>
+                    <div className={proctoringStyles.proctoringInfo}>
+                      <span className={proctoringStyles.proctoringIcon}>{opt.icon}</span>
+                      <div>
+                        <strong>{opt.label}</strong>
+                        <p>{opt.desc}</p>
+                      </div>
+                    </div>
+                    <label className={proctoringStyles.toggleSwitch}>
+                      <input
+                        type="checkbox"
+                        checked={jobData.proctoring_config?.[opt.key] ?? true}
+                        onChange={(e) => setJobData(prev => ({
+                          ...prev,
+                          proctoring_config: {
+                            ...prev.proctoring_config,
+                            [opt.key]: e.target.checked
+                          }
+                        }))}
+                      />
+                      <span className={proctoringStyles.slider}></span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.helpText}>
+                Only selected proctoring modules will run during the interview. Disabled modules will show "Not enabled" in reports.
               </div>
             </div>
 

@@ -41,6 +41,14 @@ let gazeStartedAtMs = null;
 let gazeEndedAtMs = null;
 let gazeRecorderTracking = false;
 
+// Proctoring config from job (defaults all enabled)
+let proctoringConfig = {
+    voice_detection: true,
+    object_detection: true,
+    eyeball_tracking: true,
+    gaze_heatmap: true,
+};
+
 // ── Object detection runs on a slower cadence to avoid blocking the face loop ──
 let lastObjectDetectTime = 0;
 const OBJECT_DETECT_INTERVAL = 2000;
@@ -221,6 +229,12 @@ async function startInterview() {
         console.log(`\n📋 === INTERVIEW STARTED ===`);
         console.log(`   Session ID: ${currentSessionId}`);
         console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
+
+        // Extract proctoring config from server response
+        if (data.proctoring_config) {
+            proctoringConfig = data.proctoring_config;
+        }
+        console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
         console.log(`================================\n`);
 
     } catch (err) {
@@ -233,8 +247,8 @@ async function startInterview() {
     // Switch Views
     startupView.style.display = 'none';
 
-    // Start Gaze Calibration before proceeding to interview
-    if (window.GazeCloudAPI && window.GazeRecorderAPI) {
+    // Start Gaze Calibration before proceeding to interview (only if gaze_heatmap enabled)
+    if (proctoringConfig.gaze_heatmap && window.GazeCloudAPI && window.GazeRecorderAPI) {
         btnStart.textContent = "Calibrating Gaze...";
         gazePointsTracker = [];
         gazeStartedAtMs = Date.now();
@@ -257,7 +271,11 @@ async function startInterview() {
 
         window.GazeCloudAPI.StartEyeTracking();
     } else {
-        console.warn("GazeCloudAPI not available. Starting without heatmap tracking...");
+        if (!proctoringConfig.gaze_heatmap) {
+            console.log("🔒 Gaze Heatmap proctoring is disabled for this job.");
+        } else {
+            console.warn("GazeCloudAPI not available. Starting without heatmap tracking...");
+        }
         finalizeStartInterview();
     }
 }
@@ -288,34 +306,34 @@ function finalizeStartInterview() {
         });
     }
 
-    // Automatic Speech Recording start
+    // Automatic Speech Recording start (only if voice_detection enabled)
     currentTranscript = "";
-    if (!speechNetworkFailed) {
+    if (proctoringConfig.voice_detection && !speechNetworkFailed) {
         startRecording();
+    } else if (!proctoringConfig.voice_detection) {
+        console.log("🔒 Voice Detection proctoring is disabled for this job.");
     }
 
     // Start Timer
     clockInterval = setInterval(() => {
         const elapsed = (Date.now() - sessionStartTime) / 1000;
         timeDisplay.textContent = formatTime(elapsed);
-
-        if (socket && socket.connected && video && video.readyState === 4) {
-            const sockCanvas = document.createElement("canvas");
-            sockCanvas.width = video.videoWidth;
-            sockCanvas.height = video.videoHeight;
-            const sockCtx = sockCanvas.getContext("2d");
-            sockCtx.drawImage(video, 0, 0, sockCanvas.width, sockCanvas.height);
-            const imageData = sockCanvas.toDataURL("image/jpeg", 0.5);
-            socket.emit("proctoring_frame", { session_id: currentSessionId, image: imageData });
-        }
     }, 1000);
 
     document.getElementById('q-count').textContent = questionCount;
     transcriptText.textContent = currentQuestion;
 
-    // Start tracking loops
-    requestAnimationFrame(faceLoop);
-    objectLoop();
+    // Start tracking loops conditionally
+    if (proctoringConfig.eyeball_tracking) {
+        requestAnimationFrame(faceLoop);
+    } else {
+        console.log("🔒 Eyeball Tracking proctoring is disabled for this job.");
+    }
+    if (proctoringConfig.object_detection) {
+        objectLoop();
+    } else {
+        console.log("🔒 Object Detection proctoring is disabled for this job.");
+    }
 }
 
 async function endInterview() {
@@ -346,7 +364,7 @@ async function endInterview() {
 
     // Tell backend to end interview and send gaze data
     try {
-        if (recData && gazePointsTracker.length > 0) {
+        if (proctoringConfig.gaze_heatmap && recData && gazePointsTracker.length > 0) {
             await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
                 method: "POST",
                 headers: {
@@ -369,7 +387,10 @@ async function endInterview() {
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${apiToken}`
-            }
+            },
+            body: JSON.stringify({
+                tracking_data: proctoringConfig.eyeball_tracking ? trackingData : []
+            })
         });
     } catch (e) {
         console.error("Failed to signal backend to end interview or send gaze tracking data", e);

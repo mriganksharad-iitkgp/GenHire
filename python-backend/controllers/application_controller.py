@@ -549,7 +549,7 @@ class ApplicationController:
         if not report:
             return {"error": "Report not found"}, 404
 
-        # Return complete report with transcript
+        # Return complete report with transcript and proctoring details
         payload = {
             "session_id": report.get("session_id"),
             "final_score": report.get("final_score"),
@@ -560,6 +560,19 @@ class ApplicationController:
             ),  # Include conversation transcript
             "usage_summary": report.get("usage_summary", {}),
             "usage_deduction": report.get("usage_deduction", {}),
+            # Proctoring details for the report modal
+            "proctoring_config": report.get("proctoring_config", {
+                "voice_detection": True,
+                "object_detection": True,
+                "eyeball_tracking": True,
+                "gaze_heatmap": True,
+            }),
+            "gaze_metrics": report.get("gaze_metrics"),
+            "manual_infractions": report.get("manual_infractions", []),
+            "gaze_plot_path": report.get("gaze_plot_path"),
+            "gaze_recorder_analysis": report.get("gaze_recorder_analysis"),
+            "gaze_recorder_score": report.get("gaze_recorder_score"),
+            "gaze_recorder_analysis_path": report.get("gaze_recorder_analysis_path")
         }
         return payload, 200
 

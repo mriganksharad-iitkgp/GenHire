@@ -1024,3 +1024,123 @@ body.dark .formFooter,
 .aiError i {
   margin-right: 5px;
 }
+
+/* Proctoring Configuration Section */
+.proctoringSection {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 100%);
+  border: 1px solid #d0d8f0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.creditWarning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.creditWarning i {
+  color: #d97706;
+  font-size: 16px;
+}
+
+.proctoringToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.proctoringToggle:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.proctoringInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.proctoringIcon {
+  font-size: 22px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.proctoringInfo strong {
+  display: block;
+  font-size: 14px;
+  color: #2d3748;
+  margin-bottom: 2px;
+}
+
+.proctoringInfo p {
+  margin: 0;
+  font-size: 12px;
+  color: #718096;
+  font-style: normal;
+}
+
+/* Toggle Switch */
+.toggleSwitch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.toggleSwitch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e0;
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggleSwitch input:checked + .slider {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.toggleSwitch input:checked + .slider::before {
+  transform: translateX(22px);
+}

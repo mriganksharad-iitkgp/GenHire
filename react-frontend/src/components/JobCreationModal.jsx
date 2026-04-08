@@ -173,7 +173,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     requirements: [],
     benefits: [],
     deadline: '',
-    minimum_cv_score: 50  // Default minimum CV score
+    minimum_cv_score: 50,  // Default minimum CV score
+    proctoring_config: {
+      voice_detection: true,
+      object_detection: true,
+      eyeball_tracking: true,
+      gaze_heatmap: true,
+    }
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -453,8 +459,14 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       responsibilities: '',
       requirements: '',
       benefits: '',
-      status: 'draft', // Reset to draft status
-      minimum_cv_score: 50 // Reset to default minimum CV score
+      status: 'draft',
+      minimum_cv_score: 50,
+      proctoring_config: {
+        voice_detection: true,
+        object_detection: true,
+        eyeball_tracking: true,
+        gaze_heatmap: true,
+      }
     });
     setSkillInput('');
     setFilteredSuggestions([]);
@@ -806,6 +818,50 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               />
               <div className={styles.helpText}>
                 Applications with CV scores ≥ this threshold will be automatically shortlisted. Below this score = auto-rejected. Default: 50
+              </div>
+            </div>
+
+            {/* Proctoring Configuration */}
+            <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
+              <label>🛡️ Proctoring Configuration</label>
+              <div className={styles.proctoringSection}>
+                <div className={styles.creditWarning}>
+                  <i className="fa fa-exclamation-triangle"></i>
+                  Enabling proctoring features may consume additional credits from your plan.
+                </div>
+                {[
+                  { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
+                  { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
+                  { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
+                  { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
+                ].map(opt => (
+                  <div key={opt.key} className={styles.proctoringToggle}>
+                    <div className={styles.proctoringInfo}>
+                      <span className={styles.proctoringIcon}>{opt.icon}</span>
+                      <div>
+                        <strong>{opt.label}</strong>
+                        <p>{opt.desc}</p>
+                      </div>
+                    </div>
+                    <label className={styles.toggleSwitch}>
+                      <input
+                        type="checkbox"
+                        checked={jobData.proctoring_config[opt.key]}
+                        onChange={(e) => setJobData(prev => ({
+                          ...prev,
+                          proctoring_config: {
+                            ...prev.proctoring_config,
+                            [opt.key]: e.target.checked
+                          }
+                        }))}
+                      />
+                      <span className={styles.slider}></span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.helpText}>
+                Only selected proctoring modules will run during the interview. Disabled modules will show "Not enabled" in reports.
               </div>
             </div>
 

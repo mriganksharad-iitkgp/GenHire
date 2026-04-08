@@ -118,6 +118,21 @@ class JobController:
                 return {'error': 'Minimum CV score must be a valid number'}, 400
         else:
             minimum_cv_score = 50.0  # Default minimum CV score
+
+        # Proctoring configuration — defaults all enabled
+        default_proctoring = {
+            'voice_detection': True,
+            'object_detection': True,
+            'eyeball_tracking': True,
+            'gaze_heatmap': True,
+        }
+        raw_proctoring = job_data.get('proctoring_config')
+        if isinstance(raw_proctoring, dict):
+            proctoring_config = {
+                k: bool(raw_proctoring.get(k, True)) for k in default_proctoring
+            }
+        else:
+            proctoring_config = default_proctoring
         
         # Check for unique job title
         job_title = job_data['title'].strip()
@@ -199,6 +214,7 @@ class JobController:
             'benefits': normalize_list_field(job_data.get('benefits', []), separator='\n'),
             'status': status,
             'minimum_cv_score': minimum_cv_score,
+            'proctoring_config': proctoring_config,
             'created_by': recruiter_id,
             'created_at': datetime.datetime.utcnow(),
             'updated_at': datetime.datetime.utcnow(),
@@ -256,7 +272,7 @@ class JobController:
                 return [p for p in parts if p]
             return []
         
-        allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline', 'minimum_cv_score']
+        allowed_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description', 'skills', 'responsibilities', 'requirements', 'benefits', 'status', 'deadline', 'minimum_cv_score', 'proctoring_config']
         for field in allowed_fields:
             if field in job_data:
                 if field == 'status':
@@ -279,6 +295,11 @@ class JobController:
                         update_fields[field] = cv_score
                     except (ValueError, TypeError):
                         return {'error': 'Minimum CV score must be a valid number'}, 400
+                elif field == 'proctoring_config':
+                    raw_pc = job_data.get(field, {})
+                    if isinstance(raw_pc, dict):
+                        valid_keys = {'voice_detection', 'object_detection', 'eyeball_tracking', 'gaze_heatmap'}
+                        update_fields[field] = {k: bool(raw_pc.get(k, True)) for k in valid_keys}
                 elif field in {'skills'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []))
                 elif field in {'responsibilities', 'requirements', 'benefits'}:

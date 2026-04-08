@@ -454,6 +454,12 @@ def start_interview(current_user):
         ),
         "status": "active",
         "similarity_score": sim_score,
+        "proctoring_config": job.get("proctoring_config", {
+            "voice_detection": True,
+            "object_detection": True,
+            "eyeball_tracking": True,
+            "gaze_heatmap": True,
+        }),
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
         "start_time": time.time(),
@@ -468,6 +474,7 @@ def start_interview(current_user):
             "initial_questions": [session_details["first_question"]],
             "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
+            "proctoring_config": interview_doc["proctoring_config"],
         }
     )
 
@@ -539,6 +546,9 @@ def submit_answer(current_user, session_id):
 @app.route("/api/interviews/<session_id>/end", methods=["POST"])
 @token_required
 def end_interview(current_user, session_id):
+    data = request.json or {}
+    tracking_data = data.get("tracking_data", [])
+    
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
     final_evaluation = {}
@@ -651,8 +661,37 @@ def end_interview(current_user, session_id):
             )
 
     # --- NEW: Generate and save the gaze plot ---
-    gaze_plot_path = None
-    # Gaze plot generation is now handled by the external service
+    if tracking_data:
+        try:
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+            import uuid
+
+            times = [float(d["time"]) for d in tracking_data if "time" in d]
+            ratios = [float(d["gazeRatio"]) if d.get("gazeRatio") is not None else 0.0 for d in tracking_data if "time" in d]
+
+            plt.figure(figsize=(10, 4))
+            plt.plot(times, ratios, label='Gaze Ratio', color='#667eea')
+            plt.axhline(0.35, color='r', linestyle='--', label='Right Boundary')
+            plt.axhline(-0.35, color='r', linestyle='--', label='Left Boundary')
+            plt.title('Eye Ball Tracking - Gaze Direction Over Time')
+            plt.xlabel('Time (s)')
+            plt.ylabel('Gaze Ratio')
+            plt.legend()
+
+            gaze_plot_filename = f"gaze_plot_{session_id}_{uuid.uuid4().hex[:6]}.png"
+            # Ensure folder exists
+            os.makedirs(app.config["PROCTORING_FOLDER"], exist_ok=True)
+            gaze_plot_path = os.path.join(app.config["PROCTORING_FOLDER"], gaze_plot_filename)
+            plt.savefig(gaze_plot_path)
+            plt.close()
+        except Exception as e:
+            print(f"⚠️ Failed to generate local gaze tracking plot: {e}")
+            if not gaze_plot_path:  # fallback to external one if available
+                pass
+    elif not gaze_plot_path:
+        gaze_plot_path = None
 
     # Update the database record with final data
     interviews_collection.update_one(
