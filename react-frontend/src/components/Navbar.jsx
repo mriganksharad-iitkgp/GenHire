@@ -7,21 +7,13 @@ import { CandidatePlanButton } from "./candidate/subscription";
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [darkMode, setDarkMode] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [userName, setUserName] = useState("");
   const [companyName, setCompanyName] = useState("TechCorp Solutions");
   const userMenuRef = useRef(null);
 
-  // Check dark mode preference on component mount
   useEffect(() => {
-    const savedDarkMode = localStorage.getItem("darkMode") === "true";
-    setDarkMode(savedDarkMode);
-    if (savedDarkMode) {
-      document.body.classList.add("dark");
-    }
-
     // Load user data
     loadUserData();
   }, []);
@@ -87,18 +79,6 @@ const Navbar = ({ userType = "candidate" }) => {
     }
   };
 
-  // Handle dark mode toggle
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem("darkMode", newDarkMode.toString());
-    if (newDarkMode) {
-      document.body.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
-    }
-  };
-
   // Handle logout
   const handleLogout = () => {
     localStorage.removeItem("companyxyz-token");
@@ -137,7 +117,7 @@ const Navbar = ({ userType = "candidate" }) => {
               </svg>
             </div>
             <h1>
-              SmartHire
+              GenHire
             </h1>
           </Link>
         </div>
@@ -208,18 +188,6 @@ const Navbar = ({ userType = "candidate" }) => {
           {/* Upgrade Button for Recruiters */}
           {userType === "recruiter" && <UpgradeButton />}
           {userType !== "recruiter" && <CandidatePlanButton />}
-
-          <button
-            className={styles.darkModeButton}
-            onClick={toggleDarkMode}
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? (
-              <i className="fa fa-sun-o"></i>
-            ) : (
-              <i className="fa fa-moon-o"></i>
-            )}
-          </button>
 
           <div className={styles.userDropdown} ref={userMenuRef}>
             <button

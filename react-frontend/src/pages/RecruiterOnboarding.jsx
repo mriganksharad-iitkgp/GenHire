@@ -72,7 +72,47 @@ const RecruiterOnboarding = () => {
     { number: 4, title: "Review", description: "Confirm & submit" }
   ];
 
-  const validateStep1 = () => {
+  const validateEmailForRecruiter = async (email) => {
+    const normalizedEmail = String(email || "").trim();
+    if (!normalizedEmail) return false;
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE}/check-email-account-type`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, userType: "recruiter" }),
+      });
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      const isExplicitConflict =
+        response.status === 409 ||
+        (data && data.available === false && data.existing_user_type && data.requested_user_type);
+
+      if (isExplicitConflict) {
+        setError(data.error || "This email is already used for another account type");
+        return false;
+      }
+
+      // Do not block signup for endpoint/network/server issues.
+      // Final server-side registration still enforces account-type restrictions.
+      if (!response.ok) {
+        return true;
+      }
+
+      return true;
+    } catch {
+      // Allow progress if precheck service is unavailable.
+      return true;
+    }
+  };
+
+  const validateStep1 = async () => {
     if (googleUser) return true; // Skip validation for Google users
     
     if (!accountInfo.name.trim()) {
@@ -99,7 +139,8 @@ const RecruiterOnboarding = () => {
       setError("Passwords do not match");
       return false;
     }
-    return true;
+
+    return validateEmailForRecruiter(accountInfo.email);
   };
 
   const validateStep2 = () => {
@@ -130,10 +171,10 @@ const RecruiterOnboarding = () => {
     return true;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError("");
     
-    if (currentStep === 1 && !validateStep1()) return;
+    if (currentStep === 1 && !(await validateStep1())) return;
     if (currentStep === 2 && !validateStep2()) return;
     if (currentStep === 3 && !validateStep3()) return;
     
@@ -221,6 +262,11 @@ const RecruiterOnboarding = () => {
       
       const userData = JSON.parse(jsonPayload);
       
+      const canUseEmail = await validateEmailForRecruiter(userData.email);
+      if (!canUseEmail) {
+        return;
+      }
+
       setGoogleUser({
         name: userData.name,
         email: userData.email,
@@ -237,7 +283,7 @@ const RecruiterOnboarding = () => {
       // Move to step 2 since account info is handled by Google
       setCurrentStep(2);
     } catch (error) {
-      setError("Failed to process Google sign-up. Please try again.");
+      setError(error?.message || "Failed to process Google sign-up. Please try again.");
     }
   };
 
@@ -536,7 +582,7 @@ const RecruiterOnboarding = () => {
                   </div>
                   
                   <div className={styles.inputGroup + ' ' + styles.fullWidth}>
-                    <label>Why are you joining SmartHire?</label>
+                    <label>Why are you joining GenHire?</label>
                     <textarea
                       value={additionalInfo.reasonForJoining}
                       onChange={(e) => setAdditionalInfo({...additionalInfo, reasonForJoining: e.target.value})}

@@ -31,6 +31,7 @@ class Job:
     jd_pdf_path: Optional[str] = None  # Path to JD PDF file
     jd_extracted_text: Optional[str] = None  # Extracted text from JD PDF
     jd_upload_date: Optional[datetime.datetime] = None  # When JD was uploaded
+    gaze_proctoring: bool = False  # Enable gaze heat map proctoring
     
     def __post_init__(self):
         if self.skills is None:
@@ -74,7 +75,8 @@ class Job:
             'updated_at': self.updated_at,
             'jd_pdf_path': self.jd_pdf_path,
             'jd_extracted_text': self.jd_extracted_text,
-            'jd_upload_date': self.jd_upload_date
+            'jd_upload_date': self.jd_upload_date,
+            'gaze_proctoring': self.gaze_proctoring
         }
     
     @classmethod
@@ -106,5 +108,6 @@ class Job:
             updated_at=data.get('updated_at'),
             jd_pdf_path=data.get('jd_pdf_path'),
             jd_extracted_text=data.get('jd_extracted_text'),
-            jd_upload_date=data.get('jd_upload_date')
+            jd_upload_date=data.get('jd_upload_date'),
+            gaze_proctoring=data.get('gaze_proctoring', False)
         )

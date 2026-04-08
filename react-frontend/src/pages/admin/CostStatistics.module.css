@@ -235,6 +235,65 @@
   color: #b91c1c !important;
 }
 
+.expandBtn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.expandPanelCell {
+  background: #f8fafc;
+}
+
+.usageLineWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.usageCategoryCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.usageCategoryHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.emptyCell {
+  text-align: center;
+  color: #64748b;
+}
+
+.inlineStatus {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  margin-bottom: 8px;
+}
+
+.inlineError {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  margin-bottom: 8px;
+}
+
 @media (max-width: 768px) {
   .wrapper {
     padding: 14px;

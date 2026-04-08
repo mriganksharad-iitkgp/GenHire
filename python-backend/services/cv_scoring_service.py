@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict, Any, Optional
 from pydantic import SecretStr
+from services.usage_telemetry_service import extract_usage_from_response
 
 class CVScoringService:
     """Service for calculating CV-JD matching scores using AI"""
@@ -293,7 +294,14 @@ class CVScoringService:
             response_content = response.content
             if not isinstance(response_content, str):
                 response_content = str(response_content)
-            return self._parse_ai_response(response_content)
+            parsed_result = self._parse_ai_response(response_content)
+            usage = extract_usage_from_response(response)
+            parsed_result['usage'] = {
+                'prompt_tokens': usage.get('prompt_tokens'),
+                'completion_tokens': usage.get('completion_tokens'),
+                'usage_source': usage.get('usage_source', 'assumed'),
+            }
+            return parsed_result
             
         except Exception as e:
             print(f"Error in CV scoring from text: {str(e)}")
@@ -370,7 +378,14 @@ class CVScoringService:
             response_content = response.content
             if not isinstance(response_content, str):
                 response_content = str(response_content)
-            return self._parse_ai_response(response_content)
+            parsed_result = self._parse_ai_response(response_content)
+            usage = extract_usage_from_response(response)
+            parsed_result['usage'] = {
+                'prompt_tokens': usage.get('prompt_tokens'),
+                'completion_tokens': usage.get('completion_tokens'),
+                'usage_source': usage.get('usage_source', 'assumed'),
+            }
+            return parsed_result
             
         except Exception as e:
             print(f"Error in CV scoring: {str(e)}")

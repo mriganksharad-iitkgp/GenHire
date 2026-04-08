@@ -9,7 +9,7 @@ import BioForm from "../components/candidate/BioForm";
 import ApplicationsList from "../components/candidate/ApplicationsList";
 import useCandidateProfile from "../hooks/candidate/useCandidateProfile";
 import useCandidateApplications from "../hooks/candidate/useCandidateApplications";
-import { viewCV as apiViewCV } from "../services/api";
+import { viewCV as apiViewCV, viewApplicationCV } from "../services/api";
 
 const Profile = () => {
 	const navigate = useNavigate();
@@ -178,13 +178,15 @@ const Profile = () => {
 	};
 
 	// Handle CV viewing
-	const handleViewCV = async () => {
+	const handleViewCV = async (application = null) => {
 		try {
-			const blob = await apiViewCV();
+			const blob = application?.id
+				? await viewApplicationCV(application.id)
+				: await apiViewCV();
 			const url = window.URL.createObjectURL(blob);
 			window.open(url, '_blank');
 		} catch (e) {
-			showToast("Error viewing CV", "error");
+			showToast("Error viewing CV for this application", "error");
 		}
 	};
 

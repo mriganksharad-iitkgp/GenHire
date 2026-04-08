@@ -53,7 +53,9 @@ except ImportError as e:
 from routes.speech_routes import speech_bp
 
 from services.cv_scoring_service import CVScoringService
+from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
+from payment_module.services.subscription_service import SubscriptionService
 from interview.core.cost_tracker import CostTracker
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
@@ -338,6 +340,7 @@ else:
     subscription_billing_service = None
 
 
+
 # health check route
 @app.route("/health", methods=["GET"])
 def health_check():
@@ -375,25 +378,28 @@ def start_interview(current_user):
     student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
-    # --- Credit pre-check (usage-based billing) ---
+    # --- Interview start credit pre-check (deduction occurs at interview end) ---
     if job:
         recruiter_id = job.get("created_by")
-        if recruiter_id and subscription_billing_service:
-            credit_check = subscription_billing_service.check_credit_availability(
+        if recruiter_id:
+            db = db_config.get_db()
+            subscription_service = SubscriptionService(db)
+            availability = subscription_service.check_credit_availability(
                 employer_id=str(recruiter_id),
                 audience="recruiter",
             )
 
-            if not credit_check.get("can_start_interview", False):
+            if not availability.get("can_start_interview", False):
                 return (
                     jsonify(
                         {
-                            "error": "Interview is currently unavailable for this job. The recruiter has exhausted credits on their plan.",
-                            "error_code": credit_check.get(
-                                "error_code", "insufficient_credits"
-                            ),
+                            "error": availability.get("error")
+                            or "Interview is currently unavailable for this job. The recruiter has exhausted interview credits on their plan.",
+                            "error_code": availability.get("error_code")
+                            or "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
                             "plan_owner": "recruiter",
-                            "credits_remaining": credit_check.get(
+                            "can_start_interview": False,
+                            "credits_remaining": availability.get(
                                 "credits_remaining", 0
                             ),
                         }
@@ -644,21 +650,66 @@ def end_interview(current_user, session_id):
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
 
-    # Deduct credits based on measured interview usage
-    if session_doc and subscription_billing_service:
-        recruiter_id = session_doc.get("recruiter_id")
-        if recruiter_id:
-            usage_deduction = subscription_billing_service.consume_usage_credits(
-                employer_id=str(recruiter_id),
-                audience="recruiter",
-                usage=usage_summary,
-                idempotency_key=f"interview-session:{session_id}",
-                metadata={
-                    "session_id": session_id,
-                    "application_id": session_doc.get("application_id"),
-                    "candidate_user_id": str(current_user.get("_id")),
-                },
+    # Derive actual media usage from the transcript/session timing
+    tts_characters = sum(
+        len((item.get("text") or "").strip())
+        for item in interview_transcript
+        if item.get("role") == "assistant"
+    )
+    stt_seconds = max(0.0, float(interview_duration or 0.0))
+
+    usage_summary = CostTracker().end_session(
+        session_id,
+        clear_events=True,
+        fallback={
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_stt_seconds": stt_seconds,
+            "total_tts_characters": int(tts_characters or 0),
+            "model": "llama-3.3-70b-versatile",
+        },
+    )
+
+    recruiter_owner_id = None
+    existing_app = None
+    if session_doc and session_doc.get("application_id"):
+        try:
+            existing_app = applications_collection.find_one(
+                {"_id": ObjectId(session_doc["application_id"])}
             )
+            if existing_app and existing_app.get("job_id"):
+                job_doc_for_billing = jobs_collection.find_one(
+                    {"_id": ObjectId(existing_app["job_id"])},
+                    {"created_by": 1},
+                )
+                if job_doc_for_billing:
+                    recruiter_owner_id = str(
+                        job_doc_for_billing.get("created_by") or ""
+                    )
+        except Exception:
+            recruiter_owner_id = None
+
+    if recruiter_owner_id:
+        subscription_service = SubscriptionService(db_config.get_db())
+        usage_deduction = subscription_service.consume_usage_credits(
+            employer_id=recruiter_owner_id,
+            audience="recruiter",
+            usage_summary=usage_summary,
+            idempotency_key=f"interview-session:{session_id}",
+            metadata={
+                "session_id": session_id,
+                "application_id": str(session_doc.get("application_id") or ""),
+                "source": "interview_session",
+            },
+        )
+    else:
+        usage_deduction = {
+            "success": False,
+            "credits_deducted": 0,
+            "usage_cost_usd": float(usage_summary.get("total_cost", 0.0) or 0.0),
+            "error": "Unable to resolve recruiter owner for billing.",
+            "error_code": "missing_recruiter_owner",
+        }
 
     # --- NEW: Generate and save the gaze plot ---
     if tracking_data:
@@ -706,6 +757,8 @@ def end_interview(current_user, session_id):
                 "manual_infractions": manual_infractions,
                 "gaze_metrics": gaze_times,
                 "gaze_plot_path": gaze_plot_path,
+                "stt_seconds": stt_seconds,
+                "tts_characters": int(tts_characters or 0),
                 "usage_summary": usage_summary,
                 "usage_deduction": usage_deduction,
                 "updated_at": datetime.datetime.utcnow(),
@@ -718,7 +771,7 @@ def end_interview(current_user, session_id):
         try:
             application_id = session_doc["application_id"]
             # First, check if the application exists
-            existing_app = applications_collection.find_one(
+            existing_app = existing_app or applications_collection.find_one(
                 {"_id": ObjectId(application_id)}
             )
             if not existing_app:
@@ -732,6 +785,8 @@ def end_interview(current_user, session_id):
                         "interview_score": interview_score,
                         "proctoring_score": proctoring_score,
                         "transcript": interview_transcript,
+                        "usage_summary": usage_summary,
+                        "usage_deduction": usage_deduction,
                         "error": "Application not found",
                     }
                 )
@@ -744,6 +799,9 @@ def end_interview(current_user, session_id):
                     "$set": {
                         "interview_score": interview_score,  # Store interview performance score
                         "proctoring_score": proctoring_score,  # Store proctoring behavior score
+                        "stt_seconds": stt_seconds,
+                        "tts_characters": int(tts_characters or 0),
+                        "usage_source": "actual",
                         "status": "interviewed",
                         "updated_at": datetime.datetime.utcnow(),
                     }
@@ -771,6 +829,47 @@ def end_interview(current_user, session_id):
                 print(
                     f"❌ Warning: Application {application_id} was not updated (no documents modified)"
                 )
+
+            recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
+
+            record_usage_event(
+                collections,
+                action_type="ai_interview",
+                actor_type="recruiter",
+                actor_id=recruiter_actor_id,
+                model="gpt-4o",
+                stt_seconds=stt_seconds,
+                tts_characters=int(tts_characters or 0),
+                usage_source="actual",
+                source={
+                    "type": "application",
+                    "id": str(application_id),
+                    "label": existing_app.get("job_title") or "Interview",
+                },
+                occurred_at=datetime.datetime.utcnow(),
+                metadata={
+                    "session_id": session_id,
+                    "proctoring_score": proctoring_score,
+                },
+            )
+
+            record_usage_event(
+                collections,
+                action_type="ai_interview_evaluation",
+                actor_type="recruiter",
+                actor_id=recruiter_actor_id,
+                model="gpt-5-mini",
+                usage_source="assumed",
+                source={
+                    "type": "application",
+                    "id": str(application_id),
+                    "label": existing_app.get("job_title") or "Interview Evaluation",
+                },
+                occurred_at=datetime.datetime.utcnow(),
+                metadata={
+                    "session_id": session_id,
+                },
+            )
 
         except Exception as e:
             print(f"❌ Error updating application: {e}")

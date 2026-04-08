@@ -18,6 +18,17 @@ def register():
     result, status_code = auth_controller.register_user(data)
     return jsonify(result), status_code
 
+@auth_bp.route('/check-email-account-type', methods=['POST'])
+@cross_origin()
+def check_email_account_type():
+    """Validate whether an email can be used for the requested account type."""
+    data = request.get_json() or {}
+    email = data.get('email')
+    user_type = data.get('userType', 'candidate')
+
+    result, status_code = auth_controller.check_email_account_type(email, user_type)
+    return jsonify(result), status_code
+
 @auth_bp.route('/login', methods=['POST'])
 @cross_origin()
 def login():

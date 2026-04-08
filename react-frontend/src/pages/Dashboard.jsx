@@ -4,6 +4,7 @@ import Toast from "../components/Toast";
 import Pagination from "../components/Pagination";
 import CVSelectionModal from "../components/CVSelectionModal";
 import { useCandidateData } from "../contexts/CandidateDataContext";
+import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "../constants/jobTaxonomy";
 import styles from "./Dashboard.module.css";
 
 const Dashboard = () => {
@@ -389,14 +390,112 @@ const Dashboard = () => {
 		return null;
 	};
 
-	// Get unique job roles for the filter dropdown
-	const uniqueJobRoles = [...new Set(jobOpenings.map(job => job.title).filter(Boolean))].sort();
+	// Hardcoded standard job roles for the filter dropdown (prevents messy duplicates from recruiter-typed titles)
+	const STANDARD_JOB_ROLES = [
+		// Engineering & Tech
+		"Software Engineer", "Frontend Developer", "Backend Developer", "Full Stack Developer",
+		"Mobile Developer", "DevOps Engineer", "Cloud Engineer", "Site Reliability Engineer",
+		"Data Engineer", "Data Scientist", "Data Analyst", "Machine Learning Engineer",
+		"AI Engineer", "QA Engineer", "Security Engineer", "Embedded Engineer",
+		// Product & Design
+		"Product Manager", "Product Designer", "UX Designer", "UI Designer", "UX Researcher",
+		// Business & Management
+		"Business Analyst", "Project Manager", "Scrum Master", "Engineering Manager",
+		"Technical Lead", "CTO", "VP of Engineering",
+		// Marketing & Growth
+		"Marketing Manager", "Content Writer", "SEO Specialist", "Growth Manager",
+		"Digital Marketing Manager", "Social Media Manager",
+		// Sales & Support
+		"Sales Executive", "Account Manager", "Customer Success Manager", "Support Engineer",
+		// Operations & HR
+		"Operations Manager", "HR Manager", "Recruiter", "People Operations",
+		// Finance & Legal
+		"Financial Analyst", "Accountant", "Legal Counsel",
+	];
 	
 	// Get unique companies for the filter dropdown
 	const uniqueCompanies = [...new Set(jobOpenings.map(job => job.company || 'TechCorp Solutions').filter(Boolean))].sort();
 	
 	// Get unique skills for the filter dropdown
 	const uniqueSkills = [...new Set(jobOpenings.flatMap(job => Array.isArray(job.skills) ? job.skills : []).filter(Boolean))].sort();
+
+	// --- Search Suggestions Logic ---
+	const [showSuggestions, setShowSuggestions] = useState(false);
+	const [searchSuggestions, setSearchSuggestions] = useState({ roles: [], companies: [], locations: [], skills: [] });
+	const searchInputRef = React.useRef(null);
+	const suggestionsRef = React.useRef(null);
+
+	// Compute categorized suggestions from loaded jobs data
+	const computeSuggestions = React.useCallback((query) => {
+		if (!query || query.trim().length < 1) {
+			setSearchSuggestions({ roles: [], companies: [], locations: [], skills: [] });
+			return;
+		}
+
+		const q = query.trim().toLowerCase();
+		const MAX_PER_CATEGORY = 3;
+
+		// Collect all unique values
+		const allRoles = [...new Set(jobOpenings.map(j => j.title).filter(Boolean))];
+		const allCompanies = [...new Set(jobOpenings.map(j => j.company).filter(Boolean))];
+		const allLocations = [...new Set(jobOpenings.map(j => j.location).filter(Boolean))];
+		const allSkills = [...new Set(jobOpenings.flatMap(j => Array.isArray(j.skills) ? j.skills : []).filter(Boolean))];
+
+		// Match against query (prefix match first, then contains)
+		const match = (items) => {
+			const prefixMatches = items.filter(item => item.toLowerCase().startsWith(q));
+			const containsMatches = items.filter(item => !item.toLowerCase().startsWith(q) && item.toLowerCase().includes(q));
+			return [...prefixMatches, ...containsMatches].slice(0, MAX_PER_CATEGORY);
+		};
+
+		setSearchSuggestions({
+			roles: match(allRoles),
+			companies: match(allCompanies),
+			locations: match(allLocations),
+			skills: match(allSkills),
+		});
+	}, [jobOpenings]);
+
+	// Recompute suggestions when searchQuery changes
+	useEffect(() => {
+		computeSuggestions(searchQuery);
+	}, [searchQuery, computeSuggestions]);
+
+	// Close suggestions on outside click
+	useEffect(() => {
+		const handleClickOutside = (e) => {
+			if (
+				suggestionsRef.current && !suggestionsRef.current.contains(e.target) &&
+				searchInputRef.current && !searchInputRef.current.contains(e.target)
+			) {
+				setShowSuggestions(false);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
+
+	const hasSuggestions = searchSuggestions.roles.length > 0 || searchSuggestions.companies.length > 0 || searchSuggestions.locations.length > 0 || searchSuggestions.skills.length > 0;
+
+	const handleSuggestionClick = (value) => {
+		setSearchQuery(value);
+		setShowSuggestions(false);
+	};
+
+	// Highlight matching text in suggestions
+	const highlightMatch = (text, query) => {
+		if (!query) return text;
+		const idx = text.toLowerCase().indexOf(query.toLowerCase());
+		if (idx === -1) return text;
+		return (
+			<>
+				{text.slice(0, idx)}
+				<span className={styles.suggestionHighlight}>{text.slice(idx, idx + query.length)}</span>
+				{text.slice(idx + query.length)}
+			</>
+		);
+	};
+	// --- End Search Suggestions Logic ---
 
 	const filteredJobs = jobOpenings.filter((job) => {
 		const q = searchQuery.trim().toLowerCase();
@@ -431,8 +530,8 @@ const Dashboard = () => {
 			matchesExperience = minYears !== null ? minYears >= 5 : true;
 		}
 
-		const roleSel = jobRoleFilter.trim();
-		const matchesJobRole = roleSel === '' || String(job.title || '') === roleSel;
+		const roleSel = jobRoleFilter.trim().toLowerCase();
+		const matchesJobRole = roleSel === '' || String(job.title || '').toLowerCase().includes(roleSel);
 
 		const companySel = companyFilter.trim();
 		const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
@@ -468,17 +567,110 @@ const Dashboard = () => {
 				</div>
 
 				<div className={styles.jobFilters}>
+					<div className={styles.searchBarWrapper}>
 					<div className={styles.searchBar}>
 						<input
+							ref={searchInputRef}
 							type="text"
-							placeholder="Search for positions, skills, or departments"
+							placeholder="Search for positions, skills, companies, or locations..."
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
+							onFocus={() => setShowSuggestions(true)}
+							onKeyDown={(e) => {
+								if (e.key === 'Escape') setShowSuggestions(false);
+							}}
+							autoComplete="off"
 						/>
 						<button className={styles.searchButton}>
 							<i className="fa fa-search"></i>
 						</button>
 					</div>
+
+					{/* Suggestions Dropdown */}
+					{showSuggestions && hasSuggestions && (
+						<div className={styles.suggestionsDropdown} ref={suggestionsRef}>
+							{searchSuggestions.roles.length > 0 && (
+								<div className={styles.suggestionCategory}>
+									<div className={styles.suggestionCategoryHeader}>
+										<span>Roles</span>
+									</div>
+									{searchSuggestions.roles.map((role, i) => (
+										<div
+											key={`role-${i}`}
+											className={styles.suggestionItem}
+											onMouseDown={() => handleSuggestionClick(role)}
+										>
+											<span className={styles.suggestionItemIcon}>
+												<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M6 3.75A2.75 2.75 0 018.75 1h2.5A2.75 2.75 0 0114 3.75v.443c.572.055 1.14.122 1.706.2C17.053 4.582 18 5.75 18 7.07v3.469c0 1.126-.694 2.191-1.83 2.54-1.952.599-4.024.921-6.17.921s-4.219-.322-6.17-.921C2.694 12.73 2 11.665 2 10.539V7.07c0-1.321.947-2.489 2.294-2.676A41.047 41.047 0 016 4.193V3.75z" clipRule="evenodd" /></svg>
+											</span>
+											<span className={styles.suggestionItemText}>{highlightMatch(role, searchQuery)}</span>
+										</div>
+									))}
+								</div>
+							)}
+
+							{searchSuggestions.companies.length > 0 && (
+								<div className={styles.suggestionCategory}>
+									<div className={styles.suggestionCategoryHeader}>
+										<span>Companies</span>
+									</div>
+									{searchSuggestions.companies.map((company, i) => (
+										<div
+											key={`company-${i}`}
+											className={styles.suggestionItem}
+											onMouseDown={() => handleSuggestionClick(company)}
+										>
+											<span className={styles.suggestionItemIcon}>
+												<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M4 16.5v-13h-.25a.75.75 0 010-1.5h12.5a.75.75 0 010 1.5H16v13h.25a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75v-2.5a.75.75 0 00-.75-.75h-2.5a.75.75 0 00-.75.75v2.5a.75.75 0 01-.75.75h-3.5a.75.75 0 010-1.5H4z" clipRule="evenodd" /></svg>
+											</span>
+											<span className={styles.suggestionItemText}>{highlightMatch(company, searchQuery)}</span>
+										</div>
+									))}
+								</div>
+							)}
+
+							{searchSuggestions.locations.length > 0 && (
+								<div className={styles.suggestionCategory}>
+									<div className={styles.suggestionCategoryHeader}>
+										<span>Locations</span>
+									</div>
+									{searchSuggestions.locations.map((loc, i) => (
+										<div
+											key={`loc-${i}`}
+											className={styles.suggestionItem}
+											onMouseDown={() => handleSuggestionClick(loc)}
+										>
+											<span className={styles.suggestionItemIcon}>
+												<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14 15.862 15.862 0 002.53-1.718C14.977 15.578 17 13.046 17 10a7 7 0 10-14 0c0 3.046 2.023 5.578 3.856 7.065a15.862 15.862 0 002.53 1.718 9.94 9.94 0 00.3.148l.018.008.006.003zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
+											</span>
+											<span className={styles.suggestionItemText}>{highlightMatch(loc, searchQuery)}</span>
+										</div>
+									))}
+								</div>
+							)}
+
+							{searchSuggestions.skills.length > 0 && (
+								<div className={styles.suggestionCategory}>
+									<div className={styles.suggestionCategoryHeader}>
+										<span>Skills</span>
+									</div>
+									{searchSuggestions.skills.map((skill, i) => (
+										<div
+											key={`skill-${i}`}
+											className={styles.suggestionItem}
+											onMouseDown={() => handleSuggestionClick(skill)}
+										>
+											<span className={styles.suggestionItemIcon}>
+												<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
+											</span>
+											<span className={styles.suggestionItemText}>{highlightMatch(skill, searchQuery)}</span>
+										</div>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+				</div>
 
 					<div className={styles.filterOptions}>
 						<select
@@ -499,12 +691,11 @@ const Dashboard = () => {
 							className={styles.filterSelect}
 						>
 							<option value="">All Locations</option>
-							<option value="Remote">Remote</option>
-							<option value="Hybrid">Hybrid</option>
-							<option value="San Francisco">San Francisco</option>
-							<option value="New York">New York</option>
-							<option value="Boston">Boston</option>
-							<option value="Seattle">Seattle</option>
+							{INDIA_LOCATION_OPTIONS.map((locationOption) => (
+								<option key={locationOption} value={locationOption}>
+									{locationOption}
+								</option>
+							))}
 						</select>
 
 						<select
@@ -521,17 +712,17 @@ const Dashboard = () => {
 						</select>
 
 						<select
-							value={jobRoleFilter}
-							onChange={(e) => setJobRoleFilter(e.target.value)}
-							className={styles.filterSelect}
-						>
-							<option value="">All Job Roles</option>
-							{uniqueJobRoles.map((role, index) => (
-								<option key={index} value={role}>
-									{role}
-								</option>
-							))}
-						</select>
+						value={jobRoleFilter}
+						onChange={(e) => setJobRoleFilter(e.target.value)}
+						className={styles.filterSelect}
+					>
+						<option value="">All Job Roles</option>
+						{STANDARD_JOB_ROLES.map((role, index) => (
+							<option key={index} value={role}>
+								{role}
+							</option>
+						))}
+					</select>
 
 						<select
 							value={companyFilter}

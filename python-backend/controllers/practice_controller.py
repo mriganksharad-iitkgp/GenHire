@@ -14,6 +14,9 @@ from services.candidate_practice_quota_service import (
     get_candidate_practice_quota,
     consume_candidate_practice_credit,
 )
+from services.usage_telemetry_service import record_usage_event
+from payment_module.services.subscription_service import SubscriptionService
+from interview.core.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,8 @@ class PracticeController:
         "business-analyst": "technical_question_bank/BusinessAnalyst_JD.txt",
         "fullstack-developer": "technical_question_bank/FullStackDeveloper_JD.txt",
         "devops-engineer": "technical_question_bank/DevOpsEngineer_JD.txt",
+        "finance-analyst": "technical_question_bank/BusinessAnalyst_JD.txt",
+        "ui-ux-designer": "technical_question_bank/ProductManager_JD.txt",
     }
 
     def __init__(self, collections):
@@ -45,6 +50,8 @@ class PracticeController:
             "business-analyst": "Business Analyst",
             "fullstack-developer": "Full Stack Developer",
             "devops-engineer": "DevOps Engineer",
+            "finance-analyst": "Finance Analyst",
+            "ui-ux-designer": "UI/UX Designer",
         }
 
         # Ensure upload directories exist
@@ -693,6 +700,95 @@ class PracticeController:
                 f"Built transcript with {len(transcript)} messages from interview_data"
             )
 
+            created_at = session.get("created_at")
+            completed_at = datetime.utcnow()
+            stt_seconds = 0.0
+            if isinstance(created_at, datetime):
+                stt_seconds = max(0.0, (completed_at - created_at).total_seconds())
+
+            tts_characters = sum(
+                len(((item.get("text") or item.get("content") or "")).strip())
+                for item in transcript
+                if item.get("role") == "assistant"
+            )
+
+            usage_summary = CostTracker().end_session(
+                session_id,
+                clear_events=True,
+                fallback={
+                    "total_prompt_tokens": 0,
+                    "total_completion_tokens": 0,
+                    "total_stt_seconds": stt_seconds,
+                    "total_tts_characters": int(tts_characters or 0),
+                    "model": "llama-3.3-70b-versatile",
+                },
+            )
+
+            db = self.collections["users"].database
+            subscription_service = SubscriptionService(db)
+            usage_deduction = subscription_service.consume_usage_credits(
+                employer_id=user_id,
+                audience="candidate",
+                usage_summary=usage_summary,
+                idempotency_key=f"practice-session:{session_id}",
+                metadata={
+                    "session_id": session_id,
+                    "source": "practice_session",
+                },
+            )
+
+            if (
+                not usage_deduction.get("success")
+                and usage_deduction.get("error_code") == "no_subscription"
+            ):
+                quota_snapshot = get_candidate_practice_quota(db, user_id)
+                consumed = consume_candidate_practice_credit(
+                    db,
+                    candidate_id=user_id,
+                    session_id=session_id,
+                    quota_snapshot=quota_snapshot,
+                )
+
+                if consumed:
+                    usage_deduction = {
+                        "success": True,
+                        "credits_deducted": 1,
+                        "usage_cost_usd": float(
+                            usage_summary.get("total_cost", 0.0) or 0.0
+                        ),
+                        "credits_remaining": max(
+                            0,
+                            int(quota_snapshot.get("interviews_remaining", 0) or 0) - 1,
+                        ),
+                        "credits_used": int(
+                            quota_snapshot.get("interviews_used", 0) or 0
+                        )
+                        + 1,
+                        "credits_allocated": int(
+                            quota_snapshot.get("interviews_allowed", 0) or 0
+                        ),
+                        "is_unlimited": False,
+                        "interviews_used": int(
+                            quota_snapshot.get("interviews_used", 0) or 0
+                        )
+                        + 1,
+                        "source": "candidate_free_quota",
+                    }
+                else:
+                    usage_deduction = {
+                        "success": False,
+                        "credits_deducted": 0,
+                        "usage_cost_usd": float(
+                            usage_summary.get("total_cost", 0.0) or 0.0
+                        ),
+                        "credits_remaining": int(
+                            quota_snapshot.get("interviews_remaining", 0) or 0
+                        ),
+                        "error": "You've reached your free practice interview limit. Upgrade your plan to continue.",
+                        "error_code": "CANDIDATE_PRACTICE_LIMIT_REACHED",
+                        "source": "candidate_free_quota",
+                    }
+
             # Calculate interview score from evaluation (same logic as real interviews)
             interview_score = 85  # Default score
             if isinstance(final_evaluation, dict) and final_evaluation:
@@ -753,17 +849,53 @@ class PracticeController:
                     "$set": {
                         "status": "completed",
                         "updated_at": datetime.utcnow(),
-                        "completed_at": datetime.utcnow(),
+                        "completed_at": completed_at,
                         "evaluation": final_evaluation,
                         "interview_score": interview_score,
                         "proctoring_score": proctoring_score,
-                        "final_score": interview_score,  # Overall performance
-                        "transcript": transcript,  # Store properly formatted transcript
+                        "stt_seconds": stt_seconds,
+                        "tts_characters": int(tts_characters or 0),
                         "usage_summary": usage_summary,
                         "usage_deduction": usage_deduction,
+                        "usage_source": "actual",
+                        "final_score": interview_score,  # Overall performance
+                        "transcript": transcript,  # Store properly formatted transcript
                     }
                 },
             )
+
+            record_usage_event(
+                self.collections,
+                action_type="practice_interview",
+                actor_type="candidate",
+                actor_id=user_id,
+                model="gpt-4o",
+                stt_seconds=stt_seconds,
+                tts_characters=int(tts_characters or 0),
+                usage_source="actual",
+                source={
+                    "type": "practice_session",
+                    "id": session_id,
+                    "label": session.get("role") or "Practice Interview",
+                },
+                occurred_at=completed_at,
+            )
+
+            if final_evaluation:
+                record_usage_event(
+                    self.collections,
+                    action_type="practice_interview_evaluation",
+                    actor_type="candidate",
+                    actor_id=user_id,
+                    model="gpt-5-mini",
+                    usage_source="assumed",
+                    source={
+                        "type": "practice_session",
+                        "id": session_id,
+                        "label": session.get("role") or "Practice Evaluation",
+                    },
+                    occurred_at=completed_at,
+                )
 
             logger.info(
                 f"Practice interview {session_id} completed - CV: {cv_score}, Interview: {interview_score}%, Transcript messages: {len(transcript)}"

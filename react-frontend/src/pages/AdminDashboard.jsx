@@ -329,7 +329,7 @@ const AdminDashboard = () => {
                 <circle cx="7" cy="7" r="3"></circle>
               </svg>
             </div>
-            <h2>SmartHire</h2>
+            <h2>GenHire</h2>
             <span className={styles.adminBadge}>Admin</span>
           </div>
           <div className={styles.sidebarLoading}>
@@ -359,7 +359,7 @@ const AdminDashboard = () => {
               <circle cx="7" cy="7" r="3"></circle>
             </svg>
           </div>
-          <h2>SmartHire</h2>
+          <h2>GenHire</h2>
           <span className={styles.adminBadge}>Admin</span>
         </div>
         
@@ -890,7 +890,7 @@ const AdminDashboard = () => {
                               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
                               <line x1="12" y1="17" x2="12.01" y2="17"></line>
                             </svg>
-                            Why They're Joining SmartHire
+                            Why They're Joining GenHire
                           </h4>
                           <p className={styles.descriptionText}>{recruiter.reason_for_joining}</p>
                         </div>

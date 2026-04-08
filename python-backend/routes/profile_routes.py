@@ -360,6 +360,9 @@ def get_candidate_cost_statistics(current_user):
         db = db_config.get_db()
 
         quota = get_candidate_practice_quota(db, candidate_id)
+        subscription = None
+        if quota.get("subscription_id"):
+            subscription = db.subscriptions.find_one({"_id": quota["subscription_id"]})
 
         six_months_ago = datetime.utcnow() - timedelta(days=180)
         practice_sessions = list(
@@ -377,15 +380,30 @@ def get_candidate_cost_statistics(current_user):
             created_at = session.get("created_at")
             if not isinstance(created_at, datetime):
                 continue
+
             month_key = created_at.strftime("%Y-%m")
-            current = monthly_map.get(month_key) or {
-                "month": month_key,
-                "interviews": 0,
-                "completed": 0,
-            }
-            current["interviews"] += 1
+            current = monthly_map.get(
+                month_key,
+                {
+                    "month": month_key,
+                    "total_sessions": 0,
+                    "completed_sessions": 0,
+                    "credits_used": 0,
+                },
+            )
+
+            current["total_sessions"] += 1
+
+            usage_deduction = session.get("usage_deduction") or {}
+            try:
+                credits_deducted = int(usage_deduction.get("credits_deducted", 0) or 0)
+            except (TypeError, ValueError):
+                credits_deducted = 0
+            current["credits_used"] += max(0, credits_deducted)
+
             if str(session.get("status", "")).lower() == "completed":
-                current["completed"] += 1
+                current["completed_sessions"] += 1
+
             monthly_map[month_key] = current
 
         monthly_usage = [monthly_map[key] for key in sorted(monthly_map.keys())]
@@ -407,24 +425,28 @@ def get_candidate_cost_statistics(current_user):
                 avg_interview_score = round(sum(score_values) / len(score_values), 1)
 
         recent_activity = []
+        total_practice_credits_used = 0
+        total_usage_cost_usd = 0.0
         for index, session in enumerate(reversed(practice_sessions[-10:])):
             created_at = session.get("created_at")
             usage_deduction = session.get("usage_deduction") or {}
             usage_summary = session.get("usage_summary") or {}
-
-            raw_credits = usage_deduction.get("credits_deducted")
             try:
-                credits_used = max(0, int(raw_credits or 0))
+                credits_deducted = int(usage_deduction.get("credits_deducted", 0) or 0)
             except (TypeError, ValueError):
-                credits_used = 0
-
-            raw_usage_cost = usage_deduction.get(
-                "usage_cost_usd", usage_summary.get("total_cost")
-            )
+                credits_deducted = 0
             try:
-                usage_cost_usd = round(max(0.0, float(raw_usage_cost or 0.0)), 6)
+                usage_cost = float(
+                    usage_summary.get(
+                        "total_cost", usage_deduction.get("usage_cost_usd", 0.0)
+                    )
+                    or 0.0
+                )
             except (TypeError, ValueError):
-                usage_cost_usd = 0.0
+                usage_cost = 0.0
+
+            total_practice_credits_used += max(0, credits_deducted)
+            total_usage_cost_usd += max(0.0, usage_cost)
 
             recent_activity.append(
                 {
@@ -444,29 +466,48 @@ def get_candidate_cost_statistics(current_user):
             )
 
         plan_name = quota.get("plan_name", "Free Tier")
-        is_free_plan = "free" in str(plan_name).strip().lower()
+        subscription_credits_allocated = int(
+            (subscription or {}).get(
+                "interviews_allowed", (subscription or {}).get("credits_allocated", 0)
+            )
+            or 0
+        )
+        subscription_credits_remaining = int(
+            (subscription or {}).get(
+                "interviews_remaining", (subscription or {}).get("credits_remaining", 0)
+            )
+            or 0
+        )
+        subscription_credits_used = int(
+            (subscription or {}).get(
+                "interviews_used", (subscription or {}).get("credits_used", 0)
+            )
+            or 0
+        )
+        has_paid_subscription = (
+            subscription is not None and subscription_credits_allocated > 0
+        )
 
-        plan_interviews_allowed = int(quota.get("plan_interviews_allowed", 0) or 0)
-        free_used_value = int(quota.get("free_interviews_used", 0) or 0)
-
-        monthly_credits = int(
-            quota.get("monthly_credits", quota.get("interviews_allowed", 0)) or 0
-        )
-        credits_allocated = int(
-            quota.get("credits_allocated", quota.get("interviews_allowed", 0)) or 0
-        )
-        credits_used = int(
-            quota.get("credits_used", quota.get("interviews_used", 0)) or 0
-        )
-        credits_remaining = int(
-            quota.get("credits_remaining", quota.get("interviews_remaining", 0)) or 0
-        )
-
-        if is_free_plan and plan_interviews_allowed == 0:
-            monthly_credits = max(250, monthly_credits, credits_allocated)
-            credits_allocated = max(monthly_credits, credits_allocated)
-            credits_used = max(0, credits_used, free_used_value)
-            credits_remaining = max(0, credits_allocated - credits_used)
+        if has_paid_subscription:
+            credits_allocated = subscription_credits_allocated
+            credits_remaining = subscription_credits_remaining
+            credits_used = subscription_credits_used
+            plan_credits_allocated = subscription_credits_allocated
+            plan_credits_used = subscription_credits_used
+            plan_credits_remaining = subscription_credits_remaining
+            free_credits_allocated = int(quota.get("free_interviews_allowed", 0) or 0)
+            free_credits_used = int(quota.get("free_interviews_used", 0) or 0)
+            free_credits_remaining = int(quota.get("free_interviews_remaining", 0) or 0)
+        else:
+            credits_allocated = int(quota.get("interviews_allowed", 1500) or 1500)
+            credits_remaining = int(quota.get("interviews_remaining", 0) or 0)
+            credits_used = int(quota.get("interviews_used", 0) or 0)
+            plan_credits_allocated = credits_allocated
+            plan_credits_used = credits_used
+            plan_credits_remaining = credits_remaining
+            free_credits_allocated = 0
+            free_credits_used = 0
+            free_credits_remaining = 0
 
         cost_data = {
             "candidate": {
@@ -482,18 +523,29 @@ def get_candidate_cost_statistics(current_user):
             },
             "plan": {
                 "name": plan_name,
-                "monthly_credits": monthly_credits,
                 "credits_allocated": credits_allocated,
-                "credits_used": credits_used,
                 "credits_remaining": credits_remaining,
-                "expires_at": None,
+                "credits_used": credits_used,
+                "plan_credits_allocated": plan_credits_allocated,
+                "plan_credits_used": plan_credits_used,
+                "plan_credits_remaining": plan_credits_remaining,
+                "free_credits_allocated": free_credits_allocated,
+                "free_credits_used": free_credits_used,
+                "free_credits_remaining": free_credits_remaining,
+                "expires_at": (
+                    subscription.get("expires_at").strftime("%Y-%m-%d")
+                    if subscription and subscription.get("expires_at")
+                    else None
+                ),
             },
             "monthlyUsage": monthly_usage,
             "recentActivity": recent_activity,
             "summary": {
-                "totalPracticeInterviews": len(practice_sessions),
-                "completedPracticeInterviews": len(completed_sessions),
+                "totalPracticeSessions": len(practice_sessions),
+                "completedPracticeSessions": len(completed_sessions),
                 "avgInterviewScore": avg_interview_score,
+                "totalPracticeCreditsUsed": total_practice_credits_used,
+                "totalUsageCostUsd": round(total_usage_cost_usd, 6),
             },
         }
 

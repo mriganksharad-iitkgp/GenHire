@@ -150,7 +150,7 @@ const Register = () => {
               <circle cx="7" cy="7" r="3"></circle>
             </svg>
           </div>
-          <h1>SmartHire</h1>
+          <h1>GenHire</h1>
           <p>Create your account to access your dashboard.</p>
         </div>
 

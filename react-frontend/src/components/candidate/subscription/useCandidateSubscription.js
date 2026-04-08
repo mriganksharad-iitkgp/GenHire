@@ -93,6 +93,24 @@ const useCandidateSubscription = () => {
           const normalized = normalizeCandidatePlan(statsData.data.plan);
           debugCandidateCredits("cost-statistics:normalized", normalized);
           setSubscription(normalized);
+          const plan = statsData.data.plan;
+          setSubscription({
+            plan: {
+              name: plan.name || "Free Tier",
+              slug: String(plan.name || "free")
+                .toLowerCase()
+                .includes("candidate")
+                ? String(plan.name || "")
+                    .toLowerCase()
+                    .replace(/\s+/g, "-")
+                : "candidate-free",
+            },
+            credits_remaining: Math.max(0, Number(plan.credits_remaining ?? 0)),
+            credits_allocated: Number(plan.credits_allocated ?? 0),
+            credits_used: Number(plan.credits_used ?? 0),
+            is_unlimited: false,
+            status: "active",
+          });
           return;
         }
       }

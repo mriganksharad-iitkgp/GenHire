@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "../recruiter/RecruiterCostStatistics.module.css";
+import {
+  addMonths,
+  buildContinuousMonthlySeries,
+  clampMonthRange,
+  getMaxMonthToAllowed,
+} from "../../utils/monthRange";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -21,16 +27,18 @@ const CandidateCostStatistics = () => {
     },
     plan: {
       name: "Free Tier",
-      monthly_credits: 250,
-      credits_allocated: 250,
-      credits_remaining: 250,
+      credits_allocated: 0,
+      credits_remaining: 0,
       credits_used: 0,
+      plan_credits_remaining: 0,
+      free_credits_remaining: 0,
     },
     monthlyUsage: [],
     recentActivity: [],
     summary: {
-      totalPracticeInterviews: 0,
-      completedPracticeInterviews: 0,
+      totalPracticeSessions: 0,
+      completedPracticeSessions: 0,
+      totalPracticeCreditsUsed: 0,
       avgInterviewScore: 0,
     },
   });
@@ -63,7 +71,42 @@ const CandidateCostStatistics = () => {
 
         const data = await response.json();
         if (data.success) {
-          setCostData(data.data);
+          let mergedData = data.data;
+
+          const hasExpiry = Boolean(data?.data?.plan?.expires_at);
+          const isPaidPlan = !String(data?.data?.plan?.name || "")
+            .toLowerCase()
+            .includes("free");
+
+          // Fallback: hydrate expires_at from active subscription endpoint when cost-stats payload misses it.
+          if (!hasExpiry && isPaidPlan) {
+            try {
+              const subRes = await fetch(
+                `${API_BASE_URL}/api/payment/subscriptions/me`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                },
+              );
+              const subData = await subRes.json().catch(() => null);
+              const fallbackExpiry = subData?.data?.subscription?.expires_at;
+              if (fallbackExpiry) {
+                mergedData = {
+                  ...data.data,
+                  plan: {
+                    ...(data.data?.plan || {}),
+                    expires_at: fallbackExpiry,
+                  },
+                };
+              }
+            } catch (e) {
+              // Keep original payload if fallback fetch fails.
+            }
+          }
+
+          setCostData(mergedData);
         } else {
           setCostData(generateFallbackData());
         }
@@ -81,61 +124,95 @@ const CandidateCostStatistics = () => {
   const safeData = costData || generateFallbackData();
   const plan = safeData.plan || {};
 
-  const monthlyCredits = Number(
-    plan.monthly_credits ?? plan.credits_allocated ?? 250,
-  );
-  const creditsUsed = Number(plan.credits_used ?? 0);
+  const creditsAllocated = Number(plan.credits_allocated ?? 0) || 0;
+  const creditsUsed = Number(plan.credits_used ?? 0) || 0;
   const creditsRemaining = Math.max(
     0,
-    Number(plan.credits_remaining ?? monthlyCredits - creditsUsed),
+    Number(plan.credits_remaining ?? 0) || 0,
   );
+  const planCreditsRemaining = Math.max(
+    0,
+    Number(plan.plan_credits_remaining ?? 0) || 0,
+  );
+  const freeCreditsRemaining = Math.max(
+    0,
+    Number(plan.free_credits_remaining ?? 0) || 0,
+  );
+  const isFreeTier = String(plan.name || "")
+    .toLowerCase()
+    .includes("free");
+  const planMonthlyCredits = !isFreeTier
+    ? Math.max(0, Number(plan.plan_credits_allocated ?? 0))
+    : creditsAllocated;
+  const displayedMonthlyCredits = planMonthlyCredits;
   const usagePercentage =
-    monthlyCredits > 0
-      ? Math.min(100, Math.round((creditsUsed / monthlyCredits) * 100))
+    creditsAllocated > 0
+      ? Math.min(100, Math.round((creditsUsed / creditsAllocated) * 100))
       : 0;
   const isNearLimit = usagePercentage >= 80;
+  const expiresAt = plan.expires_at;
+  const daysUntilExpiry = (() => {
+    if (!expiresAt) return null;
+    const expDate = new Date(expiresAt);
+    const now = new Date();
+    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  })();
 
   const monthlySeries = useMemo(() => {
     const series = safeData.monthlyUsage || [];
     return [...series]
       .map((item) => ({
         month: item.month,
-        interviews: Number(item.interviews || 0),
+        credits_used: Number(item.credits_used || 0),
       }))
       .sort((a, b) => String(a.month).localeCompare(String(b.month)));
   }, [safeData.monthlyUsage]);
 
   const currentMonthKey = new Date().toISOString().slice(0, 7);
 
-  useEffect(() => {
-    if (!monthlySeries.length) {
-      setMonthFrom(currentMonthKey);
-      setMonthTo(currentMonthKey);
-      return;
-    }
+  const maxMonthToAllowed = useMemo(() => {
+    return getMaxMonthToAllowed(monthFrom, currentMonthKey);
+  }, [monthFrom, currentMonthKey]);
 
-    if (!monthFrom) setMonthFrom(monthlySeries[0].month);
-    if (!monthTo) setMonthTo(monthlySeries[monthlySeries.length - 1].month);
-  }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
+  const handleMonthFromChange = (nextFrom) => {
+    setMonthFrom(nextFrom);
+
+    if (!nextFrom) return;
+
+    const autoTo = addMonths(nextFrom, 2);
+    const cappedAutoTo = autoTo < currentMonthKey ? autoTo : currentMonthKey;
+    setMonthTo(cappedAutoTo);
+  };
+
+  useEffect(() => {
+    const defaultFrom = addMonths(currentMonthKey, -2);
+    if (!monthFrom) setMonthFrom(defaultFrom);
+    if (!monthTo) setMonthTo(currentMonthKey);
+  }, [monthFrom, monthTo, currentMonthKey]);
+
+  useEffect(() => {
+    if (!monthFrom || !monthTo) return;
+
+    const nextMonthTo = clampMonthRange(monthFrom, monthTo, currentMonthKey);
+    if (nextMonthTo !== monthTo) {
+      setMonthTo(nextMonthTo);
+    }
+  }, [monthFrom, monthTo, currentMonthKey]);
 
   const filteredMonthlySeries = useMemo(() => {
-    if (!monthlySeries.length) {
-      return [{ month: currentMonthKey, interviews: creditsUsed }];
-    }
-    return monthlySeries.filter(
-      (item) =>
-        item.month >= (monthFrom || item.month) &&
-        item.month <= (monthTo || item.month),
-    );
-  }, [monthlySeries, monthFrom, monthTo, currentMonthKey, creditsUsed]);
+    const from = monthFrom || addMonths(currentMonthKey, -2);
+    const to = monthTo || currentMonthKey;
+    return buildContinuousMonthlySeries(monthlySeries, from, to);
+  }, [monthlySeries, monthFrom, monthTo, currentMonthKey]);
 
   const maxMonthlyUsage = Math.max(
-    ...filteredMonthlySeries.map((item) => item.interviews),
+    ...filteredMonthlySeries.map((item) => item.credits_used),
     1,
   );
 
   const selectedRangeTotal = filteredMonthlySeries.reduce(
-    (sum, item) => sum + item.interviews,
+    (sum, item) => sum + item.credits_used,
     0,
   );
 
@@ -239,10 +316,10 @@ const CandidateCostStatistics = () => {
               </div>
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>
-                  Practice Interviews
+                  Practice Credits Used
                 </span>
                 <span className={styles.overviewValue}>
-                  {safeData.summary?.totalPracticeInterviews || 0}
+                  {safeData.summary?.totalPracticeCreditsUsed || 0}
                 </span>
               </div>
             </div>
@@ -267,7 +344,7 @@ const CandidateCostStatistics = () => {
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>Completed</span>
                 <span className={styles.overviewValue}>
-                  {safeData.summary?.completedPracticeInterviews || 0}
+                  {safeData.summary?.completedPracticeSessions || 0}
                 </span>
               </div>
             </div>
@@ -319,9 +396,13 @@ const CandidateCostStatistics = () => {
                 </svg>
               </div>
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLabel}>Monthly Credits</span>
+                <span className={styles.overviewLabel}>
+                  {daysUntilExpiry !== null ? "Expires In" : "Plan"}
+                </span>
                 <span className={styles.overviewValue}>
-                  {monthlyCredits.toLocaleString("en-IN")}
+                  {daysUntilExpiry !== null
+                    ? `${daysUntilExpiry} days`
+                    : plan.name || "Free Tier"}
                 </span>
               </div>
             </div>
@@ -333,7 +414,9 @@ const CandidateCostStatistics = () => {
                 <h2>Practice Credits</h2>
                 <p className={styles.creditsSubtitle}>
                   {plan.name || "Free Tier"} —{" "}
-                  {monthlyCredits.toLocaleString("en-IN")} monthly credits
+                  {isFreeTier
+                    ? `${creditsAllocated} free credits available`
+                    : `${displayedMonthlyCredits} credits/month`}
                 </p>
 
                 <div className={styles.creditsNumbers}>
@@ -353,7 +436,7 @@ const CandidateCostStatistics = () => {
                   <div className={styles.creditsDivider}></div>
                   <div className={styles.creditsStat}>
                     <span className={styles.creditsStatValue}>
-                      {monthlyCredits}
+                      {creditsAllocated}
                     </span>
                     <span className={styles.creditsStatLabel}>Total</span>
                   </div>
@@ -362,17 +445,49 @@ const CandidateCostStatistics = () => {
                 <div className={styles.creditBreakdownRow}>
                   <div className={styles.creditBreakdownItem}>
                     <span>Plan credits left</span>
-                    <strong>{creditsRemaining}</strong>
+                    <strong>{planCreditsRemaining}</strong>
+                  </div>
+                  <div className={styles.creditBreakdownItem}>
+                    <span>Free credits left (lifetime)</span>
+                    <strong>{freeCreditsRemaining}</strong>
                   </div>
                 </div>
+
+                {expiresAt && (
+                  <div className={styles.renewalInfo}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    Expires on{" "}
+                    {new Date(expiresAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {daysUntilExpiry !== null && (
+                      <span> ({daysUntilExpiry} days left)</span>
+                    )}
+                  </div>
+                )}
 
                 {isNearLimit && (
                   <div className={styles.upgradePrompt}>
                     <div className={styles.upgradeText}>
                       <strong>Running low on practice credits!</strong>
                       <p>
-                        You've used {usagePercentage}% of your monthly credits.
-                        Upgrade to continue.
+                        You've used {usagePercentage}% of{" "}
+                        {isFreeTier
+                          ? "your lifetime free credits"
+                          : "your monthly credits"}
+                        . Upgrade to continue.
                       </p>
                     </div>
                     <button
@@ -427,8 +542,8 @@ const CandidateCostStatistics = () => {
 
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Monthly Practice Analytics</h2>
-              <p>Select a month range to analyze your practice trend</p>
+              <h2>Monthly Credit Analytics</h2>
+              <p>Select a month range to analyze your credit usage trend</p>
             </div>
             <div className={styles.trendCard}>
               <div className={styles.monthFiltersRow}>
@@ -438,7 +553,7 @@ const CandidateCostStatistics = () => {
                     id="monthFrom"
                     type="month"
                     value={monthFrom}
-                    onChange={(e) => setMonthFrom(e.target.value)}
+                    onChange={(e) => handleMonthFromChange(e.target.value)}
                     max={currentMonthKey}
                   />
                 </div>
@@ -450,25 +565,25 @@ const CandidateCostStatistics = () => {
                     value={monthTo}
                     onChange={(e) => setMonthTo(e.target.value)}
                     min={monthFrom || undefined}
-                    max={currentMonthKey}
+                    max={maxMonthToAllowed || undefined}
                   />
                 </div>
 
                 <div className={styles.rangeSummary}>
                   <div>
                     <span>Total</span>
-                    <strong>{selectedRangeTotal}</strong>
+                    <strong>{selectedRangeTotal} credits</strong>
                   </div>
                   <div>
                     <span>Avg / month</span>
-                    <strong>{selectedRangeAvg}</strong>
+                    <strong>{selectedRangeAvg} credits</strong>
                   </div>
                 </div>
               </div>
 
               <div className={styles.barChart}>
                 {filteredMonthlySeries.map((item, i) => {
-                  const total = item.interviews || 0;
+                  const total = item.credits_used || 0;
                   const barHeight =
                     maxMonthlyUsage > 0 ? (total / maxMonthlyUsage) * 100 : 0;
                   return (
@@ -492,35 +607,73 @@ const CandidateCostStatistics = () => {
 
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Session Credit Usage</h2>
-              <p>Credits deducted for each practice interview session</p>
+              <h2>Recent Practice Sessions</h2>
+              <p>Detailed breakdown of your recent practice interview costs</p>
             </div>
-            <div className={styles.trendCard}>
-              {sessionCreditRows.length ? (
-                <div className={styles.sessionUsageList}>
-                  {sessionCreditRows.map((item) => (
-                    <div
-                      key={item.id || item.sessionId}
-                      className={styles.sessionUsageRow}
-                    >
-                      <div className={styles.sessionUsageLeft}>
-                        <strong>{item.role}</strong>
-                        <span>{item.timestamp || item.sessionId}</span>
-                      </div>
-                      <div className={styles.sessionUsageRight}>
-                        <span className={styles.sessionCreditsBadge}>
-                          {item.creditsUsed.toLocaleString("en-IN")} credits
-                        </span>
-                        <span className={styles.sessionCostText}>
-                          ${item.usageCostUsd.toFixed(6)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className={styles.activityTableSection}>
+              {safeData.recentActivity && safeData.recentActivity.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Credits Used</th>
+                      <th>Cost (USD)</th>
+                      <th>Converted Credits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {safeData.recentActivity.map((activity) => {
+                      const CREDIT_PER_USD = 1000;
+                      const creditsFromCost = Math.round(
+                        (activity.usage_cost_usd || 0) * CREDIT_PER_USD,
+                      );
+                      return (
+                        <tr key={activity.id}>
+                          <td className={styles.activityTimestamp}>
+                            {activity.timestamp}
+                          </td>
+                          <td className={styles.activityRole}>
+                            {activity.role || "General"}
+                          </td>
+                          <td>
+                            <span
+                              className={`${
+                                styles.activityStatus
+                              } ${styles[activity.status || "pending"]}`}
+                            >
+                              {activity.status || "Pending"}
+                            </span>
+                          </td>
+                          <td className={styles.creditCost}>
+                            {activity.credits_deducted || 0}
+                          </td>
+                          <td className={styles.usdCost}>
+                            ${(activity.usage_cost_usd || 0).toFixed(4)}
+                          </td>
+                          <td className={styles.creditCost}>
+                            {creditsFromCost}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               ) : (
-                <div className={styles.emptySessionUsage}>
-                  No completed session credit deductions yet.
+                <div className={styles.emptyState}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                  </svg>
+                  <p>
+                    No practice sessions yet. Start practicing to see your
+                    usage!
+                  </p>
                 </div>
               )}
             </div>
@@ -543,8 +696,8 @@ const CandidateCostStatistics = () => {
                   Current Plan: {plan.name || "Free Tier"}
                 </div>
                 <p className={styles.planDescription}>
-                  Track your monthly credit usage and upgrade anytime for more
-                  usage capacity.
+                  Track your practice credit usage and upgrade anytime for more
+                  credits.
                 </p>
               </div>
               <button

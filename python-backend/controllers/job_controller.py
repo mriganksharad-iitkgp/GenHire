@@ -8,6 +8,8 @@ from bson import ObjectId
 from werkzeug.utils import secure_filename
 from services.pdf_parser_service import get_pdf_parser
 from dotenv import load_dotenv
+from utils.job_standards import canonicalize_job_role, is_india_location
+from services.usage_telemetry_service import record_usage_event
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +136,16 @@ class JobController:
         else:
             proctoring_config = default_proctoring
         
+        # Canonicalize title and validate location against India-only standards
+        job_title = canonicalize_job_role(job_data['title'])
+        if not job_title:
+            return {'error': 'Job title is required'}, 400
+
+        location = str(job_data.get('location', '')).strip()
+        if not is_india_location(location):
+            return {'error': 'Please select a valid India location from the standard list'}, 400
+
         # Check for unique job title
-        job_title = job_data['title'].strip()
         existing_job = self.jobs_collection.find_one({'title': job_title, 'created_by': recruiter_id})
         if existing_job:
             return {'error': f'A job with the title "{job_title}" already exists. Please use a unique job title.'}, 400
@@ -199,9 +209,10 @@ class JobController:
                 # Continue with job creation without JD file
 
         job_document = {
-            'title': job_data['title'],
+            'title': job_title,
+            'canonical_role': job_title,
             'department': job_data['department'],
-            'location': job_data['location'],
+            'location': location,
             'type': job_data['type'],
             'experience': job_data['experience'],
             'salary': job_data['salary'],
@@ -304,6 +315,17 @@ class JobController:
                     update_fields[field] = normalize_list_field(job_data.get(field, []))
                 elif field in {'responsibilities', 'requirements', 'benefits'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []), separator='\n')
+                elif field == 'title':
+                    canonical_title = canonicalize_job_role(job_data[field])
+                    if not canonical_title:
+                        return {'error': 'Job title is required'}, 400
+                    update_fields[field] = canonical_title
+                    update_fields['canonical_role'] = canonical_title
+                elif field == 'location':
+                    location = str(job_data[field]).strip()
+                    if not is_india_location(location):
+                        return {'error': 'Please select a valid India location from the standard list'}, 400
+                    update_fields[field] = location
                 else:
                     update_fields[field] = job_data[field]
         
@@ -367,7 +389,7 @@ class JobController:
             'applications': applications
         }, 200
 
-    def generate_jd_with_ai(self, prompt_text):
+    def generate_jd_with_ai(self, prompt_text, recruiter_id=None):
         """Generate a complete job description using Groq AI"""
         try:
             load_dotenv()
@@ -418,6 +440,11 @@ Rules:
             )
 
             response_text = response.choices[0].message.content.strip()
+
+            usage = getattr(response, 'usage', None) or {}
+            prompt_tokens = usage.get('prompt_tokens') if isinstance(usage, dict) else None
+            completion_tokens = usage.get('completion_tokens') if isinstance(usage, dict) else None
+            usage_source = 'actual' if (prompt_tokens is not None or completion_tokens is not None) else 'assumed'
             
             # Clean markdown code fences if present
             if response_text.startswith('```'):
@@ -441,6 +468,31 @@ Rules:
 
             # Set defaults
             job_data.setdefault('minimum_cv_score', 50)
+
+            if recruiter_id:
+                record_usage_event(
+                    {
+                        'users': self.jobs_collection.database.get_collection('users')
+                    },
+                    action_type='ai_jd_generation',
+                    actor_type='recruiter',
+                    actor_id=str(recruiter_id),
+                    model='llama-3.3-70b-versatile',
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    usage_source=usage_source,
+                    source={
+                        'type': 'jd_prompt',
+                        'id': '',
+                        'label': (prompt_text or '')[:120],
+                    },
+                    occurred_at=datetime.datetime.utcnow(),
+                    metadata={
+                        'prompt_text_length': len(prompt_text or ''),
+                        'prompt_text': (prompt_text or '')[:12000],
+                        'generated_jd_text': (response_text or '')[:20000],
+                    }
+                )
 
             return {'job_data': job_data}, 200
 

@@ -8,13 +8,10 @@ import Avatar from "../components/Avatar"; // Import the new Avatar component
 import QRCode from "react-qr-code";
 import { proctoringConfig } from "../config/proctoring";
 
-// Removed formatTime function - no longer needed since we removed the 30-second timer
-
 export default function Chat({ interviewId }) {
   const MAX_QUESTIONS = 10;
   // --- STATE MANAGEMENT ---
-  // Add this with your other refs
-  const isTimerRunningRef = useRef(false);
+
   const currentAudioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -27,6 +24,7 @@ export default function Chat({ interviewId }) {
   const [interviewStatus, setInterviewStatus] = useState("starting");
   const [startErrorMessage, setStartErrorMessage] = useState("");
   const [evaluation, setEvaluation] = useState(null);
+  const [usageDeduction, setUsageDeduction] = useState(null);
   const [similarityScore, setSimilarityScore] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [gazeDirection, setGazeDirection] = useState(null);
@@ -40,7 +38,6 @@ export default function Chat({ interviewId }) {
   });
   const [warningCount, setWarningCount] = useState(0);
 
-  // Removed timeLeft state - using only silence detection now
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [questionCount, setQuestionCount] = useState(0);
   const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
@@ -76,8 +73,6 @@ export default function Chat({ interviewId }) {
   const gazeRecordingDataRef = useRef(null);
   const gazeMessageGuardHandlerRef = useRef(null);
 
-  // --- MODIFICATION --- Add refs for the timer and the latest transcript
-  const timerRef = useRef(null);
   const transcriptRef = useRef("");
   // Track the currently active MediaStream explicitly to guarantee full shutdown
   const cameraStreamRef = useRef(null);
@@ -93,11 +88,6 @@ export default function Chat({ interviewId }) {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
-
-  // Add this hook to your component
-  useEffect(() => {
-    isTimerRunningRef.current = isTimerRunning;
-  }, [isTimerRunning]); // --- PROCTORING FOR TAB/WINDOW SWITCHING (No changes needed) ---
 
   useEffect(() => {
     // GazeRecorderAPI expects event.data to be a string in message handlers.
@@ -204,6 +194,17 @@ export default function Chat({ interviewId }) {
     if (gazeRecorderTrackingRef.current) return;
     try {
       setGazeRecorderStatus("calibrating");
+      if (!window.__gazeRecorderMessageGuardInstalled) {
+        const messageGuard = (event) => {
+          if (typeof event.data !== "string") {
+            event.stopImmediatePropagation();
+          }
+        };
+
+        window.addEventListener("message", messageGuard, true);
+        window.__gazeRecorderMessageGuardInstalled = true;
+      }
+
       if (!gazeRecorderScriptsLoadedRef.current) {
         await loadScript("https://app.gazerecorder.com/GazeCloudAPI.js");
         await loadScript("https://app.gazerecorder.com/GazeRecorderAPI.js");
@@ -221,6 +222,9 @@ export default function Chat({ interviewId }) {
       gazeEndedAtMsRef.current = null;
       gazeStartTimeRef.current = Date.now();
 
+      // Disable click-based recalibration to prevent demo-timeout recalibration overlays
+      window.GazeCloudAPI.UseClickRecalibration = false;
+
       window.GazeCloudAPI.OnResult = function (gazeData) {
         if (!gazeRecorderTrackingRef.current) return;
         gazePointsRef.current.push({
@@ -231,10 +235,34 @@ export default function Chat({ interviewId }) {
       };
 
       window.GazeCloudAPI.OnCalibrationComplete = function () {
+        // If interview is already active, this is a demo-timeout recalibration — ignore it
+        // and gracefully degrade (interview continues without gaze tracking)
+        if (gazeRecorderTrackingRef.current) {
+          console.warn(
+            "⚠️ GazeCloudAPI recalibration triggered (likely demo timeout). Stopping gaze tracking gracefully.",
+          );
+          try {
+            window.GazeRecorderAPI.StopRec();
+            window.GazeCloudAPI.StopEyeTracking();
+          } catch (e) {
+            /* already stopped */
+          }
+          gazeRecorderTrackingRef.current = false;
+          setGazeRecorderStatus("failed");
+          return;
+        }
+
         window.GazeRecorderAPI.Rec();
         gazeRecorderTrackingRef.current = true;
         gazeStartTimeRef.current = Date.now();
         setGazeRecorderStatus("tracking");
+      };
+
+      // Handle camera denial / errors from GazeCloudAPI
+      window.GazeCloudAPI.OnCamDenied = function () {
+        console.warn("⚠️ GazeCloudAPI camera access denied.");
+        gazeRecorderTrackingRef.current = false;
+        setGazeRecorderStatus("failed");
       };
 
       window.GazeCloudAPI.StartEyeTracking();
@@ -729,8 +757,6 @@ export default function Chat({ interviewId }) {
 
     // CRITICAL: Stop timer and speech recognition IMMEDIATELY
     setIsTimerRunning(false);
-    isTimerRunningRef.current = false; // Stop recognition from restarting
-    clearInterval(timerRef.current);
     clearInterval(silenceTimerRef.current);
 
     // Stop speech recording
@@ -776,7 +802,22 @@ export default function Chat({ interviewId }) {
 
       setInterviewStatus("completed");
       setEvaluation(data.evaluation);
+      setUsageDeduction(data?.usage_deduction || null);
       console.log("✅ Interview ended successfully:", data.evaluation);
+
+      const deduction = data?.usage_deduction || null;
+      if (deduction) {
+        localStorage.setItem("credits-needs-refresh", "true");
+        localStorage.setItem(
+          "last-usage-deduction",
+          JSON.stringify({
+            ...deduction,
+            session_id: currentSessionId,
+            is_practice: !!isPracticeMode,
+            captured_at: new Date().toISOString(),
+          }),
+        );
+      }
 
       // For practice mode, don't update application scores
       if (isPracticeMode) {
@@ -1310,21 +1351,22 @@ export default function Chat({ interviewId }) {
   useEffect(() => {
     if (
       interviewStatus === "active" &&
+      (gazeRecorderStatus === "tracking" || gazeRecorderStatus === "failed") &&
       currentQuestion &&
       !isSpeaking &&
       !currentAudioRef.current &&
       !initialGreetingSpoken.current
     ) {
       initialGreetingSpoken.current = true;
-      console.log("🔊 Speaking initial greeting and first question...");
-      setTimeout(() => {
-        const initialMessage = `Your CV has a ${Math.round(
-          similarityScore * 100,
-        )}% match. ${currentQuestion}`;
-        speakResponse(initialMessage);
-      }, 1000);
+      console.log(
+        "🔊 Calibration complete — speaking initial greeting and first question...",
+      );
+      const initialMessage = `Your CV has a ${Math.round(
+        similarityScore * 100,
+      )}% match. ${currentQuestion}`;
+      speakResponse(initialMessage);
     } // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interviewStatus, currentQuestion, similarityScore]);
+  }, [interviewStatus, gazeRecorderStatus, currentQuestion, similarityScore]);
 
   // Interview elapsed time tracker
   useEffect(() => {
@@ -1422,7 +1464,6 @@ export default function Chat({ interviewId }) {
         }
 
         // Clear all timers
-        clearInterval(timerRef.current);
         clearInterval(silenceTimerRef.current);
 
         // Stop proctoring
@@ -1447,12 +1488,12 @@ export default function Chat({ interviewId }) {
     return (
       <div className={Styles.loadingContainer}>
         <div className={Styles.spinner}></div>
-        <h3 style={{ marginTop: "20px", color: "#667eea", fontSize: "24px" }}>
+        <h3 style={{ marginTop: "20px", color: "#4338ca", fontSize: "24px", fontWeight: "600" }}>
           Preparing Your Interview
         </h3>
         <p
           style={{
-            color: "#666",
+            color: "#475569",
             maxWidth: "400px",
             textAlign: "center",
             lineHeight: "1.6",
@@ -1461,7 +1502,7 @@ export default function Chat({ interviewId }) {
           We're analyzing your CV and the job description to generate
           personalized questions...
         </p>
-        <div style={{ marginTop: "15px", fontSize: "14px", color: "#999" }}>
+        <div style={{ marginTop: "15px", fontSize: "14px", color: "#94a3b8" }}>
           This usually takes 3-5 seconds
         </div>
       </div>
@@ -1475,34 +1516,40 @@ export default function Chat({ interviewId }) {
     return (
       <div className={Styles.registrationContainer}>
         <h2 className={Styles.registrationHeader}>
-          Camera Setup & Security Check
+          🔐 Camera Setup & Security Check
         </h2>
+        <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
+          Complete the steps below to verify your identity and begin your interview.
+        </p>
 
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",
-            gap: "40px",
-            marginTop: "20px",
+            gap: "32px",
+            marginTop: "8px",
           }}
         >
           {/* LEFT: QR CODE SECTION */}
           <div
             style={{
               background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 8px 32px rgba(102, 126, 234, 0.1), 0 1px 3px rgba(0,0,0,0.06)",
               textAlign: "center",
               maxWidth: "300px",
+              minWidth: "260px",
             }}
           >
-            <h4 style={{ color: "#333", marginBottom: "10px" }}>
-              📱 Step 1: Connect Phone
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>📱</div>
+            <h4 style={{ color: "#1e293b", marginBottom: "8px", fontSize: "1.1rem", fontWeight: "600" }}>
+              Step 1: Connect Phone
             </h4>
             <p
-              style={{ color: "#666", fontSize: "13px", marginBottom: "15px" }}
+              style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "18px", lineHeight: "1.5" }}
             >
               Scan to enable 360° environment view. Place phone to show your
               side profile.
@@ -1510,8 +1557,9 @@ export default function Chat({ interviewId }) {
             <div
               style={{
                 background: "white",
-                padding: "10px",
+                padding: "12px",
                 display: "inline-block",
+                borderRadius: "12px",
               }}
             >
               <QRCode value={mobileUrl} size={140} />
@@ -1519,9 +1567,20 @@ export default function Chat({ interviewId }) {
           </div>
 
           {/* RIGHT: WEBCAM SECTION */}
-          <div style={{ textAlign: "center" }}>
-            <h4 style={{ color: "#fff", marginBottom: "10px" }}>
-              💻 Step 2: Face Registration
+          <div
+            style={{
+              background: "white",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 8px 32px rgba(102, 126, 234, 0.1), 0 1px 3px rgba(0,0,0,0.06)",
+              textAlign: "center",
+              minWidth: "260px",
+            }}
+          >
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>💻</div>
+            <h4 style={{ color: "#1e293b", marginBottom: "14px", fontSize: "1.1rem", fontWeight: "600" }}>
+              Step 2: Face Registration
             </h4>
             <video
               ref={videoRef}
@@ -1532,17 +1591,18 @@ export default function Chat({ interviewId }) {
               style={{
                 width: "320px",
                 height: "240px",
-                borderRadius: "8px",
-                border: "2px solid #667eea",
+                borderRadius: "12px",
+                border: "2px solid rgba(102, 126, 234, 0.5)",
               }}
             />
-            <button
-              onClick={handleFaceRegistration}
-              className={Styles.registerButton}
-              style={{ marginTop: "20px" }}
-            >
-              Start Interview
-            </button>
+            <div style={{ marginTop: "20px" }}>
+              <button
+                onClick={handleFaceRegistration}
+                className={Styles.registerButton}
+              >
+                ▶ Start Interview
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1551,6 +1611,7 @@ export default function Chat({ interviewId }) {
 
   if (interviewStatus === "start_failed") {
     const normalizedError = (startErrorMessage || "").toLowerCase();
+    const isPracticeMode = location.state?.isPractice || false;
     const isQuotaError =
       normalizedError.includes("credit") ||
       normalizedError.includes("limit") ||
@@ -1558,19 +1619,19 @@ export default function Chat({ interviewId }) {
 
     return (
       <div className={Styles.loadingContainer}>
-        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px" }}>
+        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px", fontWeight: "600" }}>
           Interview Could Not Start
         </h3>
         <p
           style={{
-            color: "#444",
+            color: "#991b1b",
             maxWidth: "560px",
             textAlign: "center",
             lineHeight: "1.6",
             marginTop: "12px",
             padding: "12px 14px",
             borderRadius: "10px",
-            background: "#fff1f2",
+            background: "#fef2f2",
             border: "1px solid #fecdd3",
           }}
         >
@@ -1580,24 +1641,35 @@ export default function Chat({ interviewId }) {
         {isQuotaError && (
           <p
             style={{
-              color: "#666",
+              color: "#64748b",
               maxWidth: "560px",
               textAlign: "center",
               lineHeight: "1.6",
               marginTop: "8px",
             }}
           >
-            No action is required from you as a candidate. Please contact the
-            recruiter to reopen interview availability for this role.
+            {isPracticeMode
+              ? "Your practice credits are exhausted. Upgrade your candidate plan to continue practice interviews."
+              : "No action is required from you as a candidate. Please contact the recruiter to reopen interview availability for this role."}
           </p>
         )}
 
         <div style={{ marginTop: "18px", display: "flex", gap: "10px" }}>
+          {isQuotaError && isPracticeMode && (
+            <button
+              onClick={() => navigate("/candidate/subscription")}
+              className={Styles.registerButton}
+            >
+              Upgrade Plan
+            </button>
+          )}
           <button
-            onClick={() => navigate("/profile#applications")}
+            onClick={() =>
+              navigate(isPracticeMode ? "/practice" : "/profile#applications")
+            }
             className={Styles.registerButton}
           >
-            Back to Applications
+            {isPracticeMode ? "Back to Practice" : "Back to Applications"}
           </button>
         </div>
       </div>
@@ -1657,18 +1729,9 @@ export default function Chat({ interviewId }) {
           }}
         >
           <p className={Styles["transcript-display"]}>
-            {isSubmittingAnswer
-              ? "AI is thinking..."
-              : isRecording
-                ? input || "Listening..."
-                : isTimerRunning
-                  ? "Ready to speak..."
-                  : isSpeaking
-                    ? displayedText
-                    : currentQuestion || "Waiting for next question..."}
-          </p>
-          <p className={Styles["transcript-display"]}>
-            Proctoring Calibration: {gazeRecorderStatus}
+            {isSpeaking
+              ? displayedText
+              : currentQuestion || "Waiting for next question..."}
           </p>
           {input && input.trim().length > 0 && (
             <div
@@ -1786,6 +1849,40 @@ export default function Chat({ interviewId }) {
                 Review your results below
               </p>
             </div>
+            {usageDeduction?.success && (
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "12px",
+                  padding: "14px 16px",
+                  marginBottom: "18px",
+                  color: "#1e3a8a",
+                }}
+              >
+                <strong>Usage billing summary:</strong> $
+                {Number(usageDeduction.usage_cost_usd || 0).toFixed(4)} used,{" "}
+                {Number(usageDeduction.credits_deducted || 0)} credits deducted,{" "}
+                {Number(usageDeduction.credits_remaining || 0)} credits
+                remaining.
+              </div>
+            )}
+            {usageDeduction && !usageDeduction.success && (
+              <div
+                style={{
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  borderRadius: "12px",
+                  padding: "14px 16px",
+                  marginBottom: "18px",
+                  color: "#9a3412",
+                }}
+              >
+                <strong>Billing update:</strong>{" "}
+                {usageDeduction.error ||
+                  "Usage deduction was not completed for this session."}
+              </div>
+            )}
             <div
               className={Styles["quantitative-metrics"]}
               style={{

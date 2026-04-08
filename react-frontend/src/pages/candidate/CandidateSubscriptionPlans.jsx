@@ -226,7 +226,8 @@ const CandidateSubscriptionPlans = () => {
       );
 
       if (!normalizedPlans || normalizedPlans.length === 0) {
-        normalizedPlans = getFallbackPlans();
+        normalizedPlans = [];
+        setError("No candidate subscription plans available right now.");
       }
 
       setPlans(normalizedPlans);
@@ -238,7 +239,7 @@ const CandidateSubscriptionPlans = () => {
       setPaymentHistory(normalizedHistory);
     } catch (err) {
       console.error("Error loading candidate subscription data:", err);
-      setPlans(getFallbackPlans());
+      setPlans([]);
       setError("Failed to load subscription data. Please try again.");
     } finally {
       setLoading(false);

@@ -162,10 +162,14 @@ body.dark .jobFilters,
   box-shadow: var(--dark-shadow);
 }
 
-.searchBar {
-  display: flex;
+.searchBarWrapper {
+  position: relative;
   max-width: 600px;
   margin: 0 auto var(--spacing-xl);
+}
+
+.searchBar {
+  display: flex;
   background: white;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
@@ -227,6 +231,158 @@ body.dark .searchBar input::placeholder,
 
 .searchButton i {
   font-size: 1rem;
+}
+
+/* Search Suggestions Dropdown */
+.suggestionsDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--gray-200);
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+  animation: suggestionsSlideIn 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: var(--spacing-xs) 0;
+}
+
+:global(.dark) .suggestionsDropdown {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+@keyframes suggestionsSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestionCategory {
+  padding: 0;
+}
+
+.suggestionCategory + .suggestionCategory {
+  border-top: 1px solid var(--gray-100);
+}
+
+:global(.dark) .suggestionCategory + .suggestionCategory {
+  border-top-color: rgba(148, 163, 184, 0.1);
+}
+
+.suggestionCategoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-400);
+  user-select: none;
+}
+
+:global(.dark) .suggestionCategoryHeader {
+  color: #64748b;
+}
+
+
+.suggestionItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 28px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 0.875rem;
+  color: var(--gray-700);
+}
+
+:global(.dark) .suggestionItem {
+  color: #cbd5e1;
+}
+
+.suggestionItem:hover {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+:global(.dark) .suggestionItem:hover {
+  background: rgba(96, 165, 250, 0.1);
+  color: #93c5fd;
+}
+
+.suggestionItemIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+:global(.dark) .suggestionItemIcon {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+.suggestionItem:hover .suggestionItemIcon {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-600);
+}
+
+:global(.dark) .suggestionItem:hover .suggestionItemIcon {
+  background: rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
+}
+
+.suggestionItemText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestionHighlight {
+  font-weight: 700;
+  color: var(--primary-600);
+}
+
+:global(.dark) .suggestionHighlight {
+  color: #60a5fa;
+}
+
+/* Scrollbar for suggestions dropdown */
+.suggestionsDropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.suggestionsDropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.suggestionsDropdown::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 3px;
+}
+
+:global(.dark) .suggestionsDropdown::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
 }
 
 /* Filter Options */

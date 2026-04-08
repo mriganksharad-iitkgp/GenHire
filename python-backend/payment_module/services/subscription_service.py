@@ -10,6 +10,7 @@ Design Decisions:
 """
 
 import logging
+import math
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import math
@@ -57,7 +58,7 @@ class SubscriptionService:
         """
         self.db = db
         self.collection = db[SubscriptionSchema.COLLECTION_NAME]
-        self.usage_collection = db["subscription_usage_events"]
+        self.usage_events_collection = db["subscription_usage_events"]
         self._ensure_indexes()
         self._backfill_subscription_credits()
 
@@ -65,114 +66,260 @@ class SubscriptionService:
         """Create indexes if they don't exist"""
         try:
             SubscriptionSchema.create_indexes(self.db)
-            self.usage_collection.create_index(
-                [("subscription_id", 1), ("idempotency_key", 1)],
+            self.usage_events_collection.create_index(
+                [("idempotency_key", 1)],
                 unique=True,
-                sparse=True,
-                name="idx_usage_subscription_idempotency",
+                name="uniq_subscription_usage_idempotency",
             )
-            self.usage_collection.create_index(
+            self.usage_events_collection.create_index(
                 [("subscription_id", 1), ("created_at", -1)],
-                name="idx_usage_subscription_created",
+                name="idx_subscription_usage_subscription_created",
             )
             logger.info("Subscription indexes ensured")
         except Exception as e:
             logger.error(f"Error creating subscription indexes: {str(e)}")
 
-    def _backfill_subscription_credits(self):
-        """Backfill credit fields for legacy subscriptions."""
-        try:
-            defaults_by_slug = {
-                payload.get("slug"): int(
-                    payload.get("monthly_credits", payload.get("interviews_allowed", 0))
-                    or 0
-                )
-                for payload in PaymentConfig.DEFAULT_PLANS.values()
-            }
-            cursor = self.collection.find(
-                {
-                    "$or": [
-                        {"credits_allocated": {"$exists": False}},
-                        {"credits_remaining": {"$exists": False}},
-                    ]
-                },
-                {
-                    "_id": 1,
-                    "interviews_allowed": 1,
-                    "interviews_remaining": 1,
-                    "plan_snapshot": 1,
-                },
-            )
-
-            updated = 0
-            for item in cursor:
-                plan_snapshot = item.get("plan_snapshot", {})
-                plan_slug = plan_snapshot.get("slug")
-                fallback_allocated = defaults_by_slug.get(
-                    plan_slug, item.get("interviews_allowed", 0)
-                )
-                allocated = int(
-                    plan_snapshot.get(
-                        "monthly_credits",
-                        fallback_allocated,
-                    )
-                    or 0
-                )
-                remaining = int(item.get("interviews_remaining", allocated) or 0)
-                credits_remaining = max(0, remaining)
-                credits_used = max(0, allocated - credits_remaining)
-
-                result = self.collection.update_one(
-                    {"_id": item["_id"]},
-                    {
-                        "$set": {
-                            "credits_allocated": allocated,
-                            "credits_remaining": credits_remaining,
-                            "credits_used": credits_used,
-                            "usage_cost_total_usd": 0.0,
-                            "updated_at": datetime.utcnow(),
-                        }
-                    },
-                )
-                updated += result.modified_count
-
-            if updated:
-                logger.info(f"Backfilled credit fields on {updated} subscriptions")
-
-        except Exception as e:
-            logger.error(f"Error backfilling subscription credits: {str(e)}")
-
-    @staticmethod
-    def _round_cost(cost_usd: float) -> float:
-        return round(float(cost_usd or 0.0), 6)
-
-    def _calculate_usage_cost_usd(self, usage: Dict[str, Any]) -> float:
-        """
-        Normalize usage payload into USD cost.
-
-        Priority:
-        1. explicit total_cost_usd from caller
-        2. interview summary total_cost
-        """
-        if usage is None:
-            return 0.0
-
-        direct_cost = usage.get("total_cost_usd")
-        if direct_cost is None:
-            direct_cost = usage.get("total_cost")
-
-        try:
-            return max(0.0, float(direct_cost or 0.0))
-        except (TypeError, ValueError):
-            return 0.0
-
     def _credits_from_usage_cost(self, usage_cost_usd: float) -> int:
-        credits_per_usd = max(1.0, float(PaymentConfig.CREDIT_PER_USD))
-        min_credits = max(0, int(PaymentConfig.MIN_USAGE_CREDITS))
-        calculated = int(math.ceil(max(0.0, usage_cost_usd) * credits_per_usd))
+        credit_per_usd = max(
+            1, int(getattr(PaymentConfig, "CREDIT_PER_USD", 1000) or 1000)
+        )
+        min_credits = max(1, int(getattr(PaymentConfig, "MIN_USAGE_CREDITS", 1) or 1))
+
         if usage_cost_usd <= 0:
             return min_credits
+
+        calculated = int(math.ceil(float(usage_cost_usd) * credit_per_usd))
         return max(min_credits, calculated)
+
+    def check_credit_availability(
+        self, employer_id: str, audience: str = "recruiter"
+    ) -> Dict[str, Any]:
+        """Check whether a user can start an interview based on remaining credits."""
+        try:
+            subscription = self.get_active_subscription(employer_id, audience=audience)
+            min_start_credits = max(
+                1,
+                int(getattr(PaymentConfig, "START_INTERVIEW_MIN_CREDITS", 1) or 1),
+            )
+
+            if not subscription:
+                return {
+                    "success": False,
+                    "can_start_interview": False,
+                    "error": "No active subscription",
+                    "error_code": "no_subscription",
+                    "credits_remaining": 0,
+                    "credits_allocated": 0,
+                    "credits_used": 0,
+                    "is_unlimited": False,
+                    "plan_owner": audience,
+                }
+
+            credits_remaining = (
+                -1
+                if subscription.is_unlimited
+                else int(subscription.interviews_remaining or 0)
+            )
+
+            can_start = bool(
+                subscription.is_unlimited or credits_remaining >= min_start_credits
+            )
+            if not can_start:
+                return {
+                    "success": False,
+                    "can_start_interview": False,
+                    "error": "Insufficient credits to start interview",
+                    "error_code": "insufficient_credits",
+                    "credits_remaining": credits_remaining,
+                    "credits_allocated": int(subscription.interviews_allowed or 0),
+                    "credits_used": int(subscription.interviews_used or 0),
+                    "is_unlimited": bool(subscription.is_unlimited),
+                    "plan_owner": audience,
+                }
+
+            return {
+                "success": True,
+                "can_start_interview": True,
+                "credits_remaining": credits_remaining,
+                "credits_allocated": int(subscription.interviews_allowed or 0),
+                "credits_used": int(subscription.interviews_used or 0),
+                "is_unlimited": bool(subscription.is_unlimited),
+                "plan_owner": audience,
+            }
+        except Exception as e:
+            logger.error(
+                f"Error checking credit availability for {employer_id}: {str(e)}"
+            )
+            return {
+                "success": False,
+                "can_start_interview": False,
+                "error": "Internal error",
+                "error_code": "internal_error",
+                "credits_remaining": 0,
+                "credits_allocated": 0,
+                "credits_used": 0,
+                "is_unlimited": False,
+                "plan_owner": audience,
+            }
+
+    def consume_usage_credits(
+        self,
+        employer_id: str,
+        usage_summary: Optional[Dict[str, Any]] = None,
+        audience: str = "recruiter",
+        idempotency_key: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Deduct usage-based credits at interview end with idempotency."""
+        usage_summary = usage_summary or {}
+        metadata = metadata or {}
+
+        if not idempotency_key:
+            return {
+                "success": False,
+                "error": "idempotency_key is required",
+                "error_code": "invalid_request",
+            }
+
+        existing_event = self.usage_events_collection.find_one(
+            {"idempotency_key": idempotency_key}
+        )
+        if existing_event:
+            return {
+                "success": True,
+                "idempotent_replay": True,
+                "credits_deducted": int(existing_event.get("credits_deducted", 0) or 0),
+                "usage_cost_usd": float(
+                    existing_event.get("usage_cost_usd", 0.0) or 0.0
+                ),
+                "credits_remaining": int(
+                    existing_event.get("credits_remaining", 0) or 0
+                ),
+                "credits_used": int(existing_event.get("credits_used", 0) or 0),
+                "credits_allocated": int(
+                    existing_event.get("credits_allocated", 0) or 0
+                ),
+                "is_unlimited": bool(existing_event.get("is_unlimited", False)),
+                "interviews_used": int(existing_event.get("interviews_used", 0) or 0),
+                "source": "subscription",
+            }
+
+        subscription = self.get_active_subscription(employer_id, audience=audience)
+        if not subscription:
+            return {
+                "success": False,
+                "error": "No active subscription",
+                "error_code": "no_subscription",
+            }
+
+        usage_cost_usd = float(usage_summary.get("total_cost", 0.0) or 0.0)
+        requested_credits = self._credits_from_usage_cost(usage_cost_usd)
+        credits_to_deduct = 0 if subscription.is_unlimited else requested_credits
+
+        if subscription.is_unlimited:
+            updated_doc = self.collection.find_one_and_update(
+                {"_id": subscription._id},
+                {
+                    "$inc": {
+                        "interviews_used": 1,
+                        "metadata.usage_cost_total_usd": usage_cost_usd,
+                    },
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+                return_document=ReturnDocument.AFTER,
+            )
+        else:
+            updated_doc = self.collection.find_one_and_update(
+                {
+                    "_id": subscription._id,
+                    "interviews_remaining": {"$gte": credits_to_deduct},
+                },
+                {
+                    "$inc": {
+                        "interviews_remaining": -credits_to_deduct,
+                        "interviews_used": credits_to_deduct,
+                        "metadata.usage_cost_total_usd": usage_cost_usd,
+                    },
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+                return_document=ReturnDocument.AFTER,
+            )
+
+            if not updated_doc:
+                fresh = self.get_active_subscription(employer_id, audience=audience)
+                return {
+                    "success": False,
+                    "error": "Insufficient credits",
+                    "error_code": "insufficient_credits",
+                    "credits_deducted": 0,
+                    "usage_cost_usd": round(usage_cost_usd, 6),
+                    "credits_remaining": int(
+                        (fresh.interviews_remaining if fresh else 0) or 0
+                    ),
+                    "credits_used": int((fresh.interviews_used if fresh else 0) or 0),
+                    "credits_allocated": int(
+                        (fresh.interviews_allowed if fresh else 0) or 0
+                    ),
+                    "is_unlimited": bool(fresh.is_unlimited) if fresh else False,
+                }
+
+        updated_sub = Subscription.from_dict(updated_doc)
+        event_doc = {
+            "subscription_id": updated_sub._id,
+            "idempotency_key": idempotency_key,
+            "employer_id": str(employer_id),
+            "audience": audience,
+            "usage": usage_summary,
+            "usage_cost_usd": round(usage_cost_usd, 6),
+            "credits_deducted": int(credits_to_deduct),
+            "credits_allocated": int(updated_sub.interviews_allowed or 0),
+            "credits_remaining": int(updated_sub.interviews_remaining or 0),
+            "credits_used": int(updated_sub.interviews_used or 0),
+            "is_unlimited": bool(updated_sub.is_unlimited),
+            "interviews_used": int(updated_sub.interviews_used or 0),
+            "metadata": metadata,
+            "created_at": datetime.utcnow(),
+        }
+
+        try:
+            self.usage_events_collection.insert_one(event_doc)
+        except DuplicateKeyError:
+            replay_event = self.usage_events_collection.find_one(
+                {"idempotency_key": idempotency_key}
+            )
+            if replay_event:
+                return {
+                    "success": True,
+                    "idempotent_replay": True,
+                    "credits_deducted": int(
+                        replay_event.get("credits_deducted", 0) or 0
+                    ),
+                    "usage_cost_usd": float(
+                        replay_event.get("usage_cost_usd", 0.0) or 0.0
+                    ),
+                    "credits_remaining": int(
+                        replay_event.get("credits_remaining", 0) or 0
+                    ),
+                    "credits_used": int(replay_event.get("credits_used", 0) or 0),
+                    "credits_allocated": int(
+                        replay_event.get("credits_allocated", 0) or 0
+                    ),
+                    "is_unlimited": bool(replay_event.get("is_unlimited", False)),
+                    "interviews_used": int(replay_event.get("interviews_used", 0) or 0),
+                    "source": "subscription",
+                }
+
+        return {
+            "success": True,
+            "credits_deducted": int(credits_to_deduct),
+            "usage_cost_usd": round(usage_cost_usd, 6),
+            "credits_remaining": int(updated_sub.interviews_remaining or 0),
+            "credits_used": int(updated_sub.interviews_used or 0),
+            "credits_allocated": int(updated_sub.interviews_allowed or 0),
+            "is_unlimited": bool(updated_sub.is_unlimited),
+            "interviews_used": int(updated_sub.interviews_used or 0),
+            "source": "subscription",
+        }
 
     def create_pending_subscription(
         self,

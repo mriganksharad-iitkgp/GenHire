@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { INDIA_LOCATION_OPTIONS } from '../constants/jobTaxonomy';
 import styles from './JobEditModal.module.css';
 import proctoringStyles from './JobCreationModal.module.css';
 
@@ -26,12 +27,7 @@ const DEPARTMENTS = [
   'Security', 'DevOps', 'Quality Assurance', 'Research & Development'
 ];
 
-const LOCATIONS = [
-  'Remote', 'Bangalore, Karnataka', 'Mumbai, Maharashtra', 'Delhi, NCR', 'Hyderabad, Telangana',
-  'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Kolkata, West Bengal', 'Ahmedabad, Gujarat', 'Gurgaon, Haryana',
-  'Noida, Uttar Pradesh', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Jaipur, Rajasthan',
-  'Remote (India)', 'Remote (Global)', 'Hybrid - Bangalore', 'Hybrid - Mumbai', 'Hybrid - Delhi'
-];
+const LOCATIONS = INDIA_LOCATION_OPTIONS;
 
 const EXPERIENCE_LEVELS = [
   'Entry Level (0-1 years)', '1-2 years', '2-4 years', '3-5 years', 
@@ -251,10 +247,10 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
 
   // Handle input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setJobData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -588,6 +584,23 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
               </div>
               <div className={styles.helpText}>
                 Only selected proctoring modules will run during the interview. Disabled modules will show "Not enabled" in reports.
+              </div>
+            </div>
+
+            {/* Gaze Proctoring */}
+            <div className={styles.formGroup}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  name="gaze_proctoring"
+                  checked={jobData.gaze_proctoring}
+                  onChange={handleInputChange}
+                  className={styles.checkboxInput}
+                />
+                Enable Gaze Heat Map Proctoring
+              </label>
+              <div className={styles.helpText} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
+                <i className="fa fa-exclamation-triangle"></i> Warning: Enabling proctoring will cost you more credits.
               </div>
             </div>
 

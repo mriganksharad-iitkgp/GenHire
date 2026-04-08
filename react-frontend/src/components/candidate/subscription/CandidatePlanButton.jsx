@@ -58,8 +58,8 @@ const CandidatePlanButton = () => {
 
   const getStatusText = () => {
     if (loading) return "Loading...";
-    if (isOutOfInterviews && !isFreeTier) return "No credits left";
-    return `${effectiveCreditsRemaining} credits left`;
+    if (isOutOfInterviews) return "No credits left";
+    return `${interviewsRemaining} credits left`;
   };
 
   return (

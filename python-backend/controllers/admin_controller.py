@@ -1,5 +1,8 @@
 import datetime
+import json
+import re
 from bson import ObjectId
+from collections import defaultdict
 from models.user import AVAILABLE_PERMISSIONS
 
 
@@ -2051,215 +2054,218 @@ class AdminController:
                 },
             }
 
-            completed_interview_query = {
-                "is_visible": True,
-                "status": {"$in": ["interviewed", "selected", "rejected"]},
-            }
-            completed_interviews = _count_documents_with_window(
-                self.applications_collection,
-                completed_interview_query,
-                ["updated_at", "created_at", "completed_at"],
-                period_start,
-                period_end,
-            )
-
-            cv_scoring_count = _count_documents_with_window(
-                self.applications_collection,
-                {"cv_score": {"$exists": True, "$ne": None}},
-                ["updated_at", "created_at", "cv_score_calculated_at"],
-                period_start,
-                period_end,
-            )
-
-            jd_generation_count = _count_documents_with_window(
-                self.jobs_collection,
-                {},
-                ["created_at", "updated_at"],
-                period_start,
-                period_end,
-            )
-
-            practice_interview_count = _count_documents_with_window(
-                self.practice_sessions_collection,
-                {},
-                ["created_at", "updated_at", "completed_at"],
-                period_start,
-                period_end,
-            )
-
-            interview_evaluation_count = _count_documents_with_window(
-                self.applications_collection,
-                {
-                    "is_visible": True,
-                    "status": {"$in": ["interviewed", "selected", "rejected"]},
-                    "interview_score": {"$exists": True, "$ne": None},
-                },
-                ["updated_at", "created_at", "completed_at"],
-                period_start,
-                period_end,
-            )
-
-            practice_evaluation_count = _count_documents_with_window(
-                self.practice_sessions_collection,
-                {
-                    "evaluation": {"$exists": True, "$ne": None},
-                },
-                ["updated_at", "created_at", "completed_at"],
-                period_start,
-                period_end,
-            )
-
-            stt_rate = pricing.get("google-stt", {}).get("price_per_minute", 0.024)
-            tts_rate = pricing.get("google-tts", {}).get("price_per_1m_chars", 4.0)
-
-            def _build_llm_line_item(key, title, cfg, count, formula_hint):
-                llm_usd = _llm_cost_usd(
-                    pricing,
-                    cfg["model"],
-                    cfg["prompt_tokens"],
-                    cfg["completion_tokens"],
-                    count,
-                )
-                total_inr = llm_usd * inr_per_usd
+            def _aggregate_line_item(key, title, model, formula, lines):
+                total = sum(float(line.get('cost_inr', 0.0) or 0.0) for line in lines)
+                count = len(lines)
                 return {
-                    "key": key,
-                    "title": title,
-                    "count": int(count),
-                    "model": cfg["model"],
-                    "rates_usd_per_1m_tokens": {
-                        "input": pricing.get(cfg["model"], {}).get("input", 0.0),
-                        "output": pricing.get(cfg["model"], {}).get("output", 0.0),
-                    },
-                    "assumptions": {
-                        "prompt_tokens_per_action": cfg["prompt_tokens"],
-                        "completion_tokens_per_action": cfg["completion_tokens"],
-                    },
-                    "formula": formula_hint,
-                    "total_cost_inr": _round_money(total_inr),
-                    "avg_cost_inr": _round_money(_safe_div(total_inr, count)),
+                    'key': key,
+                    'title': title,
+                    'count': int(count),
+                    'model': model,
+                    'formula': formula,
+                    'total_cost_inr': _round_money(total),
+                    'avg_cost_inr': _round_money(_safe_div(total, count)),
                 }
 
-            cv_item = _build_llm_line_item(
-                "cv_scoring",
-                "Total CV Score Calculation Cost",
-                action_assumptions["cv_scoring"],
-                cv_scoring_count,
-                "count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion",
+            cv_lines = []
+            jd_lines = []
+            interview_lines = []
+            interview_eval_lines = []
+            practice_lines = []
+            practice_eval_lines = []
+
+            cv_query = _build_date_range_query(
+                {'cv_score': {'$exists': True, '$ne': None}},
+                ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
             )
+            cv_apps = list(self.applications_collection.find(cv_query)) if self.applications_collection is not None else []
+            for app in cv_apps:
+                cv_lines.append(
+                    self._build_token_cost_line(
+                        app,
+                        'cv_scoring',
+                        'Total CV Score Calculation Cost',
+                        action_assumptions['cv_scoring'],
+                        ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'application',
+                            'id': str(app.get('_id') or ''),
+                            'label': app.get('job_title') or 'Application',
+                        }
+                    )
+                )
 
-            jd_item = _build_llm_line_item(
-                "ai_jd_generation",
-                "Total AI JD Generation Cost",
-                action_assumptions["ai_jd_generation"],
-                jd_generation_count,
-                "count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion",
+            jd_events = self._get_usage_events(
+                actor_type='recruiter',
+                action_types=['ai_jd_generation'],
+                period_start=period_start,
+                period_end=period_end,
             )
+            if jd_events:
+                for event in jd_events:
+                    jd_lines.append(
+                        self._build_token_cost_line(
+                            event,
+                            'ai_jd_generation',
+                            'Total AI JD Generation Cost',
+                            action_assumptions['ai_jd_generation'],
+                            ['occurred_at', 'created_at'],
+                            source_meta=event.get('source') or {},
+                        )
+                    )
+            else:
+                jobs_query = _build_date_range_query(
+                    {},
+                    ['created_at', 'updated_at'],
+                    period_start,
+                    period_end,
+                )
+                jobs = list(self.jobs_collection.find(jobs_query)) if self.jobs_collection is not None else []
+                for job in jobs:
+                    jd_lines.append(
+                        self._build_token_cost_line(
+                            job,
+                            'ai_jd_generation',
+                            'Total AI JD Generation Cost',
+                            action_assumptions['ai_jd_generation'],
+                            ['updated_at', 'created_at'],
+                            source_meta={
+                                'type': 'job',
+                                'id': str(job.get('_id') or ''),
+                                'label': job.get('title') or 'Job',
+                            }
+                        )
+                    )
 
-            interview_cfg = action_assumptions["ai_interview"]
-            interview_llm_usd = _llm_cost_usd(
-                pricing,
-                interview_cfg["model"],
-                interview_cfg["prompt_tokens"],
-                interview_cfg["completion_tokens"],
-                completed_interviews,
+            interview_query = _build_date_range_query(
+                {'is_visible': True, 'status': {'$in': ['interviewed', 'selected', 'rejected']}},
+                ['completed_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
             )
-            interview_stt_usd = (
-                (interview_cfg["stt_seconds"] / 60.0) * stt_rate
-            ) * max(completed_interviews, 0)
-            interview_tts_usd = (
-                (interview_cfg["tts_characters"] / 1_000_000.0) * tts_rate
-            ) * max(completed_interviews, 0)
-            interview_total_inr = (
-                interview_llm_usd + interview_stt_usd + interview_tts_usd
-            ) * inr_per_usd
+            interview_apps = list(self.applications_collection.find(interview_query)) if self.applications_collection is not None else []
+            interview_reports = self._latest_interview_reports_by_application([app.get('_id') for app in interview_apps])
 
-            interview_item = {
-                "key": "ai_interview",
-                "title": "Total AI Interview Cost",
-                "count": int(completed_interviews),
-                "model": interview_cfg["model"],
-                "rates_usd_per_1m_tokens": {
-                    "input": pricing.get(interview_cfg["model"], {}).get("input", 0.0),
-                    "output": pricing.get(interview_cfg["model"], {}).get(
-                        "output", 0.0
-                    ),
-                },
-                "speech_rates": {
-                    "stt_usd_per_minute": stt_rate,
-                    "tts_usd_per_1m_characters": tts_rate,
-                },
-                "assumptions": {
-                    "prompt_tokens_per_action": interview_cfg["prompt_tokens"],
-                    "completion_tokens_per_action": interview_cfg["completion_tokens"],
-                    "stt_seconds_per_action": interview_cfg["stt_seconds"],
-                    "tts_characters_per_action": interview_cfg["tts_characters"],
-                },
-                "formula": "count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion",
-                "total_cost_inr": _round_money(interview_total_inr),
-                "avg_cost_inr": _round_money(
-                    _safe_div(interview_total_inr, completed_interviews)
-                ),
-            }
+            for app in interview_apps:
+                app_with_context = self._merge_application_interview_context(
+                    app,
+                    interview_reports.get(str(app.get('_id') or ''))
+                )
 
-            practice_llm_usd = _llm_cost_usd(
-                pricing,
-                interview_cfg["model"],
-                interview_cfg["prompt_tokens"],
-                interview_cfg["completion_tokens"],
-                practice_interview_count,
+                interview_lines.append(
+                    self._build_interview_cost_line(
+                        app_with_context,
+                        'ai_interview',
+                        'Total AI Interview Cost',
+                        action_assumptions['ai_interview'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'application',
+                            'id': str(app.get('_id') or ''),
+                            'label': app.get('job_title') or 'Application',
+                        }
+                    )
+                )
+
+                if self._has_interview_evaluation(app_with_context):
+                    app_with_eval_context = self._with_evaluation_context(app_with_context)
+                    interview_eval_lines.append(
+                        self._build_token_cost_line(
+                            app_with_eval_context,
+                            'ai_interview_evaluation',
+                            'Total AI Interview Evaluation Cost',
+                            action_assumptions['evaluation'],
+                            ['completed_at', 'updated_at', 'created_at'],
+                            source_meta={
+                                'type': 'application',
+                                'id': str(app.get('_id') or ''),
+                                'label': app.get('job_title') or 'Application',
+                            }
+                        )
+                    )
+
+            practice_query = _build_date_range_query(
+                {'is_practice': True},
+                ['created_at', 'updated_at', 'completed_at'],
+                period_start,
+                period_end,
             )
-            practice_stt_usd = ((interview_cfg["stt_seconds"] / 60.0) * stt_rate) * max(
-                practice_interview_count, 0
+            practice_sessions = list(self.practice_sessions_collection.find(practice_query)) if self.practice_sessions_collection is not None else []
+            for session in practice_sessions:
+                practice_lines.append(
+                    self._build_interview_cost_line(
+                        session,
+                        'practice_interview',
+                        'Practice Interview Cost',
+                        action_assumptions['ai_interview'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'practice_session',
+                            'id': session.get('session_id') or str(session.get('_id') or ''),
+                            'label': session.get('role') or 'Practice Session',
+                        }
+                    )
+                )
+
+                session_with_eval_context = self._with_evaluation_context(session)
+                practice_eval_lines.append(
+                    self._build_token_cost_line(
+                        session_with_eval_context,
+                        'practice_interview_evaluation',
+                        'Practice Interview Evaluation Cost',
+                        action_assumptions['evaluation'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'practice_session',
+                            'id': session.get('session_id') or str(session.get('_id') or ''),
+                            'label': session.get('role') or 'Practice Session',
+                        }
+                    )
+                )
+
+            cv_item = _aggregate_line_item(
+                'cv_scoring',
+                'Total CV Score Calculation Cost',
+                action_assumptions['cv_scoring']['model'],
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+                cv_lines,
             )
-            practice_tts_usd = (
-                (interview_cfg["tts_characters"] / 1_000_000.0) * tts_rate
-            ) * max(practice_interview_count, 0)
-            practice_total_inr = (
-                practice_llm_usd + practice_stt_usd + practice_tts_usd
-            ) * inr_per_usd
-
-            practice_item = {
-                "key": "practice_interview",
-                "title": "Practice Interview Cost",
-                "count": int(practice_interview_count),
-                "model": interview_cfg["model"],
-                "rates_usd_per_1m_tokens": {
-                    "input": pricing.get(interview_cfg["model"], {}).get("input", 0.0),
-                    "output": pricing.get(interview_cfg["model"], {}).get(
-                        "output", 0.0
-                    ),
-                },
-                "speech_rates": {
-                    "stt_usd_per_minute": stt_rate,
-                    "tts_usd_per_1m_characters": tts_rate,
-                },
-                "assumptions": {
-                    "prompt_tokens_per_action": interview_cfg["prompt_tokens"],
-                    "completion_tokens_per_action": interview_cfg["completion_tokens"],
-                    "stt_seconds_per_action": interview_cfg["stt_seconds"],
-                    "tts_characters_per_action": interview_cfg["tts_characters"],
-                },
-                "formula": "count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion",
-                "total_cost_inr": _round_money(practice_total_inr),
-                "avg_cost_inr": _round_money(
-                    _safe_div(practice_total_inr, practice_interview_count)
-                ),
-            }
-
-            interview_eval_item = _build_llm_line_item(
-                "ai_interview_evaluation",
-                "Total AI Interview Evaluation Cost",
-                action_assumptions["evaluation"],
-                interview_evaluation_count,
-                "count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion",
+            jd_item = _aggregate_line_item(
+                'ai_jd_generation',
+                'Total AI JD Generation Cost',
+                action_assumptions['ai_jd_generation']['model'],
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+                jd_lines,
             )
-
-            practice_eval_item = _build_llm_line_item(
-                "practice_interview_evaluation",
-                "Practice Interview Evaluation Cost",
-                action_assumptions["evaluation"],
-                practice_evaluation_count,
-                "count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion",
+            interview_item = _aggregate_line_item(
+                'ai_interview',
+                'Total AI Interview Cost',
+                action_assumptions['ai_interview']['model'],
+                'count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
+                interview_lines,
+            )
+            interview_eval_item = _aggregate_line_item(
+                'ai_interview_evaluation',
+                'Total AI Interview Evaluation Cost',
+                action_assumptions['evaluation']['model'],
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+                interview_eval_lines,
+            )
+            practice_item = _aggregate_line_item(
+                'practice_interview',
+                'Practice Interview Cost',
+                action_assumptions['ai_interview']['model'],
+                'count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
+                practice_lines,
+            )
+            practice_eval_item = _aggregate_line_item(
+                'practice_interview_evaluation',
+                'Practice Interview Evaluation Cost',
+                action_assumptions['evaluation']['model'],
+                'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+                practice_eval_lines,
             )
 
             ai_cost_line_items = [
@@ -2274,9 +2280,14 @@ class AdminController:
                 item.get("total_cost_inr", 0.0) for item in ai_cost_line_items
             )
 
-            cloudflare_total_prorated = _monthly_cost_for_window(
-                monthly_infra_assumptions["cloudflare"], period_start, period_end
-            )
+            cv_scoring_count = len(cv_lines)
+            jd_generation_count = len(jd_lines)
+            completed_interviews = len(interview_lines)
+            interview_evaluation_count = len(interview_eval_lines)
+            practice_interview_count = len(practice_lines)
+            practice_evaluation_count = len(practice_eval_lines)
+
+            cloudflare_total_prorated = _monthly_cost_for_window(monthly_infra_assumptions['cloudflare'], period_start, period_end)
             cloudflare_gpu_prorated = cloudflare_total_prorated * cloudflare_gpu_ratio
             cloudflare_base_prorated = (
                 cloudflare_total_prorated - cloudflare_gpu_prorated
@@ -2557,4 +2568,1609 @@ class AdminController:
 
             print(f"Error getting admin cost statistics: {str(e)}")
             print(traceback.format_exc())
-            return {"error": "Failed to get cost statistics"}, 500
+            return {'error': 'Failed to get cost statistics'}, 500
+
+    def _round_money(self, value):
+        return round(float(value or 0.0), 2)
+
+    def _safe_iso(self, dt_val):
+        return dt_val.isoformat() if dt_val else None
+
+    def _safe_div(self, num, den):
+        return (num / den) if den else 0.0
+
+    def _parse_date(self, date_value, end_of_day=False):
+        if not date_value:
+            return None
+
+        parsed = None
+        try:
+            parsed = datetime.datetime.fromisoformat(str(date_value).replace('Z', '+00:00'))
+        except Exception:
+            try:
+                parsed = datetime.datetime.strptime(str(date_value), '%Y-%m-%d')
+            except Exception:
+                return None
+
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+        if len(str(date_value)) <= 10:
+            parsed = parsed.replace(
+                hour=23 if end_of_day else 0,
+                minute=59 if end_of_day else 0,
+                second=59 if end_of_day else 0,
+                microsecond=999999 if end_of_day else 0,
+            )
+
+        return parsed
+
+    def _period_window(self, period_value):
+        now = datetime.datetime.utcnow()
+        normalized_period = (period_value or 'month').lower()
+
+        if normalized_period == 'week':
+            start = now - datetime.timedelta(days=7)
+        elif normalized_period == 'quarter':
+            start = now - datetime.timedelta(days=90)
+        elif normalized_period == 'year':
+            start = now - datetime.timedelta(days=365)
+        else:
+            normalized_period = 'month'
+            start = now - datetime.timedelta(days=30)
+
+        return normalized_period, start, now
+
+    def _resolve_timeline_window(self, period='month', start_date=None, end_date=None):
+        normalized_period, period_start, period_end = self._period_window(period)
+        requested_start = self._parse_date(start_date, end_of_day=False)
+        requested_end = self._parse_date(end_date, end_of_day=True) if end_date else None
+
+        if start_date and requested_start is None:
+            return None, None, None, {'error': 'Invalid start_date format. Use YYYY-MM-DD.'}, 400
+
+        if end_date and requested_end is None:
+            return None, None, None, {'error': 'Invalid end_date format. Use YYYY-MM-DD.'}, 400
+
+        if requested_end is None:
+            requested_end = datetime.datetime.utcnow()
+
+        if requested_start:
+            period_start = requested_start
+            period_end = requested_end
+            normalized_period = 'custom'
+
+        if period_start > period_end:
+            return None, None, None, {'error': 'Invalid timeline. start_date cannot be after end_date.'}, 400
+
+        return normalized_period, period_start, period_end, None, 200
+
+    def _build_date_range_query(self, base_query, date_fields, start_dt, end_dt):
+        if not date_fields:
+            return base_query
+
+        date_conditions = [
+            {field_name: {'$gte': start_dt, '$lte': end_dt}}
+            for field_name in date_fields
+        ]
+
+        return {
+            '$and': [
+                base_query,
+                {'$or': date_conditions}
+            ]
+        }
+
+    def _extract_numeric(self, value):
+        if isinstance(value, (int, float)):
+            return float(value)
+        return None
+
+    def _extract_usage_metric(self, doc, keys, nested_dict_keys=None):
+        nested_dict_keys = nested_dict_keys or []
+
+        for key in keys:
+            value = self._extract_numeric(doc.get(key))
+            if value is not None:
+                return value, 'actual'
+
+        for nested_key in nested_dict_keys:
+            nested_value = doc.get(nested_key)
+            if not isinstance(nested_value, dict):
+                continue
+            for key in keys:
+                value = self._extract_numeric(nested_value.get(key))
+                if value is not None:
+                    return value, 'actual'
+
+        return None, 'assumed'
+
+    def _collect_text_fragments(self, value, sink):
+        if value is None:
+            return
+
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized:
+                sink.append(normalized)
+            return
+
+        if isinstance(value, dict):
+            for nested_value in value.values():
+                self._collect_text_fragments(nested_value, sink)
+            return
+
+        if isinstance(value, list):
+            for nested_value in value:
+                self._collect_text_fragments(nested_value, sink)
+            return
+
+        if isinstance(value, (int, float, bool)):
+            sink.append(str(value))
+
+    def _estimate_text_tokens(self, text):
+        if not text:
+            return 0
+        normalized_text = str(text)
+        words = len(re.findall(r"\S+", normalized_text))
+        chars = len(normalized_text)
+
+        tokens_by_words = words / 0.75
+        tokens_by_chars = chars / 4.0
+        return int(round(max(tokens_by_words, tokens_by_chars)))
+
+    def _estimate_token_count_from_value(self, value):
+        chunks = []
+        self._collect_text_fragments(value, chunks)
+        if not chunks:
+            return 0
+        return self._estimate_text_tokens(' '.join(chunks))
+
+    def _parse_datetime_value(self, value):
+        if isinstance(value, datetime.datetime):
+            return value
+        if not isinstance(value, str):
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+
+        for candidate in [raw, raw.replace('Z', '+00:00')]:
+            try:
+                parsed = datetime.datetime.fromisoformat(candidate)
+                if parsed.tzinfo is not None:
+                    parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+                return parsed
+            except Exception:
+                continue
+
+        for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%a, %d %b %Y %H:%M:%S GMT']:
+            try:
+                return datetime.datetime.strptime(raw, fmt)
+            except Exception:
+                continue
+
+        return None
+
+    def _qa_pairs(self, doc):
+        if not isinstance(doc, dict):
+            return []
+        qa_pairs = doc.get('qa_pairs')
+        if isinstance(qa_pairs, list) and qa_pairs:
+            return qa_pairs
+
+        qa_history = doc.get('qa_history')
+        if isinstance(qa_history, list) and qa_history:
+            return qa_history
+
+        interview_data = doc.get('interview_data')
+        if isinstance(interview_data, list) and interview_data:
+            return interview_data
+
+        return []
+
+    def _transcript_messages(self, doc):
+        transcript = doc.get('transcript') if isinstance(doc, dict) else None
+        if isinstance(transcript, list) and transcript:
+            return transcript
+
+        messages = []
+        for pair in self._qa_pairs(doc):
+            if not isinstance(pair, dict):
+                continue
+
+            question = pair.get('question')
+            answer = pair.get('answer')
+
+            if isinstance(question, str) and question.strip():
+                messages.append({'role': 'assistant', 'text': question})
+            if isinstance(answer, str) and answer.strip():
+                messages.append({'role': 'user', 'text': answer})
+
+        return messages
+
+    def _transcript_token_usage(self, doc):
+        stats = self._interview_token_breakdown(doc)
+        prompt_tokens = stats.get('cumulative_prompt_tokens') or 0
+        completion_tokens = stats.get('question_tokens') or 0
+
+        if prompt_tokens == 0 and completion_tokens == 0:
+            return None, None
+
+        return prompt_tokens, completion_tokens
+
+    def _interview_token_breakdown(self, doc):
+        messages = self._transcript_messages(doc)
+        if not messages:
+            return {
+                'question_tokens': 0,
+                'answer_tokens': 0,
+                'qa_total_tokens': 0,
+                'cumulative_prompt_tokens': 0,
+            }
+
+        pairs = []
+        current_question_tokens = None
+
+        question_roles = {'assistant', 'ai', 'bot', 'interviewer', 'system'}
+
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+
+            role = str(item.get('role') or '').strip().lower()
+            text = item.get('text')
+            if not isinstance(text, str):
+                text = item.get('content')
+            if not isinstance(text, str):
+                continue
+
+            token_count = self._estimate_text_tokens(text)
+            if token_count <= 0:
+                continue
+
+            if role in question_roles:
+                if current_question_tokens is not None:
+                    pairs.append((current_question_tokens, 0))
+                current_question_tokens = token_count
+            else:
+                if current_question_tokens is None:
+                    pairs.append((0, token_count))
+                else:
+                    pairs.append((current_question_tokens, token_count))
+                    current_question_tokens = None
+
+        if current_question_tokens is not None:
+            pairs.append((current_question_tokens, 0))
+
+        question_tokens = sum(question for question, _ in pairs)
+        answer_tokens = sum(answer for _, answer in pairs)
+        qa_total_tokens = question_tokens + answer_tokens
+
+        running_history = 0
+        cumulative_prompt_tokens = 0
+        for question, answer in pairs:
+            pair_total = question + answer
+            cumulative_prompt_tokens += running_history + pair_total
+            running_history += pair_total
+
+        return {
+            'question_tokens': int(question_tokens),
+            'answer_tokens': int(answer_tokens),
+            'qa_total_tokens': int(qa_total_tokens),
+            'cumulative_prompt_tokens': int(cumulative_prompt_tokens),
+        }
+
+    def _transcript_tts_characters(self, doc):
+        # Per requested accounting rule, TTS proxy uses total question tokens.
+        question_tokens = self._interview_token_breakdown(doc).get('question_tokens') or 0
+        return int(question_tokens) if question_tokens > 0 else None
+
+    def _derived_stt_seconds(self, doc):
+        # Per requested accounting rule, STT uses answer tokens converted to seconds.
+        answer_tokens = self._interview_token_breakdown(doc).get('answer_tokens') or 0
+        if answer_tokens > 0:
+            return float(answer_tokens) * 0.4
+
+        created_at = self._parse_datetime_value(doc.get('created_at') if isinstance(doc, dict) else None)
+        completed_at = self._parse_datetime_value(doc.get('completed_at') if isinstance(doc, dict) else None)
+        updated_at = self._parse_datetime_value(doc.get('updated_at') if isinstance(doc, dict) else None)
+
+        if isinstance(created_at, datetime.datetime) and isinstance(completed_at, datetime.datetime):
+            return max(0.0, (completed_at - created_at).total_seconds())
+
+        if isinstance(created_at, datetime.datetime) and isinstance(updated_at, datetime.datetime):
+            return max(0.0, (updated_at - created_at).total_seconds())
+
+        first_ts = None
+        last_ts = None
+        for pair in self._qa_pairs(doc):
+            if not isinstance(pair, dict):
+                continue
+            ts = self._parse_datetime_value(pair.get('timestamp'))
+            if ts is None:
+                continue
+            if first_ts is None or ts < first_ts:
+                first_ts = ts
+            if last_ts is None or ts > last_ts:
+                last_ts = ts
+
+        if first_ts and last_ts:
+            return max(0.0, (last_ts - first_ts).total_seconds())
+
+        return None
+
+    def _derive_token_usage_from_doc(self, doc, action_type):
+        if not isinstance(doc, dict):
+            return None, None
+
+        normalized_action = str(action_type or '').strip().lower()
+
+        interview_stats = self._interview_token_breakdown(doc)
+
+        if normalized_action in {'ai_interview', 'practice_interview'}:
+            prompt_tokens = interview_stats.get('cumulative_prompt_tokens') or 0
+            completion_tokens = interview_stats.get('question_tokens') or 0
+            return (
+                int(prompt_tokens) if prompt_tokens > 0 else None,
+                int(completion_tokens) if completion_tokens > 0 else None,
+            )
+
+        if normalized_action in {'ai_interview_evaluation', 'practice_interview_evaluation'}:
+            prompt_tokens = interview_stats.get('qa_total_tokens') or 0
+            eval_tokens = self._estimate_token_count_from_value(doc.get('evaluation'))
+            return (
+                int(prompt_tokens) if prompt_tokens > 0 else None,
+                int(eval_tokens) if eval_tokens > 0 else None,
+            )
+
+        if normalized_action == 'cv_scoring':
+            cv_text = (((doc.get('cv_snapshot') or {}).get('text')) or '').strip()
+            jd_text = (((doc.get('jd_snapshot') or {}).get('text')) or '').strip()
+            prompt_tokens = self._estimate_text_tokens(f"{cv_text}\n{jd_text}".strip())
+            completion_tokens = self._estimate_token_count_from_value(doc.get('cv_score_breakdown'))
+
+            if prompt_tokens <= 0:
+                prompt_tokens = None
+            if completion_tokens <= 0:
+                completion_tokens = None
+
+            return prompt_tokens, completion_tokens
+
+        if normalized_action == 'ai_jd_generation':
+            metadata = doc.get('metadata') if isinstance(doc.get('metadata'), dict) else {}
+            prompt_text = (metadata.get('prompt_text') or '').strip()
+            generated_jd_text = (metadata.get('generated_jd_text') or '').strip()
+
+            if prompt_text or generated_jd_text:
+                prompt_tokens = self._estimate_text_tokens(prompt_text)
+                completion_tokens = self._estimate_text_tokens(generated_jd_text)
+                return (
+                    int(prompt_tokens) if prompt_tokens > 0 else None,
+                    int(completion_tokens) if completion_tokens > 0 else None,
+                )
+
+            prompt_seed = {
+                'title': doc.get('title'),
+                'department': doc.get('department'),
+                'location': doc.get('location'),
+                'type': doc.get('type'),
+                'experience': doc.get('experience'),
+                'salary': doc.get('salary'),
+            }
+            completion_seed = {
+                'description': doc.get('description'),
+                'skills': doc.get('skills'),
+                'responsibilities': doc.get('responsibilities'),
+                'requirements': doc.get('requirements'),
+                'benefits': doc.get('benefits'),
+            }
+            prompt_tokens = self._estimate_token_count_from_value(prompt_seed)
+            completion_tokens = self._estimate_token_count_from_value(completion_seed)
+
+            if prompt_tokens <= 0:
+                prompt_tokens = None
+            if completion_tokens <= 0:
+                completion_tokens = None
+
+            return prompt_tokens, completion_tokens
+
+        return None, None
+
+    def _latest_interview_reports_by_application(self, application_ids):
+        if self.interviews_collection is None:
+            return {}
+
+        ids = [str(app_id) for app_id in application_ids if app_id is not None]
+        if not ids:
+            return {}
+
+        reports = list(self.interviews_collection.find({'application_id': {'$in': ids}}))
+        latest_map = {}
+
+        for report in reports:
+            app_id = str(report.get('application_id') or '')
+            if not app_id:
+                continue
+
+            existing = latest_map.get(app_id)
+            report_ts = report.get('updated_at') or report.get('created_at')
+            existing_ts = (existing or {}).get('updated_at') or (existing or {}).get('created_at')
+
+            if existing is None or (report_ts and (not existing_ts or report_ts > existing_ts)):
+                latest_map[app_id] = report
+
+        return latest_map
+
+    def _merge_application_interview_context(self, app_doc, interview_report):
+        if not isinstance(app_doc, dict):
+            return app_doc
+
+        if not isinstance(interview_report, dict):
+            return app_doc
+
+        merged = dict(app_doc)
+
+        if not merged.get('transcript') and isinstance(interview_report.get('transcript'), list):
+            merged['transcript'] = interview_report.get('transcript')
+
+        if not merged.get('qa_pairs') and isinstance(interview_report.get('qa_pairs'), list):
+            merged['qa_pairs'] = interview_report.get('qa_pairs')
+
+        if merged.get('evaluation') in [None, '', {}] and isinstance(interview_report.get('evaluation'), dict):
+            merged['evaluation'] = interview_report.get('evaluation')
+
+        usage_doc = interview_report.get('usage') if isinstance(interview_report.get('usage'), dict) else None
+        if usage_doc:
+            if merged.get('prompt_tokens') is None and usage_doc.get('prompt_tokens') is not None:
+                merged['prompt_tokens'] = usage_doc.get('prompt_tokens')
+            if merged.get('completion_tokens') is None and usage_doc.get('completion_tokens') is not None:
+                merged['completion_tokens'] = usage_doc.get('completion_tokens')
+
+        for dt_key in ['created_at', 'completed_at', 'updated_at']:
+            if merged.get(dt_key) is None and interview_report.get(dt_key) is not None:
+                merged[dt_key] = interview_report.get(dt_key)
+
+        return merged
+
+    def _extract_evaluation_payload(self, doc):
+        if not isinstance(doc, dict):
+            return None
+
+        candidates = [
+            doc.get('evaluation'),
+            doc.get('final_evaluation'),
+        ]
+
+        result = doc.get('result')
+        if isinstance(result, dict):
+            candidates.extend([
+                result.get('evaluation'),
+                result.get('final_evaluation'),
+            ])
+
+        for value in candidates:
+            if value in [None, '', {}, []]:
+                continue
+            return value
+
+        return None
+
+    def _with_evaluation_context(self, doc):
+        if not isinstance(doc, dict):
+            return doc
+
+        evaluation_payload = self._extract_evaluation_payload(doc)
+        if evaluation_payload is None:
+            return doc
+
+        if doc.get('evaluation') not in [None, '', {}, []]:
+            return doc
+
+        merged = dict(doc)
+        merged['evaluation'] = evaluation_payload
+        return merged
+
+    def _has_interview_evaluation(self, doc):
+        if not isinstance(doc, dict):
+            return False
+
+        if self._extract_evaluation_payload(doc) is not None:
+            return True
+
+        if doc.get('interview_score') not in [None, '']:
+            return True
+
+        if doc.get('final_score') not in [None, '']:
+            return True
+
+        status = str(doc.get('status') or '').strip().lower()
+        if status in {'interviewed', 'selected', 'rejected', 'completed'}:
+            return True
+
+        interview_stats = self._interview_token_breakdown(doc)
+        return (interview_stats.get('qa_total_tokens') or 0) > 0
+
+    def _build_token_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
+        source_meta = source_meta or {}
+
+        from interview.core.cost_tracker import CostTracker
+        pricing = CostTracker.PRICING
+        inr_per_usd = 83.0
+
+        prompt_tokens, prompt_source = self._extract_usage_metric(
+            doc,
+            ['prompt_tokens', 'input_tokens', 'llm_prompt_tokens'],
+            nested_dict_keys=['usage', 'token_usage', 'cost_usage']
+        )
+        completion_tokens, completion_source = self._extract_usage_metric(
+            doc,
+            ['completion_tokens', 'output_tokens', 'llm_completion_tokens'],
+            nested_dict_keys=['usage', 'token_usage', 'cost_usage']
+        )
+
+        if str(doc.get('usage_source') or '').strip().lower() == 'assumed':
+            prompt_tokens = None
+            completion_tokens = None
+            prompt_source = 'assumed'
+            completion_source = 'assumed'
+
+        if prompt_tokens is not None and prompt_tokens <= 0:
+            prompt_tokens = None
+            prompt_source = 'assumed'
+        if completion_tokens is not None and completion_tokens <= 0:
+            completion_tokens = None
+            completion_source = 'assumed'
+
+        if prompt_tokens is None or completion_tokens is None:
+            derived_prompt_tokens, derived_completion_tokens = self._derive_token_usage_from_doc(doc, action_type)
+            if prompt_tokens is None and derived_prompt_tokens is not None:
+                prompt_tokens = derived_prompt_tokens
+                prompt_source = 'actual'
+            if completion_tokens is None and derived_completion_tokens is not None:
+                completion_tokens = derived_completion_tokens
+                completion_source = 'actual'
+
+        # If stored values look like known defaults, prefer transcript-derived values.
+        derived_prompt_tokens, derived_completion_tokens = self._derive_token_usage_from_doc(doc, action_type)
+        if (
+            derived_prompt_tokens is not None
+            and int(prompt_tokens or 0) == int(cfg['prompt_tokens'])
+        ):
+            prompt_tokens = derived_prompt_tokens
+            prompt_source = 'actual'
+        if (
+            derived_completion_tokens is not None
+            and int(completion_tokens or 0) == int(cfg['completion_tokens'])
+        ):
+            completion_tokens = derived_completion_tokens
+            completion_source = 'actual'
+
+        prompt_tokens = int(prompt_tokens if prompt_tokens is not None else cfg['prompt_tokens'])
+        completion_tokens = int(completion_tokens if completion_tokens is not None else cfg['completion_tokens'])
+
+        rates = pricing.get(cfg['model'], {})
+        input_rate = rates.get('input', 0.0)
+        output_rate = rates.get('output', 0.0)
+
+        llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
+        cost_inr = llm_usd * inr_per_usd
+
+        timestamp = None
+        for field_name in timestamp_fields:
+            dt_val = self._parse_datetime_value(doc.get(field_name))
+            if isinstance(dt_val, datetime.datetime):
+                timestamp = dt_val
+                break
+
+        usage_source = 'actual' if prompt_source == 'actual' or completion_source == 'actual' else 'assumed'
+
+        return {
+            'id': str(source_id or doc.get('_id') or ''),
+            'action_type': action_type,
+            'title': title,
+            'timestamp': self._safe_iso(timestamp),
+            'model': cfg['model'],
+            'usage_source': usage_source,
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'stt_seconds': 0,
+            'tts_characters': 0,
+            'rates': {
+                'input_usd_per_1m_tokens': input_rate,
+                'output_usd_per_1m_tokens': output_rate,
+            },
+            'formula': '((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
+            'cost_inr': self._round_money(cost_inr),
+            'source': {
+                'type': source_meta.get('type', ''),
+                'id': source_meta.get('id', ''),
+                'label': source_meta.get('label', ''),
+            }
+        }
+
+    def _build_interview_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
+        source_meta = source_meta or {}
+
+        from interview.core.cost_tracker import CostTracker
+        pricing = CostTracker.PRICING
+        inr_per_usd = 83.0
+
+        prompt_tokens, prompt_source = self._extract_usage_metric(
+            doc,
+            ['prompt_tokens', 'input_tokens', 'llm_prompt_tokens'],
+            nested_dict_keys=['usage', 'token_usage', 'cost_usage']
+        )
+        completion_tokens, completion_source = self._extract_usage_metric(
+            doc,
+            ['completion_tokens', 'output_tokens', 'llm_completion_tokens'],
+            nested_dict_keys=['usage', 'token_usage', 'cost_usage']
+        )
+        stt_seconds, stt_source = self._extract_usage_metric(
+            doc,
+            ['stt_seconds', 'audio_seconds', 'speech_seconds'],
+            nested_dict_keys=['usage', 'audio_usage', 'cost_usage']
+        )
+        tts_characters, tts_source = self._extract_usage_metric(
+            doc,
+            ['tts_characters', 'character_count', 'tts_chars'],
+            nested_dict_keys=['usage', 'audio_usage', 'cost_usage']
+        )
+
+        if str(doc.get('usage_source') or '').strip().lower() == 'assumed':
+            prompt_tokens = None
+            completion_tokens = None
+            stt_seconds = None
+            tts_characters = None
+            prompt_source = 'assumed'
+            completion_source = 'assumed'
+            stt_source = 'assumed'
+            tts_source = 'assumed'
+
+        if prompt_tokens is not None and prompt_tokens <= 0:
+            prompt_tokens = None
+            prompt_source = 'assumed'
+        if completion_tokens is not None and completion_tokens <= 0:
+            completion_tokens = None
+            completion_source = 'assumed'
+        if stt_seconds is not None and stt_seconds <= 0:
+            stt_seconds = None
+            stt_source = 'assumed'
+        if tts_characters is not None and tts_characters <= 0:
+            tts_characters = None
+            tts_source = 'assumed'
+
+        if prompt_tokens is None or completion_tokens is None:
+            derived_prompt_tokens, derived_completion_tokens = self._derive_token_usage_from_doc(doc, action_type)
+            if prompt_tokens is None and derived_prompt_tokens is not None:
+                prompt_tokens = derived_prompt_tokens
+                prompt_source = 'actual'
+            if completion_tokens is None and derived_completion_tokens is not None:
+                completion_tokens = derived_completion_tokens
+                completion_source = 'actual'
+
+        # If stored values look like default assumptions, prefer transcript-derived values.
+        derived_prompt_tokens, derived_completion_tokens = self._derive_token_usage_from_doc(doc, action_type)
+        if (
+            derived_prompt_tokens is not None
+            and int(prompt_tokens or 0) == int(cfg['prompt_tokens'])
+        ):
+            prompt_tokens = derived_prompt_tokens
+            prompt_source = 'actual'
+        if (
+            derived_completion_tokens is not None
+            and int(completion_tokens or 0) == int(cfg['completion_tokens'])
+        ):
+            completion_tokens = derived_completion_tokens
+            completion_source = 'actual'
+
+        if stt_seconds is None:
+            derived_stt = self._derived_stt_seconds(doc)
+            if derived_stt is not None:
+                stt_seconds = derived_stt
+                stt_source = 'actual'
+
+        derived_stt = self._derived_stt_seconds(doc)
+        if (
+            derived_stt is not None
+            and (stt_seconds is None or float(stt_seconds or 0.0) == float(cfg['stt_seconds']))
+        ):
+            stt_seconds = derived_stt
+            stt_source = 'actual'
+
+        if tts_characters is None:
+            derived_tts_chars = self._transcript_tts_characters(doc)
+            if derived_tts_chars is not None:
+                tts_characters = derived_tts_chars
+                tts_source = 'actual'
+
+        derived_tts_chars = self._transcript_tts_characters(doc)
+        if (
+            derived_tts_chars is not None
+            and (tts_characters is None or int(tts_characters or 0) == int(cfg['tts_characters']))
+        ):
+            tts_characters = derived_tts_chars
+            tts_source = 'actual'
+
+        prompt_tokens = int(prompt_tokens if prompt_tokens is not None else cfg['prompt_tokens'])
+        completion_tokens = int(completion_tokens if completion_tokens is not None else cfg['completion_tokens'])
+        stt_seconds = float(stt_seconds if stt_seconds is not None else cfg['stt_seconds'])
+        tts_characters = int(tts_characters if tts_characters is not None else cfg['tts_characters'])
+
+        rates = pricing.get(cfg['model'], {})
+        input_rate = rates.get('input', 0.0)
+        output_rate = rates.get('output', 0.0)
+        stt_rate = pricing.get('google-stt', {}).get('price_per_minute', 0.024)
+        tts_rate = pricing.get('google-tts', {}).get('price_per_1m_chars', 4.0)
+
+        llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
+        stt_usd = (stt_seconds / 60.0) * stt_rate
+        tts_usd = (tts_characters / 1_000_000.0) * tts_rate
+        cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
+
+        timestamp = None
+        for field_name in timestamp_fields:
+            dt_val = self._parse_datetime_value(doc.get(field_name))
+            if isinstance(dt_val, datetime.datetime):
+                timestamp = dt_val
+                break
+
+        usage_source = 'actual' if 'actual' in [prompt_source, completion_source, stt_source, tts_source] else 'assumed'
+
+        return {
+            'id': str(source_id or doc.get('_id') or ''),
+            'action_type': action_type,
+            'title': title,
+            'timestamp': self._safe_iso(timestamp),
+            'model': cfg['model'],
+            'usage_source': usage_source,
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'stt_seconds': stt_seconds,
+            'tts_characters': tts_characters,
+            'rates': {
+                'input_usd_per_1m_tokens': input_rate,
+                'output_usd_per_1m_tokens': output_rate,
+                'stt_usd_per_minute': stt_rate,
+                'tts_usd_per_1m_characters': tts_rate,
+            },
+            'formula': '[LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
+            'cost_inr': self._round_money(cost_inr),
+            'source': {
+                'type': source_meta.get('type', ''),
+                'id': source_meta.get('id', ''),
+                'label': source_meta.get('label', ''),
+            }
+        }
+
+    def _action_assumptions(self):
+        return {
+            'cv_scoring': {
+                'model': 'gemini-1.5-flash-latest',
+                'prompt_tokens': 1800,
+                'completion_tokens': 600,
+            },
+            'ai_jd_generation': {
+                'model': 'llama-3.3-70b-versatile',
+                'prompt_tokens': 1500,
+                'completion_tokens': 1200,
+            },
+            'ai_interview': {
+                'model': 'gpt-4o',
+                'prompt_tokens': 4200,
+                'completion_tokens': 2100,
+                'stt_seconds': 900,
+                'tts_characters': 22000,
+            },
+            'evaluation': {
+                'model': 'gpt-5-mini',
+                'prompt_tokens': 1500,
+                'completion_tokens': 1000,
+            },
+        }
+
+    def _find_matching_user_id(self, user_id_map, raw_user_id):
+        if raw_user_id is None:
+            return None
+        user_id_str = str(raw_user_id)
+        return user_id_str if user_id_str in user_id_map else None
+
+    def _user_succeeded_incoming_map(self, period_start, period_end, audience='candidate'):
+        payments_collection = self.users_collection.database.get_collection('payments')
+        plans_collection = self.users_collection.database.get_collection('plans')
+        if payments_collection is None:
+            return {}
+
+        plans = list(plans_collection.find({})) if plans_collection is not None else []
+        plans_by_id = {plan.get('_id'): plan for plan in plans}
+
+        query = {
+            '$and': [
+                {'status': 'succeeded'},
+                {
+                    '$or': [
+                        {'completed_at': {'$gte': period_start, '$lte': period_end}},
+                        {'created_at': {'$gte': period_start, '$lte': period_end}},
+                    ]
+                }
+            ]
+        }
+        payments = list(payments_collection.find(query))
+
+        incoming_map = defaultdict(float)
+        for payment in payments:
+            employer_id = payment.get('employer_id')
+            if employer_id is None:
+                continue
+
+            plan_doc = plans_by_id.get(payment.get('plan_id'))
+            snapshot = payment.get('metadata', {}) or {}
+            if not plan_doc:
+                fallback_snapshot = payment.get('plan_snapshot') or {}
+                snapshot = {**fallback_snapshot, **snapshot}
+
+            payment_audience = (
+                (plan_doc or {}).get('audience')
+                or snapshot.get('owner_type')
+                or snapshot.get('audience')
+                or 'recruiter'
+            )
+            if payment_audience not in {'candidate', 'recruiter'}:
+                payment_audience = 'recruiter'
+
+            if payment_audience != audience:
+                continue
+
+            incoming_map[str(employer_id)] += float((payment.get('amount_paise', 0) or 0) / 100.0)
+
+        return {key: self._round_money(value) for key, value in incoming_map.items()}
+
+    def _active_plan_name_map(self, audience='candidate'):
+        subscriptions_collection = self.users_collection.database.get_collection('subscriptions')
+        if subscriptions_collection is None:
+            return {}
+
+        audience_filter = (
+            {'plan_snapshot.audience': 'candidate'}
+            if audience == 'candidate'
+            else {
+                '$or': [
+                    {'plan_snapshot.audience': 'recruiter'},
+                    {'plan_snapshot.audience': {'$exists': False}},
+                ]
+            }
+        )
+
+        subscriptions = list(subscriptions_collection.find({'status': 'active', '$and': [audience_filter]}).sort('created_at', -1))
+        plan_map = {}
+        for subscription in subscriptions:
+            owner_id = str(subscription.get('employer_id'))
+            if owner_id in plan_map:
+                continue
+            snapshot = subscription.get('plan_snapshot') or {}
+            plan_map[owner_id] = snapshot.get('name') or snapshot.get('slug') or 'Free'
+        return plan_map
+
+    def _line_category_summary(self, key, title, lines):
+        total_cost = sum(float(line.get('cost_inr', 0) or 0.0) for line in lines)
+        count = len(lines)
+        return {
+            'key': key,
+            'title': title,
+            'count': count,
+            'total_cost_inr': self._round_money(total_cost),
+            'avg_cost_inr': self._round_money(self._safe_div(total_cost, count)),
+            'lines': sorted(lines, key=lambda item: item.get('timestamp') or '', reverse=True),
+        }
+
+    def _usage_events_collection(self):
+        return self.users_collection.database.get_collection('ai_usage_events')
+
+    def _get_usage_events(self, actor_type, actor_id=None, action_types=None, period_start=None, period_end=None):
+        events_collection = self._usage_events_collection()
+        if events_collection is None:
+            return []
+
+        query = {
+            'actor_type': actor_type,
+        }
+        if actor_id is not None:
+            query['actor_id'] = str(actor_id)
+
+        if action_types:
+            query['action_type'] = {'$in': action_types}
+
+        if period_start and period_end:
+            query['occurred_at'] = {'$gte': period_start, '$lte': period_end}
+
+        return list(events_collection.find(query))
+
+    def _search_and_paginate_lines(self, lines, search='', page=1, limit=50):
+        normalized_search = (search or '').strip().lower()
+        if normalized_search:
+            def _matches(line):
+                haystack = ' '.join([
+                    str(line.get('title') or ''),
+                    str(line.get('model') or ''),
+                    str((line.get('source') or {}).get('label') or ''),
+                    str((line.get('source') or {}).get('type') or ''),
+                    str(line.get('formula') or ''),
+                ]).lower()
+                return normalized_search in haystack
+
+            filtered = [line for line in lines if _matches(line)]
+        else:
+            filtered = lines
+
+        safe_page = max(1, int(page or 1))
+        safe_limit = max(1, min(500, int(limit or 50)))
+        total = len(filtered)
+        start_index = (safe_page - 1) * safe_limit
+        end_index = start_index + safe_limit
+        paged = filtered[start_index:end_index]
+
+        return {
+            'items': paged,
+            'pagination': {
+                'page': safe_page,
+                'limit': safe_limit,
+                'total': total,
+                'total_pages': (total + safe_limit - 1) // safe_limit if total > 0 else 0,
+                'has_next': end_index < total,
+                'has_prev': safe_page > 1,
+            }
+        }
+
+    def get_candidate_usage_summary(self, current_user, period='month', start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window(period, start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            assumptions = self._action_assumptions()
+
+            candidate_docs = list(self.users_collection.find({'user_type': 'candidate'}, {'name': 1, 'email': 1}))
+            candidate_map = {str(doc['_id']): doc for doc in candidate_docs}
+            summary_map = {
+                candidate_id: {
+                    'candidate_id': candidate_id,
+                    'name': doc.get('name', 'Unknown Candidate'),
+                    'email': doc.get('email', ''),
+                    'practice_interview_count': 0,
+                    'practice_interview_total_cost_inr': 0.0,
+                    'practice_interview_evaluation_count': 0,
+                    'practice_interview_evaluation_total_cost_inr': 0.0,
+                }
+                for candidate_id, doc in candidate_map.items()
+            }
+
+            practice_query = self._build_date_range_query(
+                {'is_practice': True},
+                ['created_at', 'updated_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+            practice_sessions = list(self.practice_sessions_collection.find(practice_query)) if self.practice_sessions_collection is not None else []
+
+            for session in practice_sessions:
+                candidate_id = self._find_matching_user_id(candidate_map, session.get('user_id'))
+                if not candidate_id:
+                    continue
+
+                practice_line = self._build_interview_cost_line(
+                    session,
+                    'practice_interview',
+                    'Practice Interview Cost',
+                    assumptions['ai_interview'],
+                    ['completed_at', 'updated_at', 'created_at'],
+                    source_meta={
+                        'type': 'practice_session',
+                        'id': session.get('session_id') or str(session.get('_id') or ''),
+                        'label': session.get('role') or 'Practice Session',
+                    }
+                )
+                summary_map[candidate_id]['practice_interview_count'] += 1
+                summary_map[candidate_id]['practice_interview_total_cost_inr'] += float(practice_line['cost_inr'])
+
+                session_with_eval_context = self._with_evaluation_context(session)
+                evaluation_line = self._build_token_cost_line(
+                    session_with_eval_context,
+                    'practice_interview_evaluation',
+                    'Practice Interview Evaluation Cost',
+                    assumptions['evaluation'],
+                    ['completed_at', 'updated_at', 'created_at'],
+                    source_meta={
+                        'type': 'practice_session',
+                        'id': session.get('session_id') or str(session.get('_id') or ''),
+                        'label': session.get('role') or 'Practice Session',
+                    }
+                )
+                summary_map[candidate_id]['practice_interview_evaluation_count'] += 1
+                summary_map[candidate_id]['practice_interview_evaluation_total_cost_inr'] += float(evaluation_line['cost_inr'])
+
+            incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='candidate')
+            plan_map = self._active_plan_name_map(audience='candidate')
+
+            rows = []
+            for candidate_id, row in summary_map.items():
+                practice_total = float(row['practice_interview_total_cost_inr'])
+                eval_total = float(row['practice_interview_evaluation_total_cost_inr'])
+                practice_count = int(row['practice_interview_count'])
+                eval_count = int(row['practice_interview_evaluation_count'])
+                total_actions = practice_count + eval_count
+                total_cost = practice_total + eval_total
+
+                rows.append({
+                    'candidate_id': candidate_id,
+                    'name': row['name'],
+                    'email': row['email'],
+                    'enrolled_plan': plan_map.get(candidate_id, 'Free'),
+                    'incoming_amount_inr': incoming_map.get(candidate_id, 0.0),
+                    'practice_interview_count': practice_count,
+                    'practice_interview_total_cost_inr': self._round_money(practice_total),
+                    'practice_interview_avg_cost_inr': self._round_money(self._safe_div(practice_total, practice_count)),
+                    'practice_interview_evaluation_count': eval_count,
+                    'practice_interview_evaluation_total_cost_inr': self._round_money(eval_total),
+                    'practice_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(eval_total, eval_count)),
+                    'total_actions': total_actions,
+                    'total_usage_cost_inr': self._round_money(total_cost),
+                    'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                })
+
+            rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'rows': rows,
+                'total_candidates': len(rows),
+            }, 200
+
+        except Exception as e:
+            import traceback
+            print(f"Error getting candidate usage summary: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get candidate usage summary'}, 500
+
+    def get_candidate_usage_lines(self, current_user, candidate_id, period='month', start_date=None, end_date=None, page=1, limit=50, search=''):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window(period, start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            try:
+                candidate_doc = self.users_collection.find_one({'_id': ObjectId(candidate_id), 'user_type': 'candidate'}, {'name': 1, 'email': 1})
+            except Exception:
+                candidate_doc = self.users_collection.find_one({'_id': candidate_id, 'user_type': 'candidate'}, {'name': 1, 'email': 1})
+
+            if not candidate_doc:
+                return {'error': 'Candidate not found'}, 404
+
+            assumptions = self._action_assumptions()
+
+            candidate_id_str = str(candidate_doc.get('_id'))
+            candidate_id_variants = [candidate_id_str]
+            if ObjectId.is_valid(candidate_id_str):
+                candidate_id_variants.append(ObjectId(candidate_id_str))
+
+            practice_query = self._build_date_range_query(
+                {'is_practice': True, 'user_id': {'$in': candidate_id_variants}},
+                ['created_at', 'updated_at', 'completed_at'],
+                period_start,
+                period_end,
+            )
+            sessions = list(self.practice_sessions_collection.find(practice_query)) if self.practice_sessions_collection is not None else []
+
+            practice_lines = []
+            practice_eval_lines = []
+
+            for session in sessions:
+                practice_lines.append(
+                    self._build_interview_cost_line(
+                        session,
+                        'practice_interview',
+                        'Practice Interview Cost',
+                        assumptions['ai_interview'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'practice_session',
+                            'id': session.get('session_id') or str(session.get('_id') or ''),
+                            'label': session.get('role') or 'Practice Session',
+                        }
+                    )
+                )
+                session_with_eval_context = self._with_evaluation_context(session)
+                practice_eval_lines.append(
+                    self._build_token_cost_line(
+                        session_with_eval_context,
+                        'practice_interview_evaluation',
+                        'Practice Interview Evaluation Cost',
+                        assumptions['evaluation'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'practice_session',
+                            'id': session.get('session_id') or str(session.get('_id') or ''),
+                            'label': session.get('role') or 'Practice Session',
+                        }
+                    )
+                )
+
+            raw_categories = [
+                self._line_category_summary('practice_interview', 'Practice Interview Cost', practice_lines),
+                self._line_category_summary('practice_interview_evaluation', 'Practice Interview Evaluation Cost', practice_eval_lines),
+            ]
+
+            categories = []
+            for category in raw_categories:
+                paged = self._search_and_paginate_lines(category['lines'], search=search, page=page, limit=limit)
+                categories.append({
+                    **category,
+                    'lines': paged['items'],
+                    'line_pagination': paged['pagination'],
+                })
+
+            total_count = sum(category['count'] for category in categories)
+            total_cost = sum(float(category['total_cost_inr']) for category in categories)
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'candidate': {
+                    'id': str(candidate_doc.get('_id')),
+                    'name': candidate_doc.get('name', 'Unknown Candidate'),
+                    'email': candidate_doc.get('email', ''),
+                },
+                'categories': categories,
+                'summary': {
+                    'total_actions': total_count,
+                    'total_usage_cost_inr': self._round_money(total_cost),
+                    'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                }
+            }, 200
+
+        except Exception as e:
+            import traceback
+            print(f"Error getting candidate usage lines: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get candidate usage lines'}, 500
+
+    def _recruiter_id_from_job(self, job_doc):
+        return str(job_doc.get('recruiter_id') or job_doc.get('created_by') or '')
+
+    def _recruiter_id_from_application(self, application_doc):
+        recruiter_id = application_doc.get('recruiter_id')
+        if recruiter_id:
+            return str(recruiter_id)
+
+        job_id = application_doc.get('job_id')
+        if not job_id:
+            return ''
+
+        job_doc = None
+        try:
+            job_doc = self.jobs_collection.find_one({'_id': ObjectId(job_id)}, {'recruiter_id': 1, 'created_by': 1})
+        except Exception:
+            job_doc = self.jobs_collection.find_one({'_id': job_id}, {'recruiter_id': 1, 'created_by': 1})
+
+        if not job_doc:
+            return ''
+
+        return self._recruiter_id_from_job(job_doc)
+
+    def get_recruiter_usage_summary(self, current_user, period='month', start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window(period, start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            assumptions = self._action_assumptions()
+
+            recruiter_docs = list(self.users_collection.find({'user_type': 'recruiter'}, {'name': 1, 'email': 1}))
+            recruiter_map = {str(doc['_id']): doc for doc in recruiter_docs}
+
+            summary_map = {
+                recruiter_id: {
+                    'recruiter_id': recruiter_id,
+                    'name': doc.get('name', 'Unknown Recruiter'),
+                    'email': doc.get('email', ''),
+                    'real_interview_count': 0,
+                    'real_interview_total_cost_inr': 0.0,
+                    'real_interview_evaluation_count': 0,
+                    'real_interview_evaluation_total_cost_inr': 0.0,
+                    'ai_jd_generation_count': 0,
+                    'ai_jd_generation_total_cost_inr': 0.0,
+                    'cv_score_count': 0,
+                    'cv_score_total_cost_inr': 0.0,
+                }
+                for recruiter_id, doc in recruiter_map.items()
+            }
+
+            jd_events = self._get_usage_events(
+                actor_type='recruiter',
+                action_types=['ai_jd_generation'],
+                period_start=period_start,
+                period_end=period_end,
+            )
+
+            if jd_events:
+                for event in jd_events:
+                    recruiter_id = self._find_matching_user_id(recruiter_map, event.get('actor_id'))
+                    if not recruiter_id:
+                        continue
+                    jd_line = self._build_token_cost_line(
+                        event,
+                        'ai_jd_generation',
+                        'Total AI JD Generation Cost',
+                        assumptions['ai_jd_generation'],
+                        ['occurred_at', 'created_at'],
+                        source_meta=event.get('source') or {},
+                    )
+                    summary_map[recruiter_id]['ai_jd_generation_count'] += 1
+                    summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+            else:
+                jobs_query = self._build_date_range_query(
+                    {},
+                    ['created_at', 'updated_at'],
+                    period_start,
+                    period_end,
+                )
+                jobs = list(self.jobs_collection.find(jobs_query)) if self.jobs_collection is not None else []
+                for job in jobs:
+                    recruiter_id = self._find_matching_user_id(recruiter_map, self._recruiter_id_from_job(job))
+                    if not recruiter_id:
+                        continue
+                    jd_line = self._build_token_cost_line(
+                        job,
+                        'ai_jd_generation',
+                        'Total AI JD Generation Cost',
+                        assumptions['ai_jd_generation'],
+                        ['updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'job',
+                            'id': str(job.get('_id') or ''),
+                            'label': job.get('title') or 'Job',
+                        }
+                    )
+                    summary_map[recruiter_id]['ai_jd_generation_count'] += 1
+                    summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+
+            cv_query = self._build_date_range_query(
+                {'cv_score': {'$exists': True, '$ne': None}},
+                ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
+            )
+            cv_apps = list(self.applications_collection.find(cv_query)) if self.applications_collection is not None else []
+            for app in cv_apps:
+                recruiter_id = self._find_matching_user_id(recruiter_map, self._recruiter_id_from_application(app))
+                if not recruiter_id:
+                    continue
+                cv_line = self._build_token_cost_line(
+                    app,
+                    'cv_scoring',
+                    'Total CV Score Calculation Cost',
+                    assumptions['cv_scoring'],
+                    ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                    source_meta={
+                        'type': 'application',
+                        'id': str(app.get('_id') or ''),
+                        'label': app.get('job_title') or 'Application',
+                    }
+                )
+                summary_map[recruiter_id]['cv_score_count'] += 1
+                summary_map[recruiter_id]['cv_score_total_cost_inr'] += float(cv_line['cost_inr'])
+
+            interview_query = self._build_date_range_query(
+                {'is_visible': True, 'status': {'$in': ['interviewed', 'selected', 'rejected']}},
+                ['completed_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
+            )
+            interview_apps = list(self.applications_collection.find(interview_query)) if self.applications_collection is not None else []
+            interview_reports = self._latest_interview_reports_by_application([app.get('_id') for app in interview_apps])
+            for app in interview_apps:
+                app_with_context = self._merge_application_interview_context(
+                    app,
+                    interview_reports.get(str(app.get('_id') or ''))
+                )
+                recruiter_id = self._find_matching_user_id(recruiter_map, self._recruiter_id_from_application(app))
+                if not recruiter_id:
+                    continue
+                interview_line = self._build_interview_cost_line(
+                    app_with_context,
+                    'ai_interview',
+                    'Total Real Interview Cost',
+                    assumptions['ai_interview'],
+                    ['completed_at', 'updated_at', 'created_at'],
+                    source_meta={
+                        'type': 'application',
+                        'id': str(app.get('_id') or ''),
+                        'label': app.get('job_title') or 'Application',
+                    }
+                )
+                summary_map[recruiter_id]['real_interview_count'] += 1
+                summary_map[recruiter_id]['real_interview_total_cost_inr'] += float(interview_line['cost_inr'])
+
+                if self._has_interview_evaluation(app_with_context):
+                    app_with_eval_context = self._with_evaluation_context(app_with_context)
+                    eval_line = self._build_token_cost_line(
+                        app_with_eval_context,
+                        'ai_interview_evaluation',
+                        'Total Real Interview Evaluation Cost',
+                        assumptions['evaluation'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'application',
+                            'id': str(app.get('_id') or ''),
+                            'label': app.get('job_title') or 'Application',
+                        }
+                    )
+                    summary_map[recruiter_id]['real_interview_evaluation_count'] += 1
+                    summary_map[recruiter_id]['real_interview_evaluation_total_cost_inr'] += float(eval_line['cost_inr'])
+
+            incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='recruiter')
+            plan_map = self._active_plan_name_map(audience='recruiter')
+
+            rows = []
+            for recruiter_id, row in summary_map.items():
+                interview_total = float(row['real_interview_total_cost_inr'])
+                interview_eval_total = float(row['real_interview_evaluation_total_cost_inr'])
+                jd_total = float(row['ai_jd_generation_total_cost_inr'])
+                cv_total = float(row['cv_score_total_cost_inr'])
+                interview_count = int(row['real_interview_count'])
+                interview_eval_count = int(row['real_interview_evaluation_count'])
+                jd_count = int(row['ai_jd_generation_count'])
+                cv_count = int(row['cv_score_count'])
+
+                total_actions = interview_count + interview_eval_count + jd_count + cv_count
+                total_cost = interview_total + interview_eval_total + jd_total + cv_total
+
+                rows.append({
+                    'recruiter_id': recruiter_id,
+                    'name': row['name'],
+                    'email': row['email'],
+                    'enrolled_plan': plan_map.get(recruiter_id, 'Free'),
+                    'incoming_amount_inr': incoming_map.get(recruiter_id, 0.0),
+                    'real_interview_count': interview_count,
+                    'real_interview_total_cost_inr': self._round_money(interview_total),
+                    'real_interview_avg_cost_inr': self._round_money(self._safe_div(interview_total, interview_count)),
+                    'real_interview_evaluation_count': interview_eval_count,
+                    'real_interview_evaluation_total_cost_inr': self._round_money(interview_eval_total),
+                    'real_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(interview_eval_total, interview_eval_count)),
+                    'ai_jd_generation_count': jd_count,
+                    'ai_jd_generation_total_cost_inr': self._round_money(jd_total),
+                    'ai_jd_generation_avg_cost_inr': self._round_money(self._safe_div(jd_total, jd_count)),
+                    'cv_score_count': cv_count,
+                    'cv_score_total_cost_inr': self._round_money(cv_total),
+                    'cv_score_avg_cost_inr': self._round_money(self._safe_div(cv_total, cv_count)),
+                    'total_actions': total_actions,
+                    'total_usage_cost_inr': self._round_money(total_cost),
+                    'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                })
+
+            rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'rows': rows,
+                'total_recruiters': len(rows),
+            }, 200
+
+        except Exception as e:
+            import traceback
+            print(f"Error getting recruiter usage summary: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get recruiter usage summary'}, 500
+
+    def get_recruiter_usage_lines(self, current_user, recruiter_id, period='month', start_date=None, end_date=None, page=1, limit=50, search=''):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window(period, start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            try:
+                recruiter_doc = self.users_collection.find_one({'_id': ObjectId(recruiter_id), 'user_type': 'recruiter'}, {'name': 1, 'email': 1})
+            except Exception:
+                recruiter_doc = self.users_collection.find_one({'_id': recruiter_id, 'user_type': 'recruiter'}, {'name': 1, 'email': 1})
+
+            if not recruiter_doc:
+                return {'error': 'Recruiter not found'}, 404
+
+            recruiter_id_str = str(recruiter_doc.get('_id'))
+            assumptions = self._action_assumptions()
+
+            jd_lines = []
+            cv_lines = []
+            interview_lines = []
+            interview_eval_lines = []
+
+            recruiter_id_variants = [recruiter_id_str]
+            if ObjectId.is_valid(recruiter_id_str):
+                recruiter_id_variants.append(ObjectId(recruiter_id_str))
+
+            jd_events = self._get_usage_events(
+                actor_type='recruiter',
+                actor_id=recruiter_id_str,
+                action_types=['ai_jd_generation'],
+                period_start=period_start,
+                period_end=period_end,
+            )
+
+            if jd_events:
+                for event in jd_events:
+                    jd_lines.append(
+                        self._build_token_cost_line(
+                            event,
+                            'ai_jd_generation',
+                            'Total AI JD Generation Cost',
+                            assumptions['ai_jd_generation'],
+                            ['occurred_at', 'created_at'],
+                            source_meta=event.get('source') or {},
+                        )
+                    )
+            else:
+                jobs_query = self._build_date_range_query(
+                    {
+                        '$or': [
+                            {'created_by': {'$in': recruiter_id_variants}},
+                            {'recruiter_id': {'$in': recruiter_id_variants}},
+                        ]
+                    },
+                    ['created_at', 'updated_at'],
+                    period_start,
+                    period_end,
+                )
+                jobs = list(self.jobs_collection.find(jobs_query)) if self.jobs_collection is not None else []
+                for job in jobs:
+                    jd_lines.append(
+                        self._build_token_cost_line(
+                            job,
+                            'ai_jd_generation',
+                            'Total AI JD Generation Cost',
+                            assumptions['ai_jd_generation'],
+                            ['updated_at', 'created_at'],
+                            source_meta={
+                                'type': 'job',
+                                'id': str(job.get('_id') or ''),
+                                'label': job.get('title') or 'Job',
+                            }
+                        )
+                    )
+
+            base_app_query = {
+                '$or': [
+                    {'recruiter_id': recruiter_id_str},
+                    {'recruiter_id': ObjectId(recruiter_id_str)} if ObjectId.is_valid(recruiter_id_str) else {'recruiter_id': recruiter_id_str}
+                ]
+            }
+
+            cv_query = self._build_date_range_query(
+                {**base_app_query, 'cv_score': {'$exists': True, '$ne': None}},
+                ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
+            )
+            cv_apps = list(self.applications_collection.find(cv_query)) if self.applications_collection is not None else []
+            for app in cv_apps:
+                cv_lines.append(
+                    self._build_token_cost_line(
+                        app,
+                        'cv_scoring',
+                        'Total CV Score Calculation Cost',
+                        assumptions['cv_scoring'],
+                        ['cv_score_calculated_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'application',
+                            'id': str(app.get('_id') or ''),
+                            'label': app.get('job_title') or 'Application',
+                        }
+                    )
+                )
+
+            interview_query = self._build_date_range_query(
+                {
+                    **base_app_query,
+                    'is_visible': True,
+                    'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                },
+                ['completed_at', 'updated_at', 'created_at'],
+                period_start,
+                period_end,
+            )
+            interview_apps = list(self.applications_collection.find(interview_query)) if self.applications_collection is not None else []
+            interview_reports = self._latest_interview_reports_by_application([app.get('_id') for app in interview_apps])
+            for app in interview_apps:
+                app_with_context = self._merge_application_interview_context(
+                    app,
+                    interview_reports.get(str(app.get('_id') or ''))
+                )
+                interview_lines.append(
+                    self._build_interview_cost_line(
+                        app_with_context,
+                        'ai_interview',
+                        'Total Real Interview Cost',
+                        assumptions['ai_interview'],
+                        ['completed_at', 'updated_at', 'created_at'],
+                        source_meta={
+                            'type': 'application',
+                            'id': str(app.get('_id') or ''),
+                            'label': app.get('job_title') or 'Application',
+                        }
+                    )
+                )
+
+                if self._has_interview_evaluation(app_with_context):
+                    app_with_eval_context = self._with_evaluation_context(app_with_context)
+                    interview_eval_lines.append(
+                        self._build_token_cost_line(
+                            app_with_eval_context,
+                            'ai_interview_evaluation',
+                            'Total Real Interview Evaluation Cost',
+                            assumptions['evaluation'],
+                            ['completed_at', 'updated_at', 'created_at'],
+                            source_meta={
+                                'type': 'application',
+                                'id': str(app.get('_id') or ''),
+                                'label': app.get('job_title') or 'Application',
+                            }
+                        )
+                    )
+
+            raw_categories = [
+                self._line_category_summary('ai_interview', 'Total Real Interview Cost', interview_lines),
+                self._line_category_summary('ai_interview_evaluation', 'Total Real Interview Evaluation Cost', interview_eval_lines),
+                self._line_category_summary('ai_jd_generation', 'Total AI JD Generation Cost', jd_lines),
+                self._line_category_summary('cv_scoring', 'Total CV Score Calculation Cost', cv_lines),
+            ]
+
+            categories = []
+            for category in raw_categories:
+                paged = self._search_and_paginate_lines(category['lines'], search=search, page=page, limit=limit)
+                categories.append({
+                    **category,
+                    'lines': paged['items'],
+                    'line_pagination': paged['pagination'],
+                })
+
+            total_count = sum(category['count'] for category in categories)
+            total_cost = sum(float(category['total_cost_inr']) for category in categories)
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'recruiter': {
+                    'id': recruiter_id_str,
+                    'name': recruiter_doc.get('name', 'Unknown Recruiter'),
+                    'email': recruiter_doc.get('email', ''),
+                },
+                'categories': categories,
+                'summary': {
+                    'total_actions': total_count,
+                    'total_usage_cost_inr': self._round_money(total_cost),
+                    'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                }
+            }, 200
+
+        except Exception as e:
+            import traceback
+            print(f"Error getting recruiter usage lines: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get recruiter usage lines'}, 500

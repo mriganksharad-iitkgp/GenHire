@@ -136,6 +136,12 @@ class Subscription:
         price_in_smallest = self.plan_snapshot.get(
             "price_paise", self.plan_snapshot.get("price_cents", 0)
         )
+        usage_cost_total = 0.0
+        if isinstance(self.metadata, dict):
+            usage_cost_total = float(
+                self.metadata.get("usage_cost_total_usd", 0.0) or 0.0
+            )
+
         return {
             "id": str(self._id) if self._id else None,
             "plan": {

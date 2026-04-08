@@ -86,7 +86,7 @@ const LandingPage = () => {
 
   const testimonials = [
     {
-      quote: "SmartHire transformed our hiring process. We reduced time-to-hire by 60% while improving candidate quality.",
+      quote: "GenHire transformed our hiring process. We reduced time-to-hire by 60% while improving candidate quality.",
       author: "Sarah Johnson",
       role: "HR Director, TechCorp",
       avatar: "S"
@@ -119,9 +119,9 @@ const LandingPage = () => {
                 <circle cx="7" cy="7" r="3"></circle>
               </svg>
             </div>
-            <span>SmartHire</span>
+            <span>GenHire</span>
           </Link>
-          
+
           <div className={styles.navLinks}>
             <a href="#features">Features</a>
             <a href="#how-it-works">How It Works</a>
@@ -130,13 +130,13 @@ const LandingPage = () => {
           </div>
 
           <div className={styles.navActions}>
-            <button 
+            <button
               className={styles.loginBtn}
               onClick={() => navigate("/login")}
             >
               Login
             </button>
-            <button 
+            <button
               className={styles.signupBtn}
               onClick={() => navigate("/register")}
             >
@@ -152,7 +152,7 @@ const LandingPage = () => {
           <div className={styles.heroGradient}></div>
           <div className={styles.heroParticles}></div>
         </div>
-        
+
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
             <div className={styles.heroBadge}>
@@ -164,11 +164,11 @@ const LandingPage = () => {
               <span className={styles.gradientText}>Hiring Process</span>
             </h1>
             <p className={styles.heroSubtitle}>
-              Streamline recruitment with AI-powered interviews, smart CV analysis, 
+              Streamline recruitment with AI-powered interviews, smart CV analysis,
               and comprehensive analytics. Save time, reduce bias, and hire the best talent.
             </p>
             <div className={styles.heroCta}>
-              <button 
+              <button
                 className={styles.primaryBtn}
                 onClick={() => navigate("/register")}
               >
@@ -177,7 +177,7 @@ const LandingPage = () => {
                   <path d="M5 12h14M12 5l7 7-7 7"></path>
                 </svg>
               </button>
-              <button 
+              <button
                 className={styles.secondaryBtn}
                 onClick={() => navigate("/recruiter-signup")}
               >
@@ -198,7 +198,7 @@ const LandingPage = () => {
               </div>
             </div>
           </div>
-          
+
           <div className={styles.heroVisual}>
             <div className={styles.dashboardPreview}>
               <div className={styles.previewHeader}>
@@ -319,7 +319,7 @@ const LandingPage = () => {
           <div className={styles.featuresGrid}>
             {features.map((feature, index) => (
               <div key={index} className={styles.featureCard}>
-                <div 
+                <div
                   className={styles.featureIcon}
                   style={{ background: feature.gradient }}
                 >
@@ -347,14 +347,14 @@ const LandingPage = () => {
           </div>
 
           <div className={styles.workflowTabs}>
-            <button 
+            <button
               className={`${styles.workflowTab} ${workflowTab === "candidate" ? styles.active : ""}`}
               onClick={() => { setWorkflowTab("candidate"); setActiveStep(0); }}
             >
               <span className={styles.tabIcon}>👤</span>
               For Candidates
             </button>
-            <button 
+            <button
               className={`${styles.workflowTab} ${workflowTab === "recruiter" ? styles.active : ""}`}
               onClick={() => { setWorkflowTab("recruiter"); setActiveStep(0); }}
             >
@@ -366,8 +366,8 @@ const LandingPage = () => {
           <div className={styles.workflowContent}>
             <div className={styles.workflowSteps}>
               {(workflowTab === "candidate" ? candidateSteps : recruiterSteps).map((item, index) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className={`${styles.workflowStep} ${activeStep === index ? styles.activeStep : ""}`}
                   onClick={() => setActiveStep(index)}
                 >
@@ -399,7 +399,7 @@ const LandingPage = () => {
                     </div>
                     <div className={styles.visualProgress}>
                       {[0, 1, 2, 3].map((i) => (
-                        <div 
+                        <div
                           key={i}
                           className={`${styles.progressDot} ${i <= activeStep ? styles.completed : ""}`}
                         ></div>
@@ -424,7 +424,7 @@ const LandingPage = () => {
                     </div>
                     <div className={styles.visualProgress}>
                       {[0, 1, 2, 3].map((i) => (
-                        <div 
+                        <div
                           key={i}
                           className={`${styles.progressDot} ${i <= activeStep ? styles.completed : ""}`}
                           style={{ background: i <= activeStep ? "#10b981" : "" }}
@@ -465,7 +465,7 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>Free plan with 2 practice interviews per month</p>
+                <p>2 one-time free practice interviews at signup (lifetime)</p>
               </div>
               <ul className={styles.pricingFeatures}>
                 <li><span>✓</span> 2 AI Interviews</li>
@@ -541,7 +541,10 @@ const LandingPage = () => {
               <ul className={styles.pricingFeatures}>
                 <li><span>✓</span> 2 AI Interviews</li>
                 <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Basic Analytics</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Candidate Analytics</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Priority Support</li>
+                <li className={styles.unavailableFeature}><span>✕</span> Custom Branding</li>
+                <li className={styles.unavailableFeature}><span>✕</span> API Access</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
                 Start for Free
@@ -557,15 +560,15 @@ const LandingPage = () => {
                   <span className={styles.amount}>4,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
-                <p>For growing teams</p>
+                <p>Professional plan for growing teams with 100 interviews per month</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 AI Interviews/month</li>
+                <li><span>✓</span> 100 AI Interviews</li>
                 <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Advanced Analytics</li>
-                <li><span>✓</span> CV Screening & Ranking</li>
-                <li><span>✓</span> Proctoring Features</li>
+                <li><span>✓</span> Candidate Analytics</li>
                 <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> API Access</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
                 Start Free Trial
@@ -580,14 +583,14 @@ const LandingPage = () => {
                   <span className={styles.amount}>9,999.00</span>
                   <span className={styles.period}>/month</span>
                 </div>
-                <p>For large organizations</p>
+                <p>Advanced recruiter plan with 300 interviews per month</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 300 AI Interviews/month</li>
-                <li><span>✓</span> Custom Integrations</li>
-                <li><span>✓</span> Advanced Analytics & Reporting</li>
-                <li><span>✓</span> Custom Branding</li>
+                <li><span>✓</span> 300 AI Interviews</li>
+                <li><span>✓</span> Smart CV Matching</li>
+                <li><span>✓</span> Candidate Analytics</li>
                 <li><span>✓</span> Priority Support</li>
+                <li><span>✓</span> Custom Branding</li>
                 <li><span>✓</span> API Access</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
@@ -613,7 +616,7 @@ const LandingPage = () => {
               <div key={index} className={styles.testimonialCard}>
                 <div className={styles.testimonialQuote}>
                   <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
+                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
                   </svg>
                 </div>
                 <p className={styles.testimonialText}>{testimonial.quote}</p>
@@ -635,15 +638,15 @@ const LandingPage = () => {
         <div className={styles.container}>
           <div className={styles.ctaContent}>
             <h2>Ready to Transform Your Hiring?</h2>
-            <p>Join thousands of companies and candidates using SmartHire to streamline recruitment.</p>
+            <p>Join thousands of companies and candidates using GenHire to streamline recruitment.</p>
             <div className={styles.ctaButtons}>
-              <button 
+              <button
                 className={styles.ctaPrimary}
                 onClick={() => navigate("/register")}
               >
                 Get Started Free
               </button>
-              <button 
+              <button
                 className={styles.ctaSecondary}
                 onClick={() => navigate("/login")}
               >
@@ -668,22 +671,22 @@ const LandingPage = () => {
                     <circle cx="7" cy="7" r="3"></circle>
                   </svg>
                 </div>
-                <span>SmartHire</span>
+                <span>GenHire</span>
               </div>
               <p>AI-powered hiring platform that helps companies find the best talent efficiently.</p>
               <div className={styles.socialLinks}>
                 <a href="#" aria-label="Twitter">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" /></svg>
                 </a>
                 <a href="#" aria-label="LinkedIn">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" /></svg>
                 </a>
                 <a href="#" aria-label="GitHub">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" /></svg>
                 </a>
               </div>
             </div>
-            
+
             <div className={styles.footerLinks}>
               <h4>Product</h4>
               <ul>
@@ -716,7 +719,7 @@ const LandingPage = () => {
           </div>
 
           <div className={styles.footerBottom}>
-            <p>© 2026 SmartHire. All rights reserved.</p>
+            <p>© 2026 GenHire. All rights reserved.</p>
           </div>
         </div>
       </footer>

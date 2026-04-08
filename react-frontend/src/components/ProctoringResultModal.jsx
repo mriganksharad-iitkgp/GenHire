@@ -49,29 +49,27 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
           </div>
           <button onClick={onClose} className={styles.closeBtn}>&times;</button>
         </div>
-
-        {/* Overall Score */}
-        <div className={styles.scoreSection}>
-          <div className={styles.scoreCircle}>
-            <svg viewBox="0 0 120 120" className={styles.scoreSvg}>
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#1e293b" strokeWidth="8" />
-              <circle
-                cx="60" cy="60" r="50" fill="none"
-                stroke={report.proctoring_score >= 70 ? '#10b981' : report.proctoring_score >= 40 ? '#f59e0b' : '#ef4444'}
-                strokeWidth="8"
-                strokeDasharray={`${(report.proctoring_score || 0) / 100 * 314} 314`}
-                strokeLinecap="round"
-                transform="rotate(-90 60 60)"
-                style={{ transition: 'stroke-dasharray 1s ease' }}
-              />
-            </svg>
-            <span className={styles.scoreValue}>
-              {report.proctoring_score !== undefined && report.proctoring_score !== null
-                ? `${Math.round(report.proctoring_score)}%`
-                : 'N/A'}
-            </span>
-          </div>
-          <div className={styles.scoreLabel}>Overall Proctoring Score</div>
+        <div className={styles.modalBody}>
+          {report.gaze_proctoring === false ? (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: '#6b7280' }}>
+              <h3>Proctoring is off by company</h3>
+            </div>
+          ) : (
+            <>
+              <h4>Gaze Plot</h4>
+              <Scatter options={options} data={chartData} />
+              <hr />
+          <h4>Proctoring Summary</h4>
+          <p><strong>Proctoring Score:</strong> {report.proctoring_score !== undefined ? `${report.proctoring_score}%` : 'N/A'}</p>
+          <p><strong>Manual Infractions:</strong></p>
+          <ul>
+            {(report.manual_infractions || []).map((infraction, index) => (
+              <li key={index}>{infraction.type} at {new Date(infraction.timestamp).toLocaleString()}</li>
+            ))}
+             {(report.manual_infractions || []).length === 0 && <p>No manual infractions recorded.</p>}
+          </ul>
+            </>
+          )}
         </div>
 
         {/* Feature Cards */}

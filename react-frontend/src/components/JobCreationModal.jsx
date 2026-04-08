@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateJobWithAI } from '../services/api';
+import { INDIA_LOCATION_OPTIONS } from '../constants/jobTaxonomy';
 import styles from './JobCreationModal.module.css';
 
 // Predefined data for auto-suggestions
@@ -141,12 +142,7 @@ const DEPARTMENTS = [
   'Security', 'DevOps', 'Quality Assurance', 'Research & Development'
 ];
 
-const LOCATIONS = [
-  'Remote', 'Bangalore, Karnataka', 'Mumbai, Maharashtra', 'Delhi, NCR', 'Hyderabad, Telangana',
-  'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Kolkata, West Bengal', 'Ahmedabad, Gujarat', 'Gurgaon, Haryana',
-  'Noida, Uttar Pradesh', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Jaipur, Rajasthan',
-  'Remote (India)', 'Remote (Global)', 'Hybrid - Bangalore', 'Hybrid - Mumbai', 'Hybrid - Delhi'
-];
+const LOCATIONS = INDIA_LOCATION_OPTIONS;
 
 const EXPERIENCE_LEVELS = [
   'Entry Level (0-1 years)', '1-2 years', '2-4 years', '3-5 years', 
@@ -239,7 +235,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       setJobData({
         title: ai.title || '',
         department: ai.department || '',
-        location: ai.location || 'Remote',
+        location: LOCATIONS.includes(ai.location) ? ai.location : 'Remote (India)',
         type: ai.type || 'Full-time',
         experience: ai.experience || '',
         salary: ai.salary || '',
@@ -250,7 +246,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
         requirements: Array.isArray(ai.requirements) ? ai.requirements.join('\n') : '',
         benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
         status: 'draft',
-        minimum_cv_score: ai.minimum_cv_score || 50
+        minimum_cv_score: ai.minimum_cv_score || 50,
+        gaze_proctoring: false
       });
       setAiPrompt('');
     } catch (err) {
@@ -372,10 +369,10 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   }, [isOpen]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setJobData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 

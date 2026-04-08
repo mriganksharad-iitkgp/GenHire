@@ -127,12 +127,13 @@ class ApplicationController:
         cv_snapshot = None
         if selected_cv:
             cv_snapshot = {
-                "cv_id": selected_cv.get("cv_id"),
-                "filename": selected_cv.get("filename"),
-                "text": cv_text,
-                "upload_date": selected_cv.get("upload_date"),
-                "source": cv_source,
-                "metadata": selected_cv.get("metadata", {}),
+                'cv_id': selected_cv.get('cv_id'),
+                'filename': selected_cv.get('filename'),
+                'file_path': selected_cv.get('file_path'),
+                'text': cv_text,
+                'upload_date': selected_cv.get('upload_date'),
+                'source': cv_source,
+                'metadata': selected_cv.get('metadata', {})
             }
         elif cv_text:
             # Manual entry formatted as text
@@ -304,9 +305,14 @@ class ApplicationController:
                     {"application_id": app["_id"], "status": "completed"},
                     sort=[("updated_at", -1)],
                 )
-
+                
+                # Check if job has gaze proctoring enabled
+                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                
                 # Prioritize scores stored directly in the application (from interview end process)
-                if "proctoring_score" not in app or app.get("proctoring_score") is None:
+                if not gaze_proctoring_enabled:
+                    app['proctoring_score'] = None
+                elif 'proctoring_score' not in app or app.get('proctoring_score') is None:
                     # Fallback to interview collection if not in application
                     if completed_interview and completed_interview.get(
                         "proctoring_score"
@@ -381,8 +387,14 @@ class ApplicationController:
                     {"application_id": app["_id"], "status": "completed"},
                     sort=[("updated_at", -1)],
                 )
-                if completed_interview and completed_interview.get("proctoring_score"):
-                    proctoring_score = completed_interview.get("proctoring_score")
+                
+                # Check if job has gaze proctoring enabled
+                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                
+                if not gaze_proctoring_enabled:
+                    app['proctoring_score'] = None
+                elif completed_interview and completed_interview.get('proctoring_score'):
+                    proctoring_score = completed_interview.get('proctoring_score')
                     # Handle both numeric and string values, exclude 'N/A'
                     if isinstance(proctoring_score, (int, float)):
                         app["proctoring_score"] = proctoring_score
@@ -531,19 +543,17 @@ class ApplicationController:
 
         if not app_doc:
             return {"error": "Application not found"}, 404
-
         if user_type in ["candidate", "student"]:
             if app_doc.get("student_id") != user_id:
                 return {"error": "Unauthorized"}, 403
         elif user_type == "recruiter":
-            job = self.jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
-            if not job or job.get("created_by") != user_id:
-                return {"error": "Unauthorized"}, 403
+            job = self.jobs_collection.find_one({'_id': ObjectId(app_doc['job_id'])})
+            if not job or job.get('created_by') != user_id:
+                return {'error': 'Unauthorized'}, 403
         else:
             return {"error": "Unauthorized"}, 403
 
         report = self.interviews_collection.find_one(
-            {"application_id": application_id, "status": "completed"},
             sort=[("updated_at", -1)],
         )
         if not report:
@@ -563,7 +573,6 @@ class ApplicationController:
             # Proctoring details for the report modal
             "proctoring_config": report.get("proctoring_config", {
                 "voice_detection": True,
-                "object_detection": True,
                 "eyeball_tracking": True,
                 "gaze_heatmap": True,
             }),
@@ -577,17 +586,6 @@ class ApplicationController:
         return payload, 200
 
     def _validate_cv_completion(self, cv_details):
-        """Validate that required CV sections are completed"""
-        errors = []
-
-        # Education validation
-        education = cv_details.get("education", [])
-        has_valid_education = any(
-            edu.get("degree", "").strip()
-            and edu.get("institution", "").strip()
-            and edu.get("year", "").strip()
-            for edu in education
-        )
         if not has_valid_education:
             errors.append("- At least one complete education entry is required")
 
