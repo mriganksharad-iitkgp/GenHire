@@ -1042,8 +1042,7 @@ def handle_mobile_status(data):
 
 if __name__ == "__main__":
     try:
-        app.run(host="0.0.0.0", port=5000, debug=False)
-        # Disable reloader to avoid torch deadlock issues on Windows
+        # Use socketio.run instead of app.run to enable WebSocket eventlet server
         socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=False)
     finally:
         # Cleanup background processor on shutdown

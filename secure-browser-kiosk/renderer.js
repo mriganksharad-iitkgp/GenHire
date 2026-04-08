@@ -35,6 +35,12 @@ let currentQuestion = "";
 let questionCount = 0;
 let isSubmittingAnswer = false;
 
+// GazeCloud Recorder State
+let gazePointsTracker = [];
+let gazeStartedAtMs = null;
+let gazeEndedAtMs = null;
+let gazeRecorderTracking = false;
+
 // ── Object detection runs on a slower cadence to avoid blocking the face loop ──
 let lastObjectDetectTime = 0;
 const OBJECT_DETECT_INTERVAL = 2000;
@@ -226,6 +232,37 @@ async function startInterview() {
 
     // Switch Views
     startupView.style.display = 'none';
+
+    // Start Gaze Calibration before proceeding to interview
+    if (window.GazeCloudAPI && window.GazeRecorderAPI) {
+        btnStart.textContent = "Calibrating Gaze...";
+        gazePointsTracker = [];
+        gazeStartedAtMs = Date.now();
+
+        window.GazeCloudAPI.OnResult = function (gazeData) {
+            if (gazeRecorderTracking) {
+                gazePointsTracker.push({
+                    timestamp: (Date.now() - gazeStartedAtMs) / 1000,
+                    x: gazeData?.docX || 0,
+                    y: gazeData?.docY || 0,
+                });
+            }
+        };
+
+        window.GazeCloudAPI.OnCalibrationComplete = function () {
+            window.GazeRecorderAPI.Rec();
+            gazeRecorderTracking = true;
+            finalizeStartInterview();
+        };
+
+        window.GazeCloudAPI.StartEyeTracking();
+    } else {
+        console.warn("GazeCloudAPI not available. Starting without heatmap tracking...");
+        finalizeStartInterview();
+    }
+}
+
+function finalizeStartInterview() {
     interviewView.style.display = 'block';
 
     isInterviewActive = true;
@@ -287,6 +324,15 @@ async function endInterview() {
     if (silenceInterval) clearInterval(silenceInterval);
 
     stopRecording();
+    
+    let recData = null;
+    if (gazeRecorderTracking && window.GazeCloudAPI && window.GazeRecorderAPI) {
+        window.GazeRecorderAPI.StopRec();
+        window.GazeCloudAPI.StopEyeTracking();
+        gazeRecorderTracking = false;
+        gazeEndedAtMs = Date.now();
+        recData = window.GazeRecorderAPI.GetRecData();
+    }
 
     if (socket && socket.connected) {
         socket.emit("control_mobile_recording", { session_id: currentSessionId, action: "stop" });
@@ -298,8 +344,26 @@ async function endInterview() {
         video.srcObject.getTracks().forEach(t => t.stop());
     }
 
-    // Tell backend to end interview
+    // Tell backend to end interview and send gaze data
     try {
+        if (recData && gazePointsTracker.length > 0) {
+            await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiToken}`
+                },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    recordingData: recData,
+                    gazePoints: gazePointsTracker,
+                    startedAtMs: gazeStartedAtMs,
+                    endedAtMs: gazeEndedAtMs,
+                    viewport: { width: window.innerWidth, height: window.innerHeight }
+                })
+            });
+        }
+
         await fetch(`${apiUrl}/api/interviews/${currentSessionId}/end`, {
             method: "POST",
             headers: {
@@ -308,7 +372,7 @@ async function endInterview() {
             }
         });
     } catch (e) {
-        console.error("Failed to signal backend to end interview", e);
+        console.error("Failed to signal backend to end interview or send gaze tracking data", e);
     }
 
     // UNLOCK: Disable kiosk mode now that interview is over
