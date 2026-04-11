@@ -174,14 +174,35 @@ class PromptBasedQuestionGenerator:
         """Wrapper for LLM completion with cost tracking."""
         response = self.llm.complete(prompt)
         
-        # Track cost if usage is available
-        if hasattr(response, "usage") and response.usage:
-            CostTracker().add_usage(
-                source="question_generation",
-                model=getattr(response, "model", None) or self.config.default_model,
-                prompt_tokens=response.usage.get("prompt_tokens", 0),
-                completion_tokens=response.usage.get("completion_tokens", 0)
-            )
+        # Track cost with robust usage extraction
+        prompt_tokens = 0
+        completion_tokens = 0
+        model_name = getattr(response, "model", None) or self.config.default_model
+        
+        if hasattr(response, "usage"):
+            if isinstance(response.usage, dict):
+                prompt_tokens = response.usage.get("prompt_tokens", 0)
+                completion_tokens = response.usage.get("completion_tokens", 0)
+            else:
+                # Handle object-based usage
+                prompt_tokens = getattr(response.usage, "prompt_tokens", 0)
+                completion_tokens = getattr(response.usage, "completion_tokens", 0)
+        
+        # Fallback for Gemini specific structure if using raw response
+        if prompt_tokens == 0 and hasattr(response, "raw"):
+            raw = response.raw
+            if hasattr(raw, "usage_metadata"):
+                prompt_tokens = getattr(raw.usage_metadata, "prompt_token_count", 0)
+                completion_tokens = getattr(raw.usage_metadata, "candidates_token_count", 0)
+
+        CostTracker().add_usage(
+            source="question_generation",
+            model=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            prompt_text=prompt,
+            completion_text=getattr(response, "text", "") if response else ""
+        )
             
         return response
 
@@ -297,16 +318,13 @@ class PromptBasedQuestionGenerator:
             self.last_question_source = "fallback"
             return self._fallback_greeting(context)
 
-    def _rephrase_with_cv(self, bank_question: str, topic: str, difficulty: str, context: ConversationContext) -> str:
-        """Rephrase a bank question to better align with the candidate's CV while staying true to the JD."""
+    def _refine_with_jd(self, bank_question: str, topic: str, difficulty: str, context: ConversationContext) -> str:
+        """Refine a bank question to better align with the JD requirements."""
         try:
-            # Prepare CV and JD content for rephrasing
-            cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
             jd_summary = context.job_title + ": " + ", ".join(context.jd_keywords[:5])
             
             prompt = REPHRASE_BANK_QUESTION_PROMPT.format(
                 bank_question=bank_question,
-                cv_content=cv_summary or "N/A",
                 jd_content=jd_summary or "N/A",
                 topic=topic,
                 difficulty=difficulty
@@ -314,13 +332,12 @@ class PromptBasedQuestionGenerator:
             
             response = self._complete_llm(prompt)
             if response and hasattr(response, "text"):
-                rephrased = response.text.strip()
-                # Basic validation: ensure it's a question and not just repeating the prompt
-                if rephrased and "?" in rephrased and len(rephrased) > 15:
-                    return rephrased
+                refined = response.text.strip()
+                if refined and "?" in refined and len(refined) > 15:
+                    return refined
             return bank_question
         except Exception as e:
-            logger.error(f"Error rephrasing bank question: {e}")
+            logger.error(f"Error refining bank question: {e}")
             return bank_question
 
     def _generate_technical_question(
@@ -329,7 +346,7 @@ class PromptBasedQuestionGenerator:
         last_answer: Optional[str] = None,
         answer_evaluation: Optional[Dict] = None,
     ) -> str:
-        """Generate a technical question using JD as primary, tailored with CV, using bank as source."""
+        """Generate a technical question strictly based on JD requirements, using bank as primary source."""
         # Select difficulty based on JD-derived distribution
         selected_diff = self._select_question_difficulty(context)
 
@@ -340,9 +357,8 @@ class PromptBasedQuestionGenerator:
                 context.current_topic = next_topic
                 context.fallback_usage_by_topic[next_topic] = 0
 
-        # Build context about previous answers for the rephrasing model
+        # Build context about previous answers
         jd_keywords_str = ", ".join(context.jd_keywords or []) if context.jd_keywords else "N/A"
-        cv_summary = " ".join(context.cv_experiences[:3] + context.cv_projects[:3])
         
         previous_context = ""
         score = 0.5  # Default score
@@ -388,13 +404,13 @@ class PromptBasedQuestionGenerator:
 
         topics_covered_str = ", ".join(context.topics_covered) if context.topics_covered else "none yet"
 
-        # STEP 1: Try to get a question from the bank matching the selected difficulty
+        # STEP 1: Try to get a question from the bank matching the selected difficulty (JD-driven)
         bank_q = self._get_question_from_bank(context, context.current_topic, selected_diff)
         if bank_q:
             logger.info(f"Question bank HIT for topic '{context.current_topic}' and difficulty '{selected_diff}'")
             
-            # REPHRASE/TAILOR the bank question using the CV
-            tailored_q = self._rephrase_with_cv(bank_q, context.current_topic, selected_diff, context)
+            # REFINE the bank question using the JD (Ignore CV)
+            refined_q = self._refine_with_jd(bank_q, context.current_topic, selected_diff, context)
             
             if context.current_topic not in context.topics_covered:
                 context.topics_covered.append(context.current_topic)
@@ -409,10 +425,10 @@ class PromptBasedQuestionGenerator:
                     context.current_topic = next_topic
                     context.questions_on_current_topic = 0
             
-            self.last_question_source = "bank_tailored"
-            return tailored_q
+            self.last_question_source = "bank_refined"
+            return refined_q
 
-        # STEP 2: If no bank question, generate one using LLM (JD-primary, CV-tailored)
+        # STEP 2: If no bank question, generate one using LLM (STRICTLY JD-primary)
         try:
             prompt = TECHNICAL_QUESTION_PROMPT.format(
                 role_jd_keywords=jd_keywords_str,
@@ -422,12 +438,11 @@ class PromptBasedQuestionGenerator:
                 previous_context=previous_context,
                 performance_guidance=performance_guidance,
                 job_title=context.job_title,
-                role_difficulty=selected_diff, # Use selected difficulty distribution
+                role_difficulty=selected_diff,
             )
             response = self._complete_llm(prompt)
             if response and hasattr(response, 'text'):
                 question = response.text.strip()
-                # Validate: check if question is on-role and not duplicate
                 if question and len(question) > 10 and not self._is_near_duplicate(context, question):
                     if self._is_on_role_question(question, context.job_role, context.jd_keywords):
                         self.last_question_source = "prompt"
@@ -445,9 +460,9 @@ class PromptBasedQuestionGenerator:
                         
                         return question
         except Exception as e:
-            logger.error(f"Error generating tailored technical question: {e}")
+            logger.error(f"Error generating JD-driven technical question: {e}")
         
-        # STEP 3: Fallback if everything else fails
+        # STEP 3: Fallback
         return self._fallback_technical_question_with_context(context, last_answer or "", score)
 
     def _select_question_difficulty(self, context: ConversationContext) -> str:
@@ -864,65 +879,55 @@ class PromptBasedQuestionGenerator:
         bank = self.question_bank
         if not bank or not self.question_embeddings:
             return None
-        cv = ", ".join(context.cv_keywords or [])
+        
+        # Technical questions are STRICTLY JD-driven. Ignore CV keywords for bank matching.
         jd = ", ".join(context.jd_keywords or [])
         base_ctx = f"{topic} {difficulty} {context.job_title or ''} {context.job_role or ''}"
-        jd_embedding = None
-        cv_embedding = None
+        
         if jd:
-            jd_embedding = self._get_embedding(f"{base_ctx} {jd}")
-        if cv:
-            cv_embedding = self._get_embedding(f"{base_ctx} {cv}")
-        if jd_embedding is not None and cv_embedding is not None:
-            query_embedding = 0.7 * jd_embedding + 0.3 * cv_embedding
-        elif jd_embedding is not None:
-            query_embedding = jd_embedding
-        elif cv_embedding is not None:
-            query_embedding = cv_embedding
+            query_embedding = self._get_embedding(f"{base_ctx} {jd}")
         else:
             query_embedding = self._get_embedding(base_ctx)
+            
         norm = float(np.linalg.norm(query_embedding))
         if norm > 0.0:
             query_embedding = query_embedding / norm
+            
         similarities: List[Tuple[float, int]] = []
-        allowed_topics = [t.lower() for t in (context.jd_keywords or []) + (context.cv_keywords or []) if t]
+        # Strictly use JD keywords for allowed topics in technical round
+        allowed_topics = [t.lower() for t in (context.jd_keywords or []) if t]
+        
         for i, emb_data in enumerate(self.question_embeddings):
             similarity = float(np.dot(query_embedding, emb_data["embedding"]))
             similarities.append((similarity, i))
+            
         similarities.sort(reverse=True)
+        
         primary: List[Tuple[float, Dict[str, Any]]] = []
         for sim, idx in similarities[:15]:
             item_idx = self.question_embeddings[idx].get("index", idx)
             item = bank[item_idx] if isinstance(bank, list) else bank.get("questions", [])[item_idx]
+            
             if (item.get("difficulty", "") or "").lower() != (difficulty or "").lower():
                 continue
+                
             qtext = item.get("question", "")
             itopic = (item.get("topic", "") or "").lower()
             irole = (item.get("role", "") or "").lower()
+            
+            # Check if topic is relevant to JD or the identified role
+            topic_match = False
             if allowed_topics:
-                if not any(at in itopic or itopic in at for at in allowed_topics):
-                    continue
-            if not self._is_near_duplicate(context, qtext) and self._role_matches(irole, context.job_role) and self._is_topic_on_role(itopic, context.job_role):
+                if any(at in itopic or itopic in at for at in allowed_topics):
+                    topic_match = True
+            
+            if topic_match and not self._is_near_duplicate(context, qtext) and self._role_matches(irole, context.job_role) and self._is_topic_on_role(itopic, context.job_role):
                 primary.append((sim, item))
+                
         if primary:
             primary.sort(reverse=True, key=lambda x: x[0])
             return primary[0][1].get("question")
-        secondary: List[Tuple[float, Dict[str, Any]]] = []
-        for sim, idx in similarities[:15]:
-            item_idx = self.question_embeddings[idx].get("index", idx)
-            item = bank[item_idx] if isinstance(bank, list) else bank.get("questions", [])[item_idx]
-            if (item.get("difficulty", "") or "").lower() != (difficulty or "").lower():
-                continue
-            qtext = item.get("question", "")
-            if allowed_topics:
-                itopic = (item.get("topic", "") or "").lower()
-                if not any(at in itopic or itopic in at for at in allowed_topics):
-                    continue
-            if not self._is_near_duplicate(context, qtext) and sim >= 0.12:
-                secondary.append((sim, item))
-        if secondary:
-            secondary.sort(reverse=True, key=lambda x: x[0])
-            return secondary[0][1].get("question")
+            
         return None
 
     def _user_indicates_repetition(self, last_answer: Optional[str]) -> bool:

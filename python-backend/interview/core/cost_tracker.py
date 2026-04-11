@@ -40,6 +40,9 @@ class CostTracker:
         # Google Cloud Text-to-Speech (per 1M characters, assumed $4.00 for standard, $16.00 for Neural2)
         "google-tts": {"price_per_1m_chars": 4.00},
     }
+    
+    # Factor for safe margin estimates
+    SAFETY_MARGIN = 1.1
 
     def __new__(cls):
         if cls._instance is None:
@@ -57,6 +60,7 @@ class CostTracker:
         self.total_cost = 0.0
         self.events: List[UsageEvent] = []
         self.active_sessions = set()
+        self.session_totals: Dict[str, Dict] = {}
 
     def set_session_context(self, session_id: Optional[str]) -> Token:
         """Bind a session id to the current execution context."""
@@ -72,6 +76,14 @@ class CostTracker:
             return
         with self._lock:
             self.active_sessions.add(session_id)
+            self.session_totals[str(session_id)] = {
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_stt_seconds": 0.0,
+                "total_tts_characters": 0,
+                "total_cost": 0.0,
+                "event_count": 0,
+            }
 
     def end_session(self, session_id: str, clear_events: bool = False) -> Dict:
         """Return session summary and optionally purge its events."""
@@ -82,22 +94,12 @@ class CostTracker:
                 self.events = [
                     event for event in self.events if event.session_id != session_id
                 ]
+                if str(session_id) in self.session_totals:
+                    del self.session_totals[str(session_id)]
         return summary
 
     def _resolve_session_id(self, session_id: Optional[str]) -> Optional[str]:
         return session_id if session_id is not None else self._session_context.get()
-        self.session_totals: Dict[str, Dict] = {}
-
-    def start_session(self, session_id: str):
-        with self._lock:
-            self.session_totals[str(session_id)] = {
-                "total_prompt_tokens": 0,
-                "total_completion_tokens": 0,
-                "total_stt_seconds": 0.0,
-                "total_tts_characters": 0,
-                "total_cost": 0.0,
-                "event_count": 0,
-            }
 
     def _merge_session_totals(
         self,
@@ -136,15 +138,17 @@ class CostTracker:
         rates = self.PRICING.get(model_key, self.PRICING["gpt-4o"])
         input_cost = (prompt_tokens / 1_000_000) * rates["input"]
         output_cost = (completion_tokens / 1_000_000) * rates["output"]
-        return input_cost + output_cost
+        
+        # Apply safety margin to the calculated cost
+        return (input_cost + output_cost) * self.SAFETY_MARGIN
 
     def _calculate_stt_cost(self, seconds: float) -> float:
         rate = self.PRICING["google-stt"]["price_per_minute"]
-        return (seconds / 60.0) * rate
+        return (seconds / 60.0) * rate * self.SAFETY_MARGIN
 
     def _calculate_tts_cost(self, characters: int) -> float:
         rate = self.PRICING["google-tts"]["price_per_1m_chars"]
-        return (characters / 1_000_000.0) * rate
+        return (characters / 1_000_000.0) * rate * self.SAFETY_MARGIN
 
     def add_usage(
         self,
@@ -153,7 +157,15 @@ class CostTracker:
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
         session_id: Optional[str] = None,
+        prompt_text: str = "",
+        completion_text: str = ""
     ):
+        # Fallback estimation if tokens are not provided (approx 4 chars per token)
+        if prompt_tokens <= 0 and prompt_text:
+            prompt_tokens = len(prompt_text) // 4
+        if completion_tokens <= 0 and completion_text:
+            completion_tokens = len(completion_text) // 4
+
         cost = self._calculate_llm_cost(model, prompt_tokens, completion_tokens)
         resolved_session_id = self._resolve_session_id(session_id)
 
@@ -172,7 +184,7 @@ class CostTracker:
             self.total_completion_tokens += completion_tokens
             self.total_cost += cost
             self._merge_session_totals(
-                session_id,
+                resolved_session_id,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 cost=cost,
@@ -324,26 +336,35 @@ class CostTracker:
             }
 
         with self._lock:
-            session_events = [
-                event for event in self.events if event.session_id == session_id
-            ]
-
-        total_prompt_tokens = sum(event.prompt_tokens for event in session_events)
-        total_completion_tokens = sum(
-            event.completion_tokens for event in session_events
-        )
-        total_stt_seconds = sum(event.audio_seconds for event in session_events)
-        total_tts_characters = sum(event.character_count for event in session_events)
-        total_cost = sum(event.cost for event in session_events)
+            session_data = self.session_totals.get(str(session_id))
+            
+            if session_data:
+                prompt_tokens = int(session_data.get("total_prompt_tokens", 0))
+                completion_tokens = int(session_data.get("total_completion_tokens", 0))
+                stt_seconds = float(session_data.get("total_stt_seconds", 0.0))
+                tts_characters = int(session_data.get("total_tts_characters", 0))
+                cost = float(session_data.get("total_cost", 0.0))
+                event_count = int(session_data.get("event_count", 0))
+            else:
+                # Fallback to scanning events if session_totals is missing for some reason
+                session_events = [
+                    event for event in self.events if event.session_id == session_id
+                ]
+                prompt_tokens = sum(event.prompt_tokens for event in session_events)
+                completion_tokens = sum(event.completion_tokens for event in session_events)
+                stt_seconds = sum(event.audio_seconds for event in session_events)
+                tts_characters = sum(event.character_count for event in session_events)
+                cost = sum(event.cost for event in session_events)
+                event_count = len(session_events)
 
         return {
-            "total_prompt_tokens": self.total_prompt_tokens,
-            "total_completion_tokens": self.total_completion_tokens,
-            "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
-            "total_stt_seconds": round(self.total_stt_seconds, 2),
-            "total_tts_characters": self.total_tts_characters,
-            "total_cost": round(self.total_cost, 6),
-            "event_count": len(self.events),
+            "total_prompt_tokens": prompt_tokens,
+            "total_completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "total_stt_seconds": round(stt_seconds, 2),
+            "total_tts_characters": tts_characters,
+            "total_cost": round(cost, 6),
+            "event_count": event_count,
         }
 
     def get_session_cost(self, session_id: Optional[str] = None) -> float:

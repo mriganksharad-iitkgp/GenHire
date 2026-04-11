@@ -39,15 +39,18 @@ class RubricGenerator:
             response = self.llm.invoke(prompt)
             
             # Track cost
+            usage = {}
             if hasattr(response, "response_metadata") and response.response_metadata:
                 usage = response.response_metadata.get("token_usage", {})
-                if usage:
-                    CostTracker().add_usage(
-                        source="rubrics_generation",
-                        model=Config.RUBRIC_GENERATION_MODEL,
-                        prompt_tokens=usage.get("prompt_tokens", 0),
-                        completion_tokens=usage.get("completion_tokens", 0)
-                    )
+            
+            CostTracker().add_usage(
+                source="rubrics_generation",
+                model=Config.RUBRIC_GENERATION_MODEL,
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                prompt_text=prompt,
+                completion_text=response.content if hasattr(response, "content") else ""
+            )
             
             content = response.content.strip()
             return self._parse_rubrics_response(content)

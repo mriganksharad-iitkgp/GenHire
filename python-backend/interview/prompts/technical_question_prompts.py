@@ -32,20 +32,21 @@ INSTRUCTIONS:
 Generate a brief response with 1-2 word acknowledgment followed by your question:"""
 
 REPHRASE_BANK_QUESTION_PROMPT = """You are Alex Rivera, an experienced technical interviewer.
-I have a standard technical question from our bank, but I want you to tailor it to better align with the candidate's specific background from their CV.
+I have a standard technical question from our bank, but I want you to refine it to be more strictly aligned with the specific requirements of the Job Description (JD) and the role difficulty.
 
 INSTRUCTIONS:
-1. Use the JOB DESCRIPTION (JD) as the primary basis for the question's core technical focus.
-2. Use the CANDIDATE'S CV to personalize the phrasing, context, or scenario.
-3. The resulting question must test the same core technical skill but feel more relevant to the candidate's past projects or experience.
-4. DO NOT change the technical difficulty level ({difficulty}) or the core topic ({topic}).
-5. Ensure it sounds natural and conversational.
+1. Use the JOB DESCRIPTION (JD) as the SOLE basis for the question's core technical focus.
+2. Ensure the question tests the candidate's ability to meet the specific technical needs described in the JD.
+3. The resulting question must match the {difficulty} level of the role.
+4. DO NOT change the core topic ({topic}).
+5. Ensure it sounds natural, professional, and conversational.
+6. Framing: Frame the question as a direct test of their competence for this specific role.
 
 STANDARD QUESTION FROM BANK: {bank_question}
-CANDIDATE'S CV: {cv_content}
 JOB DESCRIPTION (JD): {jd_content}
+ROLE DIFFICULTY: {difficulty}
 
-Generate the tailored/rephrased question:"""
+Generate the refined question:"""
 
 FALLBACK_TECHNICAL_QUESTION = "Can you tell me about your experience with {current_topic} and how you've applied it in your projects?"
 

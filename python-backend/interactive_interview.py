@@ -272,7 +272,8 @@ def interactive_interview():
                             print(f"⚠️  Evaluation error: {eval_result['error']}")
                             # Use fallback evaluation
                             last_evaluation = {
-                                "overall_score": 0.7,
+                                "answer_score": 0.7,
+                                "language_score": 0.7,
                                 "evaluation_method": "fallback",
                             }
                         else:
@@ -290,37 +291,45 @@ def interactive_interview():
                                 # Show final evaluation
                                 final_eval = eval_result.get("final_evaluation", {})
                                 if final_eval:
-                                    print("\n📊 Final Evaluation:")
-                                    if "overall_score" in final_eval:
-                                        final_score = int(
-                                            final_eval["overall_score"] * 100
-                                        )
-                                        print(
-                                            f"   🎯 Overall Performance: {final_score}%"
-                                        )
+                                    print("\n" + "=" * 80)
+                                    print("🎓 FINAL INTERVIEW EVALUATION")
+                                    print("=" * 80)
 
-                                    if "summary" in final_eval:
-                                        print(f"   📝 Summary: {final_eval['summary']}")
+                                    # Quantitative scores
+                                    if "quantitative_scores" in final_eval:
+                                        qs = final_eval["quantitative_scores"]
+                                        if "answer_score" in qs:
+                                            ans_score = int(qs["answer_score"] * 100)
+                                            print(f"   🌟 Final Answer Score: {ans_score}%")
+                                        if "language_score" in qs:
+                                            lang_score = int(qs["language_score"] * 100)
+                                            print(f"   💬 Final Language Score: {lang_score}%")
+                                    
+                                    # Qualitative assessment
+                                    if "qualitative_assessment" in final_eval:
+                                        print("\n📝 Detailed Feedback:")
+                                        print(final_eval["qualitative_assessment"])
 
                                 # Show conversation summary
-                                conv_summary = eval_result.get(
-                                    "conversation_summary", {}
-                                )
+                                conv_summary = eval_result.get("conversation_summary", {})
                                 if conv_summary:
-                                    print(f"\n📋 Interview Summary:")
-                                    if "topics_covered" in conv_summary:
-                                        print(
-                                            f"   Topics Covered: {', '.join(conv_summary['topics_covered'])}"
-                                        )
-                                    if "total_questions" in conv_summary:
-                                        print(
-                                            f"   Total Questions: {conv_summary['total_questions']}"
-                                        )
-                                    if "average_score" in conv_summary:
-                                        avg_score = int(
-                                            conv_summary["average_score"] * 100
-                                        )
-                                        print(f"   Average Score: {avg_score}%")
+                                    print("\n" + "-" * 80)
+                                    print("📊 CONVERSATION SUMMARY")
+                                    print("-" * 80)
+                                    print(f"   Questions Asked: {conv_summary.get('total_questions', 0)}")
+                                    print(f"   Topics Explored: {', '.join(conv_summary.get('topics_covered', []))}")
+                                    print(f"   Final Skill Level: {conv_summary.get('final_skill_assessment', 'N/A')}")
+                                    
+                                    if "average_answer_score" in conv_summary:
+                                        avg_ans = int(conv_summary["average_answer_score"] * 100)
+                                        print(f"   Average Answer Score: {avg_ans}%")
+                                    
+                                    if "average_language_score" in conv_summary:
+                                        avg_lang = int(conv_summary["average_language_score"] * 100)
+                                        print(f"   Average Language Score: {avg_lang}%")
+                                        
+                                    print(f"   Performance Trend: {conv_summary.get('conversation_trend', 'stable')}")
+                                    print(f"   Engagement Level: {conv_summary.get('conversation_energy', 'normal')}")
 
                                 print(
                                     "\nThank you for participating in this AI interview simulation!"

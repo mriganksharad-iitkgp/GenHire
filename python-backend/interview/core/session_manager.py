@@ -367,17 +367,21 @@ class InterviewSessionManager:
         if session.questions_asked < 8:
             return True
 
-        # Check conversation quality only after 8+ questions
+        # 2. Check quality of conversation (if average answer score is very low after many questions)
+        if session.questions_asked >= 8:
+            avg_answer = sum(
+                item["evaluation"].get("answer_score", 0.0) for item in session.interview_data
+            ) / len(session.interview_data)
+            if avg_answer < 0.2:
+                return False
+
+        # Check recent conversation quality
         if len(session.interview_data) >= 2:
             recent_scores = [
-                item["evaluation"]["overall_score"]
+                item["evaluation"].get("answer_score", 0.0)
                 for item in session.interview_data[-2:]
             ]
             avg_recent_score = sum(recent_scores) / len(recent_scores)
-
-            # If conversation is going very poorly, end early (but only after 8 questions)
-            if avg_recent_score < 0.3 and session.questions_asked >= 10:
-                return False
 
             # If conversation is excellent and we've covered enough topics, can end
             # But require at least 10 questions and 5 topics
@@ -407,9 +411,13 @@ class InterviewSessionManager:
             return {"error": "No conversation data available"}
 
         # Analyze conversation patterns
-        scores = [
-            item["evaluation"]["overall_score"] for item in session.interview_data
+        answer_scores = [
+            item["evaluation"].get("answer_score", 0.0) for item in session.interview_data
         ]
+        language_scores = [
+            item["evaluation"].get("language_score", 0.0) for item in session.interview_data
+        ]
+        
         topics_explored = (
             session.conversation_context.topics_covered
             if session.conversation_context
@@ -417,13 +425,13 @@ class InterviewSessionManager:
         )
 
         conversation_trend = "neutral"
-        if len(scores) >= 3:
+        if len(answer_scores) >= 3:
             early_avg = (
-                sum(scores[: len(scores) // 2]) / (len(scores) // 2) if scores else 0
+                sum(answer_scores[: len(answer_scores) // 2]) / (len(answer_scores) // 2) if answer_scores else 0
             )
             late_avg = (
-                sum(scores[len(scores) // 2 :]) / (len(scores) - len(scores) // 2)
-                if scores
+                sum(answer_scores[len(answer_scores) // 2 :]) / (len(answer_scores) - len(answer_scores) // 2)
+                if answer_scores
                 else 0
             )
 
@@ -441,7 +449,8 @@ class InterviewSessionManager:
                 else "unknown"
             ),
             "total_questions": session.questions_asked,
-            "average_score": sum(scores) / len(scores) if scores else 0,
+            "average_answer_score": sum(answer_scores) / len(answer_scores) if answer_scores else 0,
+            "average_language_score": sum(language_scores) / len(language_scores) if language_scores else 0,
             "conversation_energy": (
                 session.conversation_context.conversation_energy
                 if session.conversation_context
