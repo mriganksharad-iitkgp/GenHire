@@ -27,6 +27,47 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
   const gazeData = report.gaze_metrics || { left_eye: [], right_eye: [] };
   const infractions = report.manual_infractions || [];
 
+  const chartData = {
+    datasets: [
+      {
+        label: 'Left Eye',
+        data: Array.isArray(gazeData.left_eye) ? gazeData.left_eye : [],
+        pointRadius: 3,
+        pointBackgroundColor: '#3b82f6',
+      },
+      {
+        label: 'Right Eye',
+        data: Array.isArray(gazeData.right_eye) ? gazeData.right_eye : [],
+        pointRadius: 3,
+        pointBackgroundColor: '#10b981',
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+      },
+    },
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'X',
+        },
+      },
+      y: {
+        title: {
+          display: true,
+          text: 'Y',
+        },
+      },
+    },
+  };
+
   // Backend file paths
   const gazePlotUrl = report.gaze_plot_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}` : null;
   const gazeHeatmapUrl = report.gaze_recorder_analysis_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_recorder_analysis_path)}` : null;

@@ -59,7 +59,7 @@ const CandidatePlanButton = () => {
   const getStatusText = () => {
     if (loading) return "Loading...";
     if (isOutOfInterviews) return "No credits left";
-    return `${interviewsRemaining} credits left`;
+    return `${effectiveCreditsRemaining} credits left`;
   };
 
   return (

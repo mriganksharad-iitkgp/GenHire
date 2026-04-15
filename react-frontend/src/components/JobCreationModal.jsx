@@ -155,6 +155,13 @@ const SALARY_RANGES = [
   '₹75,00,000 - ₹1,00,00,000', '₹1,00,00,000 - ₹1,50,00,000', '₹1,50,00,000 - ₹2,00,00,000', '₹2,00,00,000+'
 ];
 
+const DEFAULT_PROCTORING_CONFIG = {
+  voice_detection: true,
+  object_detection: true,
+  eyeball_tracking: true,
+  gaze_heatmap: true,
+};
+
 const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const [jobData, setJobData] = useState({
     title: '',
@@ -170,12 +177,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     benefits: [],
     deadline: '',
     minimum_cv_score: 50,  // Default minimum CV score
-    proctoring_config: {
-      voice_detection: true,
-      object_detection: true,
-      eyeball_tracking: true,
-      gaze_heatmap: true,
-    }
+    proctoring_config: DEFAULT_PROCTORING_CONFIG
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -235,7 +237,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       setJobData({
         title: ai.title || '',
         department: ai.department || '',
-        location: LOCATIONS.includes(ai.location) ? ai.location : 'Remote (India)',
+        location: String(ai.location || '').trim() || 'Remote (India)',
         type: ai.type || 'Full-time',
         experience: ai.experience || '',
         salary: ai.salary || '',
@@ -247,7 +249,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
         benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
         status: 'draft',
         minimum_cv_score: ai.minimum_cv_score || 50,
-        gaze_proctoring: false
+        gaze_proctoring: false,
+        proctoring_config: {
+          ...DEFAULT_PROCTORING_CONFIG,
+          ...(ai.proctoring_config || {})
+        }
       });
       setAiPrompt('');
     } catch (err) {
@@ -273,7 +279,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
         description: template.description,
         responsibilities: template.responsibilities.join('\n'),
         requirements: template.requirements.join('\n'),
-        benefits: template.benefits.join('\n')
+        benefits: template.benefits.join('\n'),
+        proctoring_config: {
+          ...DEFAULT_PROCTORING_CONFIG,
+          ...(jobData.proctoring_config || {})
+        }
       });
       setShowTemplates(false);
     }
@@ -458,12 +468,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       benefits: '',
       status: 'draft',
       minimum_cv_score: 50,
-      proctoring_config: {
-        voice_detection: true,
-        object_detection: true,
-        eyeball_tracking: true,
-        gaze_heatmap: true,
-      }
+      proctoring_config: DEFAULT_PROCTORING_CONFIG
     });
     setSkillInput('');
     setFilteredSuggestions([]);
@@ -843,11 +848,12 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                     <label className={styles.toggleSwitch}>
                       <input
                         type="checkbox"
-                        checked={jobData.proctoring_config[opt.key]}
+                        checked={jobData.proctoring_config?.[opt.key] ?? true}
                         onChange={(e) => setJobData(prev => ({
                           ...prev,
                           proctoring_config: {
-                            ...prev.proctoring_config,
+                            ...DEFAULT_PROCTORING_CONFIG,
+                            ...(prev.proctoring_config || {}),
                             [opt.key]: e.target.checked
                           }
                         }))}

@@ -8,7 +8,7 @@ from bson import ObjectId
 from werkzeug.utils import secure_filename
 from services.pdf_parser_service import get_pdf_parser
 from dotenv import load_dotenv
-from utils.job_standards import canonicalize_job_role, is_india_location
+from utils.job_standards import canonicalize_job_role
 from services.usage_telemetry_service import record_usage_event
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,33 @@ class JobController:
         except Exception as e:
             logger.warning(f"PDF parser initialization failed: {e}")
             self.pdf_parser = None
+
+    @staticmethod
+    def _normalize_text_key(value):
+        return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+
+    def _find_recruiter_duplicate_job(self, recruiter_id, title, location, exclude_job_id=None):
+        """Check duplicate by normalized title+location within a single recruiter's jobs."""
+        title_key = self._normalize_text_key(title)
+        location_key = self._normalize_text_key(location)
+        if not title_key or not location_key:
+            return None
+
+        recruiter_jobs = self.jobs_collection.find(
+            {'created_by': recruiter_id},
+            {'title': 1, 'location': 1}
+        )
+
+        for job in recruiter_jobs:
+            if exclude_job_id and str(job.get('_id')) == str(exclude_job_id):
+                continue
+
+            existing_title_key = self._normalize_text_key(job.get('title', ''))
+            existing_location_key = self._normalize_text_key(job.get('location', ''))
+            if existing_title_key == title_key and existing_location_key == location_key:
+                return job
+
+        return None
         
     def get_jobs(self, user_type, user_id):
         """Retrieve jobs based on user type and permissions"""
@@ -136,19 +163,28 @@ class JobController:
         else:
             proctoring_config = default_proctoring
         
-        # Canonicalize title and validate location against India-only standards
-        job_title = canonicalize_job_role(job_data['title'])
+        # Preserve recruiter-entered title; derive canonical role separately for candidate filters
+        job_title = re.sub(r"\s+", " ", str(job_data.get('title', ''))).strip()
         if not job_title:
             return {'error': 'Job title is required'}, 400
 
         location = str(job_data.get('location', '')).strip()
-        if not is_india_location(location):
-            return {'error': 'Please select a valid India location from the standard list'}, 400
+        if not location:
+            return {'error': 'location is required'}, 400
 
-        # Check for unique job title
-        existing_job = self.jobs_collection.find_one({'title': job_title, 'created_by': recruiter_id})
+        canonical_role = canonicalize_job_role(job_title)
+        if not canonical_role:
+            return {'error': 'Job title is required'}, 400
+
+        # Enforce uniqueness only within this recruiter's jobs and only for exact title+location pair
+        existing_job = self._find_recruiter_duplicate_job(recruiter_id, job_title, location)
         if existing_job:
-            return {'error': f'A job with the title "{job_title}" already exists. Please use a unique job title.'}, 400
+            return {
+                'error': (
+                    f'A job with the title "{job_title}" at location "{location}" already exists '
+                    'for your account. Please change either title or location.'
+                )
+            }, 400
         
         # Normalize/validate status with enhanced workflow - default to draft
         raw_status = (job_data.get('status') or 'draft').strip().lower()
@@ -210,9 +246,11 @@ class JobController:
 
         job_document = {
             'title': job_title,
-            'canonical_role': job_title,
+            'canonical_role': canonical_role,
             'department': job_data['department'],
             'location': location,
+            'title_key': self._normalize_text_key(job_title),
+            'location_key': self._normalize_text_key(location),
             'type': job_data['type'],
             'experience': job_data['experience'],
             'salary': job_data['salary'],
@@ -316,18 +354,41 @@ class JobController:
                 elif field in {'responsibilities', 'requirements', 'benefits'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []), separator='\n')
                 elif field == 'title':
-                    canonical_title = canonicalize_job_role(job_data[field])
+                    title_value = re.sub(r"\s+", " ", str(job_data[field] or '')).strip()
+                    canonical_title = canonicalize_job_role(title_value)
                     if not canonical_title:
                         return {'error': 'Job title is required'}, 400
-                    update_fields[field] = canonical_title
+                    update_fields[field] = title_value
                     update_fields['canonical_role'] = canonical_title
                 elif field == 'location':
                     location = str(job_data[field]).strip()
-                    if not is_india_location(location):
-                        return {'error': 'Please select a valid India location from the standard list'}, 400
+                    if not location:
+                        return {'error': 'location is required'}, 400
                     update_fields[field] = location
                 else:
                     update_fields[field] = job_data[field]
+
+        # Duplicate validation for updates: same recruiter cannot have same normalized title+location pair
+        candidate_title = update_fields.get('title', job.get('title', ''))
+        candidate_location = update_fields.get('location', job.get('location', ''))
+        duplicate_job = self._find_recruiter_duplicate_job(
+            recruiter_id,
+            candidate_title,
+            candidate_location,
+            exclude_job_id=job_object_id
+        )
+        if duplicate_job:
+            return {
+                'error': (
+                    f'A job with the title "{candidate_title}" at location "{candidate_location}" already exists '
+                    'for your account. Please change either title or location.'
+                )
+            }, 400
+
+        if 'title' in update_fields:
+            update_fields['title_key'] = self._normalize_text_key(update_fields['title'])
+        if 'location' in update_fields:
+            update_fields['location_key'] = self._normalize_text_key(update_fields['location'])
         
         if update_fields:
             update_fields['updated_at'] = datetime.datetime.utcnow()

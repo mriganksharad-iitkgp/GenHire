@@ -115,7 +115,7 @@ const Dashboard = () => {
 		loadApplications();
 	}, [navigate]);
 
-	const loadApplications = async () => {
+	const loadApplications = async (force = false) => {
 		try {
 			const token = localStorage.getItem('companyxyz-token');
 			if (!token) return;
@@ -415,6 +415,10 @@ const Dashboard = () => {
 	
 	// Get unique companies for the filter dropdown
 	const uniqueCompanies = [...new Set(jobOpenings.map(job => job.company || 'TechCorp Solutions').filter(Boolean))].sort();
+
+	// Include custom recruiter-entered locations in addition to standard options
+	const uniqueLocations = [...new Set(jobOpenings.map(job => job.location).filter(Boolean))].sort();
+	const locationOptions = [...new Set([...INDIA_LOCATION_OPTIONS, ...uniqueLocations])];
 	
 	// Get unique skills for the filter dropdown
 	const uniqueSkills = [...new Set(jobOpenings.flatMap(job => Array.isArray(job.skills) ? job.skills : []).filter(Boolean))].sort();
@@ -530,8 +534,9 @@ const Dashboard = () => {
 			matchesExperience = minYears !== null ? minYears >= 5 : true;
 		}
 
-		const roleSel = jobRoleFilter.trim().toLowerCase();
-		const matchesJobRole = roleSel === '' || String(job.title || '').toLowerCase().includes(roleSel);
+		const roleSel = jobRoleFilter.trim();
+		const canonicalJobRole = canonicalizeJobRole(job.title || '');
+		const matchesJobRole = roleSel === '' || canonicalJobRole === roleSel;
 
 		const companySel = companyFilter.trim();
 		const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
@@ -691,7 +696,7 @@ const Dashboard = () => {
 							className={styles.filterSelect}
 						>
 							<option value="">All Locations</option>
-							{INDIA_LOCATION_OPTIONS.map((locationOption) => (
+							{locationOptions.map((locationOption) => (
 								<option key={locationOption} value={locationOption}>
 									{locationOption}
 								</option>
