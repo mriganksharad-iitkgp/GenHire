@@ -331,10 +331,13 @@ if PAYMENT_MODULE_AVAILABLE:
     try:
         init_payment_routes(db)
         app.register_blueprint(payment_bp)
-        subscription_billing_service = SubscriptionService(db)
         print("[OK] Payment routes registered at /api/payment")
     except Exception as e:
-        print(f"[WARN] Failed to initialize payment module: {e}")
+        print(f"[WARN] Failed to register payment routes: {e}")
+    try:
+        subscription_billing_service = SubscriptionService(db)
+    except Exception as e:
+        print(f"[WARN] Failed to initialize subscription billing service: {e}")
         subscription_billing_service = None
 else:
     subscription_billing_service = None

@@ -62,6 +62,72 @@ class SubscriptionService:
         self._ensure_indexes()
         self._backfill_subscription_credits()
 
+    def _backfill_subscription_credits(self):
+        """Populate legacy subscription documents with credit fields."""
+        try:
+            legacy_filter = {
+                "$or": [
+                    {"credits_allocated": {"$exists": False}},
+                    {"credits_remaining": {"$exists": False}},
+                    {"credits_used": {"$exists": False}},
+                ]
+            }
+
+            updated_count = 0
+            for subscription_doc in self.collection.find(legacy_filter):
+                interviews_allowed = int(
+                    subscription_doc.get("interviews_allowed", 0) or 0
+                )
+                interviews_remaining = int(
+                    subscription_doc.get(
+                        "interviews_remaining", interviews_allowed
+                    )
+                    or 0
+                )
+                interviews_used = int(
+                    subscription_doc.get(
+                        "interviews_used",
+                        max(0, interviews_allowed - interviews_remaining),
+                    )
+                    or 0
+                )
+
+                credits_allocated = int(
+                    subscription_doc.get("credits_allocated", interviews_allowed)
+                    or 0
+                )
+                credits_remaining = int(
+                    subscription_doc.get("credits_remaining", interviews_remaining)
+                    or 0
+                )
+                credits_used = int(
+                    subscription_doc.get("credits_used", interviews_used) or 0
+                )
+
+                updates = {}
+                if subscription_doc.get("credits_allocated") != credits_allocated:
+                    updates["credits_allocated"] = credits_allocated
+                if subscription_doc.get("credits_remaining") != credits_remaining:
+                    updates["credits_remaining"] = credits_remaining
+                if subscription_doc.get("credits_used") != credits_used:
+                    updates["credits_used"] = credits_used
+
+                if updates:
+                    updates["updated_at"] = datetime.utcnow()
+                    self.collection.update_one(
+                        {"_id": subscription_doc["_id"]}, {"$set": updates}
+                    )
+                    updated_count += 1
+
+            if updated_count > 0:
+                logger.info(
+                    "Backfilled credit fields for %s legacy subscription documents",
+                    updated_count,
+                )
+        except Exception as e:
+            logger.warning(f"Skipping subscription credit backfill: {str(e)}")
+    
+
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
         try:
