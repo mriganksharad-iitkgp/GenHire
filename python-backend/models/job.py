@@ -32,6 +32,7 @@ class Job:
     jd_extracted_text: Optional[str] = None  # Extracted text from JD PDF
     jd_upload_date: Optional[datetime.datetime] = None  # When JD was uploaded
     gaze_proctoring: bool = False  # Enable gaze heat map proctoring
+    proctoring_config: Optional[dict] = None
     
     def __post_init__(self):
         if self.skills is None:
@@ -46,6 +47,8 @@ class Job:
             self.created_at = datetime.datetime.utcnow()
         if self.updated_at is None:
             self.updated_at = datetime.datetime.utcnow()
+        if self.proctoring_config is None:
+            self.proctoring_config = {}
     
     def to_dict(self):
         """Convert job object to dictionary for MongoDB storage"""
@@ -76,7 +79,8 @@ class Job:
             'jd_pdf_path': self.jd_pdf_path,
             'jd_extracted_text': self.jd_extracted_text,
             'jd_upload_date': self.jd_upload_date,
-            'gaze_proctoring': self.gaze_proctoring
+            'gaze_proctoring': self.gaze_proctoring,
+            'proctoring_config': self.proctoring_config
         }
     
     @classmethod
@@ -109,5 +113,6 @@ class Job:
             jd_pdf_path=data.get('jd_pdf_path'),
             jd_extracted_text=data.get('jd_extracted_text'),
             jd_upload_date=data.get('jd_upload_date'),
-            gaze_proctoring=data.get('gaze_proctoring', False)
+            gaze_proctoring=data.get('gaze_proctoring', False),
+            proctoring_config=data.get('proctoring_config', {})
         )

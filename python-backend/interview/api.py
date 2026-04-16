@@ -56,6 +56,7 @@ class InterviewAPI:
         cv_file_path: str,
         job_description_path: str,
         reference_documents: List[str] = None,
+        proctoring_config: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         Start a new interview session.
@@ -88,6 +89,7 @@ class InterviewAPI:
             cv_path=cv_file_path,
             jd_path=job_description_path,
             reference_paths=reference_documents,
+            proctoring_config=proctoring_config,
         )
 
     def get_question(self, session_id: str) -> Dict[str, Any]:
@@ -148,6 +150,7 @@ class InterviewAPI:
         job_description_path: str,
         reference_documents: List[str] = None,
         max_questions: int = None,
+        proctoring_config: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         Conduct a complete simulated interview (for testing/demo purposes).
@@ -164,7 +167,7 @@ class InterviewAPI:
 
         # Start interview
         session_result = self.start_interview(
-            cv_file_path, job_description_path, reference_documents
+            cv_file_path, job_description_path, reference_documents, proctoring_config
         )
 
         if "error" in session_result:

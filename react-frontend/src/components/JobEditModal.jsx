@@ -93,6 +93,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
       object_detection: true,
       eyeball_tracking: true,
       gaze_heatmap: true,
+      ai_detection: false,
     }
   });
 
@@ -133,6 +134,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           object_detection: true,
           eyeball_tracking: true,
           gaze_heatmap: true,
+          ai_detection: false,
         }
       });
     }
@@ -556,6 +558,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
                   { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
                   { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
                   { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
+                  { key: 'ai_detection', label: 'AI Answer Detection', desc: 'Detects high probability usage of LLMs like ChatGPT in candidate answers', icon: '🤖' },
                 ].map(opt => (
                   <div key={opt.key} className={proctoringStyles.proctoringToggle}>
                     <div className={proctoringStyles.proctoringInfo}>

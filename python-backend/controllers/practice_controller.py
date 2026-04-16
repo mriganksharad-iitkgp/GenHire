@@ -528,7 +528,13 @@ class PracticeController:
                         "transcript": {
                             "$each": [
                                 {"role": "assistant", "text": question},
-                                {"role": "user", "text": answer},
+                                {
+                                    "role": "user", 
+                                    "text": answer,
+                                    "ai_probability": (
+                                        serializable_result.get("current_evaluation") or {}
+                                    ).get("ai_probability") if isinstance(serializable_result, dict) else None
+                                },
                             ]
                         },
                     },

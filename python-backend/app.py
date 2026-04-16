@@ -436,8 +436,15 @@ def start_interview(current_user):
     with open(jd_txt_path, "w", encoding="utf-8") as f:
         f.write(jd_text)
 
+    proctoring_config = job.get("proctoring_config", {
+        "voice_detection": True,
+        "object_detection": True,
+        "eyeball_tracking": True,
+        "gaze_heatmap": True,
+    }) if job else {}
+
     session_details = interview_manager.create_session(
-        cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[]
+        cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[], proctoring_config=proctoring_config
     )
 
     if "error" in session_details:
@@ -460,12 +467,7 @@ def start_interview(current_user):
         ),
         "status": "active",
         "similarity_score": sim_score,
-        "proctoring_config": job.get("proctoring_config", {
-            "voice_detection": True,
-            "object_detection": True,
-            "eyeball_tracking": True,
-            "gaze_heatmap": True,
-        }),
+        "proctoring_config": proctoring_config,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
         "start_time": time.time(),
@@ -576,7 +578,7 @@ def end_interview(current_user, session_id):
                     {"role": "assistant", "text": qa.get("question", "")}
                 )
                 interview_transcript.append(
-                    {"role": "user", "text": qa.get("answer", "")}
+                    {"role": "user", "text": qa.get("answer", ""), "ai_probability": (qa.get("evaluation") or {}).get("ai_probability")}
                 )
 
     elif session:
@@ -590,7 +592,7 @@ def end_interview(current_user, session_id):
                     {"role": "assistant", "text": qa.get("question", "")}
                 )
                 interview_transcript.append(
-                    {"role": "user", "text": qa.get("answer", "")}
+                    {"role": "user", "text": qa.get("answer", ""), "ai_probability": (qa.get("evaluation") or {}).get("ai_probability")}
                 )
     else:
         final_evaluation = {

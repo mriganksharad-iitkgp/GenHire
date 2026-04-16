@@ -19,6 +19,7 @@ from .prompt_based_question_generator import (
     QuestionMetadata,
 )
 from .cost_tracker import CostTracker
+from utils.ai_detection import check_ai_content
 
 
 @dataclass
@@ -36,6 +37,7 @@ class InterviewSession:
     conversation_context: Optional[ConversationContext] = None
     current_question: Optional[str] = None
     current_question_metadata: Optional[QuestionMetadata] = None
+    proctoring_config: Optional[dict] = None
 
 
 class InterviewSessionManager:
@@ -56,7 +58,7 @@ class InterviewSessionManager:
         self.evaluation_system = EvaluationSystem()
 
     def create_session(
-        self, cv_path: str, jd_path: str, reference_paths: List[str]
+        self, cv_path: str, jd_path: str, reference_paths: List[str], proctoring_config: Optional[dict] = None
     ) -> Dict[str, Any]:
         """Create a new interview session with natural conversation flow."""
         session_id = str(uuid.uuid4())
@@ -98,6 +100,7 @@ class InterviewSessionManager:
                 conversation_context=conversation_context,
                 current_question=first_question,
                 current_question_metadata=first_metadata,
+                proctoring_config=proctoring_config or {}
             )
 
             self.sessions[session_id] = session
@@ -161,6 +164,13 @@ class InterviewSessionManager:
             else:
                 # Fallback to basic evaluation
                 evaluation = self._fallback_evaluation(question, answer)
+
+            # Check AI content if enabled
+            if session.proctoring_config and session.proctoring_config.get("ai_detection", False):
+                ai_result = check_ai_content(answer)
+                if ai_result:
+                    evaluation["ai_probability"] = ai_result.get("score")
+                    evaluation["ai_detection_raw"] = ai_result.get("raw_response")
 
             # Record the interaction
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"

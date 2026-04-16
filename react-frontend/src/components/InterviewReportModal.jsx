@@ -480,7 +480,23 @@ export default function InterviewReportModal({
                               whiteSpace: "pre-wrap",
                             }}
                           >
-                            {turn.text}
+                            <div>{turn.text}</div>
+                            {turn.ai_probability !== undefined && turn.ai_probability !== null && (
+                              <div style={{
+                                marginTop: 8,
+                                paddingTop: 8,
+                                borderTop: `1px solid ${isAI ? "#cfe0ff" : "#bfe8d1"}`,
+                                fontSize: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                color: turn.ai_probability >= 0.8 ? "#d32f2f" : turn.ai_probability >= 0.4 ? "#f57c00" : "#388e3c"
+                              }}>
+                                <span>🤖</span>
+                                <strong>AI Probability:</strong> {Math.round(turn.ai_probability * 100)}%
+                                {turn.ai_probability >= 0.8 && " (High likelihood of AI generation)"}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
