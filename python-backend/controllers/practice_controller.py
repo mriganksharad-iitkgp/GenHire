@@ -9,14 +9,9 @@ from interview.core.cost_tracker import CostTracker
 import logging
 from services.pdf_parser_service import get_pdf_parser
 from controllers.cv_controller import CVController
-from payment_module.services.subscription_service import SubscriptionService
-from services.candidate_practice_quota_service import (
-    get_candidate_practice_quota,
-    consume_candidate_practice_credit,
-)
 from services.usage_telemetry_service import record_usage_event
-from payment_module.services.subscription_service import SubscriptionService
-from interview.core.cost_tracker import CostTracker
+from payment_module.services.wallet_service import WalletService
+from payment_module.config.settings import PaymentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -89,18 +84,9 @@ class PracticeController:
             logger.error(f"Failed to initialize Interview API: {e}")
             self.interview_api = None
 
-        # Initialize payment subscription service for usage-based credits.
-        try:
-            self.subscription_service = SubscriptionService(
-                self.collections["users"].database
-            )
-        except Exception as e:
-            logger.warning(
-                f"Subscription service initialization failed for practice billing: {e}"
-            )
-            self.subscription_service = None
+        self.wallet_service = WalletService(self.collections["users"].database)
 
-    def start_practice(self, user_id, jd_file, role, difficulty, cv_id=None):
+    def start_practice(self, user_id, jd_file, role, difficulty, cv_id=None, proctoring_enabled=False):
         """
         Start a practice interview session
 
@@ -127,59 +113,24 @@ class PracticeController:
             if not user:
                 return {"error": "User not found"}, 404
 
-            credit_snapshot = None
-            if self.subscription_service:
-                credit_snapshot = self.subscription_service.check_credit_availability(
-                    employer_id=user_id,
-                    audience="candidate",
-                )
-
-            if credit_snapshot and not credit_snapshot.get(
-                "can_start_interview", False
-            ):
-                # Free-tier candidates may not have a paid subscription doc.
-                # Fall back to monthly candidate practice quota for no_subscription.
-                if credit_snapshot.get("error_code") == "no_subscription":
-                    quota_snapshot = get_candidate_practice_quota(
-                        self.collections["users"].database,
-                        user_id,
-                    )
-                    if not quota_snapshot.get("can_start_interview", False):
-                        return {
-                            "error": "Monthly practice interview limit reached for your available credits.",
-                            "error_code": quota_snapshot.get(
-                                "error_code", "CANDIDATE_PRACTICE_LIMIT_REACHED"
-                            ),
-                            "plan": {
-                                "name": quota_snapshot.get("plan_name", "Free Tier"),
-                                "credits_allocated": quota_snapshot.get(
-                                    "credits_allocated", 0
-                                ),
-                                "credits_used": quota_snapshot.get("credits_used", 0),
-                                "credits_remaining": quota_snapshot.get(
-                                    "credits_remaining", 0
-                                ),
-                            },
-                            "redirect": "/candidate/subscription",
-                        }, 402
-                else:
-                    return {
-                        "error": "Monthly practice interview limit reached for your available credits.",
-                        "error_code": credit_snapshot.get(
-                            "error_code", "CANDIDATE_PRACTICE_LIMIT_REACHED"
-                        ),
-                        "plan": {
-                            "name": user.get("plan_name", "Free Tier"),
-                            "credits_allocated": credit_snapshot.get(
-                                "credits_allocated", 0
-                            ),
-                            "credits_used": credit_snapshot.get("credits_used", 0),
-                            "credits_remaining": credit_snapshot.get(
-                                "credits_remaining", 0
-                            ),
-                        },
-                        "redirect": "/candidate/subscription",
-                    }, 402
+            required_credits = (
+                int(PaymentConfig.CANDIDATE_PRACTICE_PROCTORED_CREDITS)
+                if proctoring_enabled
+                else int(PaymentConfig.CANDIDATE_PRACTICE_CREDITS)
+            )
+            credit_snapshot = self.wallet_service.check_credit_availability(
+                owner_id=user_id,
+                audience="candidate",
+                min_required_credits=required_credits,
+            )
+            if not credit_snapshot.get("can_start_interview", False):
+                return {
+                    "error": "Insufficient credits for practice interview.",
+                    "error_code": credit_snapshot.get("error_code", "insufficient_credits"),
+                    "credits_required": required_credits,
+                    "credits_remaining": int(credit_snapshot.get("credits_remaining", 0) or 0),
+                    "redirect": "/candidate/subscription",
+                }, 402
 
             # Get CV content (PDF or manual entry)
             cv_text = None
@@ -430,6 +381,7 @@ class PracticeController:
                 "manual_infractions": [],
                 "gaze_metrics": None,
                 "gaze_plot_path": None,
+                "proctoring_enabled": bool(proctoring_enabled),
             }
 
             self.collections["practice_sessions"].insert_one(practice_session)
@@ -443,6 +395,8 @@ class PracticeController:
                 "cv_score": cv_score,  # Return CV score as percentage (0-100) for display
                 "initial_questions": [question_result.get("question", "")],
                 "message": "Practice interview session started successfully",
+                "credits_required": required_credits,
+                "proctoring_enabled": bool(proctoring_enabled),
                 "quota": {
                     "credits_allocated": int(
                         (credit_snapshot or {}).get("credits_allocated", 0) or 0
@@ -585,63 +539,6 @@ class PracticeController:
             usage_summary = CostTracker().end_session(session_id, clear_events=True)
             usage_deduction = None
 
-            if self.subscription_service:
-                usage_deduction = self.subscription_service.consume_usage_credits(
-                    employer_id=user_id,
-                    audience="candidate",
-                    usage=usage_summary,
-                    idempotency_key=f"practice-session:{session_id}",
-                    metadata={
-                        "session_id": session_id,
-                        "is_practice": True,
-                        "candidate_user_id": user_id,
-                    },
-                )
-
-                # Free-tier candidates without paid subscription consume monthly quota event.
-                if (
-                    usage_deduction
-                    and not usage_deduction.get("success", False)
-                    and usage_deduction.get("error_code") == "no_subscription"
-                ):
-                    quota_snapshot = get_candidate_practice_quota(
-                        self.collections["users"].database,
-                        user_id,
-                    )
-                    consumed = consume_candidate_practice_credit(
-                        self.collections["users"].database,
-                        user_id,
-                        session_id,
-                        quota_snapshot=quota_snapshot,
-                    )
-                    if consumed:
-                        usage_deduction = {
-                            "success": True,
-                            "idempotent_replay": False,
-                            "credits_deducted": 1,
-                            "usage_cost_usd": float(
-                                usage_summary.get("total_cost", 0.0) or 0.0
-                            ),
-                            "credits_remaining": max(
-                                0,
-                                int(quota_snapshot.get("credits_remaining", 0) or 0)
-                                - 1,
-                            ),
-                            "credits_used": int(
-                                quota_snapshot.get("credits_used", 0) or 0
-                            )
-                            + 1,
-                            "credits_allocated": int(
-                                quota_snapshot.get("credits_allocated", 0) or 0
-                            ),
-                            "is_unlimited": False,
-                            "interviews_used": int(
-                                quota_snapshot.get("interviews_used", 0) or 0
-                            )
-                            + 1,
-                            "source": "candidate_free_quota",
-                        }
-
             # Deep JSON serialization function (same as real interview)
             def make_json_serializable(obj):
                 """Recursively convert an object to be JSON serializable."""
@@ -730,70 +627,24 @@ class PracticeController:
                 },
             )
 
-            db = self.collections["users"].database
-            subscription_service = SubscriptionService(db)
-            usage_deduction = subscription_service.consume_usage_credits(
-                employer_id=user_id,
+            practice_cost = (
+                int(PaymentConfig.CANDIDATE_PRACTICE_PROCTORED_CREDITS)
+                if bool(session.get("proctoring_enabled", False))
+                else int(PaymentConfig.CANDIDATE_PRACTICE_CREDITS)
+            )
+            usage_deduction = self.wallet_service.debit_wallet(
+                owner_id=user_id,
                 audience="candidate",
-                usage_summary=usage_summary,
-                idempotency_key=f"practice-session:{session_id}",
+                credits=practice_cost,
+                transaction_type="practice_interview",
+                reference_type="practice_session",
+                reference_id=session_id,
                 metadata={
                     "session_id": session_id,
-                    "source": "practice_session",
+                    "proctoring_enabled": bool(session.get("proctoring_enabled", False)),
                 },
+                idempotency_key=f"practice-session:{session_id}",
             )
-
-            if (
-                not usage_deduction.get("success")
-                and usage_deduction.get("error_code") == "no_subscription"
-            ):
-                quota_snapshot = get_candidate_practice_quota(db, user_id)
-                consumed = consume_candidate_practice_credit(
-                    db,
-                    candidate_id=user_id,
-                    session_id=session_id,
-                    quota_snapshot=quota_snapshot,
-                )
-
-                if consumed:
-                    usage_deduction = {
-                        "success": True,
-                        "credits_deducted": 1,
-                        "usage_cost_usd": float(
-                            usage_summary.get("total_cost", 0.0) or 0.0
-                        ),
-                        "credits_remaining": max(
-                            0,
-                            int(quota_snapshot.get("interviews_remaining", 0) or 0) - 1,
-                        ),
-                        "credits_used": int(
-                            quota_snapshot.get("interviews_used", 0) or 0
-                        )
-                        + 1,
-                        "credits_allocated": int(
-                            quota_snapshot.get("interviews_allowed", 0) or 0
-                        ),
-                        "is_unlimited": False,
-                        "interviews_used": int(
-                            quota_snapshot.get("interviews_used", 0) or 0
-                        )
-                        + 1,
-                        "source": "candidate_free_quota",
-                    }
-                else:
-                    usage_deduction = {
-                        "success": False,
-                        "credits_deducted": 0,
-                        "usage_cost_usd": float(
-                            usage_summary.get("total_cost", 0.0) or 0.0
-                        ),
-                        "credits_remaining": int(
-                            quota_snapshot.get("interviews_remaining", 0) or 0
-                        ),
-                        "error": "You've reached your free practice interview limit. Upgrade your plan to continue.",
-                        "error_code": "CANDIDATE_PRACTICE_LIMIT_REACHED",
-                        "source": "candidate_free_quota",
-                    }
 
             # Calculate interview score from evaluation (same logic as real interviews)
             interview_score = 85  # Default score

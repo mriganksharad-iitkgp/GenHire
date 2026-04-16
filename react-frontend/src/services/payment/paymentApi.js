@@ -1,5 +1,5 @@
-// Payment & Subscription API Layer
-// Centralized payment endpoints for subscription management
+// Payment & Wallet API Layer
+// Centralized recharge and wallet endpoints
 
 const API_BASE =
   process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
@@ -44,7 +44,7 @@ async function request(path, options = {}) {
 // =============================================================================
 
 /** Get all available subscription plans */
-export const getPlans = () => request("/payment/plans");
+export const getPlans = () => request("/payment/recharge/packs");
 
 /** Get specific plan by ID */
 export const getPlan = (planId) => request(`/payment/plans/${planId}`);
@@ -53,12 +53,11 @@ export const getPlan = (planId) => request(`/payment/plans/${planId}`);
 // SUBSCRIPTIONS
 // =============================================================================
 
-/** Get current subscription for logged-in user */
-export const getCurrentSubscription = () =>
-  request("/payment/subscriptions/me");
+/** Get wallet summary for logged-in user */
+export const getCurrentSubscription = () => request("/payment/wallet/summary");
 
 /** Check if user can conduct interviews */
-export const checkSubscription = () => request("/payment/subscriptions/check");
+export const checkSubscription = () => request("/payment/wallet/check");
 
 /** Get subscription history */
 export const getSubscriptionHistory = () =>
@@ -77,20 +76,24 @@ export const cancelSubscription = (reason) =>
 
 /** Initiate payment for a plan (creates Razorpay order) */
 export const initiatePayment = (planId) =>
-  request("/payment/payments/initiate", {
+  request("/payment/recharge/initiate", {
     method: "POST",
     body: JSON.stringify({ plan_id: planId }),
   });
 
 /** Verify Razorpay payment after checkout */
 export const verifyPayment = (paymentData) =>
-  request("/payment/payments/verify", {
+  request("/payment/recharge/verify", {
     method: "POST",
     body: JSON.stringify(paymentData),
   });
 
 /** Get payment history */
 export const getPaymentHistory = () => request("/payment/payments/history");
+
+/** Get recent credit transactions */
+export const getCreditTransactions = () =>
+  request("/payment/wallet/transactions");
 
 // =============================================================================
 // INTERVIEWS (Usage)

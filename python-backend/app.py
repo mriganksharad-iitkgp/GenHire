@@ -56,6 +56,8 @@ from services.cv_scoring_service import CVScoringService
 from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
 from payment_module.services.subscription_service import SubscriptionService
+from payment_module.services.wallet_service import WalletService
+from payment_module.config.settings import PaymentConfig
 from interview.core.cost_tracker import CostTracker
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
@@ -74,6 +76,8 @@ RECORDING_ANALYZER_AVAILABLE = False
 try:
     from payment_module.routes import payment_bp, init_payment_routes
     from payment_module.services.subscription_service import SubscriptionService
+    from payment_module.services.wallet_service import WalletService
+    from payment_module.config.settings import PaymentConfig
 
     PAYMENT_MODULE_AVAILABLE = True
     print("[OK] Payment module loaded successfully")
@@ -81,6 +85,8 @@ except ImportError as e:
     print(f"[WARN] Payment module not available: {e}")
     PAYMENT_MODULE_AVAILABLE = False
     SubscriptionService = None
+    WalletService = None
+    PaymentConfig = None
 
 # Load environment variables
 load_dotenv()
@@ -152,6 +158,17 @@ users_collection = collections["users"]
 interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
 jobs_collection = collections["jobs"]
+
+if PAYMENT_MODULE_AVAILABLE and WalletService:
+    try:
+        granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(
+            users_collection
+        )
+        print(
+            f"[OK] Startup wallet signup bonus bootstrap complete. Granted={granted}, skipped={skipped}"
+        )
+    except Exception as e:
+        print(f"[WARN] Startup wallet bonus bootstrap skipped: {e}")
 
 # Initialize and start background processor for CV scoring
 from services.background_processor import get_background_processor
@@ -381,15 +398,34 @@ def start_interview(current_user):
     student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
-    # --- Interview start credit pre-check (deduction occurs at interview end) ---
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    proctoring_config = job.get("proctoring_config", {
+        "voice_detection": True,
+        "object_detection": True,
+        "eyeball_tracking": True,
+        "gaze_heatmap": True,
+    }) if job else {}
+
+    proctoring_enabled = any(bool(v) for v in (proctoring_config or {}).values())
+    recruiter_interview_cost = (
+        int(PaymentConfig.RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS)
+        if proctoring_enabled
+        else int(PaymentConfig.RECRUITER_REAL_INTERVIEW_CREDITS)
+    )
+    recruiter_deduction = None
+
+    # --- Interview start credit pre-check and deduction ---
     if job:
         recruiter_id = job.get("created_by")
         if recruiter_id:
             db = db_config.get_db()
-            subscription_service = SubscriptionService(db)
-            availability = subscription_service.check_credit_availability(
-                employer_id=str(recruiter_id),
+            wallet_service = WalletService(db)
+            availability = wallet_service.check_credit_availability(
+                owner_id=str(recruiter_id),
                 audience="recruiter",
+                min_required_credits=recruiter_interview_cost,
             )
 
             if not availability.get("can_start_interview", False):
@@ -402,6 +438,7 @@ def start_interview(current_user):
                             or "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
                             "plan_owner": "recruiter",
                             "can_start_interview": False,
+                            "credits_required": recruiter_interview_cost,
                             "credits_remaining": availability.get(
                                 "credits_remaining", 0
                             ),
@@ -410,8 +447,49 @@ def start_interview(current_user):
                     403,
                 )
 
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
+            recruiter_deduction = wallet_service.debit_wallet(
+                owner_id=str(recruiter_id),
+                audience="recruiter",
+                credits=recruiter_interview_cost,
+                transaction_type="real_interview_recruiter",
+                reference_type="application",
+                reference_id=str(application_id),
+                metadata={
+                    "application_id": str(application_id),
+                    "job_id": str(job.get("_id")),
+                    "proctoring_enabled": proctoring_enabled,
+                },
+                idempotency_key=f"real-interview:{application_id}",
+            )
+
+            if not recruiter_deduction.get("success"):
+                return (
+                    jsonify(
+                        {
+                            "error": "Insufficient recruiter credits to start interview",
+                            "error_code": recruiter_deduction.get("error_code", "insufficient_credits"),
+                            "plan_owner": "recruiter",
+                            "credits_required": recruiter_interview_cost,
+                            "credits_remaining": recruiter_deduction.get("credits_remaining", 0),
+                        }
+                    ),
+                    403,
+                )
+
+            wallet_service.add_audit_transaction(
+                owner_id=str(current_user.get("_id")),
+                audience="candidate",
+                transaction_type="real_interview_candidate_audit",
+                reference_type="application",
+                reference_id=str(application_id),
+                metadata={
+                    "application_id": str(application_id),
+                    "job_id": str(job.get("_id")),
+                    "recruiter_id": str(recruiter_id),
+                    "credits_impact": 0,
+                },
+                idempotency_key=f"real-interview-candidate-audit:{application_id}",
+            )
 
     cv_details = student.get("cv_details")
     if not cv_details:
@@ -439,13 +517,6 @@ def start_interview(current_user):
     with open(jd_txt_path, "w", encoding="utf-8") as f:
         f.write(jd_text)
 
-    proctoring_config = job.get("proctoring_config", {
-        "voice_detection": True,
-        "object_detection": True,
-        "eyeball_tracking": True,
-        "gaze_heatmap": True,
-    }) if job else {}
-
     session_details = interview_manager.create_session(
         cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[], proctoring_config=proctoring_config
     )
@@ -471,6 +542,7 @@ def start_interview(current_user):
         "status": "active",
         "similarity_score": sim_score,
         "proctoring_config": proctoring_config,
+        "usage_deduction": recruiter_deduction,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
         "start_time": time.time(),
@@ -486,6 +558,8 @@ def start_interview(current_user):
             "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
             "proctoring_config": interview_doc["proctoring_config"],
+            "credits_deducted": recruiter_interview_cost,
+            "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
 
@@ -675,46 +749,12 @@ def end_interview(current_user, session_id):
         },
     )
 
-    recruiter_owner_id = None
     existing_app = None
-    if session_doc and session_doc.get("application_id"):
-        try:
-            existing_app = applications_collection.find_one(
-                {"_id": ObjectId(session_doc["application_id"])}
-            )
-            if existing_app and existing_app.get("job_id"):
-                job_doc_for_billing = jobs_collection.find_one(
-                    {"_id": ObjectId(existing_app["job_id"])},
-                    {"created_by": 1},
-                )
-                if job_doc_for_billing:
-                    recruiter_owner_id = str(
-                        job_doc_for_billing.get("created_by") or ""
-                    )
-        except Exception:
-            recruiter_owner_id = None
-
-    if recruiter_owner_id:
-        subscription_service = SubscriptionService(db_config.get_db())
-        usage_deduction = subscription_service.consume_usage_credits(
-            employer_id=recruiter_owner_id,
-            audience="recruiter",
-            usage_summary=usage_summary,
-            idempotency_key=f"interview-session:{session_id}",
-            metadata={
-                "session_id": session_id,
-                "application_id": str(session_doc.get("application_id") or ""),
-                "source": "interview_session",
-            },
-        )
-    else:
-        usage_deduction = {
-            "success": False,
-            "credits_deducted": 0,
-            "usage_cost_usd": float(usage_summary.get("total_cost", 0.0) or 0.0),
-            "error": "Unable to resolve recruiter owner for billing.",
-            "error_code": "missing_recruiter_owner",
-        }
+    usage_deduction = (session_doc or {}).get("usage_deduction") or {
+        "success": True,
+        "credits_deducted": 0,
+        "source": "deducted_at_start",
+    }
 
     # --- NEW: Generate and save the gaze plot ---
     if tracking_data:

@@ -42,126 +42,88 @@ class PaymentConfig:
     # Payment Module Settings
     CURRENCY = os.getenv("PAYMENT_CURRENCY", "INR")
 
-    # Interview settings
-    UNLIMITED_INTERVIEWS = -1  # Sentinel value for unlimited plans
-    CREDIT_PER_USD = int(os.getenv("CREDIT_PER_USD", "1000"))
-    MIN_USAGE_CREDITS = int(os.getenv("MIN_USAGE_CREDITS", "1"))
-    START_INTERVIEW_MIN_CREDITS = int(os.getenv("START_INTERVIEW_MIN_CREDITS", "1"))
+    # Wallet and fixed-deduction settings
+    SIGNUP_BONUS_CREDITS = int(os.getenv("SIGNUP_BONUS_CREDITS", "100"))
+    CANDIDATE_PRACTICE_CREDITS = int(os.getenv("CANDIDATE_PRACTICE_CREDITS", "30"))
+    CANDIDATE_PRACTICE_PROCTORED_CREDITS = int(
+        os.getenv("CANDIDATE_PRACTICE_PROCTORED_CREDITS", "50")
+    )
+    RECRUITER_AI_JD_CREDITS = int(os.getenv("RECRUITER_AI_JD_CREDITS", "10"))
+    RECRUITER_REAL_INTERVIEW_CREDITS = int(
+        os.getenv("RECRUITER_REAL_INTERVIEW_CREDITS", "30")
+    )
+    RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS = int(
+        os.getenv("RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS", "50")
+    )
 
-    # Usage credit economics
-    # Credits are integer billing units consumed from measured USD cost.
-    CREDIT_PER_USD = float(os.getenv("CREDIT_PER_USD", "1000"))
-    MIN_USAGE_CREDITS = int(os.getenv("MIN_USAGE_CREDITS", "1"))
-    START_INTERVIEW_MIN_CREDITS = int(os.getenv("START_INTERVIEW_MIN_CREDITS", "1"))
-
-    # Default Plans Configuration
-    # These are seeded if no plans exist in the database
+    # Recharge pack configuration
     # Prices in paise (1 INR = 100 paise)
-    # - Free Tier: 2,000 credits
-    # - Recruiter Pro: ₹4,999/month, 75,000 credits
-    # - Recruiter Max: ₹9,999/month, 180,000 credits
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
-        "free": {
-            "name": "Free Tier",
-            "slug": "free",
-            "description": "Starter free tier with limited credits",
-            "price_paise": 0,  # Free plan
-            "credits_allocated": 2000,
-            "validity_days": 365,  # Keep free tier valid for 1 year by default
-            "audience": "recruiter",
-            "features": [
-                "2,000 AI usage credits",
-                "Basic candidate analytics",
-                "Smart CV matching",
-            ],
-            "is_active": True,
-            "display_order": 1,
-        },
-        "professional": {
-            "name": "Recruiter Pro",
-            "slug": "professional",
-            "description": "Professional plan for growing teams with 75,000 credits per month",
-            "price_paise": 499900,  # ₹4,999.00
-            "credits_allocated": 75000,
-            "validity_days": 30,  # 1 month validity
-            "audience": "recruiter",
-            "features": [
-                "75,000 AI usage credits/month",
-                "Advanced analytics & reporting",
-                "CV screening & ranking",
-                "Proctoring features",
-                "Priority support",
-            ],
-            "is_active": True,
-            "display_order": 2,
-            "is_popular": True,
-        },
-        "recruiter_max": {
-            "name": "Recruiter Max",
-            "slug": "recruiter-max",
-            "description": "Advanced recruiter plan with 180,000 credits per month",
-            "price_paise": 999900,  # ₹9,999.00
-            "credits_allocated": 180000,
-            "validity_days": 30,  # 1 month validity
-            "audience": "recruiter",
-            "features": [
-                "180,000 AI usage credits/month",
-                "Custom integrations",
-                "Advanced analytics and reporting",
-                "Custom branding",
-                "Priority support",
-            ],
-            "is_active": True,
-            "display_order": 3,
-        },
-        "candidate_free": {
-            "name": "Free Tier",
-            "slug": "candidate-free",
-            "description": "Free plan with 1,500 practice credits per month",
-            "price_paise": 0,
-            "credits_allocated": 1500,
-            "validity_days": 30,
-            "audience": "candidate",
-            "features": [
-                "1,500 Practice Credits/month",
-                "Smart practice feedback",
-                "Basic interview analytics",
-            ],
-            "is_active": True,
-            "display_order": 1,
-        },
         "candidate_pro": {
             "name": "Candidate Pro",
             "slug": "candidate-pro",
-            "description": "30,000 practice credits per month for active preparation",
-            "price_paise": 99900,
-            "credits_allocated": 30000,
-            "validity_days": 30,
+            "description": "Recharge pack with 500 non-expiring candidate credits",
+            "price_paise": 49900,
+            "credits_allocated": 500,
+            "validity_days": 36500,
             "audience": "candidate",
             "features": [
-                "30,000 Practice Credits/month",
-                "Detailed interview scoring",
-                "Priority report generation",
+                "500 non-expiring credits",
+                "Practice interviews",
+                "Wallet recharge support",
             ],
             "is_active": True,
-            "display_order": 2,
+            "display_order": 1,
             "is_popular": True,
         },
         "candidate_max": {
             "name": "Candidate Max",
             "slug": "candidate-max",
-            "description": "70,000 practice credits per month for intensive preparation",
-            "price_paise": 149900,
-            "credits_allocated": 70000,
-            "validity_days": 30,
+            "description": "Recharge pack with 1,000 non-expiring candidate credits",
+            "price_paise": 99900,
+            "credits_allocated": 1000,
+            "validity_days": 36500,
             "audience": "candidate",
             "features": [
-                "70,000 Practice Credits/month",
-                "Advanced analytics dashboard",
-                "Priority support",
+                "1,000 non-expiring credits",
+                "Practice interviews",
+                "Wallet recharge support",
+            ],
+            "is_active": True,
+            "display_order": 2,
+        },
+        "recruiter_pro": {
+            "name": "Recruiter Pro",
+            "slug": "recruiter-pro",
+            "description": "Recharge pack with 5,000 non-expiring recruiter credits",
+            "price_paise": 499900,  # ₹4,999.00
+            "credits_allocated": 5000,
+            "validity_days": 36500,
+            "audience": "recruiter",
+            "features": [
+                "5,000 non-expiring credits",
+                "AI JD generation",
+                "Real interview wallet deductions",
             ],
             "is_active": True,
             "display_order": 3,
+            "is_popular": True,
+        },
+        "recruiter_max": {
+            "name": "Recruiter Max",
+            "slug": "recruiter-max",
+            "description": "Recharge pack with 10,000 non-expiring recruiter credits",
+            "price_paise": 999900,  # ₹9,999.00
+            "credits_allocated": 10000,
+            "validity_days": 36500,
+            "audience": "recruiter",
+            "features": [
+                "10,000 non-expiring credits",
+                "AI JD generation",
+                "Real interview wallet deductions",
+            ],
+            "is_active": True,
+            "display_order": 4,
         },
     }
 

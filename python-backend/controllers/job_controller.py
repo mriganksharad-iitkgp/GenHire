@@ -10,6 +10,8 @@ from services.pdf_parser_service import get_pdf_parser
 from dotenv import load_dotenv
 from utils.job_standards import canonicalize_job_role
 from services.usage_telemetry_service import record_usage_event
+from payment_module.config.settings import PaymentConfig
+from payment_module.services.wallet_service import WalletService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ class JobController:
         except Exception as e:
             logger.warning(f"PDF parser initialization failed: {e}")
             self.pdf_parser = None
+        self.wallet_service = WalletService(self.jobs_collection.database)
 
     @staticmethod
     def _normalize_text_key(value):
@@ -453,6 +456,26 @@ class JobController:
     def generate_jd_with_ai(self, prompt_text, recruiter_id=None):
         """Generate a complete job description using Groq AI"""
         try:
+            if recruiter_id:
+                deduction = self.wallet_service.debit_wallet(
+                    owner_id=str(recruiter_id),
+                    audience="recruiter",
+                    credits=int(PaymentConfig.RECRUITER_AI_JD_CREDITS),
+                    transaction_type="ai_jd_generation",
+                    reference_type="ai_jd_prompt",
+                    reference_id=str(uuid.uuid4()),
+                    metadata={
+                        "prompt_preview": (prompt_text or "")[:160],
+                    },
+                )
+                if not deduction.get("success"):
+                    return {
+                        "error": "Insufficient credits for AI JD generation",
+                        "error_code": deduction.get("error_code", "insufficient_credits"),
+                        "credits_required": int(PaymentConfig.RECRUITER_AI_JD_CREDITS),
+                        "credits_remaining": int(deduction.get("credits_remaining", 0) or 0),
+                    }, 402
+
             load_dotenv()
             groq_api_key = os.getenv("GROQ_API_KEY")
             if not groq_api_key:
@@ -555,7 +578,18 @@ Rules:
                     }
                 )
 
-            return {'job_data': job_data}, 200
+            wallet_summary = None
+            if recruiter_id:
+                wallet_summary = self.wallet_service.get_wallet_summary(
+                    owner_id=str(recruiter_id),
+                    audience="recruiter",
+                )
+
+            return {
+                'job_data': job_data,
+                'credits_deducted': int(PaymentConfig.RECRUITER_AI_JD_CREDITS),
+                'wallet': wallet_summary,
+            }, 200
 
         except json.JSONDecodeError as e:
             logger.error(f"AI response JSON parse error: {e}")

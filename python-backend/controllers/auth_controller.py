@@ -9,6 +9,7 @@ from pymongo.errors import DuplicateKeyError
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from services.email_service import EmailService
+from payment_module.services.wallet_service import WalletService
 
 class AuthController:
     def __init__(self, db_collections):
@@ -17,6 +18,7 @@ class AuthController:
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.email_service = EmailService()
         self.require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'true').lower() == 'true'
+        self.wallet_service = WalletService(self.users_collection.database)
 
     def _normalize_email(self, email):
         return str(email or '').strip().lower()
@@ -174,6 +176,8 @@ class AuthController:
                     'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
                 }, 409
             return {'error': 'Email already exists'}, 409
+
+        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
         
         # Send verification email if required
         if self.require_email_verification:
@@ -600,6 +604,8 @@ class AuthController:
                             'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
                         }, 409
                     return {'error': 'Email already exists'}, 409
+
+                self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
                 
                 # Generate token
                 jwt_token = self.generate_token(user_id)

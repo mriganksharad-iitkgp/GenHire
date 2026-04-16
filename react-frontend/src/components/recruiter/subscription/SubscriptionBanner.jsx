@@ -34,10 +34,7 @@ const SubscriptionBanner = ({
   const creditsAllowed = Number(
     subscription?.credits_allocated ?? subscription?.interviews_allowed ?? 2,
   );
-  const interviewsRemaining = subscription?.interviews_remaining ?? 2;
-  const interviewsAllowed = subscription?.interviews_allowed ?? 2;
   const isUnlimited = subscription?.is_unlimited || false;
-  const expiresAt = subscription?.expires_at;
   const isFreeTier = !subscription || planName.toLowerCase().includes("free");
 
   // Calculate usage percentage
@@ -54,17 +51,6 @@ const SubscriptionBanner = ({
   const lowThreshold = Math.max(5, Math.ceil(creditsAllowed * 0.1));
   const isLowUsage = !isUnlimited && creditsRemaining <= lowThreshold;
   const isOutOfInterviews = !isUnlimited && creditsRemaining <= 0;
-
-  // Format expiry date
-  const formatDate = (dateStr) => {
-    if (!dateStr) return null;
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
 
   return (
     <div
@@ -100,11 +86,6 @@ const SubscriptionBanner = ({
             )}
             <span className={styles.planName}>{planName}</span>
           </div>
-          {expiresAt && (
-            <span className={styles.expiryDate}>
-              Expires: {formatDate(expiresAt)}
-            </span>
-          )}
         </div>
 
         <div className={styles.usageSection}>

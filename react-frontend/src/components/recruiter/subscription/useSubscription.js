@@ -17,74 +17,53 @@ const useSubscription = () => {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem(
-        process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-      );
-
-      // Prefer recruiter cost-statistics plan data so navbar always matches dashboard credits
-      if (token) {
-        const costStatsRes = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/recruiter/cost-statistics?period=month`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        const costStatsData = await costStatsRes.json().catch(() => null);
-        if (
-          costStatsRes.ok &&
-          costStatsData?.success &&
-          costStatsData?.data?.plan
-        ) {
-          const plan = costStatsData.data.plan;
-          const normalizedPlanName = plan?.name || "Free Tier";
-          const isUnlimited = (plan?.interviews_allowed || 0) === -1;
-
-          setSubscription({
-            plan: {
-              name: normalizedPlanName,
-              slug: normalizedPlanName.toLowerCase().includes("free")
-                ? "free"
-                : "paid",
-            },
-            credits_remaining: Math.max(
-              0,
-              Number(
-                plan?.credits_remaining ?? plan?.interviews_remaining ?? 0,
-              ),
-            ),
-            credits_allocated: Number(
-              plan?.credits_allocated ?? plan?.interviews_allowed ?? 2,
-            ),
-            credits_used: Number(
-              plan?.credits_used ?? plan?.interviews_used ?? 0,
-            ),
-            interviews_remaining: isUnlimited
-              ? -1
-              : Math.max(0, Number(plan?.interviews_remaining ?? 0)),
-            interviews_allowed: isUnlimited
-              ? -1
-              : Number(plan?.interviews_allowed ?? 2),
-            interviews_used: Number(plan?.interviews_used ?? 0),
-            is_unlimited: isUnlimited,
-            status: "active",
-            expires_at: plan?.expires_at || null,
-          });
-          return;
-        }
-      }
-
       const response = await getCurrentSubscription();
+      const wallet = response?.data?.wallet || null;
+      const subscriptionLike =
+        response?.data?.subscription || response?.subscription || null;
 
-      if (response?.data?.subscription) {
-        setSubscription(response.data.subscription);
-      } else if (response?.subscription) {
-        setSubscription(response.subscription);
+      if (subscriptionLike || wallet) {
+        setSubscription({
+          ...(subscriptionLike || {}),
+          plan: {
+            name:
+              subscriptionLike?.plan?.name ||
+              wallet?.latest_recharge?.plan_name ||
+              "Recharge Wallet",
+            slug:
+              subscriptionLike?.plan?.slug ||
+              wallet?.latest_recharge?.plan_slug ||
+              "wallet",
+            monthly_credits:
+              subscriptionLike?.plan?.monthly_credits ||
+              wallet?.latest_recharge?.recharge_credits ||
+              0,
+          },
+          credits_remaining: Number(
+            subscriptionLike?.credits_remaining ?? wallet?.credits_balance ?? 0,
+          ),
+          credits_allocated: Number(
+            subscriptionLike?.credits_allocated ?? wallet?.total_credited ?? 0,
+          ),
+          credits_used: Number(
+            subscriptionLike?.credits_used ?? wallet?.total_debited ?? 0,
+          ),
+          interviews_remaining: Number(
+            subscriptionLike?.interviews_remaining ??
+              wallet?.credits_balance ??
+              0,
+          ),
+          interviews_allowed: Number(
+            subscriptionLike?.interviews_allowed ?? wallet?.total_credited ?? 0,
+          ),
+          interviews_used: Number(
+            subscriptionLike?.interviews_used ?? wallet?.total_debited ?? 0,
+          ),
+          is_unlimited: false,
+          status: "active",
+          expires_at: null,
+        });
       } else {
-        // Default to free tier if no subscription found
         setSubscription(getDefaultFreeTier());
       }
     } catch (err) {
@@ -103,19 +82,19 @@ const useSubscription = () => {
 
   // Helper to get default free tier
   const getDefaultFreeTier = () => ({
-    plan: { name: "Free Tier", slug: "free" },
-    credits_remaining: 250,
-    credits_allocated: 250,
+    plan: { name: "Recharge Wallet", slug: "wallet" },
+    credits_remaining: 0,
+    credits_allocated: 0,
     credits_used: 0,
-    interviews_remaining: 2,
-    interviews_allowed: 2,
+    interviews_remaining: 0,
+    interviews_allowed: 0,
     interviews_used: 0,
     is_unlimited: false,
     status: "active",
   });
 
   // Computed properties
-  const isFreeTier = !subscription || subscription?.plan?.slug === "free";
+  const isFreeTier = false;
   const creditsRemaining =
     subscription?.credits_remaining ?? subscription?.interviews_remaining ?? 2;
   const creditsAllowed =

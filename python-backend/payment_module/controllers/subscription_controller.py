@@ -13,6 +13,7 @@ from typing import Tuple, Dict, Any
 
 from ..services.subscription_service import SubscriptionService
 from ..services.plan_service import PlanService
+from ..services.wallet_service import WalletService
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class SubscriptionController:
         """
         self.subscription_service = SubscriptionService(db)
         self.plan_service = PlanService(db)
+        self.wallet_service = WalletService(db)
 
     @staticmethod
     def _normalize_user_type(user_data: Dict[str, Any]) -> str:
@@ -46,15 +48,7 @@ class SubscriptionController:
         return user_type
 
     def get_current_subscription(self, user_data: Dict[str, Any]) -> Tuple[dict, int]:
-        """
-        Get current active subscription for authenticated user.
-
-        Args:
-            user_data: Authenticated user data
-
-        Returns:
-            Tuple of (response_dict, status_code)
-        """
+        """Return wallet summary in a backward-compatible response envelope."""
         try:
             audience = self._normalize_user_type(user_data)
             if audience not in {"recruiter", "candidate"}:
@@ -65,27 +59,41 @@ class SubscriptionController:
                 }, 403
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
-
-            subscription = self.subscription_service.get_active_subscription(
-                employer_id,
+            wallet_summary = self.wallet_service.get_wallet_summary(
+                owner_id=employer_id,
                 audience=audience,
             )
+            latest_pack = wallet_summary.get("latest_recharge") or {}
 
-            if not subscription:
-                return {
-                    "success": True,
-                    "data": {
-                        "has_subscription": False,
-                        "subscription": None,
-                        "message": "No active subscription",
-                    },
-                }, 200
+            subscription_like = {
+                "plan": {
+                    "name": latest_pack.get("plan_name"),
+                    "slug": latest_pack.get("plan_slug"),
+                    "price": (
+                        float(latest_pack.get("amount_paise", 0) or 0) / 100.0
+                    ),
+                    "currency": "INR",
+                    "monthly_credits": int(latest_pack.get("recharge_credits", 0) or 0),
+                },
+                "status": "active",
+                "credits_balance": int(wallet_summary.get("credits_balance", 0) or 0),
+                "credits_allocated": int(wallet_summary.get("total_credited", 0) or 0),
+                "credits_remaining": int(wallet_summary.get("credits_balance", 0) or 0),
+                "credits_used": int(wallet_summary.get("total_debited", 0) or 0),
+                "total_credited": int(wallet_summary.get("total_credited", 0) or 0),
+                "total_debited": int(wallet_summary.get("total_debited", 0) or 0),
+                "expires_at": None,
+                "is_unlimited": False,
+                "is_active": True,
+                "can_use_interview": int(wallet_summary.get("credits_balance", 0) or 0) > 0,
+            }
 
             return {
                 "success": True,
                 "data": {
                     "has_subscription": True,
-                    "subscription": subscription.to_api_response(),
+                    "subscription": subscription_like,
+                    "wallet": wallet_summary,
                 },
             }, 200
 
@@ -155,21 +163,25 @@ class SubscriptionController:
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
 
-            result = self.subscription_service.use_interview(
-                employer_id,
+            result = self.wallet_service.debit_wallet(
+                owner_id=employer_id,
                 audience=audience,
+                credits=1,
+                transaction_type="manual_interview_use",
+                reference_type="user",
+                reference_id=employer_id,
             )
 
             if result["success"]:
                 return {
                     "success": True,
                     "data": {
-                        "interviews_remaining": result["interviews_remaining"],
-                        "interviews_used": result["interviews_used"],
-                        "credits_remaining": result.get("credits_remaining"),
-                        "credits_used": result.get("credits_used"),
-                        "credits_allocated": result.get("credits_allocated"),
-                        "is_unlimited": result.get("is_unlimited", False),
+                        "interviews_remaining": result.get("wallet", {}).get("balance"),
+                        "interviews_used": result.get("wallet", {}).get("total_debited"),
+                        "credits_remaining": result.get("wallet", {}).get("balance"),
+                        "credits_used": result.get("wallet", {}).get("total_debited"),
+                        "credits_allocated": result.get("wallet", {}).get("total_credited"),
+                        "is_unlimited": False,
                     },
                 }, 200
             else:
@@ -221,56 +233,22 @@ class SubscriptionController:
 
             employer_id = str(user_data.get("_id") or user_data.get("user_id"))
 
-            subscription = self.subscription_service.get_active_subscription(
-                employer_id,
+            wallet_summary = self.wallet_service.get_wallet_summary(
+                owner_id=employer_id,
                 audience=audience,
             )
-
-            if not subscription:
-                return {
-                    "success": True,
-                    "data": {
-                        "can_interview": audience == "recruiter" and False,
-                        "can_practice": audience == "candidate" and False,
-                        "reason": "no_subscription",
-                        "message": "Please purchase a plan to continue",
-                    },
-                }, 200
-
-            if not subscription.can_use_interview:
-                reason = "expired" if not subscription.is_active else "limit_reached"
-                return {
-                    "success": True,
-                    "data": {
-                        "can_interview": audience == "recruiter" and False,
-                        "can_practice": audience == "candidate" and False,
-                        "reason": reason,
-                        "message": (
-                            "Please purchase a new plan"
-                            if reason == "expired"
-                            else "Interview limit reached"
-                        ),
-                    },
-                }, 200
+            can_use = int(wallet_summary.get("credits_balance", 0) or 0) > 0
 
             return {
                 "success": True,
                 "data": {
-                    "can_interview": audience == "recruiter",
-                    "can_practice": audience == "candidate",
-                    "credits_remaining": subscription.credits_remaining,
-                    "credits_used": subscription.credits_used,
-                    "credits_allocated": subscription.credits_allocated,
-                    "interviews_remaining": (
-                        subscription.interviews_remaining
-                        if not subscription.is_unlimited
-                        else "unlimited"
-                    ),
-                    "expires_at": (
-                        subscription.expires_at.isoformat()
-                        if subscription.expires_at
-                        else None
-                    ),
+                    "can_interview": audience == "recruiter" and can_use,
+                    "can_practice": audience == "candidate" and can_use,
+                    "credits_remaining": int(wallet_summary.get("credits_balance", 0) or 0),
+                    "credits_used": int(wallet_summary.get("total_debited", 0) or 0),
+                    "credits_allocated": int(wallet_summary.get("total_credited", 0) or 0),
+                    "interviews_remaining": int(wallet_summary.get("credits_balance", 0) or 0),
+                    "expires_at": None,
                 },
             }, 200
 
@@ -309,23 +287,13 @@ class SubscriptionController:
             data = request.get_json() or {}
             reason = data.get("reason", "user_requested")
 
-            success = self.subscription_service.cancel_subscription(
-                employer_id=employer_id,
-                reason=reason,
-                audience=audience,
-            )
-
-            if success:
-                return {
-                    "success": True,
-                    "data": {"message": "Subscription cancelled successfully"},
-                }, 200
-            else:
-                return {
-                    "success": False,
-                    "error": "No active subscription to cancel",
-                    "error_code": "no_subscription",
-                }, 404
+            return {
+                "success": True,
+                "data": {
+                    "message": "Recharge wallet model is active. Cancellation is not required.",
+                    "reason": reason,
+                },
+            }, 200
 
         except Exception as e:
             logger.error(f"Error cancelling subscription: {str(e)}")
@@ -333,4 +301,25 @@ class SubscriptionController:
                 "success": False,
                 "error": "Failed to cancel subscription",
                 "error_code": "cancel_failed",
+            }, 500
+
+    def get_credit_transactions(self, user_data: Dict[str, Any]) -> Tuple[dict, int]:
+        try:
+            audience = self._normalize_user_type(user_data)
+            owner_id = str(user_data.get("_id") or user_data.get("user_id"))
+            limit = request.args.get("limit", 20, type=int)
+            transactions = self.wallet_service.get_transactions(owner_id, audience, limit)
+            return {
+                "success": True,
+                "data": {
+                    "transactions": transactions,
+                    "count": len(transactions),
+                },
+            }, 200
+        except Exception as e:
+            logger.error(f"Error fetching credit transactions: {str(e)}")
+            return {
+                "success": False,
+                "error": "Failed to fetch transactions",
+                "error_code": "fetch_failed",
             }, 500

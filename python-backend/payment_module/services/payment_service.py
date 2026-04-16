@@ -20,8 +20,8 @@ from pymongo import ReturnDocument
 from ..models.payment import Payment, PaymentSchema, PaymentStatus
 from ..models.plan import Plan
 from ..services.razorpay_service import RazorpayService
-from ..services.subscription_service import SubscriptionService
 from ..services.plan_service import PlanService
+from ..services.wallet_service import WalletService
 from ..config.settings import PaymentConfig
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,8 @@ class PaymentService:
 
         # Initialize dependent services
         self.razorpay_service = RazorpayService()
-        self.subscription_service = SubscriptionService(db)
         self.plan_service = PlanService(db)
+        self.wallet_service = WalletService(db)
 
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
@@ -79,8 +79,7 @@ class PaymentService:
         2. Generate idempotency key
         3. Create Razorpay order
         4. Create pending payment record
-        5. Create pending subscription
-        6. Return order details for frontend checkout
+        5. Return order details for frontend checkout
 
         Args:
             employer_id: User ID
@@ -142,28 +141,15 @@ class PaymentService:
                     "employer_name": employer_name,
                     "employer_email": employer_email,
                     "plan_name": plan.name,
+                    "plan_slug": plan.slug,
                     "buyer_type": buyer_type,
                     "plan_audience": plan_audience,
+                    "recharge_credits": int(plan.credits_allocated or 0),
                 },
             )
 
             payment_result = self.collection.insert_one(payment.to_dict())
             payment._id = payment_result.inserted_id
-
-            # 5. Create pending subscription
-            subscription = self.subscription_service.create_pending_subscription(
-                employer_id=employer_id,
-                plan=plan,
-                razorpay_order_id=razorpay_order_id,
-                owner_type=buyer_type,
-            )
-
-            if subscription:
-                # Link subscription to payment
-                self.collection.update_one(
-                    {"_id": payment._id},
-                    {"$set": {"subscription_id": subscription._id}},
-                )
 
             logger.info(f"Payment initiated: {payment._id} for employer {employer_id}")
 
@@ -181,7 +167,9 @@ class PaymentService:
                 "notes": {
                     "plan_id": str(plan._id),
                     "plan_name": plan.name,
+                    "plan_slug": plan.slug,
                     "plan_audience": plan_audience,
+                    "recharge_credits": int(plan.credits_allocated or 0),
                 },
             }
 
@@ -267,24 +255,57 @@ class PaymentService:
 
             payment = Payment.from_dict(update_result)
 
-            # 5. Activate subscription
-            subscription = self.subscription_service.activate_subscription(
-                razorpay_order_id=razorpay_order_id, payment_id=payment._id
+            audience = (
+                update_result.get("metadata", {}).get("plan_audience")
+                or update_result.get("metadata", {}).get("buyer_type")
+                or "recruiter"
+            )
+            if audience == "student":
+                audience = "candidate"
+
+            recharge_credits = int(
+                update_result.get("metadata", {}).get("recharge_credits", 0) or 0
+            )
+            if recharge_credits <= 0:
+                plan_id = update_result.get("plan_id")
+                if plan_id:
+                    plan = self.plan_service.get_plan_by_id(str(plan_id), audience=audience)
+                    if plan:
+                        recharge_credits = int(plan.credits_allocated or 0)
+
+            credited = self.wallet_service.credit_wallet(
+                owner_id=str(update_result.get("employer_id")),
+                audience=audience,
+                credits=recharge_credits,
+                transaction_type="recharge",
+                reference_type="payment",
+                reference_id=str(payment._id),
+                metadata={
+                    "plan_id": str(update_result.get("plan_id") or ""),
+                    "razorpay_order_id": razorpay_order_id,
+                    "razorpay_payment_id": razorpay_payment_id,
+                    "amount_paise": int(update_result.get("amount_paise", 0) or 0),
+                    "plan_name": update_result.get("metadata", {}).get("plan_name"),
+                    "plan_slug": update_result.get("metadata", {}).get("plan_slug"),
+                    "recharge_credits": recharge_credits,
+                },
+                idempotency_key=f"recharge:{razorpay_order_id}",
             )
 
-            if subscription:
-                logger.info(
-                    f"Payment {payment._id} verified, subscription {subscription._id} activated"
-                )
-            else:
+            # Use configured recharge credits from payment metadata.
+            if not credited.get("success"):
                 logger.warning(
-                    f"Payment {payment._id} verified but subscription activation failed"
+                    f"Wallet recharge failed for payment {payment._id}: {credited.get('error')}"
                 )
 
             return {
                 "success": True,
                 "message": "Payment verified successfully",
                 "payment_id": str(payment._id),
+                "wallet": self.wallet_service.get_wallet_summary(
+                    owner_id=str(update_result.get("employer_id")),
+                    audience=audience,
+                ),
             }
 
         except Exception as e:
@@ -409,19 +430,35 @@ class PaymentService:
 
             payment = Payment.from_dict(update_result)
 
-            # Activate subscription
-            subscription = self.subscription_service.activate_subscription(
-                razorpay_order_id=razorpay_order_id, payment_id=payment._id
+            audience = (
+                update_result.get("metadata", {}).get("plan_audience")
+                or update_result.get("metadata", {}).get("buyer_type")
+                or "recruiter"
             )
+            if audience == "student":
+                audience = "candidate"
 
-            if subscription:
-                logger.info(
-                    f"Payment {payment._id} captured, subscription {subscription._id} activated"
-                )
-            else:
-                logger.warning(
-                    f"Payment {payment._id} captured but subscription activation failed"
-                )
+            recharge_credits = int(
+                update_result.get("metadata", {}).get("recharge_credits", 0) or 0
+            )
+            self.wallet_service.credit_wallet(
+                owner_id=str(update_result.get("employer_id")),
+                audience=audience,
+                credits=recharge_credits,
+                transaction_type="recharge",
+                reference_type="payment",
+                reference_id=str(payment._id),
+                metadata={
+                    "plan_id": str(update_result.get("plan_id") or ""),
+                    "razorpay_order_id": razorpay_order_id,
+                    "razorpay_payment_id": razorpay_payment_id,
+                    "amount_paise": int(update_result.get("amount_paise", 0) or 0),
+                    "plan_name": update_result.get("metadata", {}).get("plan_name"),
+                    "plan_slug": update_result.get("metadata", {}).get("plan_slug"),
+                    "recharge_credits": recharge_credits,
+                },
+                idempotency_key=f"recharge:{razorpay_order_id}",
+            )
 
             return {
                 "success": True,

@@ -13,13 +13,29 @@ import {
   LockIcon,
 } from "../../components/payment";
 import { useRazorpay } from "../../hooks/useRazorpay";
-import { getPlans, getPaymentHistory } from "../../services/payment";
+import {
+  getPlans,
+  getPaymentHistory,
+  getCreditTransactions,
+} from "../../services/payment";
 import styles from "../SubscriptionPlans.module.css";
 
 const TABS = [
-  { id: "plans", label: "Plans", icon: GridIcon },
+  { id: "plans", label: "Recharge Packs", icon: GridIcon },
+  { id: "transactions", label: "Credit Activity", icon: ClockIcon },
   { id: "history", label: "Payment History", icon: ClockIcon },
 ];
+
+const getCandidateSignupBonusPlan = () => ({
+  id: "candidate-signup-bonus",
+  slug: "candidate-signup-bonus",
+  name: "Signup Bonus",
+  description: "One-time welcome credits added automatically at signup",
+  price: 0,
+  recharge_credits: 100,
+  disable_action: true,
+  cta_label: "Included at Signup",
+});
 
 const TabNav = ({ activeView, onChangeView }) => (
   <div className={styles.tabNav}>
@@ -59,7 +75,6 @@ const CreditSummary = ({ subscription }) => {
   const creditsRemaining = Number(subscription?.credits_remaining ?? 0);
   const creditsAllocated = Number(subscription?.credits_allocated ?? 0);
   const creditsUsed = Number(subscription?.credits_used ?? 0);
-  const usageCost = Number(subscription?.usage_cost_total_usd ?? 0);
 
   const stats = [
     {
@@ -68,10 +83,10 @@ const CreditSummary = ({ subscription }) => {
     },
     { label: "Credits Used", value: creditsUsed.toLocaleString("en-IN") },
     {
-      label: "Credits Allocated",
+      label: "Total Credited",
       value: creditsAllocated.toLocaleString("en-IN"),
     },
-    { label: "Usage Cost", value: `$${usageCost.toFixed(4)}` },
+    { label: "Total Debited", value: creditsUsed.toLocaleString("en-IN") },
   ];
 
   return (
@@ -87,20 +102,13 @@ const CreditSummary = ({ subscription }) => {
 };
 
 const PlansGrid = ({ plans, subscription, loadingPlanId, onSelectPlan }) => {
-  const isCurrentPlan = (plan) => {
-    if (!subscription?.plan) return plan.slug === "candidate-free";
-    return (
-      subscription.plan.slug === plan.slug || subscription.plan.id === plan.id
-    );
-  };
-
   return (
     <div className={styles.plansGrid}>
       {plans.map((plan) => (
         <PlanCard
           key={plan.id || plan.slug}
           plan={plan}
-          isCurrent={isCurrentPlan(plan)}
+          isCurrent={false}
           isPopular={plan.slug === "candidate-pro" || plan.is_popular}
           isLoading={loadingPlanId === (plan.id || plan.slug)}
           onSelect={onSelectPlan}
@@ -119,6 +127,37 @@ const Footer = () => (
   </div>
 );
 
+const CreditTransactions = ({ items }) => {
+  if (!items?.length) {
+    return <div className={styles.noPlans}>No credit transactions yet.</div>;
+  }
+
+  return (
+    <div className={styles.paymentHistoryWrapper}>
+      <table className={styles.historyTable}>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Delta</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((tx) => (
+            <tr key={tx.id}>
+              <td>{tx.created_at ? new Date(tx.created_at).toLocaleString() : "-"}</td>
+              <td>{tx.transaction_type || "-"}</td>
+              <td>{Number(tx.delta_credits || 0) > 0 ? `+${tx.delta_credits}` : tx.delta_credits}</td>
+              <td>{tx.balance_after ?? 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const CandidateSubscriptionPlans = () => {
   const navigate = useNavigate();
   const { subscription, refresh: refreshSubscription } =
@@ -126,6 +165,7 @@ const CandidateSubscriptionPlans = () => {
 
   const [plans, setPlans] = useState([]);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [creditTransactions, setCreditTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeView, setActiveView] = useState("plans");
@@ -155,51 +195,35 @@ const CandidateSubscriptionPlans = () => {
 
   const getFallbackPlans = () => [
     {
-      id: "candidate-free",
-      slug: "candidate-free",
-      name: "Free Tier",
-      description: "Free plan with 250 monthly credits",
-      price: 0,
-      currency: "INR",
-      interval: "month",
-      features: [
-        { name: "250 Monthly Credits", included: true },
-        { name: "Smart Practice Feedback", included: true },
-        { name: "Basic Analytics", included: true },
-      ],
-      monthly_credits: 250,
-      is_popular: false,
-    },
-    {
       id: "candidate-pro",
       slug: "candidate-pro",
       name: "Candidate Pro",
-      description: "10,000 monthly credits",
-      price: 999,
+      description: "500 non-expiring credits",
+      price: 499,
       currency: "INR",
-      interval: "month",
+      interval: "one_time",
       features: [
-        { name: "10,000 Monthly Credits", included: true },
-        { name: "Detailed Score Insights", included: true },
-        { name: "Priority Report Generation", included: true },
+        { name: "500 non-expiring credits", included: true },
+        { name: "Practice interview wallet billing", included: true },
+        { name: "Real-time credit tracking", included: true },
       ],
-      monthly_credits: 10000,
+      monthly_credits: 500,
       is_popular: true,
     },
     {
       id: "candidate-max",
       slug: "candidate-max",
       name: "Candidate Max",
-      description: "25,000 monthly credits",
-      price: 1499,
+      description: "1,000 non-expiring credits",
+      price: 999,
       currency: "INR",
-      interval: "month",
+      interval: "one_time",
       features: [
-        { name: "25,000 Monthly Credits", included: true },
-        { name: "Advanced Analytics", included: true },
-        { name: "Priority Support", included: true },
+        { name: "1,000 non-expiring credits", included: true },
+        { name: "Practice interview wallet billing", included: true },
+        { name: "Real-time credit tracking", included: true },
       ],
-      monthly_credits: 25000,
+      monthly_credits: 1000,
       is_popular: false,
     },
   ];
@@ -209,9 +233,10 @@ const CandidateSubscriptionPlans = () => {
       setLoading(true);
       setError(null);
 
-      const [plansRes, historyRes] = await Promise.all([
+      const [plansRes, historyRes, txRes] = await Promise.all([
         getPlans().catch(() => null),
         getPaymentHistory().catch(() => ({ payments: [] })),
+        getCreditTransactions().catch(() => ({ transactions: [] })),
       ]);
 
       let normalizedPlans =
@@ -226,21 +251,33 @@ const CandidateSubscriptionPlans = () => {
       );
 
       if (!normalizedPlans || normalizedPlans.length === 0) {
-        normalizedPlans = [];
-        setError("No candidate subscription plans available right now.");
+        normalizedPlans = getFallbackPlans();
+        setError("Using fallback recharge packs while plan service is unavailable.");
       }
 
-      setPlans(normalizedPlans);
+      const normalizedWithoutSignup = normalizedPlans.filter((plan) => {
+        const slug = String(plan?.slug || "").toLowerCase();
+        const id = String(plan?.id || "").toLowerCase();
+        return slug !== "candidate-signup-bonus" && id !== "candidate-signup-bonus";
+      });
+
+      setPlans([getCandidateSignupBonusPlan(), ...normalizedWithoutSignup]);
 
       const normalizedHistory =
         historyRes?.data?.payments ||
         historyRes?.payments ||
         (Array.isArray(historyRes) ? historyRes : []);
       setPaymentHistory(normalizedHistory);
+
+      const normalizedTx =
+        txRes?.data?.transactions ||
+        txRes?.transactions ||
+        (Array.isArray(txRes) ? txRes : []);
+      setCreditTransactions(normalizedTx);
     } catch (err) {
-      console.error("Error loading candidate subscription data:", err);
-      setPlans([]);
-      setError("Failed to load subscription data. Please try again.");
+      console.error("Error loading candidate wallet data:", err);
+      setPlans(getFallbackPlans());
+      setError("Failed to load recharge wallet data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -284,9 +321,9 @@ const CandidateSubscriptionPlans = () => {
           <div className={styles.headerText}>
             <h1>
               <StarIcon />
-              Candidate Subscription Plans
+              Candidate Recharge Packs
             </h1>
-            <p>Choose the best plan for your practice interview preparation</p>
+            <p>Top up your wallet with non-expiring credits for practice interviews</p>
           </div>
         </header>
 
@@ -299,7 +336,7 @@ const CandidateSubscriptionPlans = () => {
         )}
 
         {loading ? (
-          <LoadingState message="Loading candidate subscription data..." />
+          <LoadingState message="Loading candidate wallet data..." />
         ) : activeView === "plans" ? (
           <PlansGrid
             plans={plans}
@@ -307,6 +344,8 @@ const CandidateSubscriptionPlans = () => {
             loadingPlanId={paymentLoading}
             onSelectPlan={handleSelectPlan}
           />
+        ) : activeView === "transactions" ? (
+          <CreditTransactions items={creditTransactions} />
         ) : (
           <PaymentHistory payments={paymentHistory} />
         )}

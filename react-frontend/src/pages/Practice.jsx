@@ -20,6 +20,7 @@ const Practice = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showCVModal, setShowCVModal] = useState(false);
+  const [proctoringEnabled, setProctoringEnabled] = useState(false);
 
   // Pagination state for practice history
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,6 +133,7 @@ const Practice = () => {
       const formData = new FormData();
       formData.append("role", selectedRole);
       formData.append("difficulty", "medium");
+      formData.append("proctoring_enabled", proctoringEnabled ? "true" : "false");
 
       if (selectedRole === "custom" && uploadedJD) {
         formData.append("jd", uploadedJD);
@@ -380,6 +382,32 @@ const Practice = () => {
               </div>
             </div>
           )}
+
+          {/* Start Button */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <i className="fa fa-shield"></i> Practice Proctoring
+            </h3>
+            <div className={styles.uploadSection}>
+              <div className={styles.uploadCard}>
+                <div className={styles.uploadHeader}>
+                  <h4>Enable Proctoring</h4>
+                  <span className={styles.required}>Optional</span>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155" }}>
+                  <input
+                    type="checkbox"
+                    checked={proctoringEnabled}
+                    onChange={(e) => setProctoringEnabled(e.target.checked)}
+                  />
+                  Turn on proctoring for practice interview
+                </label>
+                <p style={{ marginTop: "10px", marginBottom: 0, fontSize: "13px", color: "#64748b" }}>
+                  Credit deduction: {proctoringEnabled ? "50" : "30"} credits per practice session.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Start Button */}
           <div className={styles.actionSection}>
