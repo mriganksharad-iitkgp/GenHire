@@ -262,36 +262,77 @@ async function startInterview() {
         return;
     }
 
-    // Start Gaze Calibration before proceeding to interview (only if gaze_heatmap enabled)
-    if (proctoringConfig.gaze_heatmap && window.GazeCloudAPI && window.GazeRecorderAPI) {
+    // Start Gaze Tracking via WebGazer (only if gaze_heatmap enabled)
+    if (proctoringConfig.gaze_heatmap && window.webgazer) {
         gazePointsTracker = [];
         gazeStartedAtMs = Date.now();
 
-        window.GazeCloudAPI.OnResult = function (gazeData) {
-            if (gazeRecorderTracking) {
-                gazePointsTracker.push({
-                    timestamp: (Date.now() - gazeStartedAtMs) / 1000,
-                    x: gazeData?.docX || 0,
-                    y: gazeData?.docY || 0,
+        window.webgazer
+            .setRegression('ridge')
+            .setTracker('TFFacemesh')
+            .setGazeListener(function (data, elapsedMs) {
+                if (gazeRecorderTracking && data) {
+                    let ts = elapsedMs / 1000;
+                    let x = Math.max(0, Math.min(window.innerWidth - 1, data.x));
+                    let y = Math.max(0, Math.min(window.innerHeight - 1, data.y));
+                    gazePointsTracker.push({
+                        timestamp: ts,
+                        x: Math.round(x),
+                        y: Math.round(y),
+                    });
+                }
+            })
+            .showVideoPreview(false)
+            .showPredictionPoints(false)
+            .begin()
+            .then(() => {
+                // Run an inline 5-point calibration before finalizing
+                let calibrationPoints = [
+                    {x: '10%', y: '10%'}, {x: '90%', y: '10%'}, 
+                    {x: '50%', y: '50%'}, 
+                    {x: '10%', y: '90%'}, {x: '90%', y: '90%'}
+                ];
+                let calIdx = 0;
+
+                const overlay = document.createElement('div');
+                overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
+                
+                const title = document.createElement('h2');
+                title.textContent = "👀 Eye Tracking Calibration";
+                const sub = document.createElement('p');
+                sub.textContent = "Look directly at the red dot and CLICK it to calibrate your eye tracking.";
+                
+                const dot = document.createElement('div');
+                dot.style.cssText = `position:absolute; width:40px; height:40px; background:red; border-radius:50%; cursor:pointer; transition:all 0.3s ease; left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow: 0 0 10px red;`;
+
+                overlay.appendChild(title);
+                overlay.appendChild(sub);
+                overlay.appendChild(dot);
+                document.body.appendChild(overlay);
+
+                dot.addEventListener('click', () => {
+                    calIdx++;
+                    if (calIdx >= calibrationPoints.length) {
+                        document.body.removeChild(overlay);
+                        gazeRecorderTracking = true;
+                        finalizeStartInterview();
+                    } else {
+                        dot.style.left = calibrationPoints[calIdx].x;
+                        dot.style.top = calibrationPoints[calIdx].y;
+                        sub.textContent = `Point ${calIdx+1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
+                    }
                 });
-            }
-        };
+            })
+            .catch(err => {
+                console.error("WebGazer start error:", err);
+                finalizeStartInterview();
+            });
 
-        window.GazeCloudAPI.OnCalibrationComplete = function () {
-            window.GazeRecorderAPI.Rec();
-            gazeRecorderTracking = true;
-            finalizeStartInterview();
-        };
-
-        // Hide testing overlay so the Gaze calibration UI is visible
-        testingOverlay.style.display = 'none';
-
-        window.GazeCloudAPI.StartEyeTracking();
     } else {
         if (!proctoringConfig.gaze_heatmap) {
             console.log("🔒 Gaze Heatmap proctoring is disabled for this job.");
         } else {
-            console.warn("GazeCloudAPI not available. Starting without heatmap tracking...");
+            console.warn("WebGazer not available. Starting without heatmap tracking...");
         }
         finalizeStartInterview();
     }
@@ -381,13 +422,10 @@ async function endInterview() {
 
     stopRecording();
     
-    let recData = null;
-    if (gazeRecorderTracking && window.GazeCloudAPI && window.GazeRecorderAPI) {
-        window.GazeRecorderAPI.StopRec();
-        window.GazeCloudAPI.StopEyeTracking();
+    if (gazeRecorderTracking && window.webgazer) {
+        window.webgazer.pause();
         gazeRecorderTracking = false;
         gazeEndedAtMs = Date.now();
-        recData = window.GazeRecorderAPI.GetRecData();
     }
 
     if (socket && socket.connected) {
@@ -402,7 +440,7 @@ async function endInterview() {
 
     // Tell backend to end interview and send gaze data
     try {
-        if (proctoringConfig.gaze_heatmap && recData && gazePointsTracker.length > 0) {
+        if (proctoringConfig.gaze_heatmap && gazePointsTracker.length > 0) {
             await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
                 method: "POST",
                 headers: {
@@ -411,7 +449,7 @@ async function endInterview() {
                 },
                 body: JSON.stringify({
                     session_id: currentSessionId,
-                    recordingData: recData,
+                    recordingData: null,
                     gazePoints: gazePointsTracker,
                     startedAtMs: gazeStartedAtMs,
                     endedAtMs: gazeEndedAtMs,
@@ -745,8 +783,9 @@ async function objectLoop() {
         const objects = await objectDetector.detect(video);
         let personCount = 0, cellPhoneDetected = false;
         objects.forEach(obj => {
-            if (obj.class === 'person') personCount++;
-            if (obj.class === 'cell phone') cellPhoneDetected = true;
+            // Require high confidence to avoid background noise triggering it
+            if (obj.class === 'person' && obj.score > 0.65) personCount++;
+            if (obj.class === 'cell phone' && obj.score > 0.55) cellPhoneDetected = true;
         });
 
         if (cellPhoneDetected) {

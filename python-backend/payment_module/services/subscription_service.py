@@ -60,7 +60,7 @@ class SubscriptionService:
         self.collection = db[SubscriptionSchema.COLLECTION_NAME]
         self.usage_events_collection = db["subscription_usage_events"]
         self._ensure_indexes()
-        self._backfill_subscription_credits()
+        # self._backfill_subscription_credits()  # Method undefined, caused 500 error
 
     def _backfill_subscription_credits(self):
         """Populate legacy subscription documents with credit fields."""
