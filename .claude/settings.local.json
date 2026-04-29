@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from services.email_service import EmailService; from services.email_providers import get_email_provider, reset_provider_cache; import os; os.environ.pop\\('EMAIL_PROVIDER', None\\); reset_provider_cache\\(\\); p = get_email_provider\\(\\); print\\('default provider:', p.name\\); reset_provider_cache\\(\\); os.environ['EMAIL_PROVIDER'] = 'zeptomail'; p2 = get_email_provider\\(\\); print\\('zeptomail provider:', p2.name, 'configured:', p2.is_configured\\); svc = EmailService\\(\\); print\\('EmailService instantiates OK'\\)\")",
+      "Bash(where python *)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\); print\\(sys.path[:3]\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from services.email_service import EmailService; from services.email_providers import get_email_provider, reset_provider_cache; import os; os.environ.pop\\('EMAIL_PROVIDER', None\\); reset_provider_cache\\(\\); p = get_email_provider\\(\\); print\\('default provider:', p.name\\); reset_provider_cache\\(\\); os.environ['EMAIL_PROVIDER'] = 'zeptomail'; p2 = get_email_provider\\(\\); print\\('zeptomail provider:', p2.name\\); svc = EmailService\\(\\); print\\('EmailService instantiates OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe _invite_e2e_test.py)",
+      "Bash(.venv/Scripts/python.exe -c \"import openpyxl; print\\('openpyxl version:', openpyxl.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install openpyxl==3.1.5 --quiet)",
+      "Bash(node -e ' *)",
+      "Bash(.venv/Scripts/python.exe seed_test_accounts.py)",
+      "Bash(.venv/Scripts/python.exe grant_test_credits.py)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe _invite_b_test.py)",
+      "Bash(xargs grep *)",
+      "Bash(git log *)",
+      "Bash(python3 -m pip list)",
+      "Bash(python3 -c \"import marshal, sys; data = open\\('python-backend/models/__pycache__/invite_batch.cpython-312.pyc', 'rb'\\).read\\(\\); code = marshal.loads\\(data[16:]\\); print\\(code.co_names[:20]\\)\")",
+      "Bash(python3)",
+      "Bash(.venv/Scripts/python scripts/delete_test_accounts.py)",
+      "Bash(.venv/Scripts/python scripts/delete_test_accounts.py --commit)",
+      "Bash(/d/Projects/product-prototyping-lab/python-backend/.venv/Scripts/python /d/Projects/product-prototyping-lab/python-backend/scripts/delete_test_accounts.py --commit)"
+    ]
+  }
+}

@@ -159,8 +159,19 @@ class BackgroundProcessor:
                     logger.error(f"Error calculating CV score: {e}", exc_info=True)
                     cv_score = 75.0
             
-            # Determine application status based on score
-            if cv_score >= minimum_cv_score:
+            # If this application was pre-shortlisted by a recruiter interview invite,
+            # the CV score is informational only -- never auto-reject the candidate.
+            current_app = applications_collection.find_one({'_id': ObjectId(application_id)})
+            auto_shortlisted_via_invite = bool(
+                current_app and current_app.get('auto_shortlisted_via_invite')
+            )
+
+            if auto_shortlisted_via_invite:
+                application_status = 'shortlisted'
+                status_reason = (
+                    f'CV score ({cv_score:.1f}); status preserved from recruiter interview invite'
+                )
+            elif cv_score >= minimum_cv_score:
                 application_status = 'shortlisted'
                 status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
             else:

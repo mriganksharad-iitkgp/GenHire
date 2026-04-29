@@ -22,6 +22,7 @@ import ApplicationView from "./pages/ApplicationView";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import InviteRedeem from "./pages/InviteRedeem";
 import Practice from "./pages/Practice";
 import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
@@ -60,6 +61,7 @@ function App() {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/invite/redeem" element={<InviteRedeem />} />
             <Route
               path="/recruiter-dashboard"
               element={<RecruiterDashboard />}

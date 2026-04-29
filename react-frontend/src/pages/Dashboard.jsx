@@ -220,7 +220,15 @@ const Dashboard = () => {
 	};
 
 	const hasApplied = (jobId) => {
-		return applications.some(app => app.job_id === jobId.toString());
+		// Treat invite-created skeletons (no CV uploaded yet, awaiting candidate
+		// submission) as "not yet applied" so the Apply button stays available
+		// for invitees who haven't completed the apply step.
+		return applications.some(app => {
+			if (String(app.job_id) !== String(jobId)) return false;
+			const isSkeleton =
+				app.processing_status === 'awaiting_candidate' || !app.cv_snapshot;
+			return !isSkeleton;
+		});
 	};
 
 	const getApplicationStatus = (jobId) => {
@@ -234,13 +242,39 @@ const Dashboard = () => {
 		return status && ['pending', 'applied'].includes(status.toLowerCase());
 	};
 
+	// Pull the cached candidate user once per render — used to scope apply-rights
+	// for invite-only (burner) accounts.
+	const cachedUser = (() => {
+		try {
+			return JSON.parse(localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user") || "null");
+		} catch (_) {
+			return null;
+		}
+	})();
+	const isInviteOnly = !!(cachedUser && (cachedUser.is_invite_only || cachedUser.isInviteOnly));
+	const invitedJobIds = (cachedUser?.invited_job_ids || cachedUser?.invitedJobIds || []).map(String);
+	const isAllowedToApply = (jobId) =>
+		!isInviteOnly || invitedJobIds.includes(String(jobId));
+
 	// Function to get the correct button state and text
 	const getJobButtonState = (jobId) => {
 		const hasAppliedToJob = hasApplied(jobId);
 		const canWithdraw = canWithdrawApplication(jobId);
 		const isPendingWithdrawal = pendingWithdrawal === jobId;
 		const isApplying = applyingJobId === jobId;
-		
+		const allowedToApply = isAllowedToApply(jobId);
+
+		// Invite-only candidate viewing a job they weren't invited to.
+		if (!hasAppliedToJob && !allowedToApply) {
+			return {
+				type: 'blocked',
+				text: 'Invite required',
+				className: `${styles.applyButton} ${styles.appliedButton}`,
+				onClick: () => showToast('You can only apply to jobs you were invited to.', 'warning'),
+				disabled: true,
+			};
+		}
+
 		// State 1: Apply Now (not applied yet)
 		if (!hasAppliedToJob) {
 			return {
@@ -502,6 +536,12 @@ const Dashboard = () => {
 	// --- End Search Suggestions Logic ---
 
 	const filteredJobs = jobOpenings.filter((job) => {
+		// Invite-only (burner) candidates only see jobs they were invited to.
+		// Direct URLs to other jobs still resolve, but they won't surface here.
+		if (isInviteOnly && !invitedJobIds.includes(String(job._id))) {
+			return false;
+		}
+
 		const q = searchQuery.trim().toLowerCase();
 		const title = String(job.title || '').toLowerCase();
 		const desc = String(job.description || '').toLowerCase();
