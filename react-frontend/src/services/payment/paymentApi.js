@@ -89,11 +89,12 @@ export const verifyPayment = (paymentData) =>
   });
 
 /** Get payment history */
-export const getPaymentHistory = () => request("/payment/payments/history");
+export const getPaymentHistory = (limit = 100) =>
+  request(`/payment/payments/history?limit=${encodeURIComponent(limit)}`);
 
 /** Get recent credit transactions */
-export const getCreditTransactions = () =>
-  request("/payment/wallet/transactions");
+export const getCreditTransactions = (kind = "all") =>
+  request(`/payment/wallet/transactions?kind=${encodeURIComponent(kind)}`);
 
 // =============================================================================
 // INTERVIEWS (Usage)

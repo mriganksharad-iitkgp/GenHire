@@ -146,6 +146,11 @@ class Payment:
             "subscription_id": (
                 str(self.subscription_id) if self.subscription_id else None
             ),
+            "plan_id": str(self.plan_id) if self.plan_id else None,
+            "plan_name": self.metadata.get("plan_name"),
+            "plan_slug": self.metadata.get("plan_slug"),
+            "recharge_credits": self.metadata.get("recharge_credits"),
+            "is_migration": bool(self.metadata.get("migration", False)),
             "amount": self.amount_rupees,
             "currency": self.currency,
             "status": (

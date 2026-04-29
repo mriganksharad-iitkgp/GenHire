@@ -405,12 +405,12 @@ const CostStatistics = () => {
         plan.incoming_amount_inr || 0,
         '',
         plan.succeeded_payment_count || 0,
-        '',
+        plan.migration_payment_count || 0,
         '',
         'Succeeded payments in selected timeline',
       ]);
     });
-    rows.push(['Incoming Candidate', 'Candidate Total Incoming', incoming?.candidate?.total_incoming_inr || 0, '', incoming?.candidate?.succeeded_payment_count || 0, '', '', '']);
+    rows.push(['Incoming Candidate', 'Candidate Total Incoming', incoming?.candidate?.total_incoming_inr || 0, '', incoming?.candidate?.succeeded_payment_count || 0, incoming?.candidate?.migration_payment_count || 0, '', '']);
 
     (incoming?.recruiter?.plans || []).forEach((plan) => {
       rows.push([
@@ -419,12 +419,12 @@ const CostStatistics = () => {
         plan.incoming_amount_inr || 0,
         '',
         plan.succeeded_payment_count || 0,
-        '',
+        plan.migration_payment_count || 0,
         '',
         'Succeeded payments in selected timeline',
       ]);
     });
-    rows.push(['Incoming Recruiter', 'Recruiter Total Incoming', incoming?.recruiter?.total_incoming_inr || 0, '', incoming?.recruiter?.succeeded_payment_count || 0, '', '', '']);
+    rows.push(['Incoming Recruiter', 'Recruiter Total Incoming', incoming?.recruiter?.total_incoming_inr || 0, '', incoming?.recruiter?.succeeded_payment_count || 0, incoming?.recruiter?.migration_payment_count || 0, '', '']);
     rows.push(['Incoming Total', 'Total Incoming', incoming?.total_incoming_inr || 0, '', '', '', '', '']);
     rows.push(['Incoming Total', 'Refunded Total', incoming?.refund_adjustments?.total_refunded_inr || 0, '', incoming?.refund_adjustments?.refund_events_count || 0, '', '', '']);
     rows.push(['Incoming Total', 'Net Incoming After Refunds', incoming?.net_incoming_after_refunds_inr || 0, '', '', '', '', '']);
@@ -718,6 +718,7 @@ const CostStatistics = () => {
                       <th>Plan</th>
                       <th>Plan Price</th>
                       <th>Succeeded Payments</th>
+                      <th>Migration Payments</th>
                       <th>Incoming Amount</th>
                     </tr>
                   </thead>
@@ -727,6 +728,7 @@ const CostStatistics = () => {
                         <td>{plan.plan_name}</td>
                         <td>{formatMoney(plan.plan_price_inr)}</td>
                         <td>{plan.succeeded_payment_count}</td>
+                        <td>{plan.migration_payment_count || 0}</td>
                         <td>{formatMoney(plan.incoming_amount_inr)}</td>
                       </tr>
                     ))}
@@ -735,6 +737,7 @@ const CostStatistics = () => {
               </div>
               <div className={styles.totalLine}>
                 Candidate Incoming Total: <strong>{formatMoney(incoming?.candidate?.total_incoming_inr)}</strong>
+                <span className={styles.totalMeta}>Migration payments: {incoming?.candidate?.migration_payment_count || 0}</span>
               </div>
             </section>
 
@@ -747,6 +750,7 @@ const CostStatistics = () => {
                       <th>Plan</th>
                       <th>Plan Price</th>
                       <th>Succeeded Payments</th>
+                      <th>Migration Payments</th>
                       <th>Incoming Amount</th>
                     </tr>
                   </thead>
@@ -756,6 +760,7 @@ const CostStatistics = () => {
                         <td>{plan.plan_name}</td>
                         <td>{formatMoney(plan.plan_price_inr)}</td>
                         <td>{plan.succeeded_payment_count}</td>
+                        <td>{plan.migration_payment_count || 0}</td>
                         <td>{formatMoney(plan.incoming_amount_inr)}</td>
                       </tr>
                     ))}
@@ -764,6 +769,7 @@ const CostStatistics = () => {
               </div>
               <div className={styles.totalLine}>
                 Recruiter Incoming Total: <strong>{formatMoney(incoming?.recruiter?.total_incoming_inr)}</strong>
+                <span className={styles.totalMeta}>Migration payments: {incoming?.recruiter?.migration_payment_count || 0}</span>
               </div>
             </section>
 

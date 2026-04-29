@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class WalletService:
+    RECHARGE_TRANSACTION_TYPES = {"recharge", "migration_recharge"}
+    DEDUCTION_TRANSACTION_TYPES = {
+        "practice_interview",
+        "ai_jd_generation",
+        "real_interview_recruiter",
+    }
+
     def __init__(self, db):
         self.db = db
         self.wallet_collection = db[CreditWalletSchema.COLLECTION_NAME]
@@ -37,6 +44,46 @@ class WalletService:
                 "audience": self._normalize_audience(audience),
             }
         )
+
+    def _format_result(
+        self,
+        owner_id: str,
+        audience: str,
+        transaction: Optional[Dict[str, Any]],
+        *,
+        idempotent_replay: bool = False,
+        wallet_doc: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        wallet_doc = wallet_doc or self._get_wallet_doc(owner_id, audience) or {}
+        balance = int(wallet_doc.get("balance", 0) or 0)
+        total_credited = int(wallet_doc.get("total_credited", 0) or 0)
+        total_debited = int(wallet_doc.get("total_debited", 0) or 0)
+        if transaction:
+            balance = int(transaction.get("balance_after", balance) or 0)
+        wallet_payload = None
+        if wallet_doc:
+            wallet_payload = {
+                "owner_id": str(wallet_doc.get("owner_id") or owner_id),
+                "audience": self._normalize_audience(wallet_doc.get("audience") or audience),
+                "balance": balance,
+                "total_credited": total_credited,
+                "total_debited": total_debited,
+                "signup_bonus_granted": bool(wallet_doc.get("signup_bonus_granted", False)),
+            }
+
+        return {
+            "success": True,
+            "idempotent_replay": bool(idempotent_replay),
+            "wallet": wallet_payload,
+            "transaction": transaction,
+            "credits_remaining": balance,
+            "current_balance": balance,
+            "credits_allocated": total_credited,
+            "total_credits_allocated": total_credited,
+            "credits_used": total_debited,
+            "total_credits_used": total_debited,
+            "balance_after": balance,
+        }
 
     def get_or_create_wallet(self, owner_id: str, audience: str) -> CreditWallet:
         normalized_audience = self._normalize_audience(audience)
@@ -119,7 +166,12 @@ class WalletService:
 
         replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
         if replay:
-            return {"success": True, "idempotent_replay": True, "transaction": replay}
+            return self._format_result(
+                owner_id,
+                normalized_audience,
+                replay,
+                idempotent_replay=True,
+            )
 
         wallet = self.get_or_create_wallet(owner_id, normalized_audience)
         updated_doc = self.wallet_collection.find_one_and_update(
@@ -150,12 +202,12 @@ class WalletService:
             if replay:
                 return {"success": True, "idempotent_replay": True, "transaction": replay}
             raise
-        return {
-            "success": True,
-            "idempotent_replay": False,
-            "wallet": CreditWallet.from_dict(updated_doc).to_dict(),
-            "transaction": transaction.to_api_response(),
-        }
+        return self._format_result(
+            owner_id,
+            normalized_audience,
+            transaction.to_api_response(),
+            wallet_doc=updated_doc,
+        )
 
     def debit_wallet(
         self,
@@ -176,7 +228,12 @@ class WalletService:
 
         replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
         if replay:
-            return {"success": True, "idempotent_replay": True, "transaction": replay}
+            return self._format_result(
+                owner_id,
+                normalized_audience,
+                replay,
+                idempotent_replay=True,
+            )
 
         self.get_or_create_wallet(owner_id, normalized_audience)
 
@@ -222,12 +279,12 @@ class WalletService:
             if replay:
                 return {"success": True, "idempotent_replay": True, "transaction": replay}
             raise
-        return {
-            "success": True,
-            "idempotent_replay": False,
-            "wallet": CreditWallet.from_dict(updated_doc).to_dict(),
-            "transaction": transaction.to_api_response(),
-        }
+        return self._format_result(
+            owner_id,
+            normalized_audience,
+            transaction.to_api_response(),
+            wallet_doc=updated_doc,
+        )
 
     def add_audit_transaction(
         self,
@@ -244,7 +301,12 @@ class WalletService:
 
         replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
         if replay:
-            return {"success": True, "idempotent_replay": True, "transaction": replay}
+            return self._format_result(
+                owner_id,
+                normalized_audience,
+                replay,
+                idempotent_replay=True,
+            )
 
         wallet = self.get_or_create_wallet(owner_id, normalized_audience)
         transaction = CreditTransaction(
@@ -266,12 +328,12 @@ class WalletService:
             if replay:
                 return {"success": True, "idempotent_replay": True, "transaction": replay}
             raise
-        return {
-            "success": True,
-            "idempotent_replay": False,
-            "wallet": wallet.to_dict(),
-            "transaction": transaction.to_api_response(),
-        }
+        return self._format_result(
+            owner_id,
+            normalized_audience,
+            transaction.to_api_response(),
+            wallet_doc=wallet.to_dict(),
+        )
 
     def check_credit_availability(
         self,
@@ -287,8 +349,11 @@ class WalletService:
             "can_start_interview": can_start,
             "required_credits": required,
             "credits_remaining": int(wallet.balance),
+            "current_balance": int(wallet.balance),
             "credits_allocated": int(wallet.total_credited),
+            "total_credits_allocated": int(wallet.total_credited),
             "credits_used": int(wallet.total_debited),
+            "total_credits_used": int(wallet.total_debited),
             "is_unlimited": False,
             "error_code": None if can_start else "insufficient_credits",
         }
@@ -299,33 +364,57 @@ class WalletService:
             {
                 "owner_id": str(owner_id),
                 "audience": self._normalize_audience(audience),
-                "transaction_type": "recharge",
+                "transaction_type": {"$in": list(self.RECHARGE_TRANSACTION_TYPES)},
             },
             sort=[("created_at", -1)],
         )
+        balance = int(wallet.balance)
+        total_credited = int(wallet.total_credited)
+        total_debited = int(wallet.total_debited)
         return {
             "owner_id": wallet.owner_id,
             "audience": wallet.audience,
-            "credits_balance": int(wallet.balance),
-            "total_credited": int(wallet.total_credited),
-            "total_debited": int(wallet.total_debited),
+            "credits_balance": balance,
+            "current_balance": balance,
+            "total_credited": total_credited,
+            "total_credits_allocated": total_credited,
+            "total_debited": total_debited,
+            "total_credits_used": total_debited,
             "signup_bonus_granted": bool(wallet.signup_bonus_granted),
             "latest_recharge": latest_recharge.get("metadata", {}) if latest_recharge else None,
         }
 
-    def get_transactions(self, owner_id: str, audience: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_transactions(
+        self,
+        owner_id: str,
+        audience: str,
+        limit: int = 20,
+        kind: str = "all",
+    ) -> List[Dict[str, Any]]:
         normalized_audience = self._normalize_audience(audience)
+        filters = {
+            "owner_id": str(owner_id),
+            "audience": normalized_audience,
+        }
+        normalized_kind = str(kind or "all").strip().lower()
+        if normalized_kind == "deductions":
+            filters["transaction_type"] = {"$in": list(self.DEDUCTION_TRANSACTION_TYPES)}
+            filters["delta_credits"] = {"$lt": 0}
+        elif normalized_kind == "recharges":
+            filters["transaction_type"] = {"$in": list(self.RECHARGE_TRANSACTION_TYPES)}
+            filters["delta_credits"] = {"$gt": 0}
+
         docs = (
-            self.transaction_collection.find(
-                {
-                    "owner_id": str(owner_id),
-                    "audience": normalized_audience,
-                }
-            )
+            self.transaction_collection.find(filters)
             .sort("created_at", -1)
             .limit(max(1, min(int(limit or 20), 100)))
         )
         return [CreditTransaction.from_dict(doc).to_api_response() for doc in docs]
+
+    def get_recharge_history(
+        self, owner_id: str, audience: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        return self.get_transactions(owner_id, audience, limit=limit, kind="recharges")
 
     def bootstrap_signup_bonus_for_all_users(self, users_collection) -> Tuple[int, int]:
         granted = 0

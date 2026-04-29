@@ -46,15 +46,83 @@ def _humanize_tx_type(tx_type):
     return label_map.get(str(tx_type or ""), str(tx_type or "activity").replace("_", " ").title())
 
 
-WALLET_ACTIVITY_TYPES = {
-    "signup_bonus",
-    "recharge",
+DEDUCTION_ACTIVITY_TYPES = {
+    "practice_interview",
     "ai_jd_generation",
     "real_interview_recruiter",
-    "real_interview_candidate_audit",
-    "practice_interview",
-    "manual_interview_use",
 }
+
+RECHARGE_ACTIVITY_TYPES = {"recharge", "migration_recharge"}
+
+
+def _is_proctored(tx):
+    metadata = tx.get("metadata") or {}
+    if "proctoring_enabled" in metadata:
+        return bool(metadata.get("proctoring_enabled"))
+    proctoring_config = metadata.get("proctoring_config")
+    if isinstance(proctoring_config, dict):
+        return any(bool(value) for value in proctoring_config.values())
+    return False
+
+
+def _credit_activity_label(tx):
+    tx_type = str(tx.get("transaction_type") or "")
+    if tx_type == "practice_interview":
+        return (
+            "Practice Interview (Proctored)"
+            if _is_proctored(tx)
+            else "Practice Interview (Non-Proctored)"
+        )
+    if tx_type == "real_interview_recruiter":
+        return (
+            "Real Interview (Proctored)"
+            if _is_proctored(tx)
+            else "Real Interview (Non-Proctored)"
+        )
+    if tx_type == "ai_jd_generation":
+        return "AI JD Generation"
+    if tx_type == "migration_recharge":
+        return "Migration Recharge"
+    return _humanize_tx_type(tx_type)
+
+
+def _tx_reference(tx):
+    return (
+        f"{tx.get('reference_type')}:{tx.get('reference_id')}"
+        if tx.get("reference_type") and tx.get("reference_id")
+        else "-"
+    )
+
+
+def _format_activity_row(tx):
+    delta = int(tx.get("delta_credits", 0) or 0)
+    return {
+        "id": tx.get("id"),
+        "activity_type": _credit_activity_label(tx),
+        "action": _credit_activity_label(tx),
+        "transaction_type": tx.get("transaction_type"),
+        "reference": _tx_reference(tx),
+        "credits_deducted": abs(delta) if delta < 0 else 0,
+        "delta_credits": delta,
+        "balance_after": int(tx.get("balance_after", 0) or 0),
+        "remaining_balance": int(tx.get("balance_after", 0) or 0),
+        "timestamp": _format_tx_timestamp(tx.get("created_at")),
+    }
+
+
+def _format_recharge_row(tx):
+    return {
+        "id": tx.get("id"),
+        "activity_type": _credit_activity_label(tx),
+        "action": _credit_activity_label(tx),
+        "transaction_type": tx.get("transaction_type"),
+        "reference": _tx_reference(tx),
+        "credits_added": max(0, int(tx.get("delta_credits", 0) or 0)),
+        "delta_credits": int(tx.get("delta_credits", 0) or 0),
+        "balance_after": int(tx.get("balance_after", 0) or 0),
+        "remaining_balance": int(tx.get("balance_after", 0) or 0),
+        "timestamp": _format_tx_timestamp(tx.get("created_at")),
+    }
 
 
 @profile_bp.route("/profile", methods=["GET"])
@@ -141,7 +209,12 @@ def get_recruiter_cost_statistics(current_user):
         )
 
         wallet = wallet_service.get_wallet_summary(recruiter_id, "recruiter")
-        tx_list = wallet_service.get_transactions(recruiter_id, "recruiter", limit=100)
+        tx_list = wallet_service.get_transactions(
+            recruiter_id, "recruiter", limit=100, kind="deductions"
+        )
+        recharge_list = wallet_service.get_recharge_history(
+            recruiter_id, "recruiter", limit=100
+        )
 
         monthly_map = {}
         for tx in tx_list:
@@ -157,21 +230,16 @@ def get_recruiter_cost_statistics(current_user):
         ]
 
         recent_activity = [
-            {
-                "id": tx.get("id"),
-                "action": _humanize_tx_type(tx.get("transaction_type")),
-                "transaction_type": tx.get("transaction_type"),
-                "reference": (
-                    f"{tx.get('reference_type')}:{tx.get('reference_id')}"
-                    if tx.get("reference_type") and tx.get("reference_id")
-                    else "-"
-                ),
-                "delta_credits": int(tx.get("delta_credits", 0) or 0),
-                "balance_after": int(tx.get("balance_after", 0) or 0),
-                "timestamp": _format_tx_timestamp(tx.get("created_at")),
-            }
+            _format_activity_row(tx)
             for tx in tx_list
-            if str(tx.get("transaction_type") or "") in WALLET_ACTIVITY_TYPES
+            if str(tx.get("transaction_type") or "") in DEDUCTION_ACTIVITY_TYPES
+            and int(tx.get("delta_credits", 0) or 0) < 0
+        ][:20]
+        recharge_history = [
+            _format_recharge_row(tx)
+            for tx in recharge_list
+            if str(tx.get("transaction_type") or "") in RECHARGE_ACTIVITY_TYPES
+            and int(tx.get("delta_credits", 0) or 0) > 0
         ][:20]
 
         plan_name = (
@@ -198,6 +266,9 @@ def get_recruiter_cost_statistics(current_user):
                 "credits_allocated": credits_allocated,
                 "credits_used": credits_used,
                 "credits_remaining": credits_remaining,
+                "total_credits_allocated": credits_allocated,
+                "total_credits_used": credits_used,
+                "current_balance": credits_remaining,
                 # Backward-compatible aliases used by current recruiter UI
                 "interviews_allowed": credits_allocated,
                 "interviews_used": credits_used,
@@ -214,6 +285,7 @@ def get_recruiter_cost_statistics(current_user):
             },
             "usageHistory": usage_history,
             "recentActivity": recent_activity,
+            "rechargeHistory": recharge_history,
             "summary": {
                 "totalJobs": len(jobs),
                 "totalApplicants": len(applications),
@@ -266,7 +338,12 @@ def get_candidate_cost_statistics(current_user):
         wallet_service = WalletService(db)
 
         wallet = wallet_service.get_wallet_summary(candidate_id, "candidate")
-        tx_list = wallet_service.get_transactions(candidate_id, "candidate", limit=100)
+        tx_list = wallet_service.get_transactions(
+            candidate_id, "candidate", limit=100, kind="deductions"
+        )
+        recharge_list = wallet_service.get_recharge_history(
+            candidate_id, "candidate", limit=100
+        )
 
         six_months_ago = datetime.utcnow() - timedelta(days=180)
         practice_sessions = list(
@@ -348,21 +425,16 @@ def get_candidate_cost_statistics(current_user):
                 avg_interview_score = round(sum(score_values) / len(score_values), 1)
 
         recent_activity = [
-            {
-                "id": tx.get("id"),
-                "action": _humanize_tx_type(tx.get("transaction_type")),
-                "transaction_type": tx.get("transaction_type"),
-                "reference": (
-                    f"{tx.get('reference_type')}:{tx.get('reference_id')}"
-                    if tx.get("reference_type") and tx.get("reference_id")
-                    else "-"
-                ),
-                "delta_credits": int(tx.get("delta_credits", 0) or 0),
-                "balance_after": int(tx.get("balance_after", 0) or 0),
-                "timestamp": _format_tx_timestamp(tx.get("created_at")),
-            }
+            _format_activity_row(tx)
             for tx in tx_list
-            if str(tx.get("transaction_type") or "") in WALLET_ACTIVITY_TYPES
+            if str(tx.get("transaction_type") or "") == "practice_interview"
+            and int(tx.get("delta_credits", 0) or 0) < 0
+        ][:20]
+        recharge_history = [
+            _format_recharge_row(tx)
+            for tx in recharge_list
+            if str(tx.get("transaction_type") or "") in RECHARGE_ACTIVITY_TYPES
+            and int(tx.get("delta_credits", 0) or 0) > 0
         ][:20]
 
         plan_name = (
@@ -396,6 +468,9 @@ def get_candidate_cost_statistics(current_user):
                 "credits_allocated": credits_allocated,
                 "credits_remaining": credits_remaining,
                 "credits_used": credits_used,
+                "total_credits_allocated": credits_allocated,
+                "total_credits_used": credits_used,
+                "current_balance": credits_remaining,
                 "plan_credits_allocated": plan_credits_allocated,
                 "plan_credits_used": plan_credits_used,
                 "plan_credits_remaining": plan_credits_remaining,
@@ -410,6 +485,7 @@ def get_candidate_cost_statistics(current_user):
             },
             "monthlyUsage": monthly_usage,
             "recentActivity": recent_activity,
+            "rechargeHistory": recharge_history,
             "summary": {
                 "totalPracticeSessions": len(practice_sessions),
                 "completedPracticeSessions": len(completed_sessions),

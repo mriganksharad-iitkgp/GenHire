@@ -181,6 +181,8 @@ const Practice = () => {
           initialQuestion: data.initial_questions?.[0] || "",
           similarityScore: data.similarity_score || 0,
           cvScore: data.cv_score || 0,
+          usageDeduction: data.usage_deduction || null,
+          walletQuota: data.quota || null,
         },
       });
     } catch (error) {

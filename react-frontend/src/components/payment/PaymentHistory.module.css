@@ -21,10 +21,28 @@ body.dark .container,
 .header,
 .row {
   display: grid;
-  grid-template-columns: 1fr 1.5fr 1fr 1fr;
+  grid-template-columns: 1fr 1.5fr 1fr 1fr 1fr;
   padding: 1rem 1.5rem;
   gap: 1rem;
   align-items: center;
+}
+
+.migrationTag {
+  display: block;
+  width: fit-content;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+body.dark .migrationTag,
+:global(.dark) .migrationTag {
+  background: #3730a3;
+  color: #e0e7ff;
 }
 
 .header {

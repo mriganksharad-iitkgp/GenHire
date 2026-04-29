@@ -499,6 +499,7 @@ def start_interview(current_user):
                     "application_id": str(application_id),
                     "job_id": str(job.get("_id")),
                     "proctoring_enabled": proctoring_enabled,
+                    "proctoring_config": proctoring_config or {},
                 },
                 idempotency_key=f"real-interview:{application_id}",
             )
@@ -600,6 +601,7 @@ def start_interview(current_user):
             "conversation_context": session_details.get("conversation_context", {}),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
+            "usage_deduction": recruiter_deduction,
             "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
