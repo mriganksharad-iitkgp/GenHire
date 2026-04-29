@@ -1,9 +1,5 @@
 import React from 'react';
-import { Scatter } from 'react-chartjs-2';
-import { Chart as ChartJS, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import styles from './ProctoringResultModal.module.css';
-
-ChartJS.register(LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const PROCTORING_FEATURES = [
   { key: 'voice_detection', label: 'Voice Activity Detection', icon: '🎤', color: '#8b5cf6' },
@@ -24,49 +20,8 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
     gaze_heatmap: true,
   };
 
-  const gazeData = report.gaze_metrics || { left_eye: [], right_eye: [] };
+  const gazeData = report.gaze_metrics || [];
   const infractions = report.manual_infractions || [];
-
-  const chartData = {
-    datasets: [
-      {
-        label: 'Left Eye',
-        data: Array.isArray(gazeData.left_eye) ? gazeData.left_eye : [],
-        pointRadius: 3,
-        pointBackgroundColor: '#3b82f6',
-      },
-      {
-        label: 'Right Eye',
-        data: Array.isArray(gazeData.right_eye) ? gazeData.right_eye : [],
-        pointRadius: 3,
-        pointBackgroundColor: '#10b981',
-      },
-    ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-      },
-    },
-    scales: {
-      x: {
-        title: {
-          display: true,
-          text: 'X',
-        },
-      },
-      y: {
-        title: {
-          display: true,
-          text: 'Y',
-        },
-      },
-    },
-  };
 
   // Backend file paths
   const gazePlotUrl = report.gaze_plot_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}` : null;
@@ -97,9 +52,6 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
             </div>
           ) : (
             <>
-              <h4>Gaze Plot</h4>
-              <Scatter options={options} data={chartData} />
-              <hr />
           <h4>Proctoring Summary</h4>
           <p><strong>Proctoring Score:</strong> {report.proctoring_score !== undefined ? `${report.proctoring_score}%` : 'N/A'}</p>
           <p><strong>Manual Infractions:</strong></p>
