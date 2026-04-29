@@ -554,6 +554,10 @@ class ApplicationController:
             return {"error": "Unauthorized"}, 403
 
         report = self.interviews_collection.find_one(
+            {
+                "application_id": application_id,
+                "status": "completed",
+            },
             sort=[("updated_at", -1)],
         )
         if not report:

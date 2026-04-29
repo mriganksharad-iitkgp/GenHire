@@ -1,3 +1,12 @@
+// NOTE: The primary console noise filter is in index.html (runs before vendor scripts).
+// This catches the rare unhandled-rejection variant of the facemesh error.
+window.addEventListener('unhandledrejection', function (event) {
+    if (event.reason && typeof event.reason.message === 'string' &&
+        event.reason.message.includes('an eye patch had zero width')) {
+        event.preventDefault();
+    }
+});
+
 // Configuration
 const REQUIRED_WIDTH = 640;
 const REQUIRED_HEIGHT = 480;
@@ -21,7 +30,7 @@ let gazeAlerts = 0;
 let objectAlerts = 0;
 let voiceAlerts = 0;
 
-let warningCount = 0; 3
+let warningCount = 0;
 let currentSessionId = null;
 let socket = null;
 
@@ -56,10 +65,14 @@ const OBJECT_DETECT_INTERVAL = 2000;
 
 // ── Cheating detection state (mirrors Python SimpleCheatingDetector) ──
 const DURATION_THRESHOLD = 3.5;
-const NORMAL_MIN = -0.35;
-const NORMAL_MAX = 0.35;
+const NORMAL_MIN = -0.30;
+const NORMAL_MAX = 0.30;
+const FACE_ABSENCE_THRESHOLD = 2.0;
+const HEAD_TURN_THRESHOLD = 2.0;
+const MULTI_FACE_THRESHOLD = 1.5;
+const HEAD_TURN_RATIO_THRESHOLD = 0.12;
 let suspiciousStartTime = null;
-let isSuspicious = false;
+let suspiciousState = null;
 let alertTriggered = false;
 
 // MediaPipe landmark indices
@@ -119,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.onInitDeepLink((event, initData) => {
             console.log("Deep link received, session data ready.");
             globalSessionData = initData;
-            
+
             // Since clicking the link might happen before models load, wait until btnStart is enabled
             const attemptStart = setInterval(() => {
                 if (!btnStart.disabled && btnStart.textContent === "Begin Interview Setup") {
@@ -170,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Models loaded, enable start button
         loadingOverlay.style.display = 'none';
-        
+
         // Only enable if we also have deep link data (or just enable it to let user click, but it requires link)
         btnStart.textContent = "Begin Interview Setup";
         if (globalSessionData) {
@@ -288,20 +301,20 @@ async function startInterview() {
             .then(() => {
                 // Run an inline 5-point calibration before finalizing
                 let calibrationPoints = [
-                    {x: '10%', y: '10%'}, {x: '90%', y: '10%'}, 
-                    {x: '50%', y: '50%'}, 
-                    {x: '10%', y: '90%'}, {x: '90%', y: '90%'}
+                    { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
+                    { x: '50%', y: '50%' },
+                    { x: '10%', y: '90%' }, { x: '90%', y: '90%' }
                 ];
                 let calIdx = 0;
 
                 const overlay = document.createElement('div');
                 overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
-                
+
                 const title = document.createElement('h2');
                 title.textContent = "👀 Eye Tracking Calibration";
                 const sub = document.createElement('p');
                 sub.textContent = "Look directly at the red dot and CLICK it to calibrate your eye tracking.";
-                
+
                 const dot = document.createElement('div');
                 dot.style.cssText = `position:absolute; width:40px; height:40px; background:red; border-radius:50%; cursor:pointer; transition:all 0.3s ease; left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow: 0 0 10px red;`;
 
@@ -319,7 +332,7 @@ async function startInterview() {
                     } else {
                         dot.style.left = calibrationPoints[calIdx].x;
                         dot.style.top = calibrationPoints[calIdx].y;
-                        sub.textContent = `Point ${calIdx+1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
+                        sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
                     }
                 });
             })
@@ -421,10 +434,12 @@ async function endInterview() {
     if (silenceInterval) clearInterval(silenceInterval);
 
     stopRecording();
-    
+
     if (gazeRecorderTracking && window.webgazer) {
         window.webgazer.pause();
         gazeRecorderTracking = false;
+        gazeEndedAtMs = Date.now();
+    } else if (!gazeEndedAtMs && gazeStartedAtMs) {
         gazeEndedAtMs = Date.now();
     }
 
@@ -441,7 +456,7 @@ async function endInterview() {
     // Tell backend to end interview and send gaze data
     try {
         if (proctoringConfig.gaze_heatmap && gazePointsTracker.length > 0) {
-            await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
+            const gazeResp = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -456,9 +471,16 @@ async function endInterview() {
                     viewport: { width: window.innerWidth, height: window.innerHeight }
                 })
             });
+
+            if (!gazeResp.ok) {
+                const gazeError = await gazeResp.text();
+                throw new Error(`Gaze results upload failed (${gazeResp.status}): ${gazeError}`);
+            }
+        } else if (proctoringConfig.gaze_heatmap) {
+            console.warn("Skipping gaze-recorder upload because no gaze points were collected.");
         }
 
-        await fetch(`${apiUrl}/api/interviews/${currentSessionId}/end`, {
+        const endResp = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/end`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -468,6 +490,11 @@ async function endInterview() {
                 tracking_data: proctoringConfig.eyeball_tracking ? trackingData : []
             })
         });
+
+        if (!endResp.ok) {
+            const endError = await endResp.text();
+            throw new Error(`Interview end request failed (${endResp.status}): ${endError}`);
+        }
     } catch (e) {
         console.error("Failed to signal backend to end interview or send gaze tracking data", e);
     }
@@ -675,7 +702,11 @@ function showProctoringWarning(msg) {
 // ═══════════════════════════════════════
 async function setupCamera() {
     audioStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: REQUIRED_WIDTH, height: REQUIRED_HEIGHT },
+        video: {
+            facingMode: 'user',
+            width: { ideal: 1280, min: REQUIRED_WIDTH },
+            height: { ideal: 720, min: REQUIRED_HEIGHT }
+        },
         audio: true,
     });
     video.srcObject = audioStream;
@@ -693,17 +724,17 @@ function startRecording() {
     document.getElementById('mic-btn').classList.add('mic-recording');
 
     window.electronAPI.startSTTStream();
-    
+
     // Create a new MediaRecorder to send audio chunks. 
     // We must extract ONLY the audio track, otherwise MediaRecorder fails when given a video track with an audio mimeType.
     const audioTrack = audioStream.getAudioTracks()[0];
     const recordStream = new MediaStream([audioTrack]);
-    
+
     let mimeType = 'audio/webm;codecs=opus';
     if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
     }
-    
+
     mediaRecorder = new MediaRecorder(recordStream, { mimeType });
     mediaRecorder.ondataavailable = async (e) => {
         if (e.data.size > 0 && isRecording) {
@@ -712,7 +743,7 @@ function startRecording() {
             window.electronAPI.sendAudioChunk(new Uint8Array(arrayBuffer));
         }
     };
-    
+
     // Send data chunks every 250ms for streaming STT
     mediaRecorder.start(250);
     lastSpeechTime = Date.now();
@@ -758,7 +789,7 @@ async function loadModels() {
         },
         outputFaceBlendshapes: false,
         runningMode: "VIDEO",
-        numFaces: 1,
+        numFaces: 2,
     });
 
     myvad = await vad.MicVAD.new({
@@ -777,29 +808,157 @@ async function loadModels() {
 // ═══════════════════════════════════════
 //  OBJECT DETECTION LOOP
 // ═══════════════════════════════════════
+let lastObjectWarningTime = 0;
+const OBJECT_WARNING_COOLDOWN = 30000; // 30 seconds between warnings
+let consecutivePhoneFrames = 0;
+const PHONE_DETECTION_THRESHOLD = 0.45;
+const PHONE_FRAMES_REQUIRED = 2;
+
 async function objectLoop() {
     if (!isInterviewActive) return;
     try {
+        // Keep object detection focused on prohibited objects only. Person counting is
+        // handled by face landmarks, which is much more reliable for a kiosk webcam.
         const objects = await objectDetector.detect(video);
-        let personCount = 0, cellPhoneDetected = false;
-        objects.forEach(obj => {
-            // Require high confidence to avoid background noise triggering it
-            if (obj.class === 'person' && obj.score > 0.65) personCount++;
-            if (obj.class === 'cell phone' && obj.score > 0.55) cellPhoneDetected = true;
-        });
+
+        const cellPhoneDetected = objects.some(obj =>
+            obj.class === 'cell phone' && obj.score >= PHONE_DETECTION_THRESHOLD
+        );
+
+        const now = Date.now();
+        const cooldownOk = (now - lastObjectWarningTime) > OBJECT_WARNING_COOLDOWN;
 
         if (cellPhoneDetected) {
+            consecutivePhoneFrames++;
+        } else {
+            consecutivePhoneFrames = 0;
+        }
+
+        if (consecutivePhoneFrames >= PHONE_FRAMES_REQUIRED && cooldownOk) {
             objectAlerts++;
+            lastObjectWarningTime = now;
+            consecutivePhoneFrames = 0;
             showProctoringWarning("📱 Cell Phone Detected in Frame. Please remove it.");
-        } else if (personCount > 1) {
-            objectAlerts++;
-            showProctoringWarning(`Multiple people (${personCount}) detected in frame.`);
-        } else if (personCount === 0) {
-            // Missing person could just be head turning too far
         }
     } catch (e) { console.error("Object detection error:", e); }
     setTimeout(objectLoop, OBJECT_DETECT_INTERVAL);
 }
+
+function setGazeWarning(message) {
+    if (!gazeWarning) return;
+    if (message) {
+        gazeWarning.textContent = message;
+        gazeWarning.style.display = 'block';
+    } else {
+        gazeWarning.style.display = 'none';
+    }
+}
+
+function getFaceBounds(lm) {
+    let minX = 1, maxX = 0, minY = 1, maxY = 0;
+    lm.forEach(p => {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    });
+    return { minX, maxX, minY, maxY };
+}
+
+function isHeadTurned(lm) {
+    const nose = lm[1];
+    if (!nose) return false;
+
+    const leftEyeCenterX = (lm[P_LEFT_EYE_INNER].x + lm[P_LEFT_EYE_OUTER].x) * 0.5;
+    const rightEyeCenterX = (lm[P_RIGHT_EYE_INNER].x + lm[P_RIGHT_EYE_OUTER].x) * 0.5;
+    const eyeMidX = (leftEyeCenterX + rightEyeCenterX) * 0.5;
+    const { minX, maxX } = getFaceBounds(lm);
+    const faceWidth = maxX - minX;
+
+    if (faceWidth <= 0) return false;
+
+    const yawRatio = (nose.x - eyeMidX) / faceWidth;
+    return Math.abs(yawRatio) > HEAD_TURN_RATIO_THRESHOLD;
+}
+
+function buildAttentionState(faceCount, gazeRatio, headTurned) {
+    if (faceCount > 1) {
+        return {
+            code: 'multiple_faces',
+            banner: 'Only one face should be visible',
+            message: `Multiple faces (${faceCount}) detected in frame.`,
+            threshold: MULTI_FACE_THRESHOLD,
+        };
+    }
+
+    if (faceCount === 0) {
+        return {
+            code: 'no_face',
+            banner: 'Face not detected',
+            message: 'Face not detected. Please stay in front of the screen.',
+            threshold: FACE_ABSENCE_THRESHOLD,
+        };
+    }
+
+    if (headTurned) {
+        return {
+            code: 'head_turned',
+            banner: 'Keep your face directed at the screen',
+            message: 'Head turned away for too long. Please face the screen.',
+            threshold: HEAD_TURN_THRESHOLD,
+        };
+    }
+
+    if (gazeRatio === null) {
+        return {
+            code: 'eyes_not_visible',
+            banner: 'Eyes not clearly visible',
+            message: 'Eyes not clearly visible. Please face the screen.',
+            threshold: FACE_ABSENCE_THRESHOLD,
+        };
+    }
+
+    if (gazeRatio < NORMAL_MIN || gazeRatio > NORMAL_MAX) {
+        return {
+            code: 'gaze_off_screen',
+            banner: 'Please look at the center of the screen',
+            message: 'Suspicious gaze held for too long. Please look at the screen.',
+            threshold: DURATION_THRESHOLD,
+        };
+    }
+
+    return null;
+}
+
+function evaluateAttentionState(attentionState, currentTime) {
+    if (!attentionState) {
+        suspiciousStartTime = null;
+        suspiciousState = null;
+        alertTriggered = false;
+        setGazeWarning(null);
+        return false;
+    }
+
+    setGazeWarning(attentionState.banner);
+
+    if (!suspiciousState || suspiciousState.code !== attentionState.code) {
+        suspiciousState = attentionState;
+        suspiciousStartTime = currentTime;
+        alertTriggered = false;
+        return false;
+    }
+
+    if (!alertTriggered && suspiciousStartTime !== null) {
+        const elapsed = currentTime - suspiciousStartTime;
+        if (elapsed > attentionState.threshold) {
+            alertTriggered = true;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 
 // ═══════════════════════════════════════
 //  FACE / EYE LOOP
@@ -818,13 +977,18 @@ async function faceLoop() {
         if (video.currentTime !== lastVideoTime) {
             lastVideoTime = video.currentTime;
             const results = faceLandmarker.detectForVideo(video, startTimeMs);
+            const faceLandmarks = results.faceLandmarks || [];
+            const faceCount = faceLandmarks.length;
+            const primaryFace = faceCount > 0 ? faceLandmarks[0] : null;
 
-            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-                const rawLandmarks = results.faceLandmarks[0];
-                let gazeRatio = null;
+            let gazeRatio = null;
+            let headTurned = false;
 
-                if (rawLandmarks.length >= 478) {
-                    const lm = rawLandmarks;
+            if (primaryFace) {
+                headTurned = isHeadTurned(primaryFace);
+
+                if (primaryFace.length >= 478) {
+                    const lm = primaryFace;
 
                     const leftIrisX = lm[P_LEFT_IRIS].x;
                     const leftInnerX = lm[P_LEFT_EYE_INNER].x;
@@ -843,39 +1007,24 @@ async function faceLoop() {
                     if (leftGazeRatio !== null && rightGazeRatio !== null) {
                         gazeRatio = (leftGazeRatio + rightGazeRatio) / 2.0;
                     }
-
-                    drawFaceBoundingBox(lm);
                 }
 
-                let gazeDirection = "Center";
-                if (gazeRatio !== null) {
-                    if (gazeRatio < NORMAL_MIN) gazeDirection = "Right";
-                    else if (gazeRatio > NORMAL_MAX) gazeDirection = "Left";
-                }
+                drawFaceBoundingBox(primaryFace);
+            }
 
-                // Show Gaze Warning UI dynamically
-                if (gazeDirection !== "Center") {
-                    gazeWarning.style.display = 'block';
-                } else {
-                    gazeWarning.style.display = 'none';
-                }
+            const attentionState = buildAttentionState(faceCount, gazeRatio, headTurned);
+            const shouldAlert = evaluateAttentionState(attentionState, currentTimeSec);
 
-                // Check Cheating Duration threshold
-                const isCheating = checkCheatingGaze(gazeRatio, currentTimeSec);
-                if (isCheating && !alertTriggered) {
-                    gazeAlerts++;
-                    alertTriggered = true;
-                    showProctoringWarning("Suspicious Gaze held for too long. Please look at the screen.");
-                }
+            if (shouldAlert && attentionState) {
+                gazeAlerts++;
+                showProctoringWarning(attentionState.message);
+            }
 
-                if (sessionStartTime) {
-                    trackingData.push({ time: (now - sessionStartTime) / 1000, gazeRatio: gazeRatio });
-                }
-
-            } else {
-                checkCheatingGaze(null, currentTimeSec);
-                gazeWarning.style.display = 'none';
-                if (sessionStartTime) trackingData.push({ time: (now - sessionStartTime) / 1000, gazeRatio: null });
+            if (sessionStartTime) {
+                trackingData.push({
+                    time: (now - sessionStartTime) / 1000,
+                    gazeRatio: faceCount === 1 ? gazeRatio : null
+                });
             }
         }
     } catch (e) {
@@ -884,36 +1033,11 @@ async function faceLoop() {
     requestAnimationFrame(faceLoop);
 }
 
-function checkCheatingGaze(gazeRatio, currentTime) {
-    if (gazeRatio === null) {
-        if (isSuspicious) { isSuspicious = false; suspiciousStartTime = null; alertTriggered = false; }
-        return false;
-    }
-    if (!(NORMAL_MIN < gazeRatio && gazeRatio < NORMAL_MAX)) {
-        if (!isSuspicious) { isSuspicious = true; suspiciousStartTime = currentTime; }
-        else {
-            const elapsed = currentTime - suspiciousStartTime;
-            if (elapsed > DURATION_THRESHOLD) return true;
-        }
-    } else {
-        if (isSuspicious) { isSuspicious = false; suspiciousStartTime = null; alertTriggered = false; }
-    }
-    return false;
-}
-
 // Subtly outline the face to prove proctoring works underneath
 function drawFaceBoundingBox(lm) {
     const W = canvas.width;
     const H = canvas.height;
-
-    // Find min max X and Y
-    let minX = 1, maxX = 0, minY = 1, maxY = 0;
-    lm.forEach(p => {
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
-    });
+    const { minX, maxX, minY, maxY } = getFaceBounds(lm);
 
     ctx.save();
     ctx.strokeStyle = '#4CAF50';

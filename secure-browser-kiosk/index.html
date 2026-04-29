@@ -611,6 +611,31 @@
     <button id="btn-download" class="download-btn">Download Results as Photo</button>
   </div>
 
+  <!-- Suppress known-harmless console noise BEFORE vendor scripts load -->
+  <script>
+    (function() {
+      var SUPPRESSED = [
+        'an eye patch had zero width',
+        'is already registered',
+        'was already registered',
+        'Removing initializer',
+        'inference_feedback_manager',
+        'face_landmarker_graph',
+      ];
+      function check(a) {
+        var m = Array.prototype.join.call(a, ' ');
+        for (var i = 0; i < SUPPRESSED.length; i++) {
+          if (m.indexOf(SUPPRESSED[i]) !== -1) return true;
+        }
+        return false;
+      }
+      var ow = console.warn, oe = console.error, ol = console.log;
+      console.warn  = function() { if (!check(arguments)) ow.apply(console, arguments); };
+      console.error = function() { if (!check(arguments)) oe.apply(console, arguments); };
+      console.log   = function() { if (!check(arguments)) ol.apply(console, arguments); };
+    })();
+  </script>
+
   <!-- Vendor Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>

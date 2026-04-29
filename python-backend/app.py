@@ -633,6 +633,16 @@ def submit_answer(current_user, session_id):
 def end_interview(current_user, session_id):
     data = request.json or {}
     tracking_data = data.get("tracking_data", [])
+
+    def utc_now():
+        return datetime.datetime.now(datetime.UTC)
+
+    def normalize_utc(dt):
+        if not isinstance(dt, datetime.datetime):
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=datetime.UTC)
+        return dt.astimezone(datetime.UTC)
     
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
@@ -643,6 +653,9 @@ def end_interview(current_user, session_id):
     interview_score = 85  # Hardcoded interview score
     usage_summary = CostTracker().end_session(session_id, clear_events=True)
     usage_deduction = None
+    session_doc = interviews_collection.find_one(
+        {"session_id": session_id, "user_id": str(current_user["_id"])}
+    )
 
     if session and session.is_complete:
         # Generate evaluation from the session manager instead of accessing session attribute
@@ -677,6 +690,14 @@ def end_interview(current_user, session_id):
             "final_score": None,
         }
 
+    proctoring_score = (session_doc or {}).get("proctoring_score")
+    if proctoring_score is None:
+        proctoring_score = (session_doc or {}).get("gaze_recorder_score")
+
+    manual_infractions = list((session_doc or {}).get("manual_infractions") or [])
+    gaze_times = (session_doc or {}).get("gaze_metrics")
+    gaze_plot_path = (session_doc or {}).get("gaze_plot_path")
+
     # Get proctoring data from external service
     proctoring_service_url = os.getenv(
         "PROCTORING_SERVICE_URL", "http://localhost:5001"
@@ -689,42 +710,45 @@ def end_interview(current_user, session_id):
         )
         if resp.status_code == 200:
             stats = resp.json()
-            proctoring_score = stats.get("proctoring_score", 90)
-            manual_infractions = stats.get("manual_infractions", [])
-            gaze_times = stats.get("gaze_times")
+            if stats.get("proctoring_score") is not None:
+                proctoring_score = stats.get("proctoring_score")
+            if stats.get("manual_infractions") is not None:
+                manual_infractions = stats.get("manual_infractions", [])
+            if stats.get("gaze_times") is not None:
+                gaze_times = stats.get("gaze_times")
             gaze_plot_filename = stats.get("gaze_plot_filename")
 
             if gaze_plot_filename:
                 gaze_plot_path = os.path.join(
                     app.config["PROCTORING_FOLDER"], gaze_plot_filename
                 )
-            else:
-                gaze_plot_path = None
         else:
-            print(f"⚠️ Proctoring service returned {resp.status_code}")
-            # Fallback or keep defaults
-            proctoring_score = 90
-            manual_infractions = []
-            gaze_times = None
-            gaze_plot_path = None
+            if proctoring_score is None and not manual_infractions and not gaze_times:
+                print(f"⚠️ Proctoring service returned {resp.status_code}")
+            else:
+                print(
+                    f"ℹ️ Proctoring service returned {resp.status_code}; keeping stored kiosk proctoring data."
+                )
     except Exception as e:
-        print(f"⚠️ Could not contact proctoring service: {e}")
+        if proctoring_score is None and not manual_infractions and not gaze_times:
+            print(f"⚠️ Could not contact proctoring service: {e}")
+        else:
+            print(
+                f"ℹ️ Could not contact proctoring service, using stored kiosk proctoring data instead: {e}"
+            )
+
+    if proctoring_score is None:
         proctoring_score = 90
-        manual_infractions = []
-        gaze_times = None
-        gaze_plot_path = None
 
     suspicious_activity_time = 0  # Not tracking this explicitly anymore in app.py
 
     # Calculate total interview duration for logging
     interview_duration = 0
-    session_doc = interviews_collection.find_one(
-        {"session_id": session_id, "user_id": str(current_user["_id"])}
-    )
     if session_doc and "created_at" in session_doc:
-        start_time = session_doc["created_at"]
-        end_time = datetime.datetime.utcnow()
-        interview_duration = (end_time - start_time).total_seconds()
+        start_time = normalize_utc(session_doc["created_at"])
+        end_time = utc_now()
+        if start_time is not None:
+            interview_duration = (end_time - start_time).total_seconds()
 
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
@@ -806,7 +830,7 @@ def end_interview(current_user, session_id):
                 "tts_characters": int(tts_characters or 0),
                 "usage_summary": usage_summary,
                 "usage_deduction": usage_deduction,
-                "updated_at": datetime.datetime.utcnow(),
+                "updated_at": utc_now(),
             }
         },
     )
@@ -848,7 +872,7 @@ def end_interview(current_user, session_id):
                         "tts_characters": int(tts_characters or 0),
                         "usage_source": "actual",
                         "status": "interviewed",
-                        "updated_at": datetime.datetime.utcnow(),
+                        "updated_at": utc_now(),
                     }
                 },
             )
@@ -891,7 +915,7 @@ def end_interview(current_user, session_id):
                     "id": str(application_id),
                     "label": existing_app.get("job_title") or "Interview",
                 },
-                occurred_at=datetime.datetime.utcnow(),
+                occurred_at=utc_now(),
                 metadata={
                     "session_id": session_id,
                     "proctoring_score": proctoring_score,
@@ -910,7 +934,7 @@ def end_interview(current_user, session_id):
                     "id": str(application_id),
                     "label": existing_app.get("job_title") or "Interview Evaluation",
                 },
-                occurred_at=datetime.datetime.utcnow(),
+                occurred_at=utc_now(),
                 metadata={
                     "session_id": session_id,
                 },
@@ -963,6 +987,7 @@ def upload_gaze_recorder_results(current_user, session_id):
     """
     Receives raw GazeRecorder payloads and stores smart heatmap analysis.
     """
+    utc_now = lambda: datetime.datetime.now(datetime.UTC)
     data = request.get_json() or {}
     recording_data = data.get("recordingData")
     gaze_points = data.get("gazePoints", [])
@@ -1006,7 +1031,7 @@ def upload_gaze_recorder_results(current_user, session_id):
                     0, 100 - analysis_result.get("cheatingScore", 0)
                 ),
                 "proctoring_source": "gaze_recorder_api",
-                "updated_at": datetime.datetime.utcnow(),
+                "updated_at": utc_now(),
             }
         },
     )
