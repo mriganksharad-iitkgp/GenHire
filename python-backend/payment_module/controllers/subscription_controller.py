@@ -141,10 +141,7 @@ class SubscriptionController:
 
     def use_interview(self, user_data: Dict[str, Any]) -> Tuple[dict, int]:
         """
-        Decrement interview count for an employer.
-
-        This should be called when an interview is initiated.
-        Uses atomic operations to prevent race conditions.
+        Deprecated legacy endpoint.
 
         Args:
             user_data: Authenticated user data
@@ -153,49 +150,11 @@ class SubscriptionController:
             Tuple of (response_dict, status_code)
         """
         try:
-            audience = self._normalize_user_type(user_data)
-            if audience != "recruiter":
-                return {
-                    "success": False,
-                    "error": "Only employers can use interviews",
-                    "error_code": "unauthorized_user_type",
-                }, 403
-
-            employer_id = str(user_data.get("_id") or user_data.get("user_id"))
-
-            result = self.wallet_service.debit_wallet(
-                owner_id=employer_id,
-                audience=audience,
-                credits=1,
-                transaction_type="manual_interview_use",
-                reference_type="user",
-                reference_id=employer_id,
-            )
-
-            if result["success"]:
-                return {
-                    "success": True,
-                    "data": {
-                        "interviews_remaining": result.get("wallet", {}).get("balance"),
-                        "interviews_used": result.get("wallet", {}).get("total_debited"),
-                        "credits_remaining": result.get("wallet", {}).get("balance"),
-                        "credits_used": result.get("wallet", {}).get("total_debited"),
-                        "credits_allocated": result.get("wallet", {}).get("total_credited"),
-                        "is_unlimited": False,
-                    },
-                }, 200
-            else:
-                # Determine appropriate status code
-                error_code = result.get("error_code", "unknown")
-                status_code = 402 if error_code == "limit_exceeded" else 400
-                if error_code == "no_subscription":
-                    status_code = 402  # Payment Required
-
-                return {
-                    "success": False,
-                    "error": result.get("error", "Failed to use interview"),
-                    "error_code": error_code,
-                }, status_code
+            return {
+                "success": False,
+                "error": "Manual interview credit deduction is deprecated. Credits are deducted by the practice, AI JD, and real interview flows.",
+                "error_code": "deprecated_endpoint",
+            }, 410
 
         except Exception as e:
             logger.error(f"Error using interview: {str(e)}")
@@ -308,7 +267,10 @@ class SubscriptionController:
             audience = self._normalize_user_type(user_data)
             owner_id = str(user_data.get("_id") or user_data.get("user_id"))
             limit = request.args.get("limit", 20, type=int)
-            transactions = self.wallet_service.get_transactions(owner_id, audience, limit)
+            kind = request.args.get("kind", "all")
+            transactions = self.wallet_service.get_transactions(
+                owner_id, audience, limit, kind=kind
+            )
             return {
                 "success": True,
                 "data": {

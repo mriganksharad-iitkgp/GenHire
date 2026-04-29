@@ -125,7 +125,10 @@ const JobDetails = () => {
 
 				setJob(jobData);
 
-				// Check if user has already applied to this job
+				// Check if user has already applied to this job. An invite-created
+				// skeleton row exists before the candidate has actually submitted
+				// (no cv_snapshot, processing_status='awaiting_candidate'); we treat
+				// those as "not yet applied" so the Apply button stays available.
 				try {
 					const res = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
 						headers: { Authorization: `Bearer ${token}` }
@@ -134,7 +137,11 @@ const JobDetails = () => {
 					if (appsRes.ok) {
 						const apps = await appsRes.json();
 						const found = (apps || []).find(a => String(a.job_id) === String(jobId) || String(a.job_details?._id) === String(jobId));
-						if (found) {
+						const isInviteSkeleton = !!found && (
+							found.processing_status === 'awaiting_candidate' ||
+							!found.cv_snapshot
+						);
+						if (found && !isInviteSkeleton) {
 							setHasApplied(true);
 							setAppliedAt(found.applied_at || null);
 							setApplicationStatus(found.status || 'pending');

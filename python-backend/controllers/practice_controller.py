@@ -353,6 +353,30 @@ class PracticeController:
 
             session_id = session_result["session_id"]
 
+            usage_deduction = self.wallet_service.debit_wallet(
+                owner_id=user_id,
+                audience="candidate",
+                credits=required_credits,
+                transaction_type="practice_interview",
+                reference_type="practice_session",
+                reference_id=session_id,
+                metadata={
+                    "session_id": session_id,
+                    "role": role,
+                    "difficulty": difficulty,
+                    "proctoring_enabled": bool(proctoring_enabled),
+                },
+                idempotency_key=f"practice-session:{session_id}",
+            )
+            if not usage_deduction.get("success"):
+                return {
+                    "error": "Insufficient credits for practice interview.",
+                    "error_code": usage_deduction.get("error_code", "insufficient_credits"),
+                    "credits_required": required_credits,
+                    "credits_remaining": int(usage_deduction.get("credits_remaining", 0) or 0),
+                    "redirect": "/candidate/subscription",
+                }, 402
+
             # Use pre-calculated CV score (normalized to 0-1 for storage)
             logger.info(
                 f"Practice session created: {session_id}, CV Score: {cv_score:.1f}% (normalized: {cv_score_normalized})"
@@ -382,6 +406,7 @@ class PracticeController:
                 "gaze_metrics": None,
                 "gaze_plot_path": None,
                 "proctoring_enabled": bool(proctoring_enabled),
+                "usage_deduction": usage_deduction,
             }
 
             self.collections["practice_sessions"].insert_one(practice_session)
@@ -396,16 +421,17 @@ class PracticeController:
                 "initial_questions": [question_result.get("question", "")],
                 "message": "Practice interview session started successfully",
                 "credits_required": required_credits,
+                "usage_deduction": usage_deduction,
                 "proctoring_enabled": bool(proctoring_enabled),
                 "quota": {
                     "credits_allocated": int(
-                        (credit_snapshot or {}).get("credits_allocated", 0) or 0
+                        (usage_deduction or {}).get("credits_allocated", 0) or 0
                     ),
                     "credits_used": int(
-                        (credit_snapshot or {}).get("credits_used", 0) or 0
+                        (usage_deduction or {}).get("credits_used", 0) or 0
                     ),
                     "credits_remaining": int(
-                        (credit_snapshot or {}).get("credits_remaining", 0) or 0
+                        (usage_deduction or {}).get("credits_remaining", 0) or 0
                     ),
                 },
             }, 200
@@ -627,24 +653,27 @@ class PracticeController:
                 },
             )
 
-            practice_cost = (
-                int(PaymentConfig.CANDIDATE_PRACTICE_PROCTORED_CREDITS)
-                if bool(session.get("proctoring_enabled", False))
-                else int(PaymentConfig.CANDIDATE_PRACTICE_CREDITS)
-            )
-            usage_deduction = self.wallet_service.debit_wallet(
-                owner_id=user_id,
-                audience="candidate",
-                credits=practice_cost,
-                transaction_type="practice_interview",
-                reference_type="practice_session",
-                reference_id=session_id,
-                metadata={
-                    "session_id": session_id,
-                    "proctoring_enabled": bool(session.get("proctoring_enabled", False)),
-                },
-                idempotency_key=f"practice-session:{session_id}",
-            )
+            usage_deduction = session.get("usage_deduction")
+            if not usage_deduction:
+                practice_cost = (
+                    int(PaymentConfig.CANDIDATE_PRACTICE_PROCTORED_CREDITS)
+                    if bool(session.get("proctoring_enabled", False))
+                    else int(PaymentConfig.CANDIDATE_PRACTICE_CREDITS)
+                )
+                usage_deduction = self.wallet_service.debit_wallet(
+                    owner_id=user_id,
+                    audience="candidate",
+                    credits=practice_cost,
+                    transaction_type="practice_interview",
+                    reference_type="practice_session",
+                    reference_id=session_id,
+                    metadata={
+                        "session_id": session_id,
+                        "proctoring_enabled": bool(session.get("proctoring_enabled", False)),
+                        "charged_at": "end_legacy_fallback",
+                    },
+                    idempotency_key=f"practice-session:{session_id}",
+                )
 
             # Calculate interview score from evaluation (same logic as real interviews)
             interview_score = 85  # Default score

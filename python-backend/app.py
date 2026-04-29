@@ -44,6 +44,7 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
+from routes.invite_routes import invite_bp
 
 try:
     from google.cloud import speech
@@ -95,6 +96,25 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
+
+# Custom JSON provider so any bson.ObjectId returned by a route auto-serializes.
+# Without this, Flask's default encoder raises 500 on ObjectIds nested inside
+# any response dict (cv_snapshot.metadata, recruiter_id stored as ObjectId on
+# legacy docs, etc.) -- and because the 500 short-circuits before
+# after_request runs, the browser also reports a CORS error as a side effect.
+from flask.json.provider import DefaultJSONProvider as _DefaultJSONProvider
+
+
+class _ObjectIdSafeJSONProvider(_DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+app.json = _ObjectIdSafeJSONProvider(app)
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -177,6 +197,13 @@ background_processor = get_background_processor()
 background_processor.start()
 logger.info("[OK] Background processor started for async CV scoring")
 
+# Initialize and start the invite cleanup scheduler (purges dormant burner accounts)
+from services.invite_cleanup_scheduler import get_invite_cleanup_scheduler
+
+invite_cleanup_scheduler = get_invite_cleanup_scheduler(collections)
+invite_cleanup_scheduler.start()
+logger.info("[OK] Invite cleanup scheduler started")
+
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(profile_bp)
@@ -194,7 +221,9 @@ admin_controller = AdminController(collections)
 init_admin_routes(admin_controller)
 app.register_blueprint(admin_bp, url_prefix="/api/admin")
 app.register_blueprint(speech_bp, url_prefix="/api/speech")
+app.register_blueprint(invite_bp)
 logger.info("[OK] Admin routes registered at /api/admin")
+logger.info("[OK] Invite routes registered")
 
 # Define a dictionary to hold a detector instance for each session
 # Define a dictionary to hold a detector instance for each session
@@ -395,6 +424,18 @@ def start_interview(current_user):
     if app_student_id != current_user_id:
         return jsonify({"error": "Unauthorized"}), 403
 
+    # Block invite skeletons: a pre-shortlisted candidate must upload a CV
+    # (i.e. complete the apply step) before the interview can start.
+    if (
+        app_doc.get("processing_status") == "awaiting_candidate"
+        or not app_doc.get("cv_snapshot")
+    ):
+        return jsonify({
+            "error": "Please complete your application by uploading your CV before starting the interview.",
+            "error_code": "application_incomplete",
+            "redirect": f"/job/{app_doc.get('job_id')}" if app_doc.get('job_id') else "/dashboard",
+        }), 400
+
     student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
@@ -458,6 +499,7 @@ def start_interview(current_user):
                     "application_id": str(application_id),
                     "job_id": str(job.get("_id")),
                     "proctoring_enabled": proctoring_enabled,
+                    "proctoring_config": proctoring_config or {},
                 },
                 idempotency_key=f"real-interview:{application_id}",
             )
@@ -559,6 +601,7 @@ def start_interview(current_user):
             "conversation_context": session_details.get("conversation_context", {}),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
+            "usage_deduction": recruiter_deduction,
             "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
@@ -1257,3 +1300,8 @@ if __name__ == "__main__":
         logger.info("Shutting down background processor...")
         background_processor.stop()
         logger.info("Background processor stopped")
+        try:
+            invite_cleanup_scheduler.stop()
+            logger.info("Invite cleanup scheduler stopped")
+        except Exception:
+            pass

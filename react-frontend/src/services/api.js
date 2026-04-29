@@ -26,14 +26,16 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     let errMsg = "Request failed";
+    let errorData = null;
     try {
-      const data = await res.json();
-      errMsg = data.error || data.message || errMsg;
+      errorData = await res.json();
+      errMsg = errorData.error || errorData.message || errMsg;
     } catch (_) {
       // ignore json parse error
     }
     const error = new Error(errMsg);
     error.status = res.status;
+    error.data = errorData;
     throw error;
   }
   // No content

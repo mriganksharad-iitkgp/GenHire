@@ -35,6 +35,7 @@ const CandidateCostStatistics = () => {
     },
     monthlyUsage: [],
     recentActivity: [],
+    rechargeHistory: [],
     summary: {
       totalPracticeSessions: 0,
       completedPracticeSessions: 0,
@@ -196,23 +197,16 @@ const CandidateCostStatistics = () => {
   const circumference = 2 * Math.PI * 54;
   const ringOffset = circumference - (usagePercentage / 100) * circumference;
   const activityRows = useMemo(() => {
-    const knownTypes = new Set([
-      "signup_bonus",
-      "recharge",
-      "ai_jd_generation",
-      "real_interview_recruiter",
-      "real_interview_candidate_audit",
-      "practice_interview",
-      "manual_interview_use",
-    ]);
     return (safeData?.recentActivity || []).filter((row) => {
       const txType = String(row?.transaction_type || "");
-      if (!knownTypes.has(txType)) return false;
       const delta = Number(row?.delta_credits || 0);
-      const hasReference = String(row?.reference || "").trim() !== "-";
-      return delta !== 0 || hasReference || txType === "signup_bonus";
+      return txType === "practice_interview" && delta < 0;
     });
   }, [safeData?.recentActivity]);
+  const rechargeRows = useMemo(
+    () => safeData?.rechargeHistory || [],
+    [safeData?.rechargeHistory],
+  );
 
   if (loading) {
     return (
@@ -374,7 +368,7 @@ const CandidateCostStatistics = () => {
               <div className={styles.creditsLeft}>
                 <h2>Practice Credits</h2>
                 <p className={styles.creditsSubtitle}>
-                  {plan.name || "Candidate Wallet"} - {displayedMonthlyCredits.toLocaleString("en-IN")} total credited, non-expiring
+                  {plan.name || "Candidate Wallet"} - {displayedMonthlyCredits.toLocaleString("en-IN")} total credits allocated, non-expiring
                 </p>
 
                 <div className={styles.creditsNumbers}>
@@ -546,11 +540,10 @@ const CandidateCostStatistics = () => {
                 <table className={styles.activityTable}>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Reference</th>
-                      <th>Delta</th>
-                      <th>Balance</th>
+                      <th>Timestamp</th>
+                      <th>Activity Type</th>
+                      <th>Credits Deducted</th>
+                      <th>Remaining Balance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -560,18 +553,14 @@ const CandidateCostStatistics = () => {
                           {activity.timestamp}
                         </td>
                         <td className={styles.activityAction}>
-                          {activity.action}
-                        </td>
-                        <td className={styles.activityRole}>
-                          {activity.reference || "-"}
+                          {activity.activity_type || activity.action}
                         </td>
                         <td className={styles.creditCost}>
-                          {Number(activity.delta_credits || 0) > 0
-                            ? `+${activity.delta_credits}`
-                            : activity.delta_credits || 0}
+                          {activity.credits_deducted ??
+                            Math.abs(Number(activity.delta_credits || 0))}
                         </td>
                         <td className={styles.creditCost}>
-                          {activity.balance_after ?? 0}
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
                         </td>
                       </tr>
                     ))}
@@ -590,6 +579,49 @@ const CandidateCostStatistics = () => {
                   <p>
                     No wallet transactions yet. Recharge or use practice to see activity.
                   </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Recharge History</h2>
+              <p>Wallet credit additions, including migration recharges.</p>
+            </div>
+            <div className={styles.activityTableSection}>
+              {rechargeRows && rechargeRows.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Type</th>
+                      <th>Credits Added</th>
+                      <th>Balance After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rechargeRows.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className={styles.activityTimestamp}>
+                          {activity.timestamp}
+                        </td>
+                        <td className={styles.activityAction}>
+                          {activity.activity_type || activity.action}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.credits_added ?? Number(activity.delta_credits || 0)}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className={styles.emptyState}>
+                  <p>No recharges yet.</p>
                 </div>
               )}
             </div>

@@ -2387,11 +2387,13 @@ class AdminController:
                 "candidate": {
                     "plans": {},
                     "succeeded_payment_count": 0,
+                    "migration_payment_count": 0,
                     "total_incoming_inr": 0.0,
                 },
                 "recruiter": {
                     "plans": {},
                     "succeeded_payment_count": 0,
+                    "migration_payment_count": 0,
                     "total_incoming_inr": 0.0,
                 },
             }
@@ -2401,6 +2403,8 @@ class AdminController:
                 plan_data = _resolve_payment_plan(payment_doc)
                 audience = plan_data["audience"]
                 plan_key = f"{plan_data['slug']}::{plan_data['price_inr']}"
+                payment_metadata = payment_doc.get("metadata", {}) or {}
+                is_migration_payment = bool(payment_metadata.get("migration"))
 
                 if plan_key not in incoming_summary[audience]["plans"]:
                     incoming_summary[audience]["plans"][plan_key] = {
@@ -2408,16 +2412,23 @@ class AdminController:
                         "plan_slug": plan_data["slug"],
                         "plan_price_inr": plan_data["price_inr"],
                         "succeeded_payment_count": 0,
+                        "migration_payment_count": 0,
                         "incoming_amount_inr": 0.0,
                     }
 
                 incoming_summary[audience]["plans"][plan_key][
                     "succeeded_payment_count"
                 ] += 1
+                if is_migration_payment:
+                    incoming_summary[audience]["plans"][plan_key][
+                        "migration_payment_count"
+                    ] += 1
                 incoming_summary[audience]["plans"][plan_key][
                     "incoming_amount_inr"
                 ] += payment_amount_inr
                 incoming_summary[audience]["succeeded_payment_count"] += 1
+                if is_migration_payment:
+                    incoming_summary[audience]["migration_payment_count"] += 1
                 incoming_summary[audience]["total_incoming_inr"] += payment_amount_inr
 
             refund_query = {
@@ -2515,12 +2526,18 @@ class AdminController:
                         "succeeded_payment_count": incoming_summary["candidate"][
                             "succeeded_payment_count"
                         ],
+                        "migration_payment_count": incoming_summary["candidate"][
+                            "migration_payment_count"
+                        ],
                         "total_incoming_inr": candidate_total_incoming,
                     },
                     "recruiter": {
                         "plans": recruiter_plans,
                         "succeeded_payment_count": incoming_summary["recruiter"][
                             "succeeded_payment_count"
+                        ],
+                        "migration_payment_count": incoming_summary["recruiter"][
+                            "migration_payment_count"
                         ],
                         "total_incoming_inr": recruiter_total_incoming,
                     },

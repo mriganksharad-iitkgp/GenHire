@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 import Pagination from '../Pagination';
 
-const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit }) => {
+const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit, onInviteCandidates }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9; // 3x3 grid
   
@@ -64,6 +64,11 @@ const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, on
           <button className={styles.secondaryButton} onClick={() => onEdit(job)}>
             <i className="fa fa-edit"></i> Edit
           </button>
+          {onInviteCandidates && (
+            <button className={styles.secondaryButton} onClick={() => onInviteCandidates(job)}>
+              <i className="fa fa-paper-plane"></i> Invite Candidates
+            </button>
+          )}
         </div>
       </div>
         ))}

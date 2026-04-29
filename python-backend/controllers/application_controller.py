@@ -4,6 +4,22 @@ import sys
 import os
 import logging
 
+
+def _coerce_objectids(value):
+    """Recursively replace bson.ObjectId values with their string form so the
+    result is JSON-serializable. Touches dicts and lists in place."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, dict):
+        for k, v in list(value.items()):
+            value[k] = _coerce_objectids(v)
+        return value
+    if isinstance(value, list):
+        for i, item in enumerate(value):
+            value[i] = _coerce_objectids(item)
+        return value
+    return value
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from services.cv_scoring_service import CVScoringService
 from controllers.cv_controller import CVController
@@ -65,11 +81,30 @@ class ApplicationController:
         if not job:
             return {"error": "Job not found"}, 404
 
-        # Check if already applied
+        # Invite-only (burner) accounts can only apply to jobs they were invited to.
+        if user_profile and user_profile.get("is_invite_only"):
+            invited_ids = [str(j) for j in (user_profile.get("invited_job_ids") or [])]
+            if str(job_id) not in invited_ids:
+                return {
+                    "error": "This account can only apply to jobs you were invited to.",
+                    "error_code": "invite_only_scope",
+                }, 403
+
+        # Check if already applied. An invite skeleton (created with no CV yet) is
+        # NOT a real application — we update it in place when the candidate submits.
         existing_application = self.applications_collection.find_one(
             {"job_id": job_id, "student_id": user_id}
         )
-        if existing_application:
+        is_invite_skeleton = bool(
+            existing_application
+            and not existing_application.get("cv_snapshot")
+            and (
+                existing_application.get("processing_status") == "awaiting_candidate"
+                or existing_application.get("invite_type") in ("apply", "interview")
+                or existing_application.get("auto_shortlisted_via_invite")
+            )
+        )
+        if existing_application and not is_invite_skeleton:
             return {"error": "You have already applied for this job"}, 400
 
         # Get CV content (PDF or manual entry)
@@ -148,25 +183,28 @@ class ApplicationController:
             "has_pdf": bool(job.get("jd_pdf_path")),
         }
 
-        # Create application document with PENDING status
-        # Application will be invisible until CV scoring completes
-        application_doc = {
-            "job_id": job_id,
-            "student_id": user_id,
+        # Determine status for new applies. For invite skeletons, preserve the
+        # pre-shortlisted status set by the recruiter so a low CV score can't
+        # auto-reject an interview invitee.
+        was_auto_shortlisted = bool(
+            existing_application
+            and existing_application.get("auto_shortlisted_via_invite")
+        )
+        new_status = "shortlisted" if was_auto_shortlisted else "pending"
+        new_status_reason = (
+            "Pre-shortlisted via recruiter interview invite"
+            if was_auto_shortlisted
+            else "Application submitted, CV scoring in progress"
+        )
+
+        # Build the field set the candidate is contributing now (CV + cover letter
+        # + profile snapshot). Reused for both insert and skeleton-update paths.
+        candidate_fields = {
             "student_name": user_profile.get("name", ""),
             "student_email": user_profile.get("email", ""),
             "cover_letter": application_data.get("cover_letter", ""),
-            "status": "pending",  # Will be updated after CV scoring
-            "status_reason": "Application submitted, CV scoring in progress",
-            "applied_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow(),
-            "job_title": job.get("title", ""),
-            "recruiter_id": job.get("created_by", ""),
-            # Placeholder scores - will be updated by background worker
-            "cv_score": None,
-            "cv_score_breakdown": None,
             "minimum_cv_score_required": job.get("minimum_cv_score", 50.0),
-            "interview_score": None,
             "student_profile": {
                 "bio": user_profile.get("bio", ""),
                 "skills": user_profile.get("skills", []),
@@ -175,28 +213,53 @@ class ApplicationController:
                 "phone": user_profile.get("phone", ""),
                 "location": user_profile.get("location", ""),
             },
-            # CV and JD snapshots
             "cv_id": cv_id,
             "cv_snapshot": cv_snapshot,
             "jd_snapshot": jd_snapshot,
             "cv_source": cv_source,
-            # Background processing flags
-            "processing_status": "pending",  # Will be: pending → processing → completed
-            "is_visible": True,  # Visible immediately so candidate sees it right away
+            "processing_status": "pending",
+            "is_visible": True,
             "cv_score_calculated_at": None,
             "processing_error": None,
             "auto_processed": True,
+            "status": new_status,
+            "status_reason": new_status_reason,
         }
 
-        # Insert application IMMEDIATELY - no waiting for CV scoring!
-        result = self.applications_collection.insert_one(application_doc)
-        application_id = str(result.inserted_id)
-        application_doc["_id"] = application_id
+        if is_invite_skeleton:
+            # Update the skeleton in place rather than insert a duplicate row.
+            self.applications_collection.update_one(
+                {"_id": existing_application["_id"]},
+                {"$set": candidate_fields},
+            )
+            application_id = str(existing_application["_id"])
+            application_doc = {**existing_application, **candidate_fields, "_id": application_id}
+            # Bump applicants counter only now that the candidate actually
+            # submitted; skeleton creation no longer touches the counter.
+            self.jobs_collection.update_one(
+                {"_id": ObjectId(job_id)}, {"$inc": {"applicants": 1}}
+            )
+        else:
+            # Fresh application: build the full doc and insert.
+            application_doc = {
+                "job_id": job_id,
+                "student_id": user_id,
+                "applied_at": datetime.datetime.utcnow(),
+                "job_title": job.get("title", ""),
+                "recruiter_id": job.get("created_by", ""),
+                "cv_score": None,
+                "cv_score_breakdown": None,
+                "interview_score": None,
+                **candidate_fields,
+            }
 
-        # Update job applicant count immediately
-        self.jobs_collection.update_one(
-            {"_id": ObjectId(job_id)}, {"$inc": {"applicants": 1}}
-        )
+            result = self.applications_collection.insert_one(application_doc)
+            application_id = str(result.inserted_id)
+            application_doc["_id"] = application_id
+
+            self.jobs_collection.update_one(
+                {"_id": ObjectId(job_id)}, {"$inc": {"applicants": 1}}
+            )
 
         # Enqueue CV scoring task for background processing
         logger.info(f"Enqueueing CV scoring task for application {application_id}")
@@ -265,8 +328,8 @@ class ApplicationController:
 
             # Convert ObjectId to string and fetch job details
             for app in applications:
-                app_id = str(app["_id"])
-                app["_id"] = app_id
+                _coerce_objectids(app)
+                app["_id"] = str(app["_id"])
 
                 # Normalize datetime serialization for frontend
                 if isinstance(app.get("applied_at"), datetime.datetime):
@@ -358,6 +421,7 @@ class ApplicationController:
 
             # Convert ObjectId to string and add job details
             for app in applications:
+                _coerce_objectids(app)
                 app["_id"] = str(app["_id"])
                 # Normalize datetime serialization for frontend
                 if isinstance(app.get("applied_at"), datetime.datetime):
@@ -501,6 +565,7 @@ class ApplicationController:
             return {"error": "Unauthorized"}, 403
 
         # shape response
+        _coerce_objectids(app_doc)
         app_doc["_id"] = str(app_doc["_id"])
         if isinstance(app_doc.get("applied_at"), datetime.datetime):
             app_doc["applied_at"] = app_doc["applied_at"].isoformat()
@@ -673,7 +738,18 @@ class ApplicationController:
                 )  # Default to 50 if not set
                 old_status = application.get("status", "pending")
 
-                if new_cv_score >= minimum_cv_score:
+                # Interview-invitees are pre-shortlisted by the recruiter; a low
+                # CV score should never auto-reject them.
+                auto_shortlisted_via_invite = bool(
+                    application.get("auto_shortlisted_via_invite")
+                )
+
+                if auto_shortlisted_via_invite:
+                    new_status = "shortlisted"
+                    status_reason = (
+                        f"CV score ({new_cv_score:.1f}); status preserved from recruiter interview invite"
+                    )
+                elif new_cv_score >= minimum_cv_score:
                     new_status = "shortlisted"
                     status_reason = f"CV score ({new_cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})"
                 else:
