@@ -169,22 +169,60 @@ const Practice = () => {
 
       const data = await response.json();
 
-      // Close modal
-      setShowCVModal(false);
+      // Handle practice session launch
+      if (window.electronAPI) {
+        // If already inside secure browser, just navigate
+        navigate(`/interview/${data.session_id}`, {
+          state: {
+            isPractice: true,
+            practiceRole: selectedRole,
+            sessionId: data.session_id,
+            initialQuestion: data.initial_questions?.[0] || "",
+            similarityScore: data.similarity_score || 0,
+            cvScore: data.cv_score || 0,
+            usageDeduction: data.usage_deduction || null,
+            walletQuota: data.quota || null,
+          },
+        });
+        return;
+      }
 
-      // Navigate to interview page with practice mode
-      navigate(`/interview/${data.session_id}`, {
-        state: {
-          isPractice: true,
-          practiceRole: selectedRole,
-          sessionId: data.session_id,
-          initialQuestion: data.initial_questions?.[0] || "",
-          similarityScore: data.similarity_score || 0,
-          cvScore: data.cv_score || 0,
-          usageDeduction: data.usage_deduction || null,
-          walletQuota: data.quota || null,
+      showToast(`Launching Secure Browser for practice session...`, 'info');
+
+      // Generate the initialization payload for practice mode
+      const payload = {
+        isPractice: true,
+        sessionId: data.session_id,
+        initialQuestion: data.initial_questions?.[0] || "",
+        similarityScore: data.similarity_score || 0,
+        proctoringConfig: {
+          voice_detection: proctoringEnabled,
+          object_detection: proctoringEnabled,
+          eyeball_tracking: proctoringEnabled,
+          gaze_heatmap: proctoringEnabled
         },
-      });
+        token: localStorage.getItem("companyxyz-token"),
+        apiUrl: process.env.REACT_APP_API_URL || window.location.origin
+      };
+
+      const encodedPayload = btoa(JSON.stringify(payload));
+      const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
+
+      // Deep Link Attempt
+      const startTimeoutTime = Date.now();
+      window.location.href = customUri;
+
+      // Fallback if app isn't installed
+      setTimeout(() => {
+        const endTimeoutTime = Date.now();
+        if (endTimeoutTime - startTimeoutTime < 3000) {
+          console.log("Secure browser not installed. Showing download prompt.");
+          window.location.href = "/apps/Genhire Secure Browser Setup 1.0.0.exe";
+          showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
+        }
+        setIsStarting(false);
+      }, 2500);
+      
     } catch (error) {
       console.error("Error starting practice interview:", error);
       if (error?.status === 402) {

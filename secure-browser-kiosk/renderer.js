@@ -41,6 +41,7 @@ let clockInterval = null;
 let apiToken = null;
 let apiUrl = null;
 let globalSessionData = null; // Store deep link payload globally
+let isPracticeMode = false; // Flag for practice mode
 let currentQuestion = "";
 let questionCount = 0;
 let isSubmittingAnswer = false;
@@ -221,7 +222,7 @@ async function startInterview() {
     try {
         const decoded = atob(globalSessionData);
         payload = JSON.parse(decoded);
-        if (!payload.applicationId || !payload.token) throw new Error("Invalid payload structure");
+        if ((!payload.applicationId && !payload.isPractice) || !payload.token) throw new Error("Invalid payload structure");
     } catch (e) {
         alert("Invalid initialization data.");
         return;
@@ -229,6 +230,7 @@ async function startInterview() {
 
     apiToken = payload.token;
     apiUrl = payload.apiUrl;
+    isPracticeMode = payload.isPractice || false;
 
     // Switch Views to Testing Overlay!
     btnStart.disabled = true;
@@ -236,36 +238,51 @@ async function startInterview() {
     testingOverlay.style.display = 'flex';
 
     try {
-        const response = await fetch(`${apiUrl}/api/interviews/start`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiToken}`
-            },
-            body: JSON.stringify({ application_id: payload.applicationId })
-        });
+        if (isPracticeMode) {
+            currentSessionId = payload.sessionId;
+            currentQuestion = payload.initialQuestion;
+            questionCount = 1;
+            
+            if (payload.proctoringConfig) {
+                proctoringConfig = payload.proctoringConfig;
+            }
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || errData.message || "Failed to start interview");
+            console.log(`\n📋 === PRACTICE INTERVIEW STARTED ===`);
+            console.log(`   Session ID: ${currentSessionId}`);
+            console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
+            console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
+            console.log(`================================\n`);
+        } else {
+            const response = await fetch(`${apiUrl}/api/interviews/start`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiToken}`
+                },
+                body: JSON.stringify({ application_id: payload.applicationId })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || errData.message || "Failed to start interview");
+            }
+
+            const data = await response.json();
+            currentSessionId = data.session_id;
+            currentQuestion = data.initial_questions[0];
+            questionCount = 1;
+
+            console.log(`\n📋 === INTERVIEW STARTED ===`);
+            console.log(`   Session ID: ${currentSessionId}`);
+            console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
+
+            // Extract proctoring config from server response
+            if (data.proctoring_config) {
+                proctoringConfig = data.proctoring_config;
+            }
+            console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
+            console.log(`================================\n`);
         }
-
-        const data = await response.json();
-        currentSessionId = data.session_id;
-        currentQuestion = data.initial_questions[0];
-        questionCount = 1;
-
-        console.log(`\n📋 === INTERVIEW STARTED ===`);
-        console.log(`   Session ID: ${currentSessionId}`);
-        console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
-
-        // Extract proctoring config from server response
-        if (data.proctoring_config) {
-            proctoringConfig = data.proctoring_config;
-        }
-        console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
-        console.log(`================================\n`);
-
     } catch (err) {
         testingOverlay.style.display = 'none';
         startupView.style.display = 'flex';
@@ -455,7 +472,7 @@ async function endInterview() {
 
     // Tell backend to end interview and send gaze data
     try {
-        if (proctoringConfig.gaze_heatmap && gazePointsTracker.length > 0) {
+        if (proctoringConfig.gaze_heatmap && gazePointsTracker.length > 0 && !isPracticeMode) {
             const gazeResp = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/gaze-recorder-results`, {
                 method: "POST",
                 headers: {
@@ -480,7 +497,11 @@ async function endInterview() {
             console.warn("Skipping gaze-recorder upload because no gaze points were collected.");
         }
 
-        const endResp = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/end`, {
+        const endpoint = isPracticeMode 
+            ? `${apiUrl}/api/practice/${currentSessionId}/end`
+            : `${apiUrl}/api/interviews/${currentSessionId}/end`;
+
+        const endResp = await fetch(endpoint, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -544,7 +565,11 @@ async function submitAnswer() {
         console.log(`   ANSWER:   "${payload.answer}"`);
         console.log(`==========================================`);
 
-        const response = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/answer`, {
+        const endpoint = isPracticeMode 
+            ? `${apiUrl}/api/practice/${currentSessionId}/answer`
+            : `${apiUrl}/api/interviews/${currentSessionId}/answer`;
+
+        const response = await fetch(endpoint, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

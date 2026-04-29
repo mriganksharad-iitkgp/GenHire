@@ -312,8 +312,9 @@ const Profile = () => {
 				const endTimeoutTime = Date.now();
 				if (endTimeoutTime - startTimeoutTime < 3000) {
 					console.log("Secure browser not installed. Showing download prompt.");
-					// In the future, swap this toast with: window.location.href = "/downloads/Installer.exe";
-					showToast('Secure Browser not detected. Please download and install the Secure Browser to proceed.', 'error');
+					// Automatically download the installer
+					window.location.href = "/apps/Genhire Secure Browser Setup 1.0.0.exe";
+					showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
 				}
 			}, 2500);
 
