@@ -650,7 +650,8 @@ class ApplicationController:
             "gaze_plot_path": report.get("gaze_plot_path"),
             "gaze_recorder_analysis": report.get("gaze_recorder_analysis"),
             "gaze_recorder_score": report.get("gaze_recorder_score"),
-            "gaze_recorder_analysis_path": report.get("gaze_recorder_analysis_path")
+            "gaze_recorder_analysis_path": report.get("gaze_recorder_analysis_path"),
+            "gaze_recorder_points_path": report.get("gaze_recorder_points_path"),
         }
         return payload, 200
 

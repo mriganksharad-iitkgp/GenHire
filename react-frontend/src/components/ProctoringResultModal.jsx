@@ -1,4 +1,5 @@
 import React from 'react';
+import GazeHeatmapPanel from './GazeHeatmapPanel';
 import styles from './ProctoringResultModal.module.css';
 
 const PROCTORING_FEATURES = [
@@ -20,12 +21,10 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
     gaze_heatmap: true,
   };
 
-  const gazeData = report.gaze_metrics || [];
   const infractions = report.manual_infractions || [];
 
   // Backend file paths
   const gazePlotUrl = report.gaze_plot_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}` : null;
-  const gazeHeatmapUrl = report.gaze_recorder_analysis_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_recorder_analysis_path)}` : null;
 
   // Categorize infractions
   const objectInfractions = infractions.filter(i => ['phone_detected', 'multiple_people', 'object_detected'].includes(i.type));
@@ -158,19 +157,19 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                     </>
                   )}
 
-                  {/* Gaze Heatmap */}
+                  {/* Gaze Heatmap (WebGazer): canvas from points JSON + regions from analysis */}
                   {feature.key === 'gaze_heatmap' && (
                     <>
-                      {gazeHeatmapUrl ? (
-                        <div className={styles.chartContainer} style={{ background: 'transparent' }}>
-                          <img src={gazeHeatmapUrl} alt="Gaze Heatmap Result" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        </div>
-                      ) : (
-                        <p className={styles.noIssues}>✅ Heatmap data recorded</p>
-                      )}
-                      {report.gaze_recorder_score !== undefined && (
+                      <div className={styles.chartContainer} style={{ background: 'transparent', height: 'auto', minHeight: '200px' }}>
+                        <GazeHeatmapPanel
+                          analysis={report.gaze_recorder_analysis}
+                          pointsPath={report.gaze_recorder_points_path}
+                          apiUrl={API_URL}
+                        />
+                      </div>
+                      {report.gaze_recorder_score !== undefined && report.gaze_recorder_score !== null && (
                         <div style={{ marginTop: '8px', fontSize: '13px', color: '#e2e8f0' }}>
-                          Engagement Score: <strong>{report.gaze_recorder_score}%</strong>
+                          Engagement score: <strong>{report.gaze_recorder_score}%</strong>
                         </div>
                       )}
                     </>
