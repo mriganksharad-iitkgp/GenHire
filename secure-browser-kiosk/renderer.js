@@ -220,6 +220,36 @@ function formatTime(seconds) {
  * Also disables saveDataAcrossSessions so begin() does not immediately reload weights from localforage
  * after clearData().
  */
+function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
+    let attempts = 0;
+    const maxAttempts = 120;
+    const tick = () => {
+        attempts++;
+        const tracker = wg.getTracker && wg.getTracker();
+        const pos = tracker && typeof tracker.getPositions === "function" ? tracker.getPositions() : null;
+        const hasFaceMeshFrame = pos && pos.length > 0;
+        if (hasFaceMeshFrame) {
+            if (typeof wg.recordScreenPosition === "function") {
+                wg.recordScreenPosition(clientX, clientY, "click");
+            }
+            onDone();
+            return;
+        }
+        if (attempts >= maxAttempts) {
+            console.warn(
+                "WebGazer calibration: no face mesh frame before timeout; click may not have trained the model."
+            );
+            if (typeof wg.recordScreenPosition === "function") {
+                wg.recordScreenPosition(clientX, clientY, "click");
+            }
+            onDone();
+            return;
+        }
+        requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+}
+
 async function beginWebGazerRecording() {
     const wg = window.webgazer;
     gazePointsTracker = [];
@@ -305,20 +335,23 @@ async function beginWebGazerRecording() {
 
     await new Promise((resolve) => {
         dot.addEventListener('click', (ev) => {
-            if (typeof wg.recordScreenPosition === 'function') {
-                wg.recordScreenPosition(ev.clientX, ev.clientY, 'click');
-            }
-            calIdx++;
-            if (calIdx >= calibrationPoints.length) {
-                document.body.removeChild(overlay);
-                gazeRecorderTracking = true;
-                finalizeStartInterview();
-                resolve();
-            } else {
-                dot.style.left = calibrationPoints[calIdx].x;
-                dot.style.top = calibrationPoints[calIdx].y;
-                sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
-            }
+            if (dot.dataset.calBusy === '1') return;
+            dot.dataset.calBusy = '1';
+            sub.textContent = 'Hold still — locking gaze sample…';
+            recordWebGazerCalibrationClick(wg, ev.clientX, ev.clientY, () => {
+                dot.dataset.calBusy = '0';
+                calIdx++;
+                if (calIdx >= calibrationPoints.length) {
+                    document.body.removeChild(overlay);
+                    gazeRecorderTracking = true;
+                    finalizeStartInterview();
+                    resolve();
+                } else {
+                    dot.style.left = calibrationPoints[calIdx].x;
+                    dot.style.top = calibrationPoints[calIdx].y;
+                    sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
+                }
+            });
         });
     });
 }
@@ -503,6 +536,8 @@ async function endInterview() {
 
     stopRecording();
 
+    const hadGazeRecorderOn = gazeRecorderTracking;
+
     if (gazeRecorderTracking && window.webgazer) {
         window.webgazer.pause();
         gazeRecorderTracking = false;
@@ -547,7 +582,8 @@ async function endInterview() {
         } else if (proctoringConfig.gaze_heatmap) {
             console.warn(
                 "Skipping gaze-recorder upload because no gaze points were collected.",
-                "webgazerActive=" + !!window.webgazer,
+                "webgazerLoaded=" + !!window.webgazer,
+                "gazeRecorderWasOn=" + hadGazeRecorderOn,
                 "samples=" + gazePointsTracker.length
             );
         }

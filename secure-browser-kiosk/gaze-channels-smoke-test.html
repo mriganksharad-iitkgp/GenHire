@@ -153,6 +153,33 @@
       rafId = requestAnimationFrame(mediapipeLoop);
     }
 
+    function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
+      let attempts = 0;
+      const maxAttempts = 120;
+      const tick = () => {
+        attempts++;
+        const tracker = wg.getTracker && wg.getTracker();
+        const pos = tracker && typeof tracker.getPositions === 'function' ? tracker.getPositions() : null;
+        if (pos && pos.length > 0) {
+          if (typeof wg.recordScreenPosition === 'function') {
+            wg.recordScreenPosition(clientX, clientY, 'click');
+          }
+          onDone();
+          return;
+        }
+        if (attempts >= maxAttempts) {
+          console.warn('WebGazer calibration: no face mesh before timeout; recording click anyway.');
+          if (typeof wg.recordScreenPosition === 'function') {
+            wg.recordScreenPosition(clientX, clientY, 'click');
+          }
+          onDone();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
     function runWebGazerCalibrationThenRecord(wg) {
       const calibrationPoints = [
         { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
@@ -179,24 +206,27 @@
       document.body.appendChild(overlay);
 
       dot.addEventListener('click', (ev) => {
-        if (typeof wg.recordScreenPosition === 'function') {
-          wg.recordScreenPosition(ev.clientX, ev.clientY, 'click');
-        }
-        calIdx++;
-        if (calIdx >= calibrationPoints.length) {
-          document.body.removeChild(overlay);
-          gazeRecorderTracking = true;
-          sessionStartTime = Date.now();
-          running = true;
-          mediapipeLoop();
-          btnStop.disabled = false;
-          btnPost.disabled = false;
-          requestAnimationFrame(tickStatus);
-        } else {
-          dot.style.left = calibrationPoints[calIdx].x;
-          dot.style.top = calibrationPoints[calIdx].y;
-          sub.textContent = 'Point ' + (calIdx + 1) + ' of ' + calibrationPoints.length;
-        }
+        if (dot.dataset.calBusy === '1') return;
+        dot.dataset.calBusy = '1';
+        sub.textContent = 'Hold still — locking gaze sample…';
+        recordWebGazerCalibrationClick(wg, ev.clientX, ev.clientY, () => {
+          dot.dataset.calBusy = '0';
+          calIdx++;
+          if (calIdx >= calibrationPoints.length) {
+            document.body.removeChild(overlay);
+            gazeRecorderTracking = true;
+            sessionStartTime = Date.now();
+            running = true;
+            mediapipeLoop();
+            btnStop.disabled = false;
+            btnPost.disabled = false;
+            requestAnimationFrame(tickStatus);
+          } else {
+            dot.style.left = calibrationPoints[calIdx].x;
+            dot.style.top = calibrationPoints[calIdx].y;
+            sub.textContent = 'Point ' + (calIdx + 1) + ' of ' + calibrationPoints.length;
+          }
+        });
       });
     }
 
