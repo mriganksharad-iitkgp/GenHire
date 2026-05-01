@@ -250,6 +250,31 @@ function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
     requestAnimationFrame(tick);
 }
 
+/** Throttled append for WebGazer screen coordinates (heatmap upload). */
+function maybeRecordWebGazerSample(pred) {
+    if (!gazeRecorderTracking || !pred) return;
+
+    const nx = Number(pred.x);
+    const ny = Number(pred.y);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+
+    const now = Date.now();
+    if (now - lastWebGazerSampleMs < WEBGAZER_SAMPLE_INTERVAL_MS) return;
+    lastWebGazerSampleMs = now;
+
+    const ts =
+        sessionStartTime != null
+            ? (now - sessionStartTime) / 1000
+            : (now - gazeStartedAtMs) / 1000;
+    const x = Math.max(0, Math.min(window.innerWidth - 1, nx));
+    const y = Math.max(0, Math.min(window.innerHeight - 1, ny));
+    gazePointsTracker.push({
+        timestamp: ts,
+        x: Math.round(x),
+        y: Math.round(y),
+    });
+}
+
 async function beginWebGazerRecording() {
     const wg = window.webgazer;
     gazePointsTracker = [];
@@ -266,29 +291,8 @@ async function beginWebGazerRecording() {
     wg
         .setRegression('ridge')
         .setTracker('TFFacemesh')
-        .setGazeListener(function (data) {
-            if (!gazeRecorderTracking || !data) return;
-
-            const nx = Number(data.x);
-            const ny = Number(data.y);
-            if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
-
-            const now = Date.now();
-            if (now - lastWebGazerSampleMs < WEBGAZER_SAMPLE_INTERVAL_MS) return;
-            lastWebGazerSampleMs = now;
-
-            const ts =
-                sessionStartTime != null
-                    ? (now - sessionStartTime) / 1000
-                    : (now - gazeStartedAtMs) / 1000;
-            const x = Math.max(0, Math.min(window.innerWidth - 1, nx));
-            const y = Math.max(0, Math.min(window.innerHeight - 1, ny));
-            gazePointsTracker.push({
-                timestamp: ts,
-                x: Math.round(x),
-                y: Math.round(y),
-            });
-        })
+        // Internal rAF often invokes this with null predictions; we sample via getCurrentPrediction() in faceLoop instead.
+        .setGazeListener(function () {})
         .showVideoPreview(false)
         .showPredictionPoints(false);
 
@@ -517,9 +521,10 @@ function finalizeStartInterview() {
     transcriptText.textContent = currentQuestion;
 
     // Start tracking loops conditionally
-    if (proctoringConfig.eyeball_tracking) {
+    if (proctoringConfig.eyeball_tracking || proctoringConfig.gaze_heatmap) {
         requestAnimationFrame(faceLoop);
-    } else {
+    }
+    if (!proctoringConfig.eyeball_tracking) {
         console.log("🔒 Eyeball Tracking proctoring is disabled for this job.");
     }
     if (proctoringConfig.object_detection) {
@@ -1101,46 +1106,59 @@ async function faceLoop() {
             let headTurned = false;
 
             if (primaryFace) {
-                headTurned = isHeadTurned(primaryFace);
+                if (proctoringConfig.eyeball_tracking) {
+                    headTurned = isHeadTurned(primaryFace);
 
-                if (primaryFace.length >= 478) {
-                    const lm = primaryFace;
+                    if (primaryFace.length >= 478) {
+                        const lm = primaryFace;
 
-                    const leftIrisX = lm[P_LEFT_IRIS].x;
-                    const leftInnerX = lm[P_LEFT_EYE_INNER].x;
-                    const leftOuterX = lm[P_LEFT_EYE_OUTER].x;
-                    const leftEyeCenterX = (leftInnerX + leftOuterX) * 0.5;
-                    const leftEyeSpan = Math.abs(leftInnerX - leftOuterX);
-                    const leftGazeRatio = leftEyeSpan !== 0 ? (leftEyeCenterX - leftIrisX) / (leftEyeSpan / 2) : null;
+                        const leftIrisX = lm[P_LEFT_IRIS].x;
+                        const leftInnerX = lm[P_LEFT_EYE_INNER].x;
+                        const leftOuterX = lm[P_LEFT_EYE_OUTER].x;
+                        const leftEyeCenterX = (leftInnerX + leftOuterX) * 0.5;
+                        const leftEyeSpan = Math.abs(leftInnerX - leftOuterX);
+                        const leftGazeRatio = leftEyeSpan !== 0 ? (leftEyeCenterX - leftIrisX) / (leftEyeSpan / 2) : null;
 
-                    const rightIrisX = lm[P_RIGHT_IRIS].x;
-                    const rightInnerX = lm[P_RIGHT_EYE_INNER].x;
-                    const rightOuterX = lm[P_RIGHT_EYE_OUTER].x;
-                    const rightEyeCenterX = (rightInnerX + rightOuterX) * 0.5;
-                    const rightEyeSpan = Math.abs(rightInnerX - rightOuterX);
-                    const rightGazeRatio = rightEyeSpan !== 0 ? (rightEyeCenterX - rightIrisX) / (rightEyeSpan / 2) : null;
+                        const rightIrisX = lm[P_RIGHT_IRIS].x;
+                        const rightInnerX = lm[P_RIGHT_EYE_INNER].x;
+                        const rightOuterX = lm[P_RIGHT_EYE_OUTER].x;
+                        const rightEyeCenterX = (rightInnerX + rightOuterX) * 0.5;
+                        const rightEyeSpan = Math.abs(rightInnerX - rightOuterX);
+                        const rightGazeRatio = rightEyeSpan !== 0 ? (rightEyeCenterX - rightIrisX) / (rightEyeSpan / 2) : null;
 
-                    if (leftGazeRatio !== null && rightGazeRatio !== null) {
-                        gazeRatio = (leftGazeRatio + rightGazeRatio) / 2.0;
+                        if (leftGazeRatio !== null && rightGazeRatio !== null) {
+                            gazeRatio = (leftGazeRatio + rightGazeRatio) / 2.0;
+                        }
                     }
                 }
 
-                drawFaceBoundingBox(primaryFace);
+                if (proctoringConfig.eyeball_tracking || proctoringConfig.gaze_heatmap) {
+                    drawFaceBoundingBox(primaryFace);
+                }
             }
 
-            const attentionState = buildAttentionState(faceCount, gazeRatio, headTurned);
-            const shouldAlert = evaluateAttentionState(attentionState, currentTimeSec);
+            if (proctoringConfig.eyeball_tracking) {
+                const attentionState = buildAttentionState(faceCount, gazeRatio, headTurned);
+                const shouldAlert = evaluateAttentionState(attentionState, currentTimeSec);
 
-            if (shouldAlert && attentionState) {
-                gazeAlerts++;
-                showProctoringWarning(attentionState.message);
+                if (shouldAlert && attentionState) {
+                    gazeAlerts++;
+                    showProctoringWarning(attentionState.message);
+                }
+
+                if (sessionStartTime) {
+                    trackingData.push({
+                        time: (now - sessionStartTime) / 1000,
+                        gazeRatio: faceCount === 1 ? gazeRatio : null
+                    });
+                }
             }
 
-            if (sessionStartTime) {
-                trackingData.push({
-                    time: (now - sessionStartTime) / 1000,
-                    gazeRatio: faceCount === 1 ? gazeRatio : null
-                });
+            if (proctoringConfig.gaze_heatmap && gazeRecorderTracking && window.webgazer && faceCount === 1) {
+                const wg = window.webgazer;
+                if (typeof wg.getCurrentPrediction === 'function') {
+                    Promise.resolve(wg.getCurrentPrediction()).then(maybeRecordWebGazerSample).catch(function () {});
+                }
             }
         }
     } catch (e) {
