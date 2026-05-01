@@ -678,7 +678,7 @@ async function submitAnswer() {
 
         const data = await response.json();
 
-        if (data.interview_complete || questionCount >= 3) {
+        if (data.interview_complete || questionCount >= 2) {
             console.log(`\n🏁 === INTERVIEW COMPLETE (after ${questionCount} questions) ===\n`);
             endInterview();
             return;
