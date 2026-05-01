@@ -250,7 +250,7 @@ function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
     requestAnimationFrame(tick);
 }
 
-/** Throttled append for WebGazer screen coordinates (heatmap upload). */
+/** Throttled append for WebGazer screen coordinates (heatmap upload). Used by gaze listener (primary) and getCurrentPrediction (fallback). */
 function maybeRecordWebGazerSample(pred) {
     if (!gazeRecorderTracking || !pred) return;
 
@@ -291,8 +291,10 @@ async function beginWebGazerRecording() {
     wg
         .setRegression('ridge')
         .setTracker('TFFacemesh')
-        // Internal rAF often invokes this with null predictions; we sample via getCurrentPrediction() in faceLoop instead.
-        .setGazeListener(function () {})
+        // Primary sampling path (WebGazer top-level API): real-time predictions each rAF tick.
+        .setGazeListener(function (data) {
+            maybeRecordWebGazerSample(data);
+        })
         .showVideoPreview(false)
         .showPredictionPoints(false);
 
@@ -1154,6 +1156,7 @@ async function faceLoop() {
                 }
             }
 
+            // Fallback if the gaze listener rarely/never delivers non-null predictions (e.g. some Electron builds).
             if (proctoringConfig.gaze_heatmap && gazeRecorderTracking && window.webgazer && faceCount === 1) {
                 const wg = window.webgazer;
                 if (typeof wg.getCurrentPrediction === 'function') {
