@@ -15,6 +15,7 @@ let video, canvas, ctx;
 let objectDetector;
 let faceLandmarker;
 let myvad;
+let optionalModelsPromise = null;
 
 // UI Elements
 let loadingOverlay, testingOverlay, startupView, interviewView, resultsView;
@@ -53,6 +54,12 @@ let gazeEndedAtMs = null;
 let gazeRecorderTracking = false;
 let lastWebGazerSampleMs = 0;
 const WEBGAZER_SAMPLE_INTERVAL_MS = 100;
+const WEBGAZER_READY_TIMEOUT_MS = 35000;
+const WEBGAZER_READY_POLL_MS = 200;
+const WEBGAZER_CALIBRATION_MAX_ATTEMPTS = 600;
+let gazePollingTimer = null;
+let latestGazeFaceCount = 0;
+let webgazerHasPrediction = false;
 
 // Proctoring config from job (defaults all enabled)
 let proctoringConfig = {
@@ -89,6 +96,7 @@ const P_RIGHT_EYE_INNER = 362;
 // Google Cloud Speech State
 let mediaRecorder = null;
 let audioStream = null;
+let videoStream = null;
 let currentTranscript = "";
 let isRecording = false;
 let speechNetworkFailed = false;
@@ -133,7 +141,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.electronAPI) {
         // Handle Deep Link Auto-Start
         window.electronAPI.onInitDeepLink((event, initData) => {
-            console.log("Deep link received, session data ready.");
             globalSessionData = initData;
 
             // Since clicking the link might happen before models load, wait until btnStart is enabled
@@ -151,7 +158,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.onTranscript((event, text, isFinal) => {
             if (isFinal) {
                 currentTranscript += text + " ";
-                console.log(`🗣️ Heard (final): "${text.trim()}"`);
             }
 
             if (text) {
@@ -171,7 +177,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 transcriptText.innerHTML = '<span style="color:#f6e05e">⚠️ Voice input error. Check credentials.json or network connection.</span>';
             }
         });
-        console.log('✅ Google Cloud STT callbacks registered');
     } else {
         console.warn("⚠️ electronAPI not found! Speech will not work.");
     }
@@ -222,7 +227,7 @@ function formatTime(seconds) {
  */
 function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
     let attempts = 0;
-    const maxAttempts = 120;
+    const maxAttempts = WEBGAZER_CALIBRATION_MAX_ATTEMPTS;
     const tick = () => {
         attempts++;
         const tracker = wg.getTracker && wg.getTracker();
@@ -237,7 +242,7 @@ function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
         }
         if (attempts >= maxAttempts) {
             console.warn(
-                "WebGazer calibration: no face mesh frame before timeout; click may not have trained the model."
+                "WebGazer calibration: no face mesh frame before extended timeout; click may not have trained the model."
             );
             if (typeof wg.recordScreenPosition === "function") {
                 wg.recordScreenPosition(clientX, clientY, "click");
@@ -250,9 +255,46 @@ function recordWebGazerCalibrationClick(wg, clientX, clientY, onDone) {
     requestAnimationFrame(tick);
 }
 
-/** Throttled append for WebGazer screen coordinates (heatmap upload). Used by gaze listener (primary) and getCurrentPrediction (fallback). */
-function maybeRecordWebGazerSample(pred) {
-    if (!gazeRecorderTracking || !pred) return;
+function setWebGazerDebugUI(wg, visible) {
+    if (!wg) return;
+    if (typeof wg.showVideo === "function") wg.showVideo(visible);
+    if (typeof wg.showVideoPreview === "function") wg.showVideoPreview(visible);
+    if (typeof wg.showFaceOverlay === "function") wg.showFaceOverlay(visible);
+    if (typeof wg.showFaceFeedbackBox === "function") wg.showFaceFeedbackBox(visible);
+    if (typeof wg.showPredictionPoints === "function") wg.showPredictionPoints(visible);
+}
+
+
+
+async function waitForWebGazerPrediction(wg) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < WEBGAZER_READY_TIMEOUT_MS) {
+        if (webgazerHasPrediction) {
+            return true;
+        }
+
+        if (typeof wg.getCurrentPrediction === "function") {
+            try {
+                const pred = await Promise.resolve(wg.getCurrentPrediction());
+                if (pred && Number.isFinite(Number(pred.x)) && Number.isFinite(Number(pred.y))) {
+                    webgazerHasPrediction = true;
+                    return true;
+                }
+            } catch (_) {
+                /* keep waiting */
+            }
+        }
+        await new Promise((resolve) => setTimeout(resolve, WEBGAZER_READY_POLL_MS));
+    }
+
+    return webgazerHasPrediction;
+}
+
+/** Throttled append for WebGazer screen coordinates (heatmap upload). */
+function maybeRecordWebGazerSample(pred, source) {
+    if (!gazeRecorderTracking) return;
+    if (latestGazeFaceCount !== 1 || !pred) return;
 
     const nx = Number(pred.x);
     const ny = Number(pred.y);
@@ -273,6 +315,9 @@ function maybeRecordWebGazerSample(pred) {
         x: Math.round(x),
         y: Math.round(y),
     });
+    if (gazePointsTracker.length <= 3 || gazePointsTracker.length % 25 === 0) {
+        console.log(`✅ WebGazer tracking (${gazePointsTracker.length} samples) — x:${Math.round(x)} y:${Math.round(y)}`);
+    }
 }
 
 async function beginWebGazerRecording() {
@@ -280,6 +325,8 @@ async function beginWebGazerRecording() {
     gazePointsTracker = [];
     gazeStartedAtMs = Date.now();
     lastWebGazerSampleMs = 0;
+    latestGazeFaceCount = 0;
+    webgazerHasPrediction = false;
 
     if (typeof wg.saveDataAcrossSessions === 'function') {
         wg.saveDataAcrossSessions(false);
@@ -291,9 +338,11 @@ async function beginWebGazerRecording() {
     wg
         .setRegression('ridge')
         .setTracker('TFFacemesh')
-        // Primary sampling path (WebGazer top-level API): real-time predictions each rAF tick.
         .setGazeListener(function (data) {
-            maybeRecordWebGazerSample(data);
+            if (data && !webgazerHasPrediction) {
+                webgazerHasPrediction = true;
+            }
+            maybeRecordWebGazerSample(data, "listener");
         })
         .showVideoPreview(false)
         .showPredictionPoints(false);
@@ -316,6 +365,9 @@ async function beginWebGazerRecording() {
         navigator.mediaDevices.getUserMedia = origGUM;
     }
 
+    // Always hide WebGazer's built-in camera/overlay (prevents double video stream)
+    setWebGazerDebugUI(wg, false);
+
     const calibrationPoints = [
         { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
         { x: '50%', y: '50%' },
@@ -323,19 +375,38 @@ async function beginWebGazerRecording() {
     ];
     let calIdx = 0;
 
+    // ── Phase 1: Wait for face lock (testing overlay already visible) ──
+    await waitForWebGazerPrediction(wg);
+
+    // ── Phase 2: Show calibration overlay ──
+    testingOverlay.style.display = 'none';
+
     const overlay = document.createElement('div');
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
+    overlay.style.cssText = `position:fixed; inset:0; background:linear-gradient(135deg, rgba(10,14,23,0.97), rgba(15,20,25,0.97)); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;`;
+
+    const icon = document.createElement('div');
+    icon.textContent = '👁️';
+    icon.style.cssText = 'font-size:48px; margin-bottom:16px; filter:drop-shadow(0 0 12px rgba(102,126,234,0.5));';
 
     const title = document.createElement('h2');
-    title.textContent = "👀 Eye Tracking Calibration";
+    title.textContent = 'Almost Ready!';
+    title.style.cssText = 'font-size:28px; font-weight:700; margin:0 0 10px; letter-spacing:-0.5px;';
+
     const sub = document.createElement('p');
-    sub.textContent = "Look directly at the red dot and CLICK it to calibrate your eye tracking.";
+    sub.textContent = 'Look directly at each dot and click it to calibrate eye tracking.';
+    sub.style.cssText = 'font-size:16px; color:#a0aec0; margin:0 0 6px; max-width:480px; text-align:center; line-height:1.5;';
+
+    const progress = document.createElement('div');
+    progress.textContent = `Point 1 of ${calibrationPoints.length}`;
+    progress.style.cssText = 'font-size:14px; color:#667eea; font-weight:600; margin-bottom:16px;';
 
     const dot = document.createElement('div');
-    dot.style.cssText = `position:absolute; width:40px; height:40px; background:red; border-radius:50%; cursor:pointer; transition:all 0.3s ease; left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow: 0 0 10px red;`;
+    dot.style.cssText = `position:absolute; width:36px; height:36px; background:linear-gradient(135deg,#ff4d4d,#ff6b6b); border-radius:50%; cursor:pointer; transition:left 0.4s cubic-bezier(0.4,0,0.2,1), top 0.4s cubic-bezier(0.4,0,0.2,1); left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow:0 0 20px rgba(255,77,77,0.5), 0 0 60px rgba(255,77,77,0.15); transform:translate(-50%,-50%);`;
 
+    overlay.appendChild(icon);
     overlay.appendChild(title);
     overlay.appendChild(sub);
+    overlay.appendChild(progress);
     overlay.appendChild(dot);
     document.body.appendChild(overlay);
 
@@ -350,12 +421,24 @@ async function beginWebGazerRecording() {
                 if (calIdx >= calibrationPoints.length) {
                     document.body.removeChild(overlay);
                     gazeRecorderTracking = true;
+                    setWebGazerDebugUI(wg, false);
+                    // Dedicated polling timer for WebGazer predictions
+                    if (!gazePollingTimer) {
+                        gazePollingTimer = setInterval(() => {
+                            if (!gazeRecorderTracking || !window.webgazer) return;
+                            if (typeof window.webgazer.getCurrentPrediction !== 'function') return;
+                            Promise.resolve(window.webgazer.getCurrentPrediction())
+                                .then(pred => maybeRecordWebGazerSample(pred, "polling"))
+                                .catch(() => {});
+                        }, WEBGAZER_READY_POLL_MS);
+                    }
                     finalizeStartInterview();
                     resolve();
                 } else {
                     dot.style.left = calibrationPoints[calIdx].x;
                     dot.style.top = calibrationPoints[calIdx].y;
-                    sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
+                    sub.textContent = 'Look at the dot and click it.';
+                    progress.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length}`;
                 }
             });
         });
@@ -396,12 +479,6 @@ async function startInterview() {
             if (payload.proctoringConfig) {
                 proctoringConfig = payload.proctoringConfig;
             }
-
-            console.log(`\n📋 === PRACTICE INTERVIEW STARTED ===`);
-            console.log(`   Session ID: ${currentSessionId}`);
-            console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
-            console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
-            console.log(`================================\n`);
         } else {
             const response = await fetch(`${apiUrl}/api/interviews/start`, {
                 method: "POST",
@@ -422,16 +499,10 @@ async function startInterview() {
             currentQuestion = data.initial_questions[0];
             questionCount = 1;
 
-            console.log(`\n📋 === INTERVIEW STARTED ===`);
-            console.log(`   Session ID: ${currentSessionId}`);
-            console.log(`   Q${questionCount} FROM SERVER: "${currentQuestion}"`);
-
             // Extract proctoring config from server response
             if (data.proctoring_config) {
                 proctoringConfig = data.proctoring_config;
             }
-            console.log(`   Proctoring Config:`, JSON.stringify(proctoringConfig));
-            console.log(`================================\n`);
         }
     } catch (err) {
         testingOverlay.style.display = 'none';
@@ -449,11 +520,6 @@ async function startInterview() {
             finalizeStartInterview();
         });
     } else {
-        if (!proctoringConfig.gaze_heatmap) {
-            console.log("🔒 Gaze Heatmap proctoring is disabled for this job.");
-        } else {
-            console.warn("WebGazer not available. Starting without heatmap tracking...");
-        }
         finalizeStartInterview();
     }
 }
@@ -474,7 +540,6 @@ function finalizeStartInterview() {
     if (!socket) {
         socket = io(apiUrl);
         socket.on("connect", () => {
-            console.log("WebSocket connected.");
             socket.emit("start_proctoring", { session_id: currentSessionId });
             socket.emit("control_mobile_recording", { session_id: currentSessionId, action: "start" });
         });
@@ -509,10 +574,6 @@ function finalizeStartInterview() {
     };
     finishSetupAndSpeak();
 
-    if (!proctoringConfig.voice_detection) {
-        console.log("🔒 Voice Detection proctoring is disabled for this job.");
-    }
-
     // Start Timer
     clockInterval = setInterval(() => {
         const elapsed = (Date.now() - sessionStartTime) / 1000;
@@ -526,13 +587,16 @@ function finalizeStartInterview() {
     if (proctoringConfig.eyeball_tracking || proctoringConfig.gaze_heatmap) {
         requestAnimationFrame(faceLoop);
     }
-    if (!proctoringConfig.eyeball_tracking) {
-        console.log("🔒 Eyeball Tracking proctoring is disabled for this job.");
-    }
-    if (proctoringConfig.object_detection) {
-        objectLoop();
-    } else {
-        console.log("🔒 Object Detection proctoring is disabled for this job.");
+    if (proctoringConfig.object_detection || proctoringConfig.voice_detection) {
+        ensureOptionalModelsLoaded()
+            .then(() => {
+                if (isInterviewActive && proctoringConfig.object_detection) {
+                    objectLoop();
+                }
+            })
+            .catch((err) => {
+                console.error("Optional proctoring models failed to initialize", err);
+            });
     }
 }
 
@@ -544,6 +608,12 @@ async function endInterview() {
     stopRecording();
 
     const hadGazeRecorderOn = gazeRecorderTracking;
+
+    // Clean up dedicated WebGazer polling timer
+    if (gazePollingTimer) {
+        clearInterval(gazePollingTimer);
+        gazePollingTimer = null;
+    }
 
     if (gazeRecorderTracking && window.webgazer) {
         window.webgazer.pause();
@@ -561,7 +631,13 @@ async function endInterview() {
     // Stop Media Streams
     if (video.srcObject) {
         video.srcObject.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
     }
+    if (audioStream) {
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+    }
+    videoStream = null;
 
     // Tell backend to end interview and send gaze data
     try {
@@ -586,13 +662,6 @@ async function endInterview() {
                 const gazeError = await gazeResp.text();
                 throw new Error(`Gaze results upload failed (${gazeResp.status}): ${gazeError}`);
             }
-        } else if (proctoringConfig.gaze_heatmap) {
-            console.warn(
-                "Skipping gaze-recorder upload because no gaze points were collected.",
-                "webgazerLoaded=" + !!window.webgazer,
-                "gazeRecorderWasOn=" + hadGazeRecorderOn,
-                "samples=" + gazePointsTracker.length
-            );
         }
 
         const endpoint = isPracticeMode 
@@ -658,11 +727,6 @@ async function submitAnswer() {
             is_intro: false
         };
 
-        console.log(`\n📤 === SUBMITTING ANSWER (Q${questionCount}) ===`);
-        console.log(`   QUESTION: "${payload.question}"`);
-        console.log(`   ANSWER:   "${payload.answer}"`);
-        console.log(`==========================================`);
-
         const endpoint = isPracticeMode 
             ? `${apiUrl}/api/practice/${currentSessionId}/answer`
             : `${apiUrl}/api/interviews/${currentSessionId}/answer`;
@@ -680,8 +744,7 @@ async function submitAnswer() {
 
         const data = await response.json();
 
-        if (data.interview_complete || questionCount >= 1) {
-            console.log(`\n🏁 === INTERVIEW COMPLETE (after ${questionCount} questions) ===\n`);
+        if (data.interview_complete || questionCount >= 5) {
             endInterview();
             return;
         }
@@ -690,8 +753,6 @@ async function submitAnswer() {
         currentQuestion = data.next_question;
         questionCount++;
         document.getElementById('q-count').textContent = questionCount;
-
-        console.log(`\n📥 Q${questionCount} FROM SERVER: "${currentQuestion}"\n`);
 
         // Reset speech variables
         currentTranscript = "";
@@ -824,15 +885,21 @@ function showProctoringWarning(msg) {
 //  Camera & ML Models Setup
 // ═══════════════════════════════════════
 async function setupCamera() {
-    audioStream = await navigator.mediaDevices.getUserMedia({
+    videoStream = await navigator.mediaDevices.getUserMedia({
         video: {
             facingMode: 'user',
             width: { ideal: 1280, min: REQUIRED_WIDTH },
             height: { ideal: 720, min: REQUIRED_HEIGHT }
         },
+        audio: false,
+    });
+
+    audioStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
         audio: true,
     });
-    video.srcObject = audioStream;
+
+    video.srcObject = videoStream;
     return new Promise(resolve => { video.onloadedmetadata = () => resolve(video); });
 }
 
@@ -877,7 +944,6 @@ function startRecording() {
         if (!isInterviewActive || isSubmittingAnswer || !isRecording) return;
         const timeSinceLastSpeech = (Date.now() - lastSpeechTime) / 1000;
         if (timeSinceLastSpeech >= 5 && currentTranscript.trim().length > 0) {
-            console.log("⏱️ 5 seconds of silence detected. Auto-submitting...");
             submitAnswer();
         }
     }, 1000);
@@ -900,7 +966,6 @@ function stopRecording() {
 }
 
 async function loadModels() {
-    objectDetector = await cocoSsd.load();
     const { FaceLandmarker, FilesetResolver } = await import(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/vision_bundle.mjs"
     );
@@ -914,18 +979,54 @@ async function loadModels() {
         runningMode: "VIDEO",
         numFaces: 2,
     });
+}
 
-    myvad = await vad.MicVAD.new({
-        stream: video.srcObject,
-        onSpeechStart: () => {
-            if (isInterviewActive) {
-                voiceAlerts++;
-                // We don't trigger a blocking modal for voice since the user is supposed to talk,
-                // but we count it anyway for demonstration/proctoring metrics. 
-            }
+/** Dynamically inject a <script> tag and wait for it to load. */
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            resolve();
+            return;
         }
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+        document.head.appendChild(s);
     });
-    myvad.start();
+}
+
+async function ensureOptionalModelsLoaded() {
+    if (optionalModelsPromise) {
+        return optionalModelsPromise;
+    }
+
+    optionalModelsPromise = (async () => {
+        if (proctoringConfig.object_detection && !objectDetector) {
+            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0');
+            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3');
+            objectDetector = await cocoSsd.load();
+        }
+
+        if (proctoringConfig.voice_detection && !myvad) {
+            myvad = await vad.MicVAD.new({
+                stream: audioStream,
+                onSpeechStart: () => {
+                    if (isInterviewActive) {
+                        voiceAlerts++;
+                        // We don't trigger a blocking modal for voice since the user is supposed to talk,
+                        // but we count it anyway for demonstration/proctoring metrics.
+                    }
+                }
+            });
+            myvad.start();
+        }
+    })().catch((err) => {
+        optionalModelsPromise = null;
+        throw err;
+    });
+
+    return optionalModelsPromise;
 }
 
 // ═══════════════════════════════════════
@@ -939,6 +1040,10 @@ const PHONE_FRAMES_REQUIRED = 2;
 
 async function objectLoop() {
     if (!isInterviewActive) return;
+    if (!objectDetector) {
+        setTimeout(objectLoop, OBJECT_DETECT_INTERVAL);
+        return;
+    }
     try {
         // Keep object detection focused on prohibited objects only. Person counting is
         // handled by face landmarks, which is much more reliable for a kiosk webcam.
@@ -1102,6 +1207,7 @@ async function faceLoop() {
             const results = faceLandmarker.detectForVideo(video, startTimeMs);
             const faceLandmarks = results.faceLandmarks || [];
             const faceCount = faceLandmarks.length;
+            latestGazeFaceCount = faceCount;
             const primaryFace = faceCount > 0 ? faceLandmarks[0] : null;
 
             let gazeRatio = null;
@@ -1156,11 +1262,12 @@ async function faceLoop() {
                 }
             }
 
-            // Fallback if the gaze listener rarely/never delivers non-null predictions (e.g. some Electron builds).
             if (proctoringConfig.gaze_heatmap && gazeRecorderTracking && window.webgazer && faceCount === 1) {
                 const wg = window.webgazer;
                 if (typeof wg.getCurrentPrediction === 'function') {
-                    Promise.resolve(wg.getCurrentPrediction()).then(maybeRecordWebGazerSample).catch(function () {});
+                    Promise.resolve(wg.getCurrentPrediction()).then(function (pred) {
+                        maybeRecordWebGazerSample(pred, "polling");
+                    }).catch(function () {});
                 }
             }
         }

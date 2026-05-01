@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start:webgazer-test": "electron ./test-webgazer",
     "smoke:gaze": "npx --yes serve@14 . -l 3333",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "electron-builder --win",
