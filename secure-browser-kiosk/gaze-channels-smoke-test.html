@@ -249,7 +249,8 @@
 
       gazeStartedAtMs = Date.now();
       const wg = window.webgazer;
-      if (typeof wg.clearData === 'function') wg.clearData();
+      if (typeof wg.saveDataAcrossSessions === 'function') wg.saveDataAcrossSessions(false);
+      if (typeof wg.clearData === 'function') await wg.clearData();
 
       wg.setRegression('ridge')
         .setTracker('TFFacemesh')
@@ -272,12 +273,24 @@
         .showVideoPreview(false)
         .showPredictionPoints(false);
 
+      const origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       try {
+        navigator.mediaDevices.getUserMedia = async function (constraints) {
+          try {
+            const existing = video && video.srcObject;
+            if (existing && typeof existing.getVideoTracks === 'function' && existing.getVideoTracks().length > 0) {
+              return existing;
+            }
+          } catch (_) {}
+          return origGUM(constraints);
+        };
         await wg.begin();
       } catch (e) {
         setStatus('webgazer.begin() failed: ' + (e && e.message));
         btnStart.disabled = false;
         return;
+      } finally {
+        navigator.mediaDevices.getUserMedia = origGUM;
       }
 
       runWebGazerCalibrationThenRecord(wg);

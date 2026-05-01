@@ -214,6 +214,115 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+/**
+ * WebGazer needs a live video stream. A second getUserMedia() often fails or never produces
+ * frames on Windows/Electron while MediaPipe already holds the camera — this reuses video.srcObject.
+ * Also disables saveDataAcrossSessions so begin() does not immediately reload weights from localforage
+ * after clearData().
+ */
+async function beginWebGazerRecording() {
+    const wg = window.webgazer;
+    gazePointsTracker = [];
+    gazeStartedAtMs = Date.now();
+    lastWebGazerSampleMs = 0;
+
+    if (typeof wg.saveDataAcrossSessions === 'function') {
+        wg.saveDataAcrossSessions(false);
+    }
+    if (typeof wg.clearData === 'function') {
+        await wg.clearData();
+    }
+
+    wg
+        .setRegression('ridge')
+        .setTracker('TFFacemesh')
+        .setGazeListener(function (data) {
+            if (!gazeRecorderTracking || !data) return;
+
+            const nx = Number(data.x);
+            const ny = Number(data.y);
+            if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+
+            const now = Date.now();
+            if (now - lastWebGazerSampleMs < WEBGAZER_SAMPLE_INTERVAL_MS) return;
+            lastWebGazerSampleMs = now;
+
+            const ts =
+                sessionStartTime != null
+                    ? (now - sessionStartTime) / 1000
+                    : (now - gazeStartedAtMs) / 1000;
+            const x = Math.max(0, Math.min(window.innerWidth - 1, nx));
+            const y = Math.max(0, Math.min(window.innerHeight - 1, ny));
+            gazePointsTracker.push({
+                timestamp: ts,
+                x: Math.round(x),
+                y: Math.round(y),
+            });
+        })
+        .showVideoPreview(false)
+        .showPredictionPoints(false);
+
+    const origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    try {
+        navigator.mediaDevices.getUserMedia = async function (constraints) {
+            try {
+                const existing = video && video.srcObject;
+                if (existing && typeof existing.getVideoTracks === 'function' && existing.getVideoTracks().length > 0) {
+                    return existing;
+                }
+            } catch (_) {
+                /* use real getUserMedia */
+            }
+            return origGUM(constraints);
+        };
+        await wg.begin();
+    } finally {
+        navigator.mediaDevices.getUserMedia = origGUM;
+    }
+
+    const calibrationPoints = [
+        { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
+        { x: '50%', y: '50%' },
+        { x: '10%', y: '90%' }, { x: '90%', y: '90%' }
+    ];
+    let calIdx = 0;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
+
+    const title = document.createElement('h2');
+    title.textContent = "👀 Eye Tracking Calibration";
+    const sub = document.createElement('p');
+    sub.textContent = "Look directly at the red dot and CLICK it to calibrate your eye tracking.";
+
+    const dot = document.createElement('div');
+    dot.style.cssText = `position:absolute; width:40px; height:40px; background:red; border-radius:50%; cursor:pointer; transition:all 0.3s ease; left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow: 0 0 10px red;`;
+
+    overlay.appendChild(title);
+    overlay.appendChild(sub);
+    overlay.appendChild(dot);
+    document.body.appendChild(overlay);
+
+    await new Promise((resolve) => {
+        dot.addEventListener('click', (ev) => {
+            if (typeof wg.recordScreenPosition === 'function') {
+                wg.recordScreenPosition(ev.clientX, ev.clientY, 'click');
+            }
+            calIdx++;
+            if (calIdx >= calibrationPoints.length) {
+                document.body.removeChild(overlay);
+                gazeRecorderTracking = true;
+                finalizeStartInterview();
+                resolve();
+            } else {
+                dot.style.left = calibrationPoints[calIdx].x;
+                dot.style.top = calibrationPoints[calIdx].y;
+                sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
+            }
+        });
+    });
+}
+
 async function startInterview() {
     if (!globalSessionData) {
         alert("Missing session data. Please launch this app directly from the Genhire Dashboard.");
@@ -296,91 +405,10 @@ async function startInterview() {
 
     // Start Gaze Tracking via WebGazer (only if gaze_heatmap enabled)
     if (proctoringConfig.gaze_heatmap && window.webgazer) {
-        gazePointsTracker = [];
-        gazeStartedAtMs = Date.now();
-        lastWebGazerSampleMs = 0;
-
-        const wg = window.webgazer;
-        if (typeof wg.clearData === 'function') {
-            wg.clearData();
-        }
-
-        wg
-            .setRegression('ridge')
-            .setTracker('TFFacemesh')
-            .setGazeListener(function (data) {
-                if (!gazeRecorderTracking || !data) return;
-
-                const nx = Number(data.x);
-                const ny = Number(data.y);
-                if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
-
-                const now = Date.now();
-                if (now - lastWebGazerSampleMs < WEBGAZER_SAMPLE_INTERVAL_MS) return;
-                lastWebGazerSampleMs = now;
-
-                const ts =
-                    sessionStartTime != null
-                        ? (now - sessionStartTime) / 1000
-                        : (now - gazeStartedAtMs) / 1000;
-                const x = Math.max(0, Math.min(window.innerWidth - 1, nx));
-                const y = Math.max(0, Math.min(window.innerHeight - 1, ny));
-                gazePointsTracker.push({
-                    timestamp: ts,
-                    x: Math.round(x),
-                    y: Math.round(y),
-                });
-            })
-            .showVideoPreview(false)
-            .showPredictionPoints(false)
-            .begin()
-            .then(() => {
-                // Run an inline 5-point calibration before finalizing.
-                // WebGazer requires recordScreenPosition(...) for each click; the previous UI only moved a div.
-                const calibrationPoints = [
-                    { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
-                    { x: '50%', y: '50%' },
-                    { x: '10%', y: '90%' }, { x: '90%', y: '90%' }
-                ];
-                let calIdx = 0;
-
-                const overlay = document.createElement('div');
-                overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
-
-                const title = document.createElement('h2');
-                title.textContent = "👀 Eye Tracking Calibration";
-                const sub = document.createElement('p');
-                sub.textContent = "Look directly at the red dot and CLICK it to calibrate your eye tracking.";
-
-                const dot = document.createElement('div');
-                dot.style.cssText = `position:absolute; width:40px; height:40px; background:red; border-radius:50%; cursor:pointer; transition:all 0.3s ease; left:${calibrationPoints[0].x}; top:${calibrationPoints[0].y}; box-shadow: 0 0 10px red;`;
-
-                overlay.appendChild(title);
-                overlay.appendChild(sub);
-                overlay.appendChild(dot);
-                document.body.appendChild(overlay);
-
-                dot.addEventListener('click', (ev) => {
-                    if (typeof wg.recordScreenPosition === 'function') {
-                        wg.recordScreenPosition(ev.clientX, ev.clientY, 'click');
-                    }
-                    calIdx++;
-                    if (calIdx >= calibrationPoints.length) {
-                        document.body.removeChild(overlay);
-                        gazeRecorderTracking = true;
-                        finalizeStartInterview();
-                    } else {
-                        dot.style.left = calibrationPoints[calIdx].x;
-                        dot.style.top = calibrationPoints[calIdx].y;
-                        sub.textContent = `Point ${calIdx + 1} of ${calibrationPoints.length} - Keep looking closely at the dot and click!`;
-                    }
-                });
-            })
-            .catch(err => {
-                console.error("WebGazer start error:", err);
-                finalizeStartInterview();
-            });
-
+        beginWebGazerRecording().catch((err) => {
+            console.error("WebGazer start error:", err);
+            finalizeStartInterview();
+        });
     } else {
         if (!proctoringConfig.gaze_heatmap) {
             console.log("🔒 Gaze Heatmap proctoring is disabled for this job.");
@@ -517,7 +545,11 @@ async function endInterview() {
                 throw new Error(`Gaze results upload failed (${gazeResp.status}): ${gazeError}`);
             }
         } else if (proctoringConfig.gaze_heatmap) {
-            console.warn("Skipping gaze-recorder upload because no gaze points were collected.");
+            console.warn(
+                "Skipping gaze-recorder upload because no gaze points were collected.",
+                "webgazerActive=" + !!window.webgazer,
+                "samples=" + gazePointsTracker.length
+            );
         }
 
         const endpoint = isPracticeMode 
