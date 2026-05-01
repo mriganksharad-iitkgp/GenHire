@@ -51,6 +51,8 @@ let gazePointsTracker = [];
 let gazeStartedAtMs = null;
 let gazeEndedAtMs = null;
 let gazeRecorderTracking = false;
+let lastWebGazerSampleMs = 0;
+const WEBGAZER_SAMPLE_INTERVAL_MS = 100;
 
 // Proctoring config from job (defaults all enabled)
 let proctoringConfig = {
@@ -296,28 +298,46 @@ async function startInterview() {
     if (proctoringConfig.gaze_heatmap && window.webgazer) {
         gazePointsTracker = [];
         gazeStartedAtMs = Date.now();
+        lastWebGazerSampleMs = 0;
 
-        window.webgazer
+        const wg = window.webgazer;
+        if (typeof wg.clearData === 'function') {
+            wg.clearData();
+        }
+
+        wg
             .setRegression('ridge')
             .setTracker('TFFacemesh')
-            .setGazeListener(function (data, elapsedMs) {
-                if (gazeRecorderTracking && data) {
-                    let ts = elapsedMs / 1000;
-                    let x = Math.max(0, Math.min(window.innerWidth - 1, data.x));
-                    let y = Math.max(0, Math.min(window.innerHeight - 1, data.y));
-                    gazePointsTracker.push({
-                        timestamp: ts,
-                        x: Math.round(x),
-                        y: Math.round(y),
-                    });
-                }
+            .setGazeListener(function (data) {
+                if (!gazeRecorderTracking || !data) return;
+
+                const nx = Number(data.x);
+                const ny = Number(data.y);
+                if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+
+                const now = Date.now();
+                if (now - lastWebGazerSampleMs < WEBGAZER_SAMPLE_INTERVAL_MS) return;
+                lastWebGazerSampleMs = now;
+
+                const ts =
+                    sessionStartTime != null
+                        ? (now - sessionStartTime) / 1000
+                        : (now - gazeStartedAtMs) / 1000;
+                const x = Math.max(0, Math.min(window.innerWidth - 1, nx));
+                const y = Math.max(0, Math.min(window.innerHeight - 1, ny));
+                gazePointsTracker.push({
+                    timestamp: ts,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                });
             })
             .showVideoPreview(false)
             .showPredictionPoints(false)
             .begin()
             .then(() => {
-                // Run an inline 5-point calibration before finalizing
-                let calibrationPoints = [
+                // Run an inline 5-point calibration before finalizing.
+                // WebGazer requires recordScreenPosition(...) for each click; the previous UI only moved a div.
+                const calibrationPoints = [
                     { x: '10%', y: '10%' }, { x: '90%', y: '10%' },
                     { x: '50%', y: '50%' },
                     { x: '10%', y: '90%' }, { x: '90%', y: '90%' }
@@ -340,7 +360,10 @@ async function startInterview() {
                 overlay.appendChild(dot);
                 document.body.appendChild(overlay);
 
-                dot.addEventListener('click', () => {
+                dot.addEventListener('click', (ev) => {
+                    if (typeof wg.recordScreenPosition === 'function') {
+                        wg.recordScreenPosition(ev.clientX, ev.clientY, 'click');
+                    }
                     calIdx++;
                     if (calIdx >= calibrationPoints.length) {
                         document.body.removeChild(overlay);
