@@ -217,7 +217,7 @@ const Practice = () => {
         const endTimeoutTime = Date.now();
         if (endTimeoutTime - startTimeoutTime < 3000) {
           console.log("Secure browser not installed. Showing download prompt.");
-          window.location.href = "/apps/Genhire Secure Browser Setup 1.0.0.exe";
+          window.location.href = "/apps/Genhire.exe";
           showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
         }
         setIsStarting(false);
