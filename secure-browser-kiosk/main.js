@@ -98,7 +98,7 @@ ipcMain.on('quit-app', () => {
 // ==========================================
 ipcMain.handle('synthesize-speech', async (event, text) => {
     if (!ttsClient) throw new Error("Google Cloud TTS client not initialized.");
-    
+
     const request = {
         input: { text: text },
         voice: { languageCode: 'en-US', name: 'en-US-Journey-F' }, // Using a more natural voice, fallback to standard if not available in project
@@ -154,7 +154,7 @@ ipcMain.on('start-stt-stream', (event) => {
                 event.sender.send('stt-on-transcript', text, isFinal);
             }
         });
-        
+
     console.log("🎙️ Google STT recognizer stream opened");
 });
 
@@ -177,27 +177,27 @@ ipcMain.on('enable-kiosk', () => {
     if (!mainWindow || mainWindow.isDestroyed() || isKioskActive) return;
     isKioskActive = true;
 
-    mainWindow.setKiosk(false); // Temporarily disabled for debugging
+    mainWindow.setKiosk(true);
     mainWindow.setFullScreen(true);
-    mainWindow.setAlwaysOnTop(false); // Temporarily disabled for debugging
-    mainWindow.setClosable(true); // Temporarily disabled for debugging
-    mainWindow.setMinimizable(true); // Temporarily disabled for debugging
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.setClosable(false);
+    mainWindow.setMinimizable(false);
 
     // Block keyboard shortcuts
     mainWindow.webContents.on('before-input-event', blockInputHandler);
 
     // Register global shortcuts
     try {
-        globalShortcut.register('CommandOrControl+Tab', () => {});
-        // globalShortcut.register('Alt+Tab', () => {}); // Temporarily disabled for debugging
-        globalShortcut.register('Escape', () => {});
-        globalShortcut.register('Super+D', () => {});
-        
+        globalShortcut.register('CommandOrControl+Tab', () => { });
+        globalShortcut.register('Alt+Tab', () => { });
+        globalShortcut.register('Escape', () => { });
+        globalShortcut.register('Super+D', () => { });
+
         const localShortcut = require('electron-localshortcut');
-        localShortcut.register(mainWindow, 'Super+Tab', () => {});
-        localShortcut.register(mainWindow, 'Super+Ctrl+Right', () => {});
-        localShortcut.register(mainWindow, 'Super+Ctrl+Left', () => {});
-    } catch(e) {
+        localShortcut.register(mainWindow, 'Super+Tab', () => { });
+        localShortcut.register(mainWindow, 'Super+Ctrl+Right', () => { });
+        localShortcut.register(mainWindow, 'Super+Ctrl+Left', () => { });
+    } catch (e) {
         console.log('Some shortcuts could not be registered:', e.message);
     }
 
@@ -223,7 +223,7 @@ ipcMain.on('disable-kiosk', () => {
     try {
         const localShortcut = require('electron-localshortcut');
         localShortcut.unregisterAll(mainWindow);
-    } catch(e) {}
+    } catch (e) { }
 
     console.log('🔓 Kiosk mode DISABLED');
 });
@@ -239,9 +239,10 @@ function blockInputHandler(event, input) {
 function createWindow() {
     // Start as a normal maximized window (NOT kiosk)
     mainWindow = new BrowserWindow({
-        title: 'Genhire Secure Browser',
+        title: 'Genhire',
         width: 1280,
         height: 800,
+        icon: path.join(__dirname, 'build', 'genhire_logo.ico'),
         fullscreen: false,
         kiosk: false,
         alwaysOnTop: false,
@@ -270,8 +271,7 @@ function createWindow() {
 
     mainWindow.loadURL(`http://localhost:${KIOSK_HTTP_PORT}/index.html`);
 
-    // DEBUG: Open DevTools for debugging
-    mainWindow.webContents.openDevTools();
+    // Removed DevTools for production
 
     // Remove the default menu entirely
     Menu.setApplicationMenu(null);
@@ -310,7 +310,7 @@ app.whenReady().then(() => {
 
         const ext = path.extname(filePath).toLowerCase();
         const contentType = mimeTypes[ext] || 'application/octet-stream';
-        
+
         fs.readFile(filePath, (err, data) => {
             if (err) {
                 res.writeHead(404);
@@ -326,7 +326,7 @@ app.whenReady().then(() => {
         KIOSK_HTTP_PORT = server.address().port;
         console.log(`✅ Kiosk HTTP server running on http://localhost:${KIOSK_HTTP_PORT}`);
         createWindow();
-        
+
         // Handle deep link passed as arg on initial launch
         mainWindow.webContents.once('did-finish-load', () => {
             const url = process.argv.find(arg => arg.startsWith('secure-interview://'));

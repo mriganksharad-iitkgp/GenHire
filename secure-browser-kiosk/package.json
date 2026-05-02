@@ -1,5 +1,5 @@
 {
-  "name": "genhire-secure-browser",
+  "name": "genhire",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
@@ -13,7 +13,8 @@
   },
   "build": {
     "appId": "com.genhire.securebrowser",
-    "productName": "Genhire Secure Browser",
+    "productName": "Genhire",
+    "artifactName": "Genhire.${ext}",
     "protocols": {
       "name": "Genhire Secure Interview URL",
       "schemes": [
@@ -24,7 +25,8 @@
     "compression": "maximum",
     "forceCodeSigning": false,
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/genhire_logo.ico"
     },
     "nsis": {
       "oneClick": false,
