@@ -400,6 +400,17 @@ class ApplicationController:
 
                 # Whether an interview report is available
                 app["report_available"] = completed_interview is not None
+                usage_summary = (completed_interview or {}).get("usage_summary", {})
+                if not isinstance(usage_summary, dict):
+                    usage_summary = {}
+                app["calculated_cost_usd"] = float(
+                    usage_summary.get("total_calculated_cost", usage_summary.get("total_cost", 0.0))
+                    or 0.0
+                )
+                actual_cost = usage_summary.get("total_actual_cost")
+                app["actual_cost_usd"] = (
+                    float(actual_cost or 0.0) if actual_cost is not None else None
+                )
 
             return applications, 200
 
@@ -474,6 +485,17 @@ class ApplicationController:
 
                 # Whether a report is available
                 app["report_available"] = completed_interview is not None
+                usage_summary = (completed_interview or {}).get("usage_summary", {})
+                if not isinstance(usage_summary, dict):
+                    usage_summary = {}
+                app["calculated_cost_usd"] = float(
+                    usage_summary.get("total_calculated_cost", usage_summary.get("total_cost", 0.0))
+                    or 0.0
+                )
+                actual_cost = usage_summary.get("total_actual_cost")
+                app["actual_cost_usd"] = (
+                    float(actual_cost or 0.0) if actual_cost is not None else None
+                )
 
             return applications, 200
 

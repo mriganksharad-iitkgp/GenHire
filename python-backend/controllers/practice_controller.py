@@ -899,6 +899,17 @@ class PracticeController:
                     ),
                     "is_practice": True,
                 }
+                usage_summary = session.get("usage_summary", {})
+                if not isinstance(usage_summary, dict):
+                    usage_summary = {}
+                session_summary["calculated_cost_usd"] = float(
+                    usage_summary.get("total_calculated_cost", usage_summary.get("total_cost", 0.0))
+                    or 0.0
+                )
+                actual_cost = usage_summary.get("total_actual_cost")
+                session_summary["actual_cost_usd"] = (
+                    float(actual_cost or 0.0) if actual_cost is not None else None
+                )
                 history.append(session_summary)
 
             return {"sessions": history, "count": len(history)}, 200

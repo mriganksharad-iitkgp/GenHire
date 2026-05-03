@@ -1,5 +1,6 @@
 import datetime
 import json
+import math
 import re
 from bson import ObjectId
 from collections import defaultdict
@@ -3011,6 +3012,12 @@ class AdminController:
         if merged.get('evaluation') in [None, '', {}] and isinstance(interview_report.get('evaluation'), dict):
             merged['evaluation'] = interview_report.get('evaluation')
 
+        if merged.get('usage_summary') in [None, '', {}] and isinstance(interview_report.get('usage_summary'), dict):
+            merged['usage_summary'] = interview_report.get('usage_summary')
+
+        if merged.get('usage_source') in [None, ''] and interview_report.get('usage_source'):
+            merged['usage_source'] = interview_report.get('usage_source')
+
         usage_doc = interview_report.get('usage') if isinstance(interview_report.get('usage'), dict) else None
         if usage_doc:
             if merged.get('prompt_tokens') is None and usage_doc.get('prompt_tokens') is not None:
@@ -3085,7 +3092,7 @@ class AdminController:
     def _build_token_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
         source_meta = source_meta or {}
 
-        from interview.core.cost_tracker import CostTracker
+        from interview.core.cost_tracker import CostTracker, calculate_cost
         pricing = CostTracker.PRICING
         inr_per_usd = 83.0
 
@@ -3145,7 +3152,22 @@ class AdminController:
         output_rate = rates.get('output', 0.0)
 
         llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
-        cost_inr = llm_usd * inr_per_usd
+        calculated_cost_inr = llm_usd * inr_per_usd
+
+        actual_llm_usd = None
+        if prompt_source == 'actual' or completion_source == 'actual':
+            actual_llm_usd = calculate_cost(
+                cfg['model'],
+                {
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                },
+            )
+        actual_cost_inr = (
+            self._round_money(actual_llm_usd * inr_per_usd)
+            if actual_llm_usd is not None
+            else None
+        )
 
         timestamp = None
         for field_name in timestamp_fields:
@@ -3172,7 +3194,9 @@ class AdminController:
                 'output_usd_per_1m_tokens': output_rate,
             },
             'formula': '((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
-            'cost_inr': self._round_money(cost_inr),
+            'cost_inr': self._round_money(calculated_cost_inr),
+            'calculated_cost_inr': self._round_money(calculated_cost_inr),
+            'actual_cost_inr': actual_cost_inr,
             'source': {
                 'type': source_meta.get('type', ''),
                 'id': source_meta.get('id', ''),
@@ -3291,13 +3315,29 @@ class AdminController:
         rates = pricing.get(cfg['model'], {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
-        stt_rate = pricing.get('google-stt', {}).get('price_per_minute', 0.024)
-        tts_rate = pricing.get('google-tts', {}).get('price_per_1m_characters', 4.0)
+        stt_rate_per_15s = pricing.get('gcp_stt', {}).get('default', 0.006)
+        tts_rates = pricing.get('gcp_tts', {})
+        tts_voice_type = str(doc.get('tts_voice_type') or 'standard').lower()
+        tts_rate = tts_rates.get(tts_voice_type, tts_rates.get('standard', 0.000004))
 
         llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
-        stt_usd = (stt_seconds / 60.0) * stt_rate
-        tts_usd = (tts_characters / 1_000_000.0) * tts_rate
-        cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
+        stt_billed_units = math.ceil(stt_seconds / 15.0) if stt_seconds > 0 else 0
+        stt_usd = stt_billed_units * stt_rate_per_15s
+        tts_usd = tts_characters * tts_rate
+        calculated_cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
+
+        actual_llm_usd = None
+        usage_summary = doc.get('usage_summary') if isinstance(doc, dict) else None
+        if isinstance(usage_summary, dict):
+            summary_actual = usage_summary.get('total_actual_cost')
+            summary_actual_val = self._extract_numeric(summary_actual)
+            if summary_actual_val is not None and summary_actual_val > 0:
+                actual_llm_usd = summary_actual_val
+        actual_cost_inr = (
+            self._round_money((actual_llm_usd + stt_usd + tts_usd) * inr_per_usd)
+            if actual_llm_usd is not None
+            else None
+        )
 
         timestamp = None
         for field_name in timestamp_fields:
@@ -3322,11 +3362,13 @@ class AdminController:
             'rates': {
                 'input_usd_per_1m_tokens': input_rate,
                 'output_usd_per_1m_tokens': output_rate,
-                'stt_usd_per_minute': stt_rate,
-                'tts_usd_per_1m_characters': tts_rate,
+                'stt_usd_per_15_seconds': stt_rate_per_15s,
+                'tts_usd_per_character': tts_rate,
             },
-            'formula': '[LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
-            'cost_inr': self._round_money(cost_inr),
+            'formula': '[LLM token cost + STT(ceil(sec/15)×rate) + TTS(chars×rate)] × INR conversion',
+            'cost_inr': self._round_money(calculated_cost_inr),
+            'calculated_cost_inr': self._round_money(calculated_cost_inr),
+            'actual_cost_inr': actual_cost_inr,
             'source': {
                 'type': source_meta.get('type', ''),
                 'id': source_meta.get('id', ''),
@@ -3444,13 +3486,20 @@ class AdminController:
 
     def _line_category_summary(self, key, title, lines):
         total_cost = sum(float(line.get('cost_inr', 0) or 0.0) for line in lines)
+        total_calculated_cost = sum(float(line.get('calculated_cost_inr', line.get('cost_inr', 0)) or 0.0) for line in lines)
+        actual_values = [line.get('actual_cost_inr') for line in lines if line.get('actual_cost_inr') is not None]
+        total_actual_cost = sum(float(value or 0.0) for value in actual_values)
         count = len(lines)
         return {
             'key': key,
             'title': title,
             'count': count,
             'total_cost_inr': self._round_money(total_cost),
+            'total_calculated_cost_inr': self._round_money(total_calculated_cost),
+            'total_actual_cost_inr': self._round_money(total_actual_cost) if actual_values else None,
             'avg_cost_inr': self._round_money(self._safe_div(total_cost, count)),
+            'avg_calculated_cost_inr': self._round_money(self._safe_div(total_calculated_cost, count)),
+            'avg_actual_cost_inr': self._round_money(self._safe_div(total_actual_cost, count)) if actual_values else None,
             'lines': sorted(lines, key=lambda item: item.get('timestamp') or '', reverse=True),
         }
 
@@ -3529,8 +3578,10 @@ class AdminController:
                     'email': doc.get('email', ''),
                     'practice_interview_count': 0,
                     'practice_interview_total_cost_inr': 0.0,
+                    'practice_interview_actual_total_cost_inr': 0.0,
                     'practice_interview_evaluation_count': 0,
                     'practice_interview_evaluation_total_cost_inr': 0.0,
+                    'practice_interview_evaluation_actual_total_cost_inr': 0.0,
                 }
                 for candidate_id, doc in candidate_map.items()
             }
@@ -3563,6 +3614,7 @@ class AdminController:
                 )
                 summary_map[candidate_id]['practice_interview_count'] += 1
                 summary_map[candidate_id]['practice_interview_total_cost_inr'] += float(practice_line['cost_inr'])
+                summary_map[candidate_id]['practice_interview_actual_total_cost_inr'] += float(practice_line.get('actual_cost_inr') or 0.0)
 
                 session_with_eval_context = self._with_evaluation_context(session)
                 evaluation_line = self._build_token_cost_line(
@@ -3579,6 +3631,7 @@ class AdminController:
                 )
                 summary_map[candidate_id]['practice_interview_evaluation_count'] += 1
                 summary_map[candidate_id]['practice_interview_evaluation_total_cost_inr'] += float(evaluation_line['cost_inr'])
+                summary_map[candidate_id]['practice_interview_evaluation_actual_total_cost_inr'] += float(evaluation_line.get('actual_cost_inr') or 0.0)
 
             incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='candidate')
             plan_map = self._active_plan_name_map(audience='candidate')
@@ -3587,10 +3640,13 @@ class AdminController:
             for candidate_id, row in summary_map.items():
                 practice_total = float(row['practice_interview_total_cost_inr'])
                 eval_total = float(row['practice_interview_evaluation_total_cost_inr'])
+                practice_actual_total = float(row['practice_interview_actual_total_cost_inr'])
+                eval_actual_total = float(row['practice_interview_evaluation_actual_total_cost_inr'])
                 practice_count = int(row['practice_interview_count'])
                 eval_count = int(row['practice_interview_evaluation_count'])
                 total_actions = practice_count + eval_count
                 total_cost = practice_total + eval_total
+                total_actual_cost = practice_actual_total + eval_actual_total
 
                 rows.append({
                     'candidate_id': candidate_id,
@@ -3600,13 +3656,17 @@ class AdminController:
                     'incoming_amount_inr': incoming_map.get(candidate_id, 0.0),
                     'practice_interview_count': practice_count,
                     'practice_interview_total_cost_inr': self._round_money(practice_total),
+                    'practice_interview_actual_total_cost_inr': self._round_money(practice_actual_total),
                     'practice_interview_avg_cost_inr': self._round_money(self._safe_div(practice_total, practice_count)),
                     'practice_interview_evaluation_count': eval_count,
                     'practice_interview_evaluation_total_cost_inr': self._round_money(eval_total),
+                    'practice_interview_evaluation_actual_total_cost_inr': self._round_money(eval_actual_total),
                     'practice_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(eval_total, eval_count)),
                     'total_actions': total_actions,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if total_actual_cost > 0 else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_actions)) if total_actual_cost > 0 else None,
                 })
 
             rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
@@ -3707,6 +3767,10 @@ class AdminController:
 
             total_count = sum(category['count'] for category in categories)
             total_cost = sum(float(category['total_cost_inr']) for category in categories)
+            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
+            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
+            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
+            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
 
             return {
                 'timeline': {
@@ -3724,7 +3788,9 @@ class AdminController:
                 'summary': {
                     'total_actions': total_count,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if actual_cost_values else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_count)) if actual_cost_values else None,
                 }
             }, 200
 
@@ -3776,12 +3842,16 @@ class AdminController:
                     'email': doc.get('email', ''),
                     'real_interview_count': 0,
                     'real_interview_total_cost_inr': 0.0,
+                    'real_interview_actual_total_cost_inr': 0.0,
                     'real_interview_evaluation_count': 0,
                     'real_interview_evaluation_total_cost_inr': 0.0,
+                    'real_interview_evaluation_actual_total_cost_inr': 0.0,
                     'ai_jd_generation_count': 0,
                     'ai_jd_generation_total_cost_inr': 0.0,
+                    'ai_jd_generation_actual_total_cost_inr': 0.0,
                     'cv_score_count': 0,
                     'cv_score_total_cost_inr': 0.0,
+                    'cv_score_actual_total_cost_inr': 0.0,
                 }
                 for recruiter_id, doc in recruiter_map.items()
             }
@@ -3808,6 +3878,7 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['ai_jd_generation_count'] += 1
                     summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+                    summary_map[recruiter_id]['ai_jd_generation_actual_total_cost_inr'] += float(jd_line.get('actual_cost_inr') or 0.0)
             else:
                 jobs_query = self._build_date_range_query(
                     {
@@ -3839,6 +3910,7 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['ai_jd_generation_count'] += 1
                     summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+                    summary_map[recruiter_id]['ai_jd_generation_actual_total_cost_inr'] += float(jd_line.get('actual_cost_inr') or 0.0)
 
             cv_query = self._build_date_range_query(
                 {'cv_score': {'$exists': True, '$ne': None}},
@@ -3865,6 +3937,7 @@ class AdminController:
                 )
                 summary_map[recruiter_id]['cv_score_count'] += 1
                 summary_map[recruiter_id]['cv_score_total_cost_inr'] += float(cv_line['cost_inr'])
+                summary_map[recruiter_id]['cv_score_actual_total_cost_inr'] += float(cv_line.get('actual_cost_inr') or 0.0)
 
             base_app_query = {
                 'recruiter_id': {'$in': recruiter_ids}
@@ -3903,6 +3976,7 @@ class AdminController:
                 )
                 summary_map[recruiter_id]['real_interview_count'] += 1
                 summary_map[recruiter_id]['real_interview_total_cost_inr'] += float(interview_line['cost_inr'])
+                summary_map[recruiter_id]['real_interview_actual_total_cost_inr'] += float(interview_line.get('actual_cost_inr') or 0.0)
 
                 if self._has_interview_evaluation(app_with_context):
                     app_with_eval_context = self._with_evaluation_context(app_with_context)
@@ -3920,6 +3994,7 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['real_interview_evaluation_count'] += 1
                     summary_map[recruiter_id]['real_interview_evaluation_total_cost_inr'] += float(eval_line['cost_inr'])
+                    summary_map[recruiter_id]['real_interview_evaluation_actual_total_cost_inr'] += float(eval_line.get('actual_cost_inr') or 0.0)
 
             incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='recruiter')
             plan_map = self._active_plan_name_map(audience='recruiter')
@@ -3930,6 +4005,10 @@ class AdminController:
                 interview_eval_total = float(row['real_interview_evaluation_total_cost_inr'])
                 jd_total = float(row['ai_jd_generation_total_cost_inr'])
                 cv_total = float(row['cv_score_total_cost_inr'])
+                interview_actual_total = float(row['real_interview_actual_total_cost_inr'])
+                interview_eval_actual_total = float(row['real_interview_evaluation_actual_total_cost_inr'])
+                jd_actual_total = float(row['ai_jd_generation_actual_total_cost_inr'])
+                cv_actual_total = float(row['cv_score_actual_total_cost_inr'])
                 interview_count = int(row['real_interview_count'])
                 interview_eval_count = int(row['real_interview_evaluation_count'])
                 jd_count = int(row['ai_jd_generation_count'])
@@ -3937,6 +4016,7 @@ class AdminController:
 
                 total_actions = interview_count + interview_eval_count + jd_count + cv_count
                 total_cost = interview_total + interview_eval_total + jd_total + cv_total
+                total_actual_cost = interview_actual_total + interview_eval_actual_total + jd_actual_total + cv_actual_total
 
                 rows.append({
                     'recruiter_id': recruiter_id,
@@ -3946,19 +4026,25 @@ class AdminController:
                     'incoming_amount_inr': incoming_map.get(recruiter_id, 0.0),
                     'real_interview_count': interview_count,
                     'real_interview_total_cost_inr': self._round_money(interview_total),
+                    'real_interview_actual_total_cost_inr': self._round_money(interview_actual_total),
                     'real_interview_avg_cost_inr': self._round_money(self._safe_div(interview_total, interview_count)),
                     'real_interview_evaluation_count': interview_eval_count,
                     'real_interview_evaluation_total_cost_inr': self._round_money(interview_eval_total),
+                    'real_interview_evaluation_actual_total_cost_inr': self._round_money(interview_eval_actual_total),
                     'real_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(interview_eval_total, interview_eval_count)),
                     'ai_jd_generation_count': jd_count,
                     'ai_jd_generation_total_cost_inr': self._round_money(jd_total),
+                    'ai_jd_generation_actual_total_cost_inr': self._round_money(jd_actual_total),
                     'ai_jd_generation_avg_cost_inr': self._round_money(self._safe_div(jd_total, jd_count)),
                     'cv_score_count': cv_count,
                     'cv_score_total_cost_inr': self._round_money(cv_total),
+                    'cv_score_actual_total_cost_inr': self._round_money(cv_actual_total),
                     'cv_score_avg_cost_inr': self._round_money(self._safe_div(cv_total, cv_count)),
                     'total_actions': total_actions,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if total_actual_cost > 0 else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_actions)) if total_actual_cost > 0 else None,
                 })
 
             rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
@@ -4169,7 +4255,9 @@ class AdminController:
                 'summary': {
                     'total_actions': total_count,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if actual_cost_values else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_count)) if actual_cost_values else None,
                 }
             }, 200
 

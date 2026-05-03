@@ -150,6 +150,9 @@ const formatDateInput = (date) => {
 };
 
 const formatMoney = (value) => formatInrNumber(value);
+const formatOptionalMoney = (value) => (
+  value === null || value === undefined ? '-' : formatInrNumber(value)
+);
 const formatCredits = (value) => {
   const numericValue = Number(value);
   if (Number.isNaN(numericValue)) return '0';
@@ -605,7 +608,7 @@ const CostStatistics = () => {
               <div className={styles.usageCategoryHeader}>
                 <strong>{category.title}</strong>
                 <span>
-                  Count: {category.count} | Avg: {formatMoney(category.avg_cost_inr)} | Total: {formatMoney(category.total_cost_inr)}
+                  Count: {category.count} | Calculated Avg: {formatMoney(category.avg_calculated_cost_inr ?? category.avg_cost_inr)} | Calculated Total: {formatMoney(category.total_calculated_cost_inr ?? category.total_cost_inr)} | Actual Avg: {formatOptionalMoney(category.avg_actual_cost_inr)} | Actual Total: {formatOptionalMoney(category.total_actual_cost_inr)}
                 </span>
               </div>
               <div className={styles.tableWrap}>
@@ -620,7 +623,8 @@ const CostStatistics = () => {
                       {showSpeechColumns && <th>STT (sec, answer-token derived)</th>}
                       {showSpeechColumns && <th>TTS (question-token proxy)</th>}
                       <th>Formula</th>
-                      <th>Cost</th>
+                      <th>Calculated Cost</th>
+                      <th>Actual Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -634,12 +638,13 @@ const CostStatistics = () => {
                         {showSpeechColumns && <td>{truncateTo2Decimals(line.stt_seconds)}</td>}
                         {showSpeechColumns && <td>{line.tts_characters || 0}</td>}
                         <td>{line.formula}</td>
-                        <td>{formatMoney(line.cost_inr)}</td>
+                        <td>{formatMoney(line.calculated_cost_inr ?? line.cost_inr)}</td>
+                        <td>{formatOptionalMoney(line.actual_cost_inr)}</td>
                       </tr>
                     ))}
                     {!category.lines?.length && (
                       <tr>
-                        <td colSpan={emptyColSpan} className={styles.emptyCell}>No rows found for this category in selected timeline.</td>
+                        <td colSpan={emptyColSpan + 1} className={styles.emptyCell}>No rows found for this category in selected timeline.</td>
                       </tr>
                     )}
                   </tbody>
@@ -910,7 +915,8 @@ const CostStatistics = () => {
                       <th>Practice Interview Eval Count</th>
                       <th>Practice Interview Eval Avg</th>
                       <th>Practice Interview Eval Total</th>
-                      <th>Total Usage Cost</th>
+                      <th>Calculated Cost</th>
+                      <th>Actual Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -937,10 +943,11 @@ const CostStatistics = () => {
                           <td>{formatMoney(row.practice_interview_evaluation_avg_cost_inr)}</td>
                           <td>{formatMoney(row.practice_interview_evaluation_total_cost_inr)}</td>
                           <td>{formatMoney(row.total_usage_cost_inr)}</td>
+                          <td>{formatOptionalMoney(row.total_actual_usage_cost_inr)}</td>
                         </tr>
                         {expandedCandidates[row.candidate_id] && (
                           <tr>
-                            <td colSpan={9} className={styles.expandPanelCell}>
+                            <td colSpan={10} className={styles.expandPanelCell}>
                               {candidateLineLoading[row.candidate_id] && <div className={styles.inlineStatus}>Loading candidate rows...</div>}
                               {candidateLineError[row.candidate_id] && <div className={styles.inlineError}>{candidateLineError[row.candidate_id]}</div>}
                               {!candidateLineLoading[row.candidate_id] && !candidateLineError[row.candidate_id] && renderUsageCategories(candidateUsageLines[row.candidate_id]?.categories || [])}
@@ -951,7 +958,7 @@ const CostStatistics = () => {
                     ))}
                     {!candidateUsageRows.length && (
                       <tr>
-                        <td colSpan={9} className={styles.emptyCell}>No candidate usage rows for selected timeline.</td>
+                        <td colSpan={10} className={styles.emptyCell}>No candidate usage rows for selected timeline.</td>
                       </tr>
                     )}
                   </tbody>
@@ -980,7 +987,8 @@ const CostStatistics = () => {
                       <th>CV Score Count</th>
                       <th>CV Score Avg</th>
                       <th>CV Score Total</th>
-                      <th>Total Usage Cost</th>
+                      <th>Calculated Cost</th>
+                      <th>Actual Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1013,10 +1021,11 @@ const CostStatistics = () => {
                           <td>{formatMoney(row.cv_score_avg_cost_inr)}</td>
                           <td>{formatMoney(row.cv_score_total_cost_inr)}</td>
                           <td>{formatMoney(row.total_usage_cost_inr)}</td>
+                          <td>{formatOptionalMoney(row.total_actual_usage_cost_inr)}</td>
                         </tr>
                         {expandedRecruiters[row.recruiter_id] && (
                           <tr>
-                            <td colSpan={15} className={styles.expandPanelCell}>
+                            <td colSpan={16} className={styles.expandPanelCell}>
                               {recruiterLineLoading[row.recruiter_id] && <div className={styles.inlineStatus}>Loading recruiter rows...</div>}
                               {recruiterLineError[row.recruiter_id] && <div className={styles.inlineError}>{recruiterLineError[row.recruiter_id]}</div>}
                               {!recruiterLineLoading[row.recruiter_id] && !recruiterLineError[row.recruiter_id] && renderCreditCategories(recruiterCreditLines[row.recruiter_id]?.categories || [])}
@@ -1027,7 +1036,7 @@ const CostStatistics = () => {
                     ))}
                     {!recruiterUsageRows.length && (
                       <tr>
-                        <td colSpan={15} className={styles.emptyCell}>No recruiter usage rows for selected timeline.</td>
+                        <td colSpan={16} className={styles.emptyCell}>No recruiter usage rows for selected timeline.</td>
                       </tr>
                     )}
                   </tbody>
