@@ -209,20 +209,23 @@ const Practice = () => {
       const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
 
       // Deep Link Attempt
-      const startTimeoutTime = Date.now();
       window.location.href = customUri;
 
       // Fallback if app isn't installed
-      setTimeout(() => {
-        const endTimeoutTime = Date.now();
-        if (endTimeoutTime - startTimeoutTime < 3000) {
+      const timeoutId = setTimeout(() => {
+        if (document.hasFocus()) {
           console.log("Secure browser not installed. Showing download prompt.");
           window.location.href = "/apps/Genhire.exe";
           showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
         }
         setIsStarting(false);
       }, 2500);
-      
+
+      window.addEventListener('blur', () => {
+        clearTimeout(timeoutId);
+        setIsStarting(false);
+      }, { once: true });
+
     } catch (error) {
       console.error("Error starting practice interview:", error);
       if (error?.status === 402) {
