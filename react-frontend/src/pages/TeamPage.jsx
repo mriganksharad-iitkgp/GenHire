@@ -51,6 +51,13 @@ const teamMembers = [
     linkedIn: "https://www.linkedin.com/in/deshkar/",
     imageUrl: "https://media.licdn.com/dms/image/v2/D5603AQFcFKvwb8FNgg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1716150437485?e=1779321600&v=beta&t=OjXq_W6rIO7kMie-jPAS0jWYpoKEvblg1H4rbuSd6h8",
   },
+  {
+    name: "Vaibhav K",
+    contribution:
+      "Led testing of the question generation pipeline, including difficulty tuning using JD/CV, and contributed to AI cost estimation.",
+    linkedIn: "https://www.linkedin.com/in/vaibhav-kumar-368592269/",
+    imageUrl: "https://media.licdn.com/dms/image/v2/D5603AQE8n9XoQeZzjA/profile-displayphoto-shrink_400_400/B56Zr6MI8sLAAg-/0/1765134078829?e=1779321600&v=beta&t=FtgLaxjZ2V5khZZnTMpNalWxy77nntM0dzaDhkiR5KQ",
+  }
 ];
 
 const TeamPage = () => {
