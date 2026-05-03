@@ -145,6 +145,14 @@ const Navbar = ({ userType = "candidate" }) => {
               >
                 Cost Statistics
               </Link>
+              <Link
+                to="/recruiter/team"
+                className={`${styles.navLink} ${
+                  location.pathname === "/recruiter/team" ? styles.active : ""
+                }`}
+              >
+                Team
+              </Link>
             </>
           ) : (
             <>
@@ -179,6 +187,14 @@ const Navbar = ({ userType = "candidate" }) => {
                 }`}
               >
                 Cost Statistics
+              </Link>
+              <Link
+                to="/team"
+                className={`${styles.navLink} ${
+                  location.pathname === "/team" ? styles.active : ""
+                }`}
+              >
+                Team
               </Link>
             </>
           )}

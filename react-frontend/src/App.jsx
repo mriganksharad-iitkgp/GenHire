@@ -30,6 +30,7 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancle";
 import CandidateSubscriptionPlans from "./pages/candidate/CandidateSubscriptionPlans";
 import CandidateCostStatistics from "./pages/candidate/CandidateCostStatistics";
+import TeamPage from "./pages/TeamPage";
 
 // Admin Pages
 import AdminOverview from "./pages/admin/AdminOverview";
@@ -43,6 +44,7 @@ import CostStatistics from "./pages/admin/CostStatistics";
 
 // Recruiter Pages
 import RecruiterCostStatistics from "./pages/recruiter/RecruiterCostStatistics";
+import RecruiterTeam from "./pages/recruiter/RecruiterTeam";
 
 // Landing Page
 import LandingPage from "./pages/LandingPage";
@@ -87,6 +89,7 @@ function App() {
             
             {/* Recruiter Cost Statistics */}
             <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />
+            <Route path="/recruiter/team" element={<RecruiterTeam />} />
             <Route path="/candidate/cost-statistics" element={<CandidateCostStatistics />} />
             
             {/* Landing Page - Public Home */}
@@ -98,6 +101,14 @@ function App() {
               element={
                 <Layout>
                   <Dashboard />
+                </Layout>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <Layout>
+                  <TeamPage />
                 </Layout>
               }
             />

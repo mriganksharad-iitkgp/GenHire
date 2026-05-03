@@ -369,3 +369,47 @@ def get_recruiter_usage_lines(current_user, recruiter_id):
     search = request.args.get('search', '')
     result, status = admin_controller.get_recruiter_usage_lines(current_user, recruiter_id, period, start_date, end_date, page, limit, search)
     return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/candidates/credit-summary', methods=['GET'])
+@token_required
+@admin_required
+def get_candidate_credit_summary(current_user):
+    """Get timeline-based credit summary for each candidate."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_candidate_credit_summary(current_user, start_date, end_date)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/candidates/<candidate_id>/credit-lines', methods=['GET'])
+@token_required
+@admin_required
+def get_candidate_credit_lines(current_user, candidate_id):
+    """Get timeline-based credit line items for one candidate."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_candidate_credit_lines(current_user, candidate_id, start_date, end_date)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/recruiters/credit-summary', methods=['GET'])
+@token_required
+@admin_required
+def get_recruiter_credit_summary(current_user):
+    """Get timeline-based credit summary for each recruiter."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_recruiter_credit_summary(current_user, start_date, end_date)
+    return jsonify(result), status
+
+
+@admin_bp.route('/cost-statistics/recruiters/<recruiter_id>/credit-lines', methods=['GET'])
+@token_required
+@admin_required
+def get_recruiter_credit_lines(current_user, recruiter_id):
+    """Get timeline-based credit line items for one recruiter."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    result, status = admin_controller.get_recruiter_credit_lines(current_user, recruiter_id, start_date, end_date)
+    return jsonify(result), status
