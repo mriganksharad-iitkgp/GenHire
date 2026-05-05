@@ -8,37 +8,35 @@ const debugCandidateCredits = (...args) => {
 };
 
 const getDefaultFreeTier = () => ({
-  plan: { name: "Free Tier", slug: "candidate-free" },
-  credits_remaining: 250,
-  credits_allocated: 250,
+  plan: { name: "Recharge Wallet", slug: "candidate-wallet" },
+  credits_remaining: 0,
+  credits_allocated: 0,
   credits_used: 0,
-  monthly_credits: 250,
+  monthly_credits: 0,
   is_unlimited: false,
   status: "active",
 });
 
 const normalizeCandidatePlan = (plan) => {
   const monthlyCredits = Number(
-    plan?.monthly_credits ?? plan?.credits_allocated ?? 250,
+    plan?.monthly_credits ?? plan?.credits_allocated ?? 0,
   );
   const creditsUsed = Number(plan?.credits_used ?? 0);
   const rawRemaining = Number(
     plan?.credits_remaining ?? monthlyCredits - creditsUsed,
   );
-  const isFreePlan = String(plan?.name || "")
-    .toLowerCase()
-    .includes("free");
+  const isFreePlan = false;
 
   return {
     plan: {
-      name: plan?.name || "Free Tier",
-      slug: String(plan?.name || "free")
+      name: plan?.name || "Recharge Wallet",
+      slug: String(plan?.slug || plan?.name || "candidate-wallet")
         .toLowerCase()
         .includes("candidate")
-        ? String(plan?.name || "")
+        ? String(plan?.slug || plan?.name || "")
             .toLowerCase()
             .replace(/\s+/g, "-")
-        : "candidate-free",
+        : "candidate-wallet",
       monthly_credits: monthlyCredits,
     },
     credits_remaining: Math.max(
@@ -64,66 +62,36 @@ const useCandidateSubscription = () => {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem(
-        process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-      );
-      debugCandidateCredits("loadSubscription:start", {
-        hasToken: Boolean(token),
-      });
-
-      if (token) {
-        const statsRes = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/candidate/cost-statistics`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        const statsData = await statsRes.json().catch(() => null);
-        debugCandidateCredits("cost-statistics:response", {
-          ok: statsRes.ok,
-          status: statsRes.status,
-          plan: statsData?.data?.plan || null,
-        });
-
-        if (statsRes.ok && statsData?.success && statsData?.data?.plan) {
-          const normalized = normalizeCandidatePlan(statsData.data.plan);
-          debugCandidateCredits("cost-statistics:normalized", normalized);
-          setSubscription(normalized);
-          const plan = statsData.data.plan;
-          setSubscription({
-            plan: {
-              name: plan.name || "Free Tier",
-              slug: String(plan.name || "free")
-                .toLowerCase()
-                .includes("candidate")
-                ? String(plan.name || "")
-                    .toLowerCase()
-                    .replace(/\s+/g, "-")
-                : "candidate-free",
-            },
-            credits_remaining: Math.max(0, Number(plan.credits_remaining ?? 0)),
-            credits_allocated: Number(plan.credits_allocated ?? 0),
-            credits_used: Number(plan.credits_used ?? 0),
-            is_unlimited: false,
-            status: "active",
-          });
-          return;
-        }
-      }
-
       const response = await getCurrentSubscription();
+      const wallet = response?.data?.wallet || null;
       const apiSub = response?.data?.subscription || response?.subscription;
       debugCandidateCredits("subscription:response", {
         hasSubscription: Boolean(apiSub),
         raw: apiSub || null,
       });
 
-      if (apiSub?.plan?.slug?.startsWith("candidate-")) {
-        setSubscription(apiSub);
+      if (apiSub || wallet) {
+        const normalized = normalizeCandidatePlan({
+          ...apiSub,
+          name:
+            apiSub?.plan?.name ||
+            wallet?.latest_recharge?.plan_name ||
+            "Recharge Wallet",
+          slug:
+            apiSub?.plan?.slug ||
+            wallet?.latest_recharge?.plan_slug ||
+            "candidate-wallet",
+          monthly_credits:
+            apiSub?.plan?.monthly_credits ||
+            wallet?.latest_recharge?.recharge_credits ||
+            0,
+          credits_remaining:
+            apiSub?.credits_remaining ?? wallet?.credits_balance ?? 0,
+          credits_allocated:
+            apiSub?.credits_allocated ?? wallet?.total_credited ?? 0,
+          credits_used: apiSub?.credits_used ?? wallet?.total_debited ?? 0,
+        });
+        setSubscription(normalized);
       } else {
         debugCandidateCredits("fallback:defaultFreeTier");
         setSubscription(getDefaultFreeTier());
@@ -150,10 +118,10 @@ const useCandidateSubscription = () => {
     0;
   const isFreeTier =
     !subscription ||
-    subscription?.plan?.slug === "candidate-free" ||
+    subscription?.plan?.slug === "candidate-wallet" ||
     String(subscription?.plan?.name || "")
       .toLowerCase()
-      .includes("free");
+      .includes("wallet");
   const isLowUsage =
     creditsRemaining <= Math.max(5, Math.ceil(creditsAllowed * 0.1));
   const isOutOfInterviews = creditsRemaining <= 0;

@@ -62,13 +62,24 @@ const PaymentHistory = ({ payments = [] }) => {
         <div className={styles.header}>
           <span>Date</span>
           <span>Plan</span>
+          <span>Credits</span>
           <span>Amount</span>
           <span>Status</span>
         </div>
         {payments.map((payment, idx) => (
           <div key={payment.id || idx} className={styles.row}>
             <span>{formatDate(payment.created_at)}</span>
-            <span>{payment.plan_name || "Subscription"}</span>
+            <span>
+              {payment.plan_name || "Subscription"}
+              {payment.is_migration && (
+                <small className={styles.migrationTag}>Migration</small>
+              )}
+            </span>
+            <span>
+              {payment.recharge_credits
+                ? `${Number(payment.recharge_credits).toLocaleString("en-IN")} credits`
+                : "-"}
+            </span>
             <span>{formatPrice(payment.amount)}</span>
             <StatusBadge status={payment.status} />
           </div>

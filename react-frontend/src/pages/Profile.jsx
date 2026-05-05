@@ -304,18 +304,21 @@ const Profile = () => {
 			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
 
 			// Deep Link Attempt
-			const startTimeoutTime = Date.now();
 			window.location.href = customUri;
 
 			// Fallback if app isn't installed
-			setTimeout(() => {
-				const endTimeoutTime = Date.now();
-				if (endTimeoutTime - startTimeoutTime < 3000) {
+			const timeoutId = setTimeout(() => {
+				if (document.hasFocus()) {
 					console.log("Secure browser not installed. Showing download prompt.");
-					// In the future, swap this toast with: window.location.href = "/downloads/Installer.exe";
-					showToast('Secure Browser not detected. Please download and install the Secure Browser to proceed.', 'error');
+					// Automatically download the installer
+					window.location.href = "/apps/Genhire.exe";
+					showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
 				}
 			}, 2500);
+
+			window.addEventListener('blur', () => {
+				clearTimeout(timeoutId);
+			}, { once: true });
 
 		} catch (error) {
 			console.error('Error launching secure browser:', error);

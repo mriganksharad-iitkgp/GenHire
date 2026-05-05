@@ -22,6 +22,7 @@ import ApplicationView from "./pages/ApplicationView";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import InviteRedeem from "./pages/InviteRedeem";
 import Practice from "./pages/Practice";
 import Layout from "./components/Layout";
 import MobileRecorder from "./pages/MobileRecorder";
@@ -29,6 +30,7 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancle";
 import CandidateSubscriptionPlans from "./pages/candidate/CandidateSubscriptionPlans";
 import CandidateCostStatistics from "./pages/candidate/CandidateCostStatistics";
+import TeamPage from "./pages/TeamPage";
 
 // Admin Pages
 import AdminOverview from "./pages/admin/AdminOverview";
@@ -42,6 +44,7 @@ import CostStatistics from "./pages/admin/CostStatistics";
 
 // Recruiter Pages
 import RecruiterCostStatistics from "./pages/recruiter/RecruiterCostStatistics";
+import RecruiterTeam from "./pages/recruiter/RecruiterTeam";
 
 // Landing Page
 import LandingPage from "./pages/LandingPage";
@@ -60,6 +63,7 @@ function App() {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/invite/redeem" element={<InviteRedeem />} />
             <Route
               path="/recruiter-dashboard"
               element={<RecruiterDashboard />}
@@ -85,6 +89,7 @@ function App() {
             
             {/* Recruiter Cost Statistics */}
             <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />
+            <Route path="/recruiter/team" element={<RecruiterTeam />} />
             <Route path="/candidate/cost-statistics" element={<CandidateCostStatistics />} />
             
             {/* Landing Page - Public Home */}
@@ -96,6 +101,14 @@ function App() {
               element={
                 <Layout>
                   <Dashboard />
+                </Layout>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <Layout>
+                  <TeamPage />
                 </Layout>
               }
             />

@@ -1,55 +1,29 @@
 import os
-import requests
 from datetime import datetime
+from typing import Optional
+
+from services.email_providers import get_email_provider
+from services.invite_email_templates import (
+    render_apply_invite,
+    render_existing_user_invite,
+    render_interview_invite,
+)
+
 
 class EmailService:
     def __init__(self):
-        self.mailgun_api_key = os.getenv('MAILGUN_API_KEY')
-        self.mailgun_domain = os.getenv('MAILGUN_DOMAIN')
-        self.mailgun_api_url = f"https://api.mailgun.net/v3/{self.mailgun_domain}/messages"
-        self.from_email = os.getenv('MAILGUN_FROM_EMAIL', f'noreply@{self.mailgun_domain}')
-        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-        
+        self.provider = get_email_provider()
+        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
     def send_email(self, to_email, subject, html_content, text_content=None):
-        """Send an email using Mailgun API"""
-        if not self.mailgun_api_key or not self.mailgun_domain:
-            print("Warning: Mailgun credentials not configured")
-            return False
-            
-        try:
-            data = {
-                'from': self.from_email,
-                'to': to_email,
-                'subject': subject,
-                'html': html_content
-            }
-            
-            if text_content:
-                data['text'] = text_content
-            
-            response = requests.post(
-                self.mailgun_api_url,
-                auth=('api', self.mailgun_api_key),
-                data=data
-            )
-            
-            if response.status_code == 200:
-                print(f"Email sent successfully to {to_email}")
-                return True
-            else:
-                print(f"Failed to send email: {response.status_code} - {response.text}")
-                return False
-                
-        except Exception as e:
-            print(f"Error sending email: {str(e)}")
-            return False
-    
+        """Send an email via the configured provider."""
+        return self.provider.send(to_email, subject, html_content, text_content)
+
     def send_verification_email(self, to_email, verification_token, user_name):
-        """Send email verification link"""
+        """Send email verification link."""
         verification_link = f"{self.frontend_url}/verify-email?token={verification_token}"
-        
         subject = "Verify Your HR Tech Account"
-        
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -81,13 +55,13 @@ class EmailService:
                     <p>If you didn't create an account with HR Tech, you can safely ignore this email.</p>
                 </div>
                 <div class="footer">
-                    <p>© {datetime.now().year} HR Tech. All rights reserved.</p>
+                    <p>&copy; {datetime.now().year} HR Tech. All rights reserved.</p>
                 </div>
             </div>
         </body>
         </html>
         """
-        
+
         text_content = f"""
         Hi {user_name},
 
@@ -99,17 +73,16 @@ class EmailService:
 
         If you didn't create an account with HR Tech, you can safely ignore this email.
 
-        © {datetime.now().year} HR Tech. All rights reserved.
+        (c) {datetime.now().year} HR Tech. All rights reserved.
         """
-        
+
         return self.send_email(to_email, subject, html_content, text_content)
-    
+
     def send_password_reset_email(self, to_email, reset_token, user_name):
-        """Send password reset link"""
+        """Send password reset link."""
         reset_link = f"{self.frontend_url}/reset-password?token={reset_token}"
-        
         subject = "Reset Your HR Tech Password"
-        
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -140,17 +113,17 @@ class EmailService:
                     <p style="word-break: break-all; color: #4F46E5;">{reset_link}</p>
                     <p>This link will expire in 1 hour for security reasons.</p>
                     <div class="warning">
-                        <strong>⚠️ Security Notice:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+                        <strong>Security Notice:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
                     </div>
                 </div>
                 <div class="footer">
-                    <p>© {datetime.now().year} HR Tech. All rights reserved.</p>
+                    <p>&copy; {datetime.now().year} HR Tech. All rights reserved.</p>
                 </div>
             </div>
         </body>
         </html>
         """
-        
+
         text_content = f"""
         Hi {user_name},
 
@@ -162,15 +135,15 @@ class EmailService:
 
         If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
 
-        © {datetime.now().year} HR Tech. All rights reserved.
+        (c) {datetime.now().year} HR Tech. All rights reserved.
         """
-        
+
         return self.send_email(to_email, subject, html_content, text_content)
-    
+
     def send_password_changed_confirmation(self, to_email, user_name):
-        """Send confirmation email after successful password change"""
+        """Send confirmation email after successful password change."""
         subject = "Your HR Tech Password Has Been Changed"
-        
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -187,25 +160,25 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>✓ Password Changed Successfully</h1>
+                    <h1>Password Changed Successfully</h1>
                 </div>
                 <div class="content">
                     <p>Hi {user_name},</p>
                     <p>This is a confirmation that your HR Tech account password has been changed successfully.</p>
                     <p>If you made this change, no further action is required.</p>
                     <div class="warning">
-                        <strong>⚠️ Didn't change your password?</strong><br>
+                        <strong>Didn't change your password?</strong><br>
                         If you didn't make this change, please contact our support team immediately and secure your account.
                     </div>
                 </div>
                 <div class="footer">
-                    <p>© {datetime.now().year} HR Tech. All rights reserved.</p>
+                    <p>&copy; {datetime.now().year} HR Tech. All rights reserved.</p>
                 </div>
             </div>
         </body>
         </html>
         """
-        
+
         text_content = f"""
         Hi {user_name},
 
@@ -215,8 +188,79 @@ class EmailService:
 
         If you didn't make this change, please contact our support team immediately and secure your account.
 
-        © {datetime.now().year} HR Tech. All rights reserved.
+        (c) {datetime.now().year} HR Tech. All rights reserved.
         """
-        
+
         return self.send_email(to_email, subject, html_content, text_content)
 
+    # --- Invite system emails ----------------------------------------------
+
+    def _invite_redeem_link(self, raw_token: str) -> str:
+        return f"{self.frontend_url}/invite/redeem?token={raw_token}"
+
+    def _job_link(self, job_id: str) -> str:
+        return f"{self.frontend_url}/job/{job_id}"
+
+    def _login_link(self, next_path: Optional[str] = None) -> str:
+        if next_path:
+            return f"{self.frontend_url}/login?next={next_path}"
+        return f"{self.frontend_url}/login"
+
+    def send_invite_apply_email(
+        self,
+        to_email: str,
+        recruiter_company: str,
+        job_title: str,
+        invite_id: str,
+        temp_password: str,
+        raw_token: str,
+        ttl_minutes: int,
+    ) -> bool:
+        magic_link = self._invite_redeem_link(raw_token)
+        subject, html, text = render_apply_invite(
+            recruiter_company=recruiter_company,
+            job_title=job_title,
+            magic_link=magic_link,
+            invite_id=invite_id,
+            temp_password=temp_password,
+            ttl_minutes=ttl_minutes,
+        )
+        return self.send_email(to_email, subject, html, text)
+
+    def send_invite_interview_email(
+        self,
+        to_email: str,
+        recruiter_company: str,
+        job_title: str,
+        invite_id: str,
+        temp_password: str,
+        raw_token: str,
+        ttl_minutes: int,
+    ) -> bool:
+        magic_link = self._invite_redeem_link(raw_token)
+        subject, html, text = render_interview_invite(
+            recruiter_company=recruiter_company,
+            job_title=job_title,
+            magic_link=magic_link,
+            invite_id=invite_id,
+            temp_password=temp_password,
+            ttl_minutes=ttl_minutes,
+        )
+        return self.send_email(to_email, subject, html, text)
+
+    def send_existing_user_invite_email(
+        self,
+        to_email: str,
+        recruiter_company: str,
+        job_title: str,
+        job_id: str,
+        invite_type: str,
+    ) -> bool:
+        job_link = self._job_link(job_id)
+        subject, html, text = render_existing_user_invite(
+            recruiter_company=recruiter_company,
+            job_title=job_title,
+            job_link=job_link,
+            invite_type=invite_type,
+        )
+        return self.send_email(to_email, subject, html, text)

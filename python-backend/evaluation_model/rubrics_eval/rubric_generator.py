@@ -49,7 +49,8 @@ class RubricGenerator:
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
                 prompt_text=prompt,
-                completion_text=response.content if hasattr(response, "content") else ""
+                completion_text=response.content if hasattr(response, "content") else "",
+                usage=usage,
             )
             
             content = response.content.strip()

@@ -75,6 +75,11 @@ const ApplicationHistoryList = ({
     return styles[statusLower] || '';
   };
 
+  const formatUsd = (value) => {
+    const numeric = Number(value || 0);
+    return `$${numeric.toFixed(4)}`;
+  };
+
   const handleStatusUpdate = async (appId, newStatus) => {
     if (onStatusChange) {
       await onStatusChange(appId, newStatus);
@@ -309,6 +314,18 @@ const ApplicationHistoryList = ({
                       <div className={styles.miniBar}>
                         <div style={{ width: `${app.proctoring_score}%`, backgroundColor: '#f59e0b' }}></div>
                       </div>
+                    </div>
+                  )}
+                  {app.calculated_cost_usd !== undefined && app.calculated_cost_usd !== null && (
+                    <div className={styles.scorePill}>
+                      <span className={styles.pillLabel}>Calculated Cost</span>
+                      <span className={styles.pillValue}>{formatUsd(app.calculated_cost_usd)}</span>
+                    </div>
+                  )}
+                  {app.actual_cost_usd !== undefined && app.actual_cost_usd !== null && (
+                    <div className={styles.scorePill}>
+                      <span className={styles.pillLabel}>Actual Cost</span>
+                      <span className={styles.pillValue}>{formatUsd(app.actual_cost_usd)}</span>
                     </div>
                   )}
                 </div>

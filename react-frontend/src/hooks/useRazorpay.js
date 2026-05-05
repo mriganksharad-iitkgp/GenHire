@@ -96,7 +96,7 @@ export const useRazorpay = ({ onSuccess, onError, onCancel } = {}) => {
           amount: orderData.amount,
           currency: orderData.currency || RAZORPAY_CONFIG.currency,
           name: RAZORPAY_CONFIG.name,
-          description: `Subscription - ${orderData.notes?.plan_name || "Plan"}`,
+          description: `Recharge - ${orderData.notes?.plan_name || "Pack"}`,
           order_id: orderData.order_id,
           prefill: {
             name:

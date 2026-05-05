@@ -64,11 +64,6 @@ const RecruiterCostStatistics = () => {
 
   const generateFallbackData = () => {
     const today = new Date();
-    const weekAgo = (weeksBack) => {
-      const date = new Date(today);
-      date.setDate(date.getDate() - weeksBack * 7);
-      return date.toISOString().split("T")[0];
-    };
 
     return {
       recruiter: {
@@ -78,21 +73,18 @@ const RecruiterCostStatistics = () => {
         joinedDate: today.toISOString().split("T")[0],
       },
       plan: {
-        name: "Free Tier",
-        interviews_allowed: 2,
-        interviews_remaining: 2,
+        name: "Recruiter Wallet",
+        interviews_allowed: 0,
+        interviews_remaining: 0,
         interviews_used: 0,
+        credits_allocated: 0,
+        credits_remaining: 0,
+        credits_used: 0,
         expires_at: null,
       },
-      usageHistory: [
-        { date: weekAgo(5), week: "Week 1", interviews: 0 },
-        { date: weekAgo(4), week: "Week 2", interviews: 0 },
-        { date: weekAgo(3), week: "Week 3", interviews: 0 },
-        { date: weekAgo(2), week: "Week 4", interviews: 0 },
-        { date: weekAgo(1), week: "Week 5", interviews: 0 },
-        { date: weekAgo(0), week: "Week 6", interviews: 0 },
-      ],
+      usageHistory: [],
       recentActivity: [],
+      rechargeHistory: [],
       summary: {
         totalJobs: 0,
         totalApplicants: 0,
@@ -107,29 +99,25 @@ const RecruiterCostStatistics = () => {
 
   // Plan & interview data
   const plan = safeCostData.plan || {};
-  const interviewsAllowed = plan.interviews_allowed || 2;
-  const interviewsUsed = plan.interviews_used || 0;
-  const interviewsRemaining = Math.max(0, plan.interviews_remaining ?? 2);
-  const planCreditsRemaining = Math.max(0, plan.plan_interviews_remaining ?? 0);
-  const freeCreditsRemaining = Math.max(0, plan.free_interviews_remaining ?? 0);
-  const planName = plan.name || "Free Tier";
-  const isUnlimited = interviewsAllowed === -1;
-  const isFreeTier = String(planName || "")
-    .toLowerCase()
-    .includes("free");
-  const planMonthlyInterviews = !isFreeTier
-    ? Math.max(0, Number(plan.plan_interviews_allowed ?? 0))
-    : interviewsAllowed;
-  const displayedMonthlyInterviews =
-    !isFreeTier && planMonthlyInterviews > 0
-      ? planMonthlyInterviews
-      : interviewsAllowed;
-  const usagePercentage = isUnlimited
-    ? 0
-    : interviewsAllowed > 0
+  const interviewsAllowed = Number(
+    plan.credits_allocated ?? plan.interviews_allowed ?? 0,
+  );
+  const interviewsUsed = Number(plan.credits_used ?? plan.interviews_used ?? 0);
+  const interviewsRemaining = Math.max(
+    0,
+    Number(plan.credits_remaining ?? plan.interviews_remaining ?? 0),
+  );
+  const signupBonusCredits = Number(plan.signup_bonus_credits ?? 100);
+  const signupBonusGranted = Boolean(plan.signup_bonus_granted);
+  const planCreditsRemaining = interviewsRemaining;
+  const freeCreditsRemaining = 0;
+  const planName = plan.name || "Recruiter Wallet";
+  const displayedMonthlyInterviews = interviewsAllowed;
+  const usagePercentage =
+    interviewsAllowed > 0
       ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100))
       : 0;
-  const isNearLimit = !isUnlimited && usagePercentage >= 80;
+  const isNearLimit = interviewsAllowed > 0 && interviewsRemaining <= Math.max(100, Math.ceil(interviewsAllowed * 0.1));
   const expiresAt = plan.expires_at;
 
   // Calculate days until expiry
@@ -142,20 +130,18 @@ const RecruiterCostStatistics = () => {
   })();
 
   // Usage history (source data)
-  const usageHistory = safeCostData.usageHistory || [];
+  const usageHistory = useMemo(
+    () => costData?.usageHistory || [],
+    [costData?.usageHistory],
+  );
   const currentMonthKey = new Date().toISOString().slice(0, 7);
 
   const monthlySeries = useMemo(() => {
     const monthlyMap = new Map();
 
     usageHistory.forEach((entry) => {
-      if (!entry?.date) return;
-      const date = new Date(entry.date);
-      if (Number.isNaN(date.getTime())) return;
-
-      const monthKey = `${date.getFullYear()}-${String(
-        date.getMonth() + 1,
-      ).padStart(2, "0")}`;
+      const monthKey = String(entry?.month || "").slice(0, 7);
+      if (!monthKey) return;
       const current = monthlyMap.get(monthKey) || 0;
       monthlyMap.set(monthKey, current + Number(entry.interviews || 0));
     });
@@ -232,6 +218,22 @@ const RecruiterCostStatistics = () => {
     });
   };
 
+  const activityRows = useMemo(() => {
+    return (costData?.recentActivity || []).filter((row) => {
+      const txType = String(row?.transaction_type || "");
+      const delta = Number(row?.delta_credits || 0);
+      return (
+        (txType === "ai_jd_generation" ||
+          txType === "real_interview_recruiter") &&
+        delta < 0
+      );
+    });
+  }, [costData?.recentActivity]);
+  const rechargeRows = useMemo(
+    () => costData?.rechargeHistory || [],
+    [costData?.rechargeHistory],
+  );
+
   if (loading) {
     return (
       <>
@@ -261,9 +263,7 @@ const RecruiterCostStatistics = () => {
 
   // Interview usage ring
   const circumference = 2 * Math.PI * 54;
-  const ringOffset = isUnlimited
-    ? 0
-    : circumference - (usagePercentage / 100) * circumference;
+  const ringOffset = circumference - (usagePercentage / 100) * circumference;
 
   return (
     <>
@@ -275,8 +275,7 @@ const RecruiterCostStatistics = () => {
             <div className={styles.headerContent}>
               <h1>Usage Dashboard</h1>
               <p>
-                Welcome, {costData.recruiter?.name || "Recruiter"} — {planName}{" "}
-                Plan
+                Welcome, {costData.recruiter?.name || "Recruiter"} - {planName}
               </p>
             </div>
           </div>
@@ -386,12 +385,12 @@ const RecruiterCostStatistics = () => {
               </div>
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>
-                  {daysUntilExpiry !== null ? "Expires In" : "Plan"}
+                  Signup Bonus
                 </span>
                 <span className={styles.overviewValue}>
-                  {daysUntilExpiry !== null
-                    ? `${daysUntilExpiry} days`
-                    : planName}
+                  {signupBonusGranted
+                    ? `${signupBonusCredits} credits`
+                    : "Pending"}
                 </span>
               </div>
             </div>
@@ -401,14 +400,9 @@ const RecruiterCostStatistics = () => {
           <div className={styles.section}>
             <div className={styles.interviewCreditsCard}>
               <div className={styles.creditsLeft}>
-                <h2>Interview Credits</h2>
+                <h2>Wallet Credits</h2>
                 <p className={styles.creditsSubtitle}>
-                  {planName} —{" "}
-                  {isUnlimited
-                    ? "Unlimited interviews"
-                    : isFreeTier
-                      ? "2 one-time free interviews at signup (lifetime)"
-                      : `${displayedMonthlyInterviews} interviews/month`}
+                  {planName} - {displayedMonthlyInterviews.toLocaleString("en-IN")} total credits allocated, non-expiring
                 </p>
 
                 <div className={styles.creditsNumbers}>
@@ -421,74 +415,45 @@ const RecruiterCostStatistics = () => {
                   <div className={styles.creditsDivider}></div>
                   <div className={styles.creditsStat}>
                     <span className={styles.creditsStatValue}>
-                      {isUnlimited ? "∞" : interviewsRemaining}
+                      {interviewsRemaining}
                     </span>
                     <span className={styles.creditsStatLabel}>Remaining</span>
                   </div>
                   <div className={styles.creditsDivider}></div>
                   <div className={styles.creditsStat}>
                     <span className={styles.creditsStatValue}>
-                      {isUnlimited ? "∞" : interviewsAllowed}
+                      {interviewsAllowed}
                     </span>
                     <span className={styles.creditsStatLabel}>Total</span>
                   </div>
                 </div>
 
-                {!isUnlimited && (
-                  <div className={styles.creditBreakdownRow}>
-                    <div className={styles.creditBreakdownItem}>
-                      <span>Plan credits left</span>
-                      <strong>{planCreditsRemaining}</strong>
-                    </div>
-                    <div className={styles.creditBreakdownItem}>
-                      <span>Free credits left (lifetime)</span>
-                      <strong>{freeCreditsRemaining}</strong>
-                    </div>
+                <div className={styles.creditBreakdownRow}>
+                  <div className={styles.creditBreakdownItem}>
+                    <span>Wallet balance</span>
+                    <strong>{planCreditsRemaining}</strong>
                   </div>
-                )}
+                  <div className={styles.creditBreakdownItem}>
+                    <span>Signup bonus</span>
+                    <strong>{signupBonusGranted ? signupBonusCredits : 0}</strong>
+                  </div>
+                </div>
 
-                {expiresAt && (
-                  <div className={styles.renewalInfo}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    Expires on{" "}
-                    {new Date(expiresAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {daysUntilExpiry !== null && (
-                      <span> ({daysUntilExpiry} days left)</span>
-                    )}
-                  </div>
-                )}
+                <div className={styles.renewalInfo}>Credits are non-expiring in wallet mode.</div>
 
                 {isNearLimit && (
                   <div className={styles.upgradePrompt}>
                     <div className={styles.upgradeText}>
                       <strong>Running low on interview credits!</strong>
                       <p>
-                        You've used {usagePercentage}% of{" "}
-                        {isFreeTier
-                          ? "your lifetime free interviews"
-                          : "your monthly interviews"}
-                        . Upgrade to get more.
+                        Your wallet is getting low. Recharge now to continue AI JD generation and real interviews.
                       </p>
                     </div>
                     <button
                       className={styles.upgradeBtn}
                       onClick={() => navigate("/subscription")}
                     >
-                      Upgrade Plan
+                      Recharge Wallet
                     </button>
                   </div>
                 )}
@@ -505,42 +470,31 @@ const RecruiterCostStatistics = () => {
                       stroke="#e2e8f0"
                       strokeWidth="12"
                     />
-                    {!isUnlimited && (
-                      <circle
-                        cx="60"
-                        cy="60"
-                        r="54"
-                        fill="none"
-                        stroke={
-                          usagePercentage >= 90
-                            ? "#ef4444"
-                            : usagePercentage >= 70
-                              ? "#f59e0b"
-                              : "#6366f1"
-                        }
-                        strokeWidth="12"
-                        strokeLinecap="round"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={ringOffset}
-                        transform="rotate(-90 60 60)"
-                        style={{ transition: "stroke-dashoffset 1s ease" }}
-                      />
-                    )}
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="54"
+                      fill="none"
+                      stroke={
+                        usagePercentage >= 90
+                          ? "#ef4444"
+                          : usagePercentage >= 70
+                            ? "#f59e0b"
+                            : "#6366f1"
+                      }
+                      strokeWidth="12"
+                      strokeLinecap="round"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={ringOffset}
+                      transform="rotate(-90 60 60)"
+                      style={{ transition: "stroke-dashoffset 1s ease" }}
+                    />
                   </svg>
                   <div className={styles.ringCenter}>
-                    {isUnlimited ? (
-                      <>
-                        <span className={styles.ringValue}>∞</span>
-                        <span className={styles.ringLabel}>Unlimited</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className={styles.ringValue}>
-                          {interviewsRemaining}
-                        </span>
-                        <span className={styles.ringLabel}>remaining</span>
-                      </>
-                    )}
+                    <>
+                      <span className={styles.ringValue}>{interviewsRemaining}</span>
+                      <span className={styles.ringLabel}>remaining</span>
+                    </>
                   </div>
                 </div>
               </div>
@@ -550,65 +504,37 @@ const RecruiterCostStatistics = () => {
           {/* Recent Activity Table */}
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Recent Hiring Activities</h2>
+              <h2>Recent Credit Activity</h2>
               <p>
-                Detailed breakdown of your recent activity and associated credit
-                costs
+                Real wallet transactions only. No synthetic or estimated rows.
               </p>
             </div>
             <div className={styles.activityTableSection}>
-              {costData.recentActivity && costData.recentActivity.length > 0 ? (
+              {activityRows && activityRows.length > 0 ? (
                 <table className={styles.activityTable}>
                   <thead>
                     <tr>
                       <th>Timestamp</th>
-                      <th>Action</th>
-                      <th>Job</th>
-                      <th>Service</th>
-                      <th>Credits Used</th>
+                      <th>Activity Type</th>
+                      <th>Credits Deducted</th>
+                      <th>Remaining Balance</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {costData.recentActivity.map((activity) => (
+                    {activityRows.map((activity) => (
                       <tr key={activity.id}>
                         <td className={styles.activityTimestamp}>
                           {activity.timestamp}
                         </td>
                         <td className={styles.activityAction}>
-                          {activity.action}
-                        </td>
-                        <td className={styles.activityRole}>{activity.job}</td>
-                        <td>
-                          <span
-                            style={{
-                              background:
-                                activity.service === "cloudflare"
-                                  ? "#dbeafe"
-                                  : activity.service === "nlp"
-                                    ? "#dcfce7"
-                                    : activity.service === "llm"
-                                      ? "#fef3c7"
-                                      : "#f1f5f9",
-                              color:
-                                activity.service === "cloudflare"
-                                  ? "#1e40af"
-                                  : activity.service === "nlp"
-                                    ? "#166534"
-                                    : activity.service === "llm"
-                                      ? "#92400e"
-                                      : "#475569",
-                              padding: "0.35rem 0.65rem",
-                              borderRadius: "8px",
-                              fontSize: "0.75rem",
-                              fontWeight: "600",
-                              textTransform: "capitalize",
-                            }}
-                          >
-                            {activity.service}
-                          </span>
+                          {activity.activity_type || activity.action}
                         </td>
                         <td className={styles.creditCost}>
-                          {activity.credits || 0}
+                          {activity.credits_deducted ??
+                            Math.abs(Number(activity.delta_credits || 0))}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
                         </td>
                       </tr>
                     ))}
@@ -625,8 +551,51 @@ const RecruiterCostStatistics = () => {
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
                   </svg>
                   <p>
-                    No recent activities yet. Start hiring to see your usage!
+                    No wallet transactions yet. Recharge or use interviews to see activity.
                   </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Recharge History</h2>
+              <p>Wallet credit additions, including migration recharges.</p>
+            </div>
+            <div className={styles.activityTableSection}>
+              {rechargeRows && rechargeRows.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Type</th>
+                      <th>Credits Added</th>
+                      <th>Balance After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rechargeRows.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className={styles.activityTimestamp}>
+                          {activity.timestamp}
+                        </td>
+                        <td className={styles.activityAction}>
+                          {activity.activity_type || activity.action}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.credits_added ?? Number(activity.delta_credits || 0)}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className={styles.emptyState}>
+                  <p>No recharges yet.</p>
                 </div>
               )}
             </div>
@@ -635,8 +604,8 @@ const RecruiterCostStatistics = () => {
           {/* Monthly Interview Analytics */}
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Monthly Interview Analytics</h2>
-              <p>Select a month range to analyze interview volume and trend</p>
+              <h2>Monthly Credit Analytics</h2>
+              <p>Select a month range to analyze credit debits and trend</p>
             </div>
             <div className={styles.trendCard}>
               <div className={styles.monthFiltersRow}>
@@ -713,25 +682,17 @@ const RecruiterCostStatistics = () => {
                   >
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
-                  Current Plan: {planName}
+                  Current Wallet: {planName}
                 </div>
                 <p className={styles.planDescription}>
-                  {planName === "Free Tier"
-                    ? "Get started with 2 one-time free interviews at signup. Upgrade to unlock monthly interview credits and advanced features."
-                    : planName.includes("Pro")
-                      ? "You have 100 interviews per month with advanced analytics and priority support."
-                      : planName.includes("Max")
-                        ? "You have 300 interviews per month with custom integrations and advanced support."
-                        : "Manage your subscription to get the most out of GenHire."}
+                  Recharge packs are non-expiring. Credits are deducted at fixed rates for AI JD generation and real interviews.
                 </p>
               </div>
               <button
                 className={styles.managePlanBtn}
                 onClick={() => navigate("/subscription")}
               >
-                {planName === "Free Tier" || planName.includes("Pro")
-                  ? "Upgrade Plan"
-                  : "Manage Plan"}
+                Recharge Wallet
                 <svg
                   width="16"
                   height="16"

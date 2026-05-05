@@ -17,6 +17,7 @@ import {
   CandidatesList,
   ProfileForm,
   RecentActivity,
+  InviteCandidatesModal,
 } from "../components/recruiter";
 import styles from "./RecruiterDashboard.module.css";
 import useAuth from "../hooks/useAuth";
@@ -63,6 +64,8 @@ const RecruiterDashboard = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
   const [isJobDetailsModalOpen, setIsJobDetailsModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [selectedJobForInvite, setSelectedJobForInvite] = useState(null);
   const [isJobEditModalOpen, setIsJobEditModalOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isProctoringModalOpen, setIsProctoringModalOpen] = useState(false); // State for the new modal
@@ -583,6 +586,16 @@ const RecruiterDashboard = () => {
         onJobUpdate={handleJobUpdate}
       />
 
+      {/* Invite Candidates Modal */}
+      <InviteCandidatesModal
+        isOpen={isInviteModalOpen}
+        onClose={() => {
+          setIsInviteModalOpen(false);
+          setSelectedJobForInvite(null);
+        }}
+        job={selectedJobForInvite}
+      />
+
       {/* CV Viewer Modal */}
       <CVViewer
         isOpen={isCVViewerOpen}
@@ -680,6 +693,18 @@ const RecruiterDashboard = () => {
                   : () =>
                       showToast(
                         "Your account must be verified to edit job postings",
+                        "warning"
+                      )
+              }
+              onInviteCandidates={
+                isVerified
+                  ? (job) => {
+                      setSelectedJobForInvite(job);
+                      setIsInviteModalOpen(true);
+                    }
+                  : () =>
+                      showToast(
+                        "Your account must be verified to invite candidates",
                         "warning"
                       )
               }

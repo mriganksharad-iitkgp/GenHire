@@ -45,6 +45,11 @@ const PracticeHistoryList = ({
     ).join(' ') || 'Practice Interview';
   };
 
+  const formatUsd = (value) => {
+    const numeric = Number(value || 0);
+    return `$${numeric.toFixed(4)}`;
+  };
+
   // Filter for completed/ended sessions
   const completedSessions = sessions.filter(
     session => session.status === 'completed' || session.status === 'ended'
@@ -181,6 +186,18 @@ const PracticeHistoryList = ({
                     ></div>
                   </div>
                 </div>
+                {session.calculated_cost_usd !== undefined && session.calculated_cost_usd !== null && (
+                  <div className={styles.scorePill}>
+                    <span className={styles.pillLabel}>Calculated Cost</span>
+                    <span className={styles.pillValue}>{formatUsd(session.calculated_cost_usd)}</span>
+                  </div>
+                )}
+                {session.actual_cost_usd !== undefined && session.actual_cost_usd !== null && (
+                  <div className={styles.scorePill}>
+                    <span className={styles.pillLabel}>Actual Cost</span>
+                    <span className={styles.pillValue}>{formatUsd(session.actual_cost_usd)}</span>
+                  </div>
+                )}
               </div>
 
               <div className={styles.actionButtons}>

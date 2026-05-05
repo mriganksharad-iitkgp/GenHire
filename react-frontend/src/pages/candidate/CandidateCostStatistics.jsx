@@ -26,7 +26,7 @@ const CandidateCostStatistics = () => {
       joinedDate: new Date().toISOString().slice(0, 10),
     },
     plan: {
-      name: "Free Tier",
+      name: "Candidate Wallet",
       credits_allocated: 0,
       credits_remaining: 0,
       credits_used: 0,
@@ -35,6 +35,7 @@ const CandidateCostStatistics = () => {
     },
     monthlyUsage: [],
     recentActivity: [],
+    rechargeHistory: [],
     summary: {
       totalPracticeSessions: 0,
       completedPracticeSessions: 0,
@@ -71,42 +72,7 @@ const CandidateCostStatistics = () => {
 
         const data = await response.json();
         if (data.success) {
-          let mergedData = data.data;
-
-          const hasExpiry = Boolean(data?.data?.plan?.expires_at);
-          const isPaidPlan = !String(data?.data?.plan?.name || "")
-            .toLowerCase()
-            .includes("free");
-
-          // Fallback: hydrate expires_at from active subscription endpoint when cost-stats payload misses it.
-          if (!hasExpiry && isPaidPlan) {
-            try {
-              const subRes = await fetch(
-                `${API_BASE_URL}/api/payment/subscriptions/me`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                  },
-                },
-              );
-              const subData = await subRes.json().catch(() => null);
-              const fallbackExpiry = subData?.data?.subscription?.expires_at;
-              if (fallbackExpiry) {
-                mergedData = {
-                  ...data.data,
-                  plan: {
-                    ...(data.data?.plan || {}),
-                    expires_at: fallbackExpiry,
-                  },
-                };
-              }
-            } catch (e) {
-              // Keep original payload if fallback fetch fails.
-            }
-          }
-
-          setCostData(mergedData);
+          setCostData(data.data);
         } else {
           setCostData(generateFallbackData());
         }
@@ -130,6 +96,8 @@ const CandidateCostStatistics = () => {
     0,
     Number(plan.credits_remaining ?? 0) || 0,
   );
+  const signupBonusCredits = Number(plan.signup_bonus_credits ?? 100);
+  const signupBonusGranted = Boolean(plan.signup_bonus_granted);
   const planCreditsRemaining = Math.max(
     0,
     Number(plan.plan_credits_remaining ?? 0) || 0,
@@ -138,12 +106,7 @@ const CandidateCostStatistics = () => {
     0,
     Number(plan.free_credits_remaining ?? 0) || 0,
   );
-  const isFreeTier = String(plan.name || "")
-    .toLowerCase()
-    .includes("free");
-  const planMonthlyCredits = !isFreeTier
-    ? Math.max(0, Number(plan.plan_credits_allocated ?? 0))
-    : creditsAllocated;
+  const planMonthlyCredits = Math.max(0, Number(plan.plan_credits_allocated ?? creditsAllocated ?? 0));
   const displayedMonthlyCredits = planMonthlyCredits;
   const usagePercentage =
     creditsAllocated > 0
@@ -220,25 +183,6 @@ const CandidateCostStatistics = () => {
     ? (selectedRangeTotal / filteredMonthlySeries.length).toFixed(1)
     : "0.0";
 
-  const sessionCreditRows = useMemo(() => {
-    const rows = safeData.recentActivity || [];
-    return rows
-      .map((item) => {
-        const creditsUsed = Number(item.credits_used ?? 0);
-        const usageCostUsd = Number(item.usage_cost_usd ?? 0);
-        return {
-          id: item.id,
-          sessionId: item.session_id || "",
-          role: item.role || "general",
-          status: item.status || "active",
-          creditsUsed: Number.isFinite(creditsUsed) ? creditsUsed : 0,
-          usageCostUsd: Number.isFinite(usageCostUsd) ? usageCostUsd : 0,
-          timestamp: item.timestamp || "",
-        };
-      })
-      .filter((item) => item.sessionId || item.timestamp);
-  }, [safeData.recentActivity]);
-
   const formatMonthLabel = (monthKey) => {
     const [year, month] = String(monthKey || currentMonthKey)
       .split("-")
@@ -252,6 +196,17 @@ const CandidateCostStatistics = () => {
 
   const circumference = 2 * Math.PI * 54;
   const ringOffset = circumference - (usagePercentage / 100) * circumference;
+  const activityRows = useMemo(() => {
+    return (safeData?.recentActivity || []).filter((row) => {
+      const txType = String(row?.transaction_type || "");
+      const delta = Number(row?.delta_credits || 0);
+      return txType === "practice_interview" && delta < 0;
+    });
+  }, [safeData?.recentActivity]);
+  const rechargeRows = useMemo(
+    () => safeData?.rechargeHistory || [],
+    [safeData?.rechargeHistory],
+  );
 
   if (loading) {
     return (
@@ -290,7 +245,7 @@ const CandidateCostStatistics = () => {
               <h1>Practice Cost Statistics</h1>
               <p>
                 Welcome, {safeData.candidate?.name || "Candidate"} —{" "}
-                {plan.name || "Free Tier"} Plan
+                {plan.name || "Candidate Wallet"}
               </p>
             </div>
           </div>
@@ -397,12 +352,12 @@ const CandidateCostStatistics = () => {
               </div>
               <div className={styles.overviewInfo}>
                 <span className={styles.overviewLabel}>
-                  {daysUntilExpiry !== null ? "Expires In" : "Plan"}
+                  Signup Bonus
                 </span>
                 <span className={styles.overviewValue}>
-                  {daysUntilExpiry !== null
-                    ? `${daysUntilExpiry} days`
-                    : plan.name || "Free Tier"}
+                  {signupBonusGranted
+                    ? `${signupBonusCredits} credits`
+                    : "Pending"}
                 </span>
               </div>
             </div>
@@ -413,10 +368,7 @@ const CandidateCostStatistics = () => {
               <div className={styles.creditsLeft}>
                 <h2>Practice Credits</h2>
                 <p className={styles.creditsSubtitle}>
-                  {plan.name || "Free Tier"} —{" "}
-                  {isFreeTier
-                    ? `${creditsAllocated} free credits available`
-                    : `${displayedMonthlyCredits} credits/month`}
+                  {plan.name || "Candidate Wallet"} - {displayedMonthlyCredits.toLocaleString("en-IN")} total credits allocated, non-expiring
                 </p>
 
                 <div className={styles.creditsNumbers}>
@@ -444,57 +396,30 @@ const CandidateCostStatistics = () => {
 
                 <div className={styles.creditBreakdownRow}>
                   <div className={styles.creditBreakdownItem}>
-                    <span>Plan credits left</span>
+                    <span>Wallet balance</span>
                     <strong>{planCreditsRemaining}</strong>
                   </div>
                   <div className={styles.creditBreakdownItem}>
-                    <span>Free credits left (lifetime)</span>
-                    <strong>{freeCreditsRemaining}</strong>
+                    <span>Signup bonus</span>
+                    <strong>{signupBonusGranted ? signupBonusCredits : 0}</strong>
                   </div>
                 </div>
 
-                {expiresAt && (
-                  <div className={styles.renewalInfo}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    Expires on{" "}
-                    {new Date(expiresAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {daysUntilExpiry !== null && (
-                      <span> ({daysUntilExpiry} days left)</span>
-                    )}
-                  </div>
-                )}
+                <div className={styles.renewalInfo}>Credits are non-expiring in wallet mode.</div>
 
                 {isNearLimit && (
                   <div className={styles.upgradePrompt}>
                     <div className={styles.upgradeText}>
                       <strong>Running low on practice credits!</strong>
                       <p>
-                        You've used {usagePercentage}% of{" "}
-                        {isFreeTier
-                          ? "your lifetime free credits"
-                          : "your monthly credits"}
-                        . Upgrade to continue.
+                        Your wallet is getting low. Recharge to continue practice sessions.
                       </p>
                     </div>
                     <button
                       className={styles.upgradeBtn}
                       onClick={() => navigate("/candidate/subscription")}
                     >
-                      Upgrade Plan
+                      Recharge Wallet
                     </button>
                   </div>
                 )}
@@ -607,57 +532,38 @@ const CandidateCostStatistics = () => {
 
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Recent Practice Sessions</h2>
-              <p>Detailed breakdown of your recent practice interview costs</p>
+              <h2>Recent Credit Activity</h2>
+              <p>Real wallet transactions only. No synthetic or estimated rows.</p>
             </div>
             <div className={styles.activityTableSection}>
-              {safeData.recentActivity && safeData.recentActivity.length > 0 ? (
+              {activityRows && activityRows.length > 0 ? (
                 <table className={styles.activityTable}>
                   <thead>
                     <tr>
                       <th>Timestamp</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Credits Used</th>
-                      <th>Cost (USD)</th>
-                      <th>Converted Credits</th>
+                      <th>Activity Type</th>
+                      <th>Credits Deducted</th>
+                      <th>Remaining Balance</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {safeData.recentActivity.map((activity) => {
-                      const CREDIT_PER_USD = 1000;
-                      const creditsFromCost = Math.round(
-                        (activity.usage_cost_usd || 0) * CREDIT_PER_USD,
-                      );
-                      return (
-                        <tr key={activity.id}>
-                          <td className={styles.activityTimestamp}>
-                            {activity.timestamp}
-                          </td>
-                          <td className={styles.activityRole}>
-                            {activity.role || "General"}
-                          </td>
-                          <td>
-                            <span
-                              className={`${
-                                styles.activityStatus
-                              } ${styles[activity.status || "pending"]}`}
-                            >
-                              {activity.status || "Pending"}
-                            </span>
-                          </td>
-                          <td className={styles.creditCost}>
-                            {activity.credits_deducted || 0}
-                          </td>
-                          <td className={styles.usdCost}>
-                            ${(activity.usage_cost_usd || 0).toFixed(4)}
-                          </td>
-                          <td className={styles.creditCost}>
-                            {creditsFromCost}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {activityRows.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className={styles.activityTimestamp}>
+                          {activity.timestamp}
+                        </td>
+                        <td className={styles.activityAction}>
+                          {activity.activity_type || activity.action}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.credits_deducted ??
+                            Math.abs(Number(activity.delta_credits || 0))}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               ) : (
@@ -671,9 +577,51 @@ const CandidateCostStatistics = () => {
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
                   </svg>
                   <p>
-                    No practice sessions yet. Start practicing to see your
-                    usage!
+                    No wallet transactions yet. Recharge or use practice to see activity.
                   </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Recharge History</h2>
+              <p>Wallet credit additions, including migration recharges.</p>
+            </div>
+            <div className={styles.activityTableSection}>
+              {rechargeRows && rechargeRows.length > 0 ? (
+                <table className={styles.activityTable}>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Type</th>
+                      <th>Credits Added</th>
+                      <th>Balance After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rechargeRows.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className={styles.activityTimestamp}>
+                          {activity.timestamp}
+                        </td>
+                        <td className={styles.activityAction}>
+                          {activity.activity_type || activity.action}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.credits_added ?? Number(activity.delta_credits || 0)}
+                        </td>
+                        <td className={styles.creditCost}>
+                          {activity.remaining_balance ?? activity.balance_after ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className={styles.emptyState}>
+                  <p>No recharges yet.</p>
                 </div>
               )}
             </div>
@@ -693,18 +641,17 @@ const CandidateCostStatistics = () => {
                   >
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
-                  Current Plan: {plan.name || "Free Tier"}
+                  Current Wallet: {plan.name || "Candidate Wallet"}
                 </div>
                 <p className={styles.planDescription}>
-                  Track your practice credit usage and upgrade anytime for more
-                  credits.
+                  Recharge packs are non-expiring. Practice interview deductions are fixed and visible in this activity feed.
                 </p>
               </div>
               <button
                 className={styles.managePlanBtn}
                 onClick={() => navigate("/candidate/subscription")}
               >
-                Upgrade Plan
+                Recharge Wallet
                 <svg
                   width="16"
                   height="16"

@@ -164,6 +164,7 @@ class PaymentController:
                     "data": {
                         "message": result.get("message", "Payment verified"),
                         "payment_id": result.get("payment_id"),
+                        "wallet": result.get("wallet"),
                     },
                 }, 200
             else:

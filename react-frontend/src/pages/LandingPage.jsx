@@ -450,10 +450,13 @@ const LandingPage = () => {
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTag}>Pricing</span>
             <h2 className={styles.sectionTitle}>
-              Simple, Transparent <span className={styles.gradientText}>Pricing</span>
+              Simple, Transparent <span className={styles.gradientText}>Wallet Recharge</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              Choose the plan that fits your needs. No hidden fees, cancel anytime.
+              Non-expiring credits, fixed deductions, and full transaction visibility.
+            </p>
+            <p className={styles.sectionSubtitle}>
+              Every new account gets a one-time 100 free signup credits bonus.
             </p>
           </div>
 
@@ -461,22 +464,20 @@ const LandingPage = () => {
           <div className={styles.pricingGrid}>
             <div className={styles.pricingCard}>
               <div className={styles.pricingHeader}>
-                <h3>Free Tier</h3>
+                <h3>Signup Bonus</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>2 one-time free practice interviews at signup (lifetime)</p>
+                <p>100 one-time wallet credits on signup</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 2 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Candidate Analytics</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Priority Support</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Custom Branding</li>
-                <li className={styles.unavailableFeature}><span>✕</span> API Access</li>
+                <li><span>✓</span> 100 credits added on first signup</li>
+                <li><span>✓</span> Non-expiring wallet credits</li>
+                <li><span>✓</span> Auto-applied, no payment required</li>
+                <li><span>✓</span> Available to every new account</li>
               </ul>
-              <button className={`${styles.pricingBtn} ${styles.disabledPricingBtn}`} disabled>
-                Current Plan
+              <button className={styles.pricingBtn} onClick={() => navigate("/register")}>
+                Claim on Signup
               </button>
             </div>
 
@@ -486,21 +487,19 @@ const LandingPage = () => {
                 <h3>Candidate Pro</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>999.00</span>
-                  <span className={styles.period}>/month</span>
+                  <span className={styles.amount}>499.00</span>
+                  <span className={styles.period}>one-time</span>
                 </div>
-                <p>50 practice interviews per month</p>
+                <p>500 non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 50 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Candidate Analytics</li>
-                <li><span>✓</span> Priority Support</li>
-                <li><span>✓</span> Custom Branding</li>
-                <li><span>✓</span> API Access</li>
+                <li><span>✓</span> 500 non-expiring credits</li>
+                <li><span>✓</span> Practice interview deductions at fixed rates</li>
+                <li><span>✓</span> Real-time wallet activity tracking</li>
+                <li><span>✓</span> 100 signup bonus credits on first signup</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/register")}>
-                Upgrade Now
+                Start and Recharge
               </button>
             </div>
 
@@ -509,21 +508,19 @@ const LandingPage = () => {
                 <h3>Candidate Max</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>1,499.00</span>
-                  <span className={styles.period}>/month</span>
+                  <span className={styles.amount}>999.00</span>
+                  <span className={styles.period}>one-time</span>
                 </div>
-                <p>100 practice interviews per month</p>
+                <p>1,000 non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Candidate Analytics</li>
-                <li><span>✓</span> Priority Support</li>
-                <li><span>✓</span> Custom Branding</li>
-                <li><span>✓</span> API Access</li>
+                <li><span>✓</span> 1,000 non-expiring credits</li>
+                <li><span>✓</span> Practice interview deductions at fixed rates</li>
+                <li><span>✓</span> Real-time wallet activity tracking</li>
+                <li><span>✓</span> Recharge anytime</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/register")}>
-                Upgrade Now
+                Start and Recharge
               </button>
             </div>
           </div>
@@ -532,22 +529,20 @@ const LandingPage = () => {
           <div className={styles.pricingGrid}>
             <div className={styles.pricingCard}>
               <div className={styles.pricingHeader}>
-                <h3>Free Tier</h3>
+                <h3>Signup Bonus</h3>
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>Starter free tier with limited interviews</p>
+                <p>100 one-time wallet credits on signup</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 2 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Candidate Analytics</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Priority Support</li>
-                <li className={styles.unavailableFeature}><span>✕</span> Custom Branding</li>
-                <li className={styles.unavailableFeature}><span>✕</span> API Access</li>
+                <li><span>✓</span> 100 credits added on first signup</li>
+                <li><span>✓</span> Non-expiring wallet credits</li>
+                <li><span>✓</span> Auto-applied, no payment required</li>
+                <li><span>✓</span> Available to every new account</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
-                Start for Free
+                Claim on Signup
               </button>
             </div>
 
@@ -558,20 +553,18 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
                   <span className={styles.amount}>4,999.00</span>
-                  <span className={styles.period}>/month</span>
+                  <span className={styles.period}>one-time</span>
                 </div>
-                <p>Professional plan for growing teams with 100 interviews per month</p>
+                <p>5,000 non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Candidate Analytics</li>
-                <li><span>✓</span> Priority Support</li>
-                <li><span>✓</span> Custom Branding</li>
-                <li><span>✓</span> API Access</li>
+                <li><span>✓</span> 5,000 non-expiring credits</li>
+                <li><span>✓</span> AI JD generation billed at fixed credits</li>
+                <li><span>✓</span> Real interview deductions at fixed credits</li>
+                <li><span>✓</span> 100 signup bonus credits on first signup</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
-                Start Free Trial
+                Start and Recharge
               </button>
             </div>
 
@@ -581,20 +574,18 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.currency}>₹</span>
                   <span className={styles.amount}>9,999.00</span>
-                  <span className={styles.period}>/month</span>
+                  <span className={styles.period}>one-time</span>
                 </div>
-                <p>Advanced recruiter plan with 300 interviews per month</p>
+                <p>10,000 non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 300 AI Interviews</li>
-                <li><span>✓</span> Smart CV Matching</li>
-                <li><span>✓</span> Candidate Analytics</li>
-                <li><span>✓</span> Priority Support</li>
-                <li><span>✓</span> Custom Branding</li>
-                <li><span>✓</span> API Access</li>
+                <li><span>✓</span> 10,000 non-expiring credits</li>
+                <li><span>✓</span> AI JD generation billed at fixed credits</li>
+                <li><span>✓</span> Real interview deductions at fixed credits</li>
+                <li><span>✓</span> Recharge anytime</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
-                Get Started
+                Start and Recharge
               </button>
             </div>
           </div>

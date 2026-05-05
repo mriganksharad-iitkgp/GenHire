@@ -63,6 +63,11 @@ class Plan:
         """Legacy alias kept for compatibility."""
         return self.credits_allocated
 
+    @property
+    def monthly_credits(self) -> int:
+        """Compatibility alias used by older clients."""
+        return self.credits_allocated
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage"""
         data = {
@@ -97,6 +102,7 @@ class Plan:
             "price_paise": self.price_paise,
             "currency": "INR",
             "credits_allocated": self.credits_allocated,
+            "recharge_credits": self.credits_allocated,
             "interviews_allowed": self.interviews_allowed,
             "monthly_credits": self.monthly_credits,
             "is_unlimited": self.is_unlimited,

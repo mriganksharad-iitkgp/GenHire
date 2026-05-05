@@ -204,6 +204,54 @@ export const getRecruiterUsageLines = (recruiterId, params = {}) => {
   );
 };
 
+export const getCandidateCreditSummary = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/candidates/credit-summary?${query.toString()}`,
+  );
+};
+
+export const getCandidateCreditLines = (candidateId, params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/candidates/${candidateId}/credit-lines?${query.toString()}`,
+  );
+};
+
+export const getRecruiterCreditSummary = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/recruiters/credit-summary?${query.toString()}`,
+  );
+};
+
+export const getRecruiterCreditLines = (recruiterId, params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  return request(
+    `/admin/cost-statistics/recruiters/${recruiterId}/credit-lines?${query.toString()}`,
+  );
+};
+
 // Permissions
 export const getAvailablePermissions = () => request("/admin/permissions");
 

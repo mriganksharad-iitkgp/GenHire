@@ -33,6 +33,7 @@ def start_practice_interview(current_user):
     role = request.form.get('role')
     difficulty = request.form.get('difficulty', 'medium')
     cv_id = request.form.get('cv_id')  # Optional CV selection (Phase 6)
+    proctoring_enabled = str(request.form.get('proctoring_enabled', 'false')).strip().lower() in ['1', 'true', 'yes', 'on']
     
     user_id = str(current_user['_id'])
     
@@ -41,7 +42,8 @@ def start_practice_interview(current_user):
         jd_file=jd_file,
         role=role,
         difficulty=difficulty,
-        cv_id=cv_id  # Pass cv_id to controller
+        cv_id=cv_id,  # Pass cv_id to controller
+        proctoring_enabled=proctoring_enabled,
     )
     
     return jsonify(result), status_code

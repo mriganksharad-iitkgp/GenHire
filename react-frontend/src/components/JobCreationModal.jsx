@@ -258,7 +258,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
       });
       setAiPrompt('');
     } catch (err) {
-      setAiError(err.message || 'Failed to generate. Please try again.');
+      const refund = err?.data?.credit_refund;
+      const refunded = Boolean(refund?.success);
+      setAiError(
+        `${err.message || 'Failed to generate. Please try again.'}${
+          refunded ? ' Credits were refunded to your wallet.' : ''
+        }`,
+      );
     } finally {
       setIsAiGenerating(false);
     }
@@ -830,7 +836,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
               <div className={styles.proctoringSection}>
                 <div className={styles.creditWarning}>
                   <i className="fa fa-exclamation-triangle"></i>
-                  Enabling proctoring features may consume additional credits from your plan.
+                  Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
                 </div>
                 {[
                   { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
@@ -866,7 +872,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
                 ))}
               </div>
               <div className={styles.helpText}>
-                Only selected proctoring modules will run during the interview. Disabled modules will show "Not enabled" in reports.
+                AI JD generation costs 10 credits. Manual job creation costs 0 credits. Disabled proctoring modules show "Not enabled" in reports.
               </div>
             </div>
 

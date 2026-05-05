@@ -201,7 +201,8 @@ class PromptBasedQuestionGenerator:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             prompt_text=prompt,
-            completion_text=getattr(response, "text", "") if response else ""
+            completion_text=getattr(response, "text", "") if response else "",
+            usage=getattr(response, "usage", None),
         )
             
         return response

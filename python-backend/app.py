@@ -44,6 +44,7 @@ from routes.file_routes import file_bp
 from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
+from routes.invite_routes import invite_bp
 
 try:
     from google.cloud import speech
@@ -56,7 +57,11 @@ from services.cv_scoring_service import CVScoringService
 from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
 from payment_module.services.subscription_service import SubscriptionService
+from payment_module.services.wallet_service import WalletService
+from payment_module.config.settings import PaymentConfig
 from interview.core.cost_tracker import CostTracker
+from interview.core.llm_wrapper import call_llm_with_tracking, get_cost_summary
+from interview.core.speech_cost_tracker import process_stt, process_tts
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
 # try:
@@ -74,6 +79,8 @@ RECORDING_ANALYZER_AVAILABLE = False
 try:
     from payment_module.routes import payment_bp, init_payment_routes
     from payment_module.services.subscription_service import SubscriptionService
+    from payment_module.services.wallet_service import WalletService
+    from payment_module.config.settings import PaymentConfig
 
     PAYMENT_MODULE_AVAILABLE = True
     print("[OK] Payment module loaded successfully")
@@ -81,6 +88,8 @@ except ImportError as e:
     print(f"[WARN] Payment module not available: {e}")
     PAYMENT_MODULE_AVAILABLE = False
     SubscriptionService = None
+    WalletService = None
+    PaymentConfig = None
 
 # Load environment variables
 load_dotenv()
@@ -89,6 +98,25 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
+
+# Custom JSON provider so any bson.ObjectId returned by a route auto-serializes.
+# Without this, Flask's default encoder raises 500 on ObjectIds nested inside
+# any response dict (cv_snapshot.metadata, recruiter_id stored as ObjectId on
+# legacy docs, etc.) -- and because the 500 short-circuits before
+# after_request runs, the browser also reports a CORS error as a side effect.
+from flask.json.provider import DefaultJSONProvider as _DefaultJSONProvider
+
+
+class _ObjectIdSafeJSONProvider(_DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+app.json = _ObjectIdSafeJSONProvider(app)
 
 # Initialize extensions
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -152,6 +180,19 @@ users_collection = collections["users"]
 interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
 jobs_collection = collections["jobs"]
+openai_cost_logs_collection = db.get_collection("openai_cost_logs")
+speech_cost_logs_collection = db.get_collection("speech_cost_logs")
+
+if PAYMENT_MODULE_AVAILABLE and WalletService:
+    try:
+        granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(
+            users_collection
+        )
+        print(
+            f"[OK] Startup wallet signup bonus bootstrap complete. Granted={granted}, skipped={skipped}"
+        )
+    except Exception as e:
+        print(f"[WARN] Startup wallet bonus bootstrap skipped: {e}")
 
 # Initialize and start background processor for CV scoring
 from services.background_processor import get_background_processor
@@ -159,6 +200,13 @@ from services.background_processor import get_background_processor
 background_processor = get_background_processor()
 background_processor.start()
 logger.info("[OK] Background processor started for async CV scoring")
+
+# Initialize and start the invite cleanup scheduler (purges dormant burner accounts)
+from services.invite_cleanup_scheduler import get_invite_cleanup_scheduler
+
+invite_cleanup_scheduler = get_invite_cleanup_scheduler(collections)
+invite_cleanup_scheduler.start()
+logger.info("[OK] Invite cleanup scheduler started")
 
 # Register blueprints
 app.register_blueprint(auth_bp)
@@ -177,7 +225,9 @@ admin_controller = AdminController(collections)
 init_admin_routes(admin_controller)
 app.register_blueprint(admin_bp, url_prefix="/api/admin")
 app.register_blueprint(speech_bp, url_prefix="/api/speech")
+app.register_blueprint(invite_bp)
 logger.info("[OK] Admin routes registered at /api/admin")
+logger.info("[OK] Invite routes registered")
 
 # Define a dictionary to hold a detector instance for each session
 # Define a dictionary to hold a detector instance for each session
@@ -350,6 +400,82 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 
+# Direct tracked chat endpoint (actual cost from response.usage only)
+@app.route("/chat", methods=["POST"])
+@app.route("/api/chat", methods=["POST"])
+def chat_with_cost_tracking():
+    data = request.get_json() or {}
+    messages = data.get("messages")
+    model = data.get("model", "gpt-4o-mini")
+    user_id = data.get("user_id")
+
+    if not isinstance(messages, list) or not messages:
+        return jsonify({"error": "messages (non-empty list) is required"}), 400
+
+    try:
+        response, cost, log_data = call_llm_with_tracking(
+            model=model,
+            messages=messages,
+            user_id=user_id,
+            logs_collection=openai_cost_logs_collection,
+        )
+    except Exception as exc:
+        logger.exception("Tracked chat request failed")
+        return jsonify({"error": "LLM request failed", "details": str(exc), "cost": None}), 500
+
+    content = ""
+    try:
+        choice = (getattr(response, "choices", None) or [None])[0]
+        message = getattr(choice, "message", None) if choice is not None else None
+        content = getattr(message, "content", "") if message is not None else ""
+    except Exception:
+        content = ""
+
+    return jsonify(
+        {
+            "response": content,
+            "cost": cost,
+            "request_id": log_data.get("request_id"),
+        }
+    )
+
+
+@app.route("/cost-summary", methods=["GET"])
+@app.route("/api/cost-summary", methods=["GET"])
+def cost_summary():
+    user_id = request.args.get("user_id")
+    summary = get_cost_summary(
+        logs_collection=openai_cost_logs_collection,
+        user_id=user_id,
+    )
+    return jsonify(summary), 200
+
+
+@app.route("/stt-cost", methods=["POST"])
+@app.route("/api/stt-cost", methods=["POST"])
+def stt_cost():
+    data = request.get_json() or {}
+    cost = process_stt(
+        data.get("audio_seconds"),
+        user_id=data.get("user_id"),
+        logs_collection=speech_cost_logs_collection,
+    )
+    return jsonify({"cost": cost}), 200
+
+
+@app.route("/tts-cost", methods=["POST"])
+@app.route("/api/tts-cost", methods=["POST"])
+def tts_cost():
+    data = request.get_json() or {}
+    cost = process_tts(
+        data.get("text"),
+        data.get("voice_type", "standard"),
+        data.get("user_id"),
+        logs_collection=speech_cost_logs_collection,
+    )
+    return jsonify({"cost": cost}), 200
+
+
 # basic index route
 @app.route("/")
 def index():
@@ -378,18 +504,49 @@ def start_interview(current_user):
     if app_student_id != current_user_id:
         return jsonify({"error": "Unauthorized"}), 403
 
+    # Block invite skeletons: a pre-shortlisted candidate must upload a CV
+    # (i.e. complete the apply step) before the interview can start.
+    if (
+        app_doc.get("processing_status") == "awaiting_candidate"
+        or not app_doc.get("cv_snapshot")
+    ):
+        return jsonify({
+            "error": "Please complete your application by uploading your CV before starting the interview.",
+            "error_code": "application_incomplete",
+            "redirect": f"/job/{app_doc.get('job_id')}" if app_doc.get('job_id') else "/dashboard",
+        }), 400
+
     student = current_user
     job = jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
 
-    # --- Interview start credit pre-check (deduction occurs at interview end) ---
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    proctoring_config = job.get("proctoring_config", {
+        "voice_detection": True,
+        "object_detection": True,
+        "eyeball_tracking": True,
+        "gaze_heatmap": True,
+    }) if job else {}
+
+    proctoring_enabled = any(bool(v) for v in (proctoring_config or {}).values())
+    recruiter_interview_cost = (
+        int(PaymentConfig.RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS)
+        if proctoring_enabled
+        else int(PaymentConfig.RECRUITER_REAL_INTERVIEW_CREDITS)
+    )
+    recruiter_deduction = None
+
+    # --- Interview start credit pre-check and deduction ---
     if job:
         recruiter_id = job.get("created_by")
         if recruiter_id:
             db = db_config.get_db()
-            subscription_service = SubscriptionService(db)
-            availability = subscription_service.check_credit_availability(
-                employer_id=str(recruiter_id),
+            wallet_service = WalletService(db)
+            availability = wallet_service.check_credit_availability(
+                owner_id=str(recruiter_id),
                 audience="recruiter",
+                min_required_credits=recruiter_interview_cost,
             )
 
             if not availability.get("can_start_interview", False):
@@ -402,6 +559,7 @@ def start_interview(current_user):
                             or "RECRUITER_INTERVIEW_CREDITS_EXHAUSTED",
                             "plan_owner": "recruiter",
                             "can_start_interview": False,
+                            "credits_required": recruiter_interview_cost,
                             "credits_remaining": availability.get(
                                 "credits_remaining", 0
                             ),
@@ -410,8 +568,50 @@ def start_interview(current_user):
                     403,
                 )
 
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
+            recruiter_deduction = wallet_service.debit_wallet(
+                owner_id=str(recruiter_id),
+                audience="recruiter",
+                credits=recruiter_interview_cost,
+                transaction_type="real_interview_recruiter",
+                reference_type="application",
+                reference_id=str(application_id),
+                metadata={
+                    "application_id": str(application_id),
+                    "job_id": str(job.get("_id")),
+                    "proctoring_enabled": proctoring_enabled,
+                    "proctoring_config": proctoring_config or {},
+                },
+                idempotency_key=f"real-interview:{application_id}",
+            )
+
+            if not recruiter_deduction.get("success"):
+                return (
+                    jsonify(
+                        {
+                            "error": "Insufficient recruiter credits to start interview",
+                            "error_code": recruiter_deduction.get("error_code", "insufficient_credits"),
+                            "plan_owner": "recruiter",
+                            "credits_required": recruiter_interview_cost,
+                            "credits_remaining": recruiter_deduction.get("credits_remaining", 0),
+                        }
+                    ),
+                    403,
+                )
+
+            wallet_service.add_audit_transaction(
+                owner_id=str(current_user.get("_id")),
+                audience="candidate",
+                transaction_type="real_interview_candidate_audit",
+                reference_type="application",
+                reference_id=str(application_id),
+                metadata={
+                    "application_id": str(application_id),
+                    "job_id": str(job.get("_id")),
+                    "recruiter_id": str(recruiter_id),
+                    "credits_impact": 0,
+                },
+                idempotency_key=f"real-interview-candidate-audit:{application_id}",
+            )
 
     cv_details = student.get("cv_details")
     if not cv_details:
@@ -439,13 +639,6 @@ def start_interview(current_user):
     with open(jd_txt_path, "w", encoding="utf-8") as f:
         f.write(jd_text)
 
-    proctoring_config = job.get("proctoring_config", {
-        "voice_detection": True,
-        "object_detection": True,
-        "eyeball_tracking": True,
-        "gaze_heatmap": True,
-    }) if job else {}
-
     session_details = interview_manager.create_session(
         cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[], proctoring_config=proctoring_config
     )
@@ -471,6 +664,7 @@ def start_interview(current_user):
         "status": "active",
         "similarity_score": sim_score,
         "proctoring_config": proctoring_config,
+        "usage_deduction": recruiter_deduction,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
         "start_time": time.time(),
@@ -486,6 +680,9 @@ def start_interview(current_user):
             "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
             "proctoring_config": interview_doc["proctoring_config"],
+            "credits_deducted": recruiter_interview_cost,
+            "usage_deduction": recruiter_deduction,
+            "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
 
@@ -559,6 +756,16 @@ def submit_answer(current_user, session_id):
 def end_interview(current_user, session_id):
     data = request.json or {}
     tracking_data = data.get("tracking_data", [])
+
+    def utc_now():
+        return datetime.datetime.now(datetime.UTC)
+
+    def normalize_utc(dt):
+        if not isinstance(dt, datetime.datetime):
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=datetime.UTC)
+        return dt.astimezone(datetime.UTC)
     
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
@@ -569,6 +776,9 @@ def end_interview(current_user, session_id):
     interview_score = 85  # Hardcoded interview score
     usage_summary = CostTracker().end_session(session_id, clear_events=True)
     usage_deduction = None
+    session_doc = interviews_collection.find_one(
+        {"session_id": session_id, "user_id": str(current_user["_id"])}
+    )
 
     if session and session.is_complete:
         # Generate evaluation from the session manager instead of accessing session attribute
@@ -603,6 +813,14 @@ def end_interview(current_user, session_id):
             "final_score": None,
         }
 
+    proctoring_score = (session_doc or {}).get("proctoring_score")
+    if proctoring_score is None:
+        proctoring_score = (session_doc or {}).get("gaze_recorder_score")
+
+    manual_infractions = list((session_doc or {}).get("manual_infractions") or [])
+    gaze_times = (session_doc or {}).get("gaze_metrics")
+    gaze_plot_path = (session_doc or {}).get("gaze_plot_path")
+
     # Get proctoring data from external service
     proctoring_service_url = os.getenv(
         "PROCTORING_SERVICE_URL", "http://localhost:5001"
@@ -615,42 +833,45 @@ def end_interview(current_user, session_id):
         )
         if resp.status_code == 200:
             stats = resp.json()
-            proctoring_score = stats.get("proctoring_score", 90)
-            manual_infractions = stats.get("manual_infractions", [])
-            gaze_times = stats.get("gaze_times")
+            if stats.get("proctoring_score") is not None:
+                proctoring_score = stats.get("proctoring_score")
+            if stats.get("manual_infractions") is not None:
+                manual_infractions = stats.get("manual_infractions", [])
+            if stats.get("gaze_times") is not None:
+                gaze_times = stats.get("gaze_times")
             gaze_plot_filename = stats.get("gaze_plot_filename")
 
             if gaze_plot_filename:
                 gaze_plot_path = os.path.join(
                     app.config["PROCTORING_FOLDER"], gaze_plot_filename
                 )
-            else:
-                gaze_plot_path = None
         else:
-            print(f"⚠️ Proctoring service returned {resp.status_code}")
-            # Fallback or keep defaults
-            proctoring_score = 90
-            manual_infractions = []
-            gaze_times = None
-            gaze_plot_path = None
+            if proctoring_score is None and not manual_infractions and not gaze_times:
+                print(f"⚠️ Proctoring service returned {resp.status_code}")
+            else:
+                print(
+                    f"ℹ️ Proctoring service returned {resp.status_code}; keeping stored kiosk proctoring data."
+                )
     except Exception as e:
-        print(f"⚠️ Could not contact proctoring service: {e}")
+        if proctoring_score is None and not manual_infractions and not gaze_times:
+            print(f"⚠️ Could not contact proctoring service: {e}")
+        else:
+            print(
+                f"ℹ️ Could not contact proctoring service, using stored kiosk proctoring data instead: {e}"
+            )
+
+    if proctoring_score is None:
         proctoring_score = 90
-        manual_infractions = []
-        gaze_times = None
-        gaze_plot_path = None
 
     suspicious_activity_time = 0  # Not tracking this explicitly anymore in app.py
 
     # Calculate total interview duration for logging
     interview_duration = 0
-    session_doc = interviews_collection.find_one(
-        {"session_id": session_id, "user_id": str(current_user["_id"])}
-    )
     if session_doc and "created_at" in session_doc:
-        start_time = session_doc["created_at"]
-        end_time = datetime.datetime.utcnow()
-        interview_duration = (end_time - start_time).total_seconds()
+        start_time = normalize_utc(session_doc["created_at"])
+        end_time = utc_now()
+        if start_time is not None:
+            interview_duration = (end_time - start_time).total_seconds()
 
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
@@ -675,46 +896,12 @@ def end_interview(current_user, session_id):
         },
     )
 
-    recruiter_owner_id = None
     existing_app = None
-    if session_doc and session_doc.get("application_id"):
-        try:
-            existing_app = applications_collection.find_one(
-                {"_id": ObjectId(session_doc["application_id"])}
-            )
-            if existing_app and existing_app.get("job_id"):
-                job_doc_for_billing = jobs_collection.find_one(
-                    {"_id": ObjectId(existing_app["job_id"])},
-                    {"created_by": 1},
-                )
-                if job_doc_for_billing:
-                    recruiter_owner_id = str(
-                        job_doc_for_billing.get("created_by") or ""
-                    )
-        except Exception:
-            recruiter_owner_id = None
-
-    if recruiter_owner_id:
-        subscription_service = SubscriptionService(db_config.get_db())
-        usage_deduction = subscription_service.consume_usage_credits(
-            employer_id=recruiter_owner_id,
-            audience="recruiter",
-            usage_summary=usage_summary,
-            idempotency_key=f"interview-session:{session_id}",
-            metadata={
-                "session_id": session_id,
-                "application_id": str(session_doc.get("application_id") or ""),
-                "source": "interview_session",
-            },
-        )
-    else:
-        usage_deduction = {
-            "success": False,
-            "credits_deducted": 0,
-            "usage_cost_usd": float(usage_summary.get("total_cost", 0.0) or 0.0),
-            "error": "Unable to resolve recruiter owner for billing.",
-            "error_code": "missing_recruiter_owner",
-        }
+    usage_deduction = (session_doc or {}).get("usage_deduction") or {
+        "success": True,
+        "credits_deducted": 0,
+        "source": "deducted_at_start",
+    }
 
     # --- NEW: Generate and save the gaze plot ---
     if tracking_data:
@@ -766,7 +953,7 @@ def end_interview(current_user, session_id):
                 "tts_characters": int(tts_characters or 0),
                 "usage_summary": usage_summary,
                 "usage_deduction": usage_deduction,
-                "updated_at": datetime.datetime.utcnow(),
+                "updated_at": utc_now(),
             }
         },
     )
@@ -808,7 +995,7 @@ def end_interview(current_user, session_id):
                         "tts_characters": int(tts_characters or 0),
                         "usage_source": "actual",
                         "status": "interviewed",
-                        "updated_at": datetime.datetime.utcnow(),
+                        "updated_at": utc_now(),
                     }
                 },
             )
@@ -851,7 +1038,7 @@ def end_interview(current_user, session_id):
                     "id": str(application_id),
                     "label": existing_app.get("job_title") or "Interview",
                 },
-                occurred_at=datetime.datetime.utcnow(),
+                occurred_at=utc_now(),
                 metadata={
                     "session_id": session_id,
                     "proctoring_score": proctoring_score,
@@ -870,7 +1057,7 @@ def end_interview(current_user, session_id):
                     "id": str(application_id),
                     "label": existing_app.get("job_title") or "Interview Evaluation",
                 },
-                occurred_at=datetime.datetime.utcnow(),
+                occurred_at=utc_now(),
                 metadata={
                     "session_id": session_id,
                 },
@@ -923,6 +1110,7 @@ def upload_gaze_recorder_results(current_user, session_id):
     """
     Receives raw GazeRecorder payloads and stores smart heatmap analysis.
     """
+    utc_now = lambda: datetime.datetime.now(datetime.UTC)
     data = request.get_json() or {}
     recording_data = data.get("recordingData")
     gaze_points = data.get("gazePoints", [])
@@ -966,7 +1154,7 @@ def upload_gaze_recorder_results(current_user, session_id):
                     0, 100 - analysis_result.get("cheatingScore", 0)
                 ),
                 "proctoring_source": "gaze_recorder_api",
-                "updated_at": datetime.datetime.utcnow(),
+                "updated_at": utc_now(),
             }
         },
     )
@@ -1192,3 +1380,8 @@ if __name__ == "__main__":
         logger.info("Shutting down background processor...")
         background_processor.stop()
         logger.info("Background processor stopped")
+        try:
+            invite_cleanup_scheduler.stop()
+            logger.info("Invite cleanup scheduler stopped")
+        except Exception:
+            pass

@@ -1,5 +1,5 @@
 /**
- * PlanCard - Individual subscription plan display card
+ * PlanCard - Individual recharge pack display card
  */
 import React from "react";
 import { CheckIcon, XIcon, StarIcon } from "./Icons";
@@ -20,12 +20,13 @@ const formatPrice = (price) => {
  */
 const getPlanFeatures = (plan) => {
   const features = [];
-  const monthlyCredits = Number(plan.monthly_credits ?? 0);
+  const rechargeCredits = Number(
+    plan.recharge_credits ?? plan.monthly_credits ?? plan.credits_allocated ?? 0,
+  );
 
-  // Credit quota (usage-based billing)
-  if (monthlyCredits > 0) {
+  if (rechargeCredits > 0) {
     features.push({
-      text: `${monthlyCredits.toLocaleString("en-IN")} Usage Credits/month`,
+      text: `${rechargeCredits.toLocaleString("en-IN")} Non-expiring credits`,
       included: true,
     });
   } else if (plan.interviews_allowed === -1 || plan.is_unlimited) {
@@ -37,10 +38,8 @@ const getPlanFeatures = (plan) => {
     });
   }
 
-  features.push({
-    text: "Credits deducted by LLM + STT/TTS usage",
-    included: true,
-  });
+  features.push({ text: "Credits never expire", included: true });
+  features.push({ text: "Recharge when wallet runs low", included: true });
 
   // Standard features based on price tier
   features.push({ text: "Smart CV Matching", included: true });
@@ -68,6 +67,14 @@ const FeatureItem = ({ text, included }) => (
 const PlanCard = ({ plan, isCurrent, isPopular, isLoading, onSelect }) => {
   const features = getPlanFeatures(plan);
   const planId = plan.id || plan.slug;
+  const isDisabled = Boolean(isCurrent || isLoading || plan.disable_action);
+
+  const getButtonLabel = () => {
+    if (isLoading) return "Processing...";
+    if (isCurrent) return "Last Recharge Pack";
+    if (plan.cta_label) return String(plan.cta_label);
+    return plan.price === 0 ? "Select Pack" : "Recharge Credits";
+  };
 
   return (
     <div
@@ -86,11 +93,7 @@ const PlanCard = ({ plan, isCurrent, isPopular, isLoading, onSelect }) => {
 
       <div className={styles.price}>
         <span className={styles.amount}>{formatPrice(plan.price)}</span>
-        {plan.price > 0 && (
-          <span className={styles.period}>
-            /{plan.billing_period || "month"}
-          </span>
-        )}
+        {plan.price > 0 && <span className={styles.period}> one-time recharge</span>}
       </div>
 
       <ul className={styles.features}>
@@ -101,23 +104,23 @@ const PlanCard = ({ plan, isCurrent, isPopular, isLoading, onSelect }) => {
 
       <button
         className={`${styles.button} ${isCurrent ? styles.currentButton : ""}`}
-        onClick={() => !isCurrent && onSelect?.(planId)}
-        disabled={isCurrent || isLoading}
+        onClick={() => !isDisabled && onSelect?.(planId)}
+        disabled={isDisabled}
       >
         {isLoading ? (
           <>
             <span className={styles.spinner} />
-            Processing...
+            {getButtonLabel()}
           </>
         ) : isCurrent ? (
           <>
             <CheckIcon />
-            Current Plan
+            {getButtonLabel()}
           </>
         ) : (
           <>
             <StarIcon />
-            {plan.price === 0 ? "Choose Plan" : "Upgrade Credits"}
+            {getButtonLabel()}
           </>
         )}
       </button>

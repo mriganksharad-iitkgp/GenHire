@@ -195,6 +195,12 @@
   color: #0f172a;
 }
 
+.totalMeta {
+  margin-left: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .kpiGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

@@ -12,6 +12,7 @@ export {
   initiatePayment,
   verifyPayment,
   getPaymentHistory,
+  getCreditTransactions,
   // Interviews
   useInterview,
 } from "./paymentApi";

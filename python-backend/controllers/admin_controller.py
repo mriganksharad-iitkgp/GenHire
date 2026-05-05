@@ -1,9 +1,11 @@
 import datetime
 import json
+import math
 import re
 from bson import ObjectId
 from collections import defaultdict
 from models.user import AVAILABLE_PERMISSIONS
+from payment_module.services.wallet_service import WalletService
 
 
 class AdminController:
@@ -998,37 +1000,16 @@ class AdminController:
                     "description": job.get("description"),
                     "skills": job.get("skills", []),
                     "responsibilities": job.get("responsibilities", []),
-                    "requirements": job.get("requirements", []),
+                    "qualifications": job.get("qualifications", []),
                     "benefits": job.get("benefits", []),
-                    "status": job.get("status"),
-                    "minimum_cv_score": job.get("minimum_cv_score"),
-                    "deadline": safe_isoformat(job.get("deadline")),
+                    "status": job.get("status", "active"),
                     "created_at": safe_isoformat(job.get("created_at")),
-                    "company": job.get("company")
-                    or (recruiter.get("company_name") if recruiter else ""),
-                    "recruiter": (
-                        {
-                            "id": str(recruiter["_id"]) if recruiter else None,
-                            "name": recruiter.get("name") if recruiter else "Unknown",
-                            "email": recruiter.get("email") if recruiter else "",
-                        }
-                        if recruiter
-                        else None
-                    ),
+                    "updated_at": safe_isoformat(job.get("updated_at")),
+                    "deadline": safe_isoformat(job.get("deadline")),
+                    "recruiter_name": recruiter.get("name") if recruiter else "Unknown",
+                    "recruiter_id": str(recruiter["_id"]) if recruiter else None,
                 },
                 "applicants": applicants,
-                "stats": {
-                    "total": len(applicants),
-                    "pending": sum(1 for a in applicants if a["status"] == "pending"),
-                    "shortlisted": sum(
-                        1 for a in applicants if a["status"] == "shortlisted"
-                    ),
-                    "interviewed": sum(
-                        1 for a in applicants if a["status"] == "interviewed"
-                    ),
-                    "selected": sum(1 for a in applicants if a["status"] == "selected"),
-                    "rejected": sum(1 for a in applicants if a["status"] == "rejected"),
-                },
             }, 200
         except Exception as e:
             import traceback
@@ -2387,11 +2368,13 @@ class AdminController:
                 "candidate": {
                     "plans": {},
                     "succeeded_payment_count": 0,
+                    "migration_payment_count": 0,
                     "total_incoming_inr": 0.0,
                 },
                 "recruiter": {
                     "plans": {},
                     "succeeded_payment_count": 0,
+                    "migration_payment_count": 0,
                     "total_incoming_inr": 0.0,
                 },
             }
@@ -2401,6 +2384,8 @@ class AdminController:
                 plan_data = _resolve_payment_plan(payment_doc)
                 audience = plan_data["audience"]
                 plan_key = f"{plan_data['slug']}::{plan_data['price_inr']}"
+                payment_metadata = payment_doc.get("metadata", {}) or {}
+                is_migration_payment = bool(payment_metadata.get("migration"))
 
                 if plan_key not in incoming_summary[audience]["plans"]:
                     incoming_summary[audience]["plans"][plan_key] = {
@@ -2408,16 +2393,23 @@ class AdminController:
                         "plan_slug": plan_data["slug"],
                         "plan_price_inr": plan_data["price_inr"],
                         "succeeded_payment_count": 0,
+                        "migration_payment_count": 0,
                         "incoming_amount_inr": 0.0,
                     }
 
                 incoming_summary[audience]["plans"][plan_key][
                     "succeeded_payment_count"
                 ] += 1
+                if is_migration_payment:
+                    incoming_summary[audience]["plans"][plan_key][
+                        "migration_payment_count"
+                    ] += 1
                 incoming_summary[audience]["plans"][plan_key][
                     "incoming_amount_inr"
                 ] += payment_amount_inr
                 incoming_summary[audience]["succeeded_payment_count"] += 1
+                if is_migration_payment:
+                    incoming_summary[audience]["migration_payment_count"] += 1
                 incoming_summary[audience]["total_incoming_inr"] += payment_amount_inr
 
             refund_query = {
@@ -2513,15 +2505,21 @@ class AdminController:
                     "candidate": {
                         "plans": candidate_plans,
                         "succeeded_payment_count": incoming_summary["candidate"][
-                            "succeeded_payment_count"
-                        ],
+                            "succeeded_payment_count"]
+                        ,
+                        "migration_payment_count": incoming_summary["candidate"][
+                            "migration_payment_count"]
+                        ,
                         "total_incoming_inr": candidate_total_incoming,
                     },
                     "recruiter": {
                         "plans": recruiter_plans,
                         "succeeded_payment_count": incoming_summary["recruiter"][
-                            "succeeded_payment_count"
-                        ],
+                            "succeeded_payment_count"]
+                        ,
+                        "migration_payment_count": incoming_summary["recruiter"][
+                            "migration_payment_count"]
+                        ,
                         "total_incoming_inr": recruiter_total_incoming,
                     },
                     "total_incoming_inr": total_incoming,
@@ -2554,9 +2552,7 @@ class AdminController:
                     "timeline_fallback_period": period,
                     "evaluation_assumption_tokens": {
                         "prompt": action_assumptions["evaluation"]["prompt_tokens"],
-                        "completion": action_assumptions["evaluation"][
-                            "completion_tokens"
-                        ],
+                        "completion": action_assumptions["evaluation"]["completion_tokens"],
                     },
                     "monthly_infrastructure_assumptions_inr": monthly_infra_assumptions,
                     "cloudflare_gpu_ratio": round(cloudflare_gpu_ratio, 4),
@@ -2585,10 +2581,10 @@ class AdminController:
 
         parsed = None
         try:
-            parsed = datetime.datetime.fromisoformat(str(date_value).replace('Z', '+00:00'))
+            parsed = datetime.datetime.fromisoformat(str(date_value).replace("Z", "+00:00"))
         except Exception:
             try:
-                parsed = datetime.datetime.strptime(str(date_value), '%Y-%m-%d')
+                parsed = datetime.datetime.strptime(str(date_value), "%Y-%m-%d")
             except Exception:
                 return None
 
@@ -2607,16 +2603,16 @@ class AdminController:
 
     def _period_window(self, period_value):
         now = datetime.datetime.utcnow()
-        normalized_period = (period_value or 'month').lower()
+        normalized_period = (period_value or "month").lower()
 
-        if normalized_period == 'week':
+        if normalized_period == "week":
             start = now - datetime.timedelta(days=7)
-        elif normalized_period == 'quarter':
+        elif normalized_period == "quarter":
             start = now - datetime.timedelta(days=90)
-        elif normalized_period == 'year':
+        elif normalized_period == "year":
             start = now - datetime.timedelta(days=365)
         else:
-            normalized_period = 'month'
+            normalized_period = "month"
             start = now - datetime.timedelta(days=30)
 
         return normalized_period, start, now
@@ -2650,16 +2646,11 @@ class AdminController:
             return base_query
 
         date_conditions = [
-            {field_name: {'$gte': start_dt, '$lte': end_dt}}
+            {field_name: {"$gte": start_dt, "$lte": end_dt}}
             for field_name in date_fields
         ]
 
-        return {
-            '$and': [
-                base_query,
-                {'$or': date_conditions}
-            ]
-        }
+        return {"$and": [base_query, {"$or": date_conditions}]}
 
     def _extract_numeric(self, value):
         if isinstance(value, (int, float)):
@@ -3021,6 +3012,12 @@ class AdminController:
         if merged.get('evaluation') in [None, '', {}] and isinstance(interview_report.get('evaluation'), dict):
             merged['evaluation'] = interview_report.get('evaluation')
 
+        if merged.get('usage_summary') in [None, '', {}] and isinstance(interview_report.get('usage_summary'), dict):
+            merged['usage_summary'] = interview_report.get('usage_summary')
+
+        if merged.get('usage_source') in [None, ''] and interview_report.get('usage_source'):
+            merged['usage_source'] = interview_report.get('usage_source')
+
         usage_doc = interview_report.get('usage') if isinstance(interview_report.get('usage'), dict) else None
         if usage_doc:
             if merged.get('prompt_tokens') is None and usage_doc.get('prompt_tokens') is not None:
@@ -3095,7 +3092,7 @@ class AdminController:
     def _build_token_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
         source_meta = source_meta or {}
 
-        from interview.core.cost_tracker import CostTracker
+        from interview.core.cost_tracker import CostTracker, calculate_cost
         pricing = CostTracker.PRICING
         inr_per_usd = 83.0
 
@@ -3155,7 +3152,22 @@ class AdminController:
         output_rate = rates.get('output', 0.0)
 
         llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
-        cost_inr = llm_usd * inr_per_usd
+        calculated_cost_inr = llm_usd * inr_per_usd
+
+        actual_llm_usd = None
+        if prompt_source == 'actual' or completion_source == 'actual':
+            actual_llm_usd = calculate_cost(
+                cfg['model'],
+                {
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                },
+            )
+        actual_cost_inr = (
+            self._round_money(actual_llm_usd * inr_per_usd)
+            if actual_llm_usd is not None
+            else None
+        )
 
         timestamp = None
         for field_name in timestamp_fields:
@@ -3182,7 +3194,9 @@ class AdminController:
                 'output_usd_per_1m_tokens': output_rate,
             },
             'formula': '((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
-            'cost_inr': self._round_money(cost_inr),
+            'cost_inr': self._round_money(calculated_cost_inr),
+            'calculated_cost_inr': self._round_money(calculated_cost_inr),
+            'actual_cost_inr': actual_cost_inr,
             'source': {
                 'type': source_meta.get('type', ''),
                 'id': source_meta.get('id', ''),
@@ -3301,13 +3315,29 @@ class AdminController:
         rates = pricing.get(cfg['model'], {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
-        stt_rate = pricing.get('google-stt', {}).get('price_per_minute', 0.024)
-        tts_rate = pricing.get('google-tts', {}).get('price_per_1m_chars', 4.0)
+        stt_rate_per_15s = pricing.get('gcp_stt', {}).get('default', 0.006)
+        tts_rates = pricing.get('gcp_tts', {})
+        tts_voice_type = str(doc.get('tts_voice_type') or 'standard').lower()
+        tts_rate = tts_rates.get(tts_voice_type, tts_rates.get('standard', 0.000004))
 
         llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
-        stt_usd = (stt_seconds / 60.0) * stt_rate
-        tts_usd = (tts_characters / 1_000_000.0) * tts_rate
-        cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
+        stt_billed_units = math.ceil(stt_seconds / 15.0) if stt_seconds > 0 else 0
+        stt_usd = stt_billed_units * stt_rate_per_15s
+        tts_usd = tts_characters * tts_rate
+        calculated_cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
+
+        actual_llm_usd = None
+        usage_summary = doc.get('usage_summary') if isinstance(doc, dict) else None
+        if isinstance(usage_summary, dict):
+            summary_actual = usage_summary.get('total_actual_cost')
+            summary_actual_val = self._extract_numeric(summary_actual)
+            if summary_actual_val is not None and summary_actual_val > 0:
+                actual_llm_usd = summary_actual_val
+        actual_cost_inr = (
+            self._round_money((actual_llm_usd + stt_usd + tts_usd) * inr_per_usd)
+            if actual_llm_usd is not None
+            else None
+        )
 
         timestamp = None
         for field_name in timestamp_fields:
@@ -3332,11 +3362,13 @@ class AdminController:
             'rates': {
                 'input_usd_per_1m_tokens': input_rate,
                 'output_usd_per_1m_tokens': output_rate,
-                'stt_usd_per_minute': stt_rate,
-                'tts_usd_per_1m_characters': tts_rate,
+                'stt_usd_per_15_seconds': stt_rate_per_15s,
+                'tts_usd_per_character': tts_rate,
             },
-            'formula': '[LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
-            'cost_inr': self._round_money(cost_inr),
+            'formula': '[LLM token cost + STT(ceil(sec/15)×rate) + TTS(chars×rate)] × INR conversion',
+            'cost_inr': self._round_money(calculated_cost_inr),
+            'calculated_cost_inr': self._round_money(calculated_cost_inr),
+            'actual_cost_inr': actual_cost_inr,
             'source': {
                 'type': source_meta.get('type', ''),
                 'id': source_meta.get('id', ''),
@@ -3383,7 +3415,7 @@ class AdminController:
             return {}
 
         plans = list(plans_collection.find({})) if plans_collection is not None else []
-        plans_by_id = {plan.get('_id'): plan for plan in plans}
+        plans_by_id = {plan_doc.get("_id"): plan_doc for plan_doc in plans}
 
         query = {
             '$and': [
@@ -3454,13 +3486,20 @@ class AdminController:
 
     def _line_category_summary(self, key, title, lines):
         total_cost = sum(float(line.get('cost_inr', 0) or 0.0) for line in lines)
+        total_calculated_cost = sum(float(line.get('calculated_cost_inr', line.get('cost_inr', 0)) or 0.0) for line in lines)
+        actual_values = [line.get('actual_cost_inr') for line in lines if line.get('actual_cost_inr') is not None]
+        total_actual_cost = sum(float(value or 0.0) for value in actual_values)
         count = len(lines)
         return {
             'key': key,
             'title': title,
             'count': count,
             'total_cost_inr': self._round_money(total_cost),
+            'total_calculated_cost_inr': self._round_money(total_calculated_cost),
+            'total_actual_cost_inr': self._round_money(total_actual_cost) if actual_values else None,
             'avg_cost_inr': self._round_money(self._safe_div(total_cost, count)),
+            'avg_calculated_cost_inr': self._round_money(self._safe_div(total_calculated_cost, count)),
+            'avg_actual_cost_inr': self._round_money(self._safe_div(total_actual_cost, count)) if actual_values else None,
             'lines': sorted(lines, key=lambda item: item.get('timestamp') or '', reverse=True),
         }
 
@@ -3539,14 +3578,17 @@ class AdminController:
                     'email': doc.get('email', ''),
                     'practice_interview_count': 0,
                     'practice_interview_total_cost_inr': 0.0,
+                    'practice_interview_actual_total_cost_inr': 0.0,
                     'practice_interview_evaluation_count': 0,
                     'practice_interview_evaluation_total_cost_inr': 0.0,
+                    'practice_interview_evaluation_actual_total_cost_inr': 0.0,
                 }
                 for candidate_id, doc in candidate_map.items()
             }
 
+            candidate_ids = list(candidate_map.keys())
             practice_query = self._build_date_range_query(
-                {'is_practice': True},
+                {'is_practice': True, 'user_id': {'$in': candidate_ids}},
                 ['created_at', 'updated_at', 'completed_at'],
                 period_start,
                 period_end,
@@ -3572,6 +3614,7 @@ class AdminController:
                 )
                 summary_map[candidate_id]['practice_interview_count'] += 1
                 summary_map[candidate_id]['practice_interview_total_cost_inr'] += float(practice_line['cost_inr'])
+                summary_map[candidate_id]['practice_interview_actual_total_cost_inr'] += float(practice_line.get('actual_cost_inr') or 0.0)
 
                 session_with_eval_context = self._with_evaluation_context(session)
                 evaluation_line = self._build_token_cost_line(
@@ -3588,6 +3631,7 @@ class AdminController:
                 )
                 summary_map[candidate_id]['practice_interview_evaluation_count'] += 1
                 summary_map[candidate_id]['practice_interview_evaluation_total_cost_inr'] += float(evaluation_line['cost_inr'])
+                summary_map[candidate_id]['practice_interview_evaluation_actual_total_cost_inr'] += float(evaluation_line.get('actual_cost_inr') or 0.0)
 
             incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='candidate')
             plan_map = self._active_plan_name_map(audience='candidate')
@@ -3596,10 +3640,13 @@ class AdminController:
             for candidate_id, row in summary_map.items():
                 practice_total = float(row['practice_interview_total_cost_inr'])
                 eval_total = float(row['practice_interview_evaluation_total_cost_inr'])
+                practice_actual_total = float(row['practice_interview_actual_total_cost_inr'])
+                eval_actual_total = float(row['practice_interview_evaluation_actual_total_cost_inr'])
                 practice_count = int(row['practice_interview_count'])
                 eval_count = int(row['practice_interview_evaluation_count'])
                 total_actions = practice_count + eval_count
                 total_cost = practice_total + eval_total
+                total_actual_cost = practice_actual_total + eval_actual_total
 
                 rows.append({
                     'candidate_id': candidate_id,
@@ -3609,13 +3656,17 @@ class AdminController:
                     'incoming_amount_inr': incoming_map.get(candidate_id, 0.0),
                     'practice_interview_count': practice_count,
                     'practice_interview_total_cost_inr': self._round_money(practice_total),
+                    'practice_interview_actual_total_cost_inr': self._round_money(practice_actual_total),
                     'practice_interview_avg_cost_inr': self._round_money(self._safe_div(practice_total, practice_count)),
                     'practice_interview_evaluation_count': eval_count,
                     'practice_interview_evaluation_total_cost_inr': self._round_money(eval_total),
+                    'practice_interview_evaluation_actual_total_cost_inr': self._round_money(eval_actual_total),
                     'practice_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(eval_total, eval_count)),
                     'total_actions': total_actions,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if total_actual_cost > 0 else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_actions)) if total_actual_cost > 0 else None,
                 })
 
             rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
@@ -3716,6 +3767,10 @@ class AdminController:
 
             total_count = sum(category['count'] for category in categories)
             total_cost = sum(float(category['total_cost_inr']) for category in categories)
+            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
+            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
+            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
+            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
 
             return {
                 'timeline': {
@@ -3733,7 +3788,9 @@ class AdminController:
                 'summary': {
                     'total_actions': total_count,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if actual_cost_values else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_count)) if actual_cost_values else None,
                 }
             }, 200
 
@@ -3776,6 +3833,7 @@ class AdminController:
 
             recruiter_docs = list(self.users_collection.find({'user_type': 'recruiter'}, {'name': 1, 'email': 1}))
             recruiter_map = {str(doc['_id']): doc for doc in recruiter_docs}
+            recruiter_ids = list(recruiter_map.keys())
 
             summary_map = {
                 recruiter_id: {
@@ -3784,12 +3842,16 @@ class AdminController:
                     'email': doc.get('email', ''),
                     'real_interview_count': 0,
                     'real_interview_total_cost_inr': 0.0,
+                    'real_interview_actual_total_cost_inr': 0.0,
                     'real_interview_evaluation_count': 0,
                     'real_interview_evaluation_total_cost_inr': 0.0,
+                    'real_interview_evaluation_actual_total_cost_inr': 0.0,
                     'ai_jd_generation_count': 0,
                     'ai_jd_generation_total_cost_inr': 0.0,
+                    'ai_jd_generation_actual_total_cost_inr': 0.0,
                     'cv_score_count': 0,
                     'cv_score_total_cost_inr': 0.0,
+                    'cv_score_actual_total_cost_inr': 0.0,
                 }
                 for recruiter_id, doc in recruiter_map.items()
             }
@@ -3816,9 +3878,15 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['ai_jd_generation_count'] += 1
                     summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+                    summary_map[recruiter_id]['ai_jd_generation_actual_total_cost_inr'] += float(jd_line.get('actual_cost_inr') or 0.0)
             else:
                 jobs_query = self._build_date_range_query(
-                    {},
+                    {
+                        '$or': [
+                            {'created_by': {'$in': recruiter_ids}},
+                            {'recruiter_id': {'$in': recruiter_ids}},
+                        ]
+                    },
                     ['created_at', 'updated_at'],
                     period_start,
                     period_end,
@@ -3842,6 +3910,7 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['ai_jd_generation_count'] += 1
                     summary_map[recruiter_id]['ai_jd_generation_total_cost_inr'] += float(jd_line['cost_inr'])
+                    summary_map[recruiter_id]['ai_jd_generation_actual_total_cost_inr'] += float(jd_line.get('actual_cost_inr') or 0.0)
 
             cv_query = self._build_date_range_query(
                 {'cv_score': {'$exists': True, '$ne': None}},
@@ -3868,9 +3937,17 @@ class AdminController:
                 )
                 summary_map[recruiter_id]['cv_score_count'] += 1
                 summary_map[recruiter_id]['cv_score_total_cost_inr'] += float(cv_line['cost_inr'])
+                summary_map[recruiter_id]['cv_score_actual_total_cost_inr'] += float(cv_line.get('actual_cost_inr') or 0.0)
 
+            base_app_query = {
+                'recruiter_id': {'$in': recruiter_ids}
+            }
             interview_query = self._build_date_range_query(
-                {'is_visible': True, 'status': {'$in': ['interviewed', 'selected', 'rejected']}},
+                {
+                    **base_app_query,
+                    'is_visible': True,
+                    'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                },
                 ['completed_at', 'updated_at', 'created_at'],
                 period_start,
                 period_end,
@@ -3899,6 +3976,7 @@ class AdminController:
                 )
                 summary_map[recruiter_id]['real_interview_count'] += 1
                 summary_map[recruiter_id]['real_interview_total_cost_inr'] += float(interview_line['cost_inr'])
+                summary_map[recruiter_id]['real_interview_actual_total_cost_inr'] += float(interview_line.get('actual_cost_inr') or 0.0)
 
                 if self._has_interview_evaluation(app_with_context):
                     app_with_eval_context = self._with_evaluation_context(app_with_context)
@@ -3916,6 +3994,7 @@ class AdminController:
                     )
                     summary_map[recruiter_id]['real_interview_evaluation_count'] += 1
                     summary_map[recruiter_id]['real_interview_evaluation_total_cost_inr'] += float(eval_line['cost_inr'])
+                    summary_map[recruiter_id]['real_interview_evaluation_actual_total_cost_inr'] += float(eval_line.get('actual_cost_inr') or 0.0)
 
             incoming_map = self._user_succeeded_incoming_map(period_start, period_end, audience='recruiter')
             plan_map = self._active_plan_name_map(audience='recruiter')
@@ -3926,6 +4005,10 @@ class AdminController:
                 interview_eval_total = float(row['real_interview_evaluation_total_cost_inr'])
                 jd_total = float(row['ai_jd_generation_total_cost_inr'])
                 cv_total = float(row['cv_score_total_cost_inr'])
+                interview_actual_total = float(row['real_interview_actual_total_cost_inr'])
+                interview_eval_actual_total = float(row['real_interview_evaluation_actual_total_cost_inr'])
+                jd_actual_total = float(row['ai_jd_generation_actual_total_cost_inr'])
+                cv_actual_total = float(row['cv_score_actual_total_cost_inr'])
                 interview_count = int(row['real_interview_count'])
                 interview_eval_count = int(row['real_interview_evaluation_count'])
                 jd_count = int(row['ai_jd_generation_count'])
@@ -3933,6 +4016,7 @@ class AdminController:
 
                 total_actions = interview_count + interview_eval_count + jd_count + cv_count
                 total_cost = interview_total + interview_eval_total + jd_total + cv_total
+                total_actual_cost = interview_actual_total + interview_eval_actual_total + jd_actual_total + cv_actual_total
 
                 rows.append({
                     'recruiter_id': recruiter_id,
@@ -3942,19 +4026,25 @@ class AdminController:
                     'incoming_amount_inr': incoming_map.get(recruiter_id, 0.0),
                     'real_interview_count': interview_count,
                     'real_interview_total_cost_inr': self._round_money(interview_total),
+                    'real_interview_actual_total_cost_inr': self._round_money(interview_actual_total),
                     'real_interview_avg_cost_inr': self._round_money(self._safe_div(interview_total, interview_count)),
                     'real_interview_evaluation_count': interview_eval_count,
                     'real_interview_evaluation_total_cost_inr': self._round_money(interview_eval_total),
+                    'real_interview_evaluation_actual_total_cost_inr': self._round_money(interview_eval_actual_total),
                     'real_interview_evaluation_avg_cost_inr': self._round_money(self._safe_div(interview_eval_total, interview_eval_count)),
                     'ai_jd_generation_count': jd_count,
                     'ai_jd_generation_total_cost_inr': self._round_money(jd_total),
+                    'ai_jd_generation_actual_total_cost_inr': self._round_money(jd_actual_total),
                     'ai_jd_generation_avg_cost_inr': self._round_money(self._safe_div(jd_total, jd_count)),
                     'cv_score_count': cv_count,
                     'cv_score_total_cost_inr': self._round_money(cv_total),
+                    'cv_score_actual_total_cost_inr': self._round_money(cv_actual_total),
                     'cv_score_avg_cost_inr': self._round_money(self._safe_div(cv_total, cv_count)),
                     'total_actions': total_actions,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if total_actual_cost > 0 else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_actions)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_actions)) if total_actual_cost > 0 else None,
                 })
 
             rows.sort(key=lambda item: (-item['total_usage_cost_inr'], item['name']))
@@ -4165,7 +4255,9 @@ class AdminController:
                 'summary': {
                     'total_actions': total_count,
                     'total_usage_cost_inr': self._round_money(total_cost),
+                    'total_actual_usage_cost_inr': self._round_money(total_actual_cost) if actual_cost_values else None,
                     'avg_usage_cost_inr': self._round_money(self._safe_div(total_cost, total_count)),
+                    'avg_actual_usage_cost_inr': self._round_money(self._safe_div(total_actual_cost, total_count)) if actual_cost_values else None,
                 }
             }, 200
 
@@ -4174,3 +4266,288 @@ class AdminController:
             print(f"Error getting recruiter usage lines: {str(e)}")
             print(traceback.format_exc())
             return {'error': 'Failed to get recruiter usage lines'}, 500
+
+    def _get_wallet_service(self):
+        if getattr(self, '_wallet_service', None) is None:
+            self._wallet_service = WalletService(self.users_collection.database)
+        return self._wallet_service
+
+    def _credit_description(self, transaction):
+        metadata = transaction.get('metadata') or {}
+        parts = []
+        plan_name = metadata.get('plan_name') or metadata.get('plan_slug') or metadata.get('name') or metadata.get('slug')
+        if plan_name:
+            parts.append(str(plan_name))
+        reason = metadata.get('reason') or metadata.get('description')
+        if reason:
+            parts.append(str(reason))
+
+        reference_type = transaction.get('reference_type')
+        reference_id = transaction.get('reference_id')
+        if not parts and (reference_type or reference_id):
+            parts.append(f"{reference_type or 'reference'}:{reference_id or ''}".strip(':'))
+
+        if not parts:
+            return str(transaction.get('transaction_type') or 'Credit transaction')
+
+        return ' - '.join(parts)
+
+    def _format_tx_timestamp(self, value):
+        if isinstance(value, datetime.datetime):
+            return value.strftime("%Y-%m-%d %H:%M")
+        text = str(value or "")
+        try:
+            parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return parsed.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return text
+
+    def _is_proctored_tx(self, tx):
+        metadata = tx.get("metadata") or {}
+        if "proctoring_enabled" in metadata:
+            return bool(metadata.get("proctoring_enabled"))
+        proctoring_config = metadata.get("proctoring_config")
+        if isinstance(proctoring_config, dict):
+            return any(bool(value) for value in proctoring_config.values())
+        return False
+
+    def _credit_activity_label(self, tx):
+        tx_type = str(tx.get("transaction_type") or "")
+        if tx_type == "practice_interview":
+            return (
+                "Practice Interview (Proctored)"
+                if self._is_proctored_tx(tx)
+                else "Practice Interview (Non-Proctored)"
+            )
+        if tx_type == "real_interview_recruiter":
+            return (
+                "Real Interview (Proctored)"
+                if self._is_proctored_tx(tx)
+                else "Real Interview (Non-Proctored)"
+            )
+        if tx_type == "ai_jd_generation":
+            return "AI JD Generation"
+        if tx_type == "migration_recharge":
+            return "Migration Recharge"
+        return str(tx_type or "activity").replace("_", " ").title()
+
+    def _format_activity_row(self, tx):
+        delta = int(tx.get("delta_credits", 0) or 0)
+        credits_deducted = abs(delta) if delta < 0 else 0
+        return {
+            "id": tx.get("id"),
+            "activity_type": self._credit_activity_label(tx),
+            "transaction_type": tx.get("transaction_type"),
+            "credits_deducted": credits_deducted,
+            "delta_credits": delta,
+            "balance_after": int(tx.get("balance_after", 0) or 0),
+            "remaining_balance": int(tx.get("balance_after", 0) or 0),
+            "timestamp": self._format_tx_timestamp(tx.get("created_at")),
+        }
+
+    def _credit_summary_rows(self, audience, start_dt, end_dt):
+        wallet_service = self._get_wallet_service()
+        transaction_collection = wallet_service.transaction_collection
+        recharge_types = list(wallet_service.RECHARGE_TRANSACTION_TYPES)
+
+        user_docs = list(self.users_collection.find({'user_type': audience}, {'name': 1, 'email': 1}))
+        rows = []
+
+        for user in user_docs:
+            owner_id = str(user.get('_id'))
+            wallet_summary = wallet_service.get_wallet_summary(owner_id, audience)
+            current_balance = int(wallet_summary.get('credits_balance', 0) or 0)
+
+            last_recharge_tx = transaction_collection.find_one(
+                {
+                    'owner_id': owner_id,
+                    'audience': audience,
+                    'transaction_type': {'$in': recharge_types},
+                },
+                sort=[('created_at', -1)],
+            )
+            last_recharge_date = self._safe_iso(last_recharge_tx.get('created_at')) if last_recharge_tx else None
+            last_recharge_meta = last_recharge_tx.get('metadata') if last_recharge_tx else {}
+            last_recharge_plan = None
+            if last_recharge_meta:
+                last_recharge_plan = last_recharge_meta.get('plan_name') or last_recharge_meta.get('plan_slug')
+
+            usage_query = {
+                'owner_id': owner_id,
+                'audience': audience,
+                'created_at': {'$gte': start_dt, '$lte': end_dt},
+                'delta_credits': {'$lt': 0},
+            }
+            usage_docs = transaction_collection.find(usage_query, {'delta_credits': 1})
+            total_usage = sum(abs(int(doc.get('delta_credits', 0) or 0)) for doc in usage_docs)
+
+            rows.append({
+                f'{audience}_id': owner_id,
+                'name': user.get('name', ''),
+                'email': user.get('email', ''),
+                'current_balance_inr': float(current_balance),
+                'last_recharge_date': last_recharge_date,
+                'last_recharge_plan': last_recharge_plan,
+                'total_usage_inr': float(total_usage),
+            })
+
+        rows.sort(key=lambda item: (-item.get('current_balance_inr', 0), item.get('name') or ''))
+        return rows
+
+    def _credit_lines_for_owner(self, owner_id, audience, start_dt, end_dt):
+        wallet_service = self._get_wallet_service()
+        tx_list = wallet_service.get_transactions(
+            owner_id,
+            audience,
+            limit=100,
+            kind="deductions",
+        )
+
+        recent_activity = [
+            self._format_activity_row(tx)
+            for tx in tx_list
+            if int(tx.get("delta_credits", 0) or 0) < 0
+        ][:50]
+
+        total_amount = sum(int(row.get("credits_deducted", 0) or 0) for row in recent_activity)
+
+        return [
+            {
+                "key": "deductions",
+                "title": "Recent Credit Activity",
+                "count": len(recent_activity),
+                "total_amount_inr": self._round_money(total_amount),
+                "lines": [
+                    {
+                        "id": row.get("id") or "",
+                        "timestamp": row.get("timestamp"),
+                        "activity_type": row.get("activity_type"),
+                        "credits_deducted": row.get("credits_deducted"),
+                        "remaining_balance": row.get("remaining_balance"),
+                        "balance_after": row.get("balance_after"),
+                        "amount_inr": row.get("credits_deducted"),
+                    }
+                    for row in recent_activity
+                ],
+            }
+        ]
+
+    def get_candidate_credit_summary(self, current_user, start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window('month', start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            rows = self._credit_summary_rows('candidate', period_start, period_end)
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'rows': rows,
+                'total_candidates': len(rows),
+            }, 200
+        except Exception as e:
+            import traceback
+            print(f"Error getting candidate credit summary: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get candidate credit summary'}, 500
+
+    def get_candidate_credit_lines(self, current_user, candidate_id, start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window('month', start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            try:
+                candidate_doc = self.users_collection.find_one({'_id': ObjectId(candidate_id), 'user_type': 'candidate'}, {'name': 1, 'email': 1})
+            except Exception:
+                candidate_doc = self.users_collection.find_one({'_id': candidate_id, 'user_type': 'candidate'}, {'name': 1, 'email': 1})
+
+            if not candidate_doc:
+                return {'error': 'Candidate not found'}, 404
+
+            candidate_id_str = str(candidate_doc.get('_id'))
+            categories = self._credit_lines_for_owner(candidate_id_str, 'candidate', period_start, period_end)
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'candidate': {
+                    'id': candidate_id_str,
+                    'name': candidate_doc.get('name', 'Unknown Candidate'),
+                    'email': candidate_doc.get('email', ''),
+                },
+                'categories': categories,
+            }, 200
+        except Exception as e:
+            import traceback
+            print(f"Error getting candidate credit lines: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get candidate credit lines'}, 500
+
+    def get_recruiter_credit_summary(self, current_user, start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window('month', start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            rows = self._credit_summary_rows('recruiter', period_start, period_end)
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'rows': rows,
+                'total_recruiters': len(rows),
+            }, 200
+        except Exception as e:
+            import traceback
+            print(f"Error getting recruiter credit summary: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get recruiter credit summary'}, 500
+
+    def get_recruiter_credit_lines(self, current_user, recruiter_id, start_date=None, end_date=None):
+        try:
+            period_mode, period_start, period_end, error_response, error_status = self._resolve_timeline_window('month', start_date, end_date)
+            if error_response:
+                return error_response, error_status
+
+            try:
+                recruiter_doc = self.users_collection.find_one({'_id': ObjectId(recruiter_id), 'user_type': 'recruiter'}, {'name': 1, 'email': 1})
+            except Exception:
+                recruiter_doc = self.users_collection.find_one({'_id': recruiter_id, 'user_type': 'recruiter'}, {'name': 1, 'email': 1})
+
+            if not recruiter_doc:
+                return {'error': 'Recruiter not found'}, 404
+
+            recruiter_id_str = str(recruiter_doc.get('_id'))
+            categories = self._credit_lines_for_owner(recruiter_id_str, 'recruiter', period_start, period_end)
+
+            return {
+                'timeline': {
+                    'period_mode': period_mode,
+                    'start_date': self._safe_iso(period_start),
+                    'end_date': self._safe_iso(period_end),
+                    'days': max(1, (period_end - period_start).days),
+                },
+                'recruiter': {
+                    'id': recruiter_id_str,
+                    'name': recruiter_doc.get('name', 'Unknown Recruiter'),
+                    'email': recruiter_doc.get('email', ''),
+                },
+                'categories': categories,
+            }, 200
+        except Exception as e:
+            import traceback
+            print(f"Error getting recruiter credit lines: {str(e)}")
+            print(traceback.format_exc())
+            return {'error': 'Failed to get recruiter credit lines'}, 500

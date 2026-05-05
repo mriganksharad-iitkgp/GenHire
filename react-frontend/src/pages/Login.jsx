@@ -4,7 +4,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
 
 const Login = () => {
-	const [email, setEmail] = useState("");
+	const [identifier, setIdentifier] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
@@ -23,10 +23,10 @@ const Login = () => {
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ 
-					email, 
-					password, 
-					userType 
+				body: JSON.stringify({
+					identifier,
+					password,
+					userType
 				}),
 			});
 
@@ -202,13 +202,18 @@ const Login = () => {
 					)}
 
 					<div className={styles.inputGroup}>
-						<label htmlFor="email">Email</label>
+						<label htmlFor="identifier">{userType === "candidate" ? "Email or Invite ID" : "Email"}</label>
 						<input
-							type="email"
-							id="email"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							placeholder={`Enter your ${userType} email`}
+							type="text"
+							id="identifier"
+							value={identifier}
+							onChange={(e) => setIdentifier(e.target.value)}
+							placeholder={
+								userType === "candidate"
+									? "Enter your email or Invite ID"
+									: `Enter your ${userType} email`
+							}
+							autoComplete="username"
 							required
 						/>
 					</div>

@@ -42,9 +42,19 @@ def init_payment_routes(db):
 
     from ..controllers.plan_controller import PlanController
     from ..controllers.subscription_controller import SubscriptionController
+    from ..services.wallet_service import WalletService
 
     _plan_controller = PlanController(db)
     _subscription_controller = SubscriptionController(db)
+    try:
+        granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(
+            db["users"]
+        )
+        logger.info(
+            f"Wallet signup bonus bootstrap complete. Granted={granted}, skipped={skipped}"
+        )
+    except Exception as e:
+        logger.warning(f"Signup bonus bootstrap skipped: {e}")
 
     # Payment and webhook controllers require Razorpay keys
     try:
@@ -65,6 +75,7 @@ def init_payment_routes(db):
 
 
 @payment_bp.route("/plans", methods=["GET"])
+@payment_bp.route("/recharge/packs", methods=["GET"])
 @token_required
 def get_plans(current_user):
     """
@@ -115,6 +126,7 @@ def get_plan_by_slug(current_user, slug):
 
 
 @payment_bp.route("/payments/initiate", methods=["POST"])
+@payment_bp.route("/recharge/initiate", methods=["POST"])
 @token_required
 def initiate_payment(current_user):
     """
@@ -147,6 +159,7 @@ def initiate_payment(current_user):
 
 
 @payment_bp.route("/payments/verify", methods=["POST"])
+@payment_bp.route("/recharge/verify", methods=["POST"])
 @token_required
 def verify_payment(current_user):
     """
@@ -235,6 +248,7 @@ def request_refund(current_user, payment_id):
 
 
 @payment_bp.route("/subscriptions/me", methods=["GET"])
+@payment_bp.route("/wallet/summary", methods=["GET"])
 @token_required
 def get_current_subscription(current_user):
     """
@@ -279,6 +293,7 @@ def get_subscription_history(current_user):
 
 
 @payment_bp.route("/subscriptions/check", methods=["GET"])
+@payment_bp.route("/wallet/check", methods=["GET"])
 @token_required
 def check_subscription(current_user):
     """
@@ -322,6 +337,15 @@ def cancel_subscription(current_user):
 # =============================================================================
 # INTERVIEW ROUTES (Protected)
 # =============================================================================
+
+
+@payment_bp.route("/credits/transactions", methods=["GET"])
+@payment_bp.route("/wallet/transactions", methods=["GET"])
+@token_required
+def get_wallet_transactions(current_user):
+    """Get recent credit wallet transactions for the authenticated user."""
+    response, status_code = _subscription_controller.get_credit_transactions(current_user)
+    return jsonify(response), status_code
 
 
 @payment_bp.route("/interviews/use", methods=["POST"])

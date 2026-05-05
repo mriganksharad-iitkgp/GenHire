@@ -41,12 +41,7 @@ class PlanService:
         self.collection = db[PlanSchema.COLLECTION_NAME]
         self._ensure_indexes()
         self._seed_default_plans()
-        self._ensure_default_plans_exist()
-        self._backfill_plan_audience()
-        self._backfill_plan_monthly_credits()
         self._remove_plan_usage_fields()
-        self._migrate_legacy_candidate_plans()
-        self._migrate_legacy_enterprise_to_recruiter_max()
 
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
@@ -57,38 +52,46 @@ class PlanService:
             logger.error(f"Error creating plan indexes: {str(e)}")
 
     def _seed_default_plans(self):
-        """
-        Seed default plans if none exist.
-
-        This ensures the system has usable plans on first deployment.
-        """
+        """Synchronize configured recharge packs and deactivate legacy plan rows."""
         try:
-            existing = self.collection.count_documents({"is_active": True})
-            if existing > 0:
-                logger.info(f"Found {existing} existing plans, skipping seed")
-                return
+            now = datetime.utcnow()
+            configured_slugs = set()
 
-            logger.info("Seeding default plans...")
-
-            for slug, plan_data in PaymentConfig.DEFAULT_PLANS.items():
-                plan = Plan(
-                    name=plan_data["name"],
-                    slug=plan_data["slug"],
-                    description=plan_data["description"],
-                    price_paise=plan_data["price_paise"],
-                    credits_allocated=plan_data.get(
-                        "credits_allocated", plan_data.get("interviews_allowed", 0)
-                    ),
-                    validity_days=plan_data["validity_days"],
-                    features=plan_data["features"],
-                    is_active=plan_data["is_active"],
-                    display_order=plan_data["display_order"],
+            for _, plan_data in PaymentConfig.DEFAULT_PLANS.items():
+                slug = plan_data["slug"]
+                configured_slugs.add(slug)
+                payload = {
+                    "name": plan_data["name"],
+                    "slug": slug,
+                    "description": plan_data["description"],
+                    "price_paise": int(plan_data["price_paise"]),
+                    "credits_allocated": int(plan_data.get("credits_allocated", 0)),
+                    "interviews_allowed": int(plan_data.get("credits_allocated", 0)),
+                    "monthly_credits": int(plan_data.get("credits_allocated", 0)),
+                    "validity_days": int(plan_data.get("validity_days", 36500)),
+                    "features": plan_data.get("features", []),
+                    "audience": plan_data.get("audience", "recruiter"),
+                    "is_popular": bool(plan_data.get("is_popular", False)),
+                    "is_active": bool(plan_data.get("is_active", True)),
+                    "display_order": int(plan_data.get("display_order", 0)),
+                    "updated_at": now,
+                }
+                self.collection.update_one(
+                    {"slug": slug},
+                    {
+                        "$set": payload,
+                        "$setOnInsert": {"created_at": now},
+                    },
+                    upsert=True,
                 )
 
-                self.collection.insert_one(plan.to_dict())
-                logger.info(f"Seeded plan: {plan.name}")
+            # Keep only configured packs active.
+            self.collection.update_many(
+                {"slug": {"$nin": list(configured_slugs)}},
+                {"$set": {"is_active": False, "updated_at": now}},
+            )
 
-            logger.info("Default plans seeded successfully")
+            logger.info("Recharge packs synchronized successfully")
 
         except Exception as e:
             logger.error(f"Error seeding plans: {str(e)}")

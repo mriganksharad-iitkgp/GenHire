@@ -14,10 +14,7 @@ const CandidatePlanButton = () => {
     isOutOfInterviews,
   } = useCandidateSubscription();
 
-  const effectiveCreditsRemaining =
-    isFreeTier && creditsRemaining <= 0
-      ? Math.max(0, subscription?.plan?.monthly_credits ?? 250)
-      : creditsRemaining;
+  const effectiveCreditsRemaining = Math.max(0, Number(creditsRemaining || 0));
   const isDepletedPaidPlan = isOutOfInterviews && !isFreeTier;
 
   useEffect(() => {
@@ -58,7 +55,7 @@ const CandidatePlanButton = () => {
 
   const getStatusText = () => {
     if (loading) return "Loading...";
-    if (isOutOfInterviews) return "No credits left";
+    if (isDepletedPaidPlan) return "No credits left";
     return `${effectiveCreditsRemaining} credits left`;
   };
 
@@ -85,7 +82,7 @@ const CandidatePlanButton = () => {
         </div>
         <div className={styles.textWrapper}>
           <span className={styles.planName}>
-            {loading ? "Plan" : subscription?.plan?.name || "Free Tier"}
+            {loading ? "Plan" : subscription?.plan?.name || "Recharge Wallet"}
           </span>
           <span className={styles.statusText}>{getStatusText()}</span>
         </div>

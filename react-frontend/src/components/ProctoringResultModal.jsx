@@ -1,9 +1,6 @@
 import React from 'react';
-import { Scatter } from 'react-chartjs-2';
-import { Chart as ChartJS, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import GazeHeatmapPanel from './GazeHeatmapPanel';
 import styles from './ProctoringResultModal.module.css';
-
-ChartJS.register(LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const PROCTORING_FEATURES = [
   { key: 'voice_detection', label: 'Voice Activity Detection', icon: '🎤', color: '#8b5cf6' },
@@ -24,53 +21,10 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
     gaze_heatmap: true,
   };
 
-  const gazeData = report.gaze_metrics || { left_eye: [], right_eye: [] };
   const infractions = report.manual_infractions || [];
-
-  const chartData = {
-    datasets: [
-      {
-        label: 'Left Eye',
-        data: Array.isArray(gazeData.left_eye) ? gazeData.left_eye : [],
-        pointRadius: 3,
-        pointBackgroundColor: '#3b82f6',
-      },
-      {
-        label: 'Right Eye',
-        data: Array.isArray(gazeData.right_eye) ? gazeData.right_eye : [],
-        pointRadius: 3,
-        pointBackgroundColor: '#10b981',
-      },
-    ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-      },
-    },
-    scales: {
-      x: {
-        title: {
-          display: true,
-          text: 'X',
-        },
-      },
-      y: {
-        title: {
-          display: true,
-          text: 'Y',
-        },
-      },
-    },
-  };
 
   // Backend file paths
   const gazePlotUrl = report.gaze_plot_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}` : null;
-  const gazeHeatmapUrl = report.gaze_recorder_analysis_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_recorder_analysis_path)}` : null;
 
   // Categorize infractions
   const objectInfractions = infractions.filter(i => ['phone_detected', 'multiple_people', 'object_detected'].includes(i.type));
@@ -97,9 +51,6 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
             </div>
           ) : (
             <>
-              <h4>Gaze Plot</h4>
-              <Scatter options={options} data={chartData} />
-              <hr />
           <h4>Proctoring Summary</h4>
           <p><strong>Proctoring Score:</strong> {report.proctoring_score !== undefined ? `${report.proctoring_score}%` : 'N/A'}</p>
           <p><strong>Manual Infractions:</strong></p>
@@ -206,19 +157,19 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                     </>
                   )}
 
-                  {/* Gaze Heatmap */}
+                  {/* Gaze Heatmap (WebGazer): canvas from points JSON + regions from analysis */}
                   {feature.key === 'gaze_heatmap' && (
                     <>
-                      {gazeHeatmapUrl ? (
-                        <div className={styles.chartContainer} style={{ background: 'transparent' }}>
-                          <img src={gazeHeatmapUrl} alt="Gaze Heatmap Result" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        </div>
-                      ) : (
-                        <p className={styles.noIssues}>✅ Heatmap data recorded</p>
-                      )}
-                      {report.gaze_recorder_score !== undefined && (
+                      <div className={styles.chartContainer} style={{ background: 'transparent', height: 'auto', minHeight: '200px' }}>
+                        <GazeHeatmapPanel
+                          analysis={report.gaze_recorder_analysis}
+                          pointsPath={report.gaze_recorder_points_path}
+                          apiUrl={API_URL}
+                        />
+                      </div>
+                      {report.gaze_recorder_score !== undefined && report.gaze_recorder_score !== null && (
                         <div style={{ marginTop: '8px', fontSize: '13px', color: '#e2e8f0' }}>
-                          Engagement Score: <strong>{report.gaze_recorder_score}%</strong>
+                          Engagement score: <strong>{report.gaze_recorder_score}%</strong>
                         </div>
                       )}
                     </>

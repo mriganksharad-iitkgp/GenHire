@@ -32,13 +32,14 @@ def check_email_account_type():
 @auth_bp.route('/login', methods=['POST'])
 @cross_origin()
 def login():
-    """User login endpoint"""
-    data = request.get_json()
-    email = data.get('email')
+    """User login endpoint. Accepts either an email or a username under
+    `identifier` (preferred) or the legacy `email` field for backward compat."""
+    data = request.get_json() or {}
+    identifier = data.get('identifier') or data.get('email') or data.get('username')
     password = data.get('password')
     user_type = data.get('userType', 'candidate')
-    
-    result, status_code = auth_controller.login_user(email, password, user_type)
+
+    result, status_code = auth_controller.login_user(identifier, password, user_type)
     return jsonify(result), status_code
 
 @auth_bp.route('/me', methods=['GET'])

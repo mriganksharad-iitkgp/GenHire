@@ -9,6 +9,7 @@ from pymongo.errors import DuplicateKeyError
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from services.email_service import EmailService
+from payment_module.services.wallet_service import WalletService
 
 class AuthController:
     def __init__(self, db_collections):
@@ -17,20 +18,43 @@ class AuthController:
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.email_service = EmailService()
         self.require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'true').lower() == 'true'
+        self.wallet_service = WalletService(self.users_collection.database)
 
     def _normalize_email(self, email):
         return str(email or '').strip().lower()
 
+    def _find_user_by_identifier(self, identifier):
+        """Resolve a user by email (if it contains '@') or by Invite ID otherwise.
+        Email lookup intentionally skips invite-only burner accounts so a real
+        candidate can keep using their email after they've been invited."""
+        if not identifier:
+            return None
+        s = str(identifier).strip()
+        if '@' in s:
+            return self._find_user_by_email(s)
+        s_lower = s.lower()
+        # Invite ID lookup. Fall back to legacy `username_lower` for old data.
+        return self.users_collection.find_one(
+            {'$or': [{'invite_id_lower': s_lower}, {'username_lower': s_lower}]}
+        )
+
     def _find_user_by_email(self, email):
+        """Lookup a real (non-invite-only) account by email. Burner accounts
+        are excluded so login-by-email never resolves to a temp invite account."""
         normalized_email = self._normalize_email(email)
         if not normalized_email:
             return None
 
+        not_invite = {'is_invite_only': {'$ne': True}}
+
         user = self.users_collection.find_one({
-            '$or': [
-                {'email_lower': normalized_email},
-                {'email': normalized_email},
-                {'email': str(email or '').strip()}
+            '$and': [
+                not_invite,
+                {'$or': [
+                    {'email_lower': normalized_email},
+                    {'email': normalized_email},
+                    {'email': str(email or '').strip()},
+                ]},
             ]
         })
         if user:
@@ -39,28 +63,25 @@ class AuthController:
         # Fallback for legacy records with mixed case or accidental spaces in `email`.
         escaped = re.escape(normalized_email)
         user = self.users_collection.find_one({
-            'email': {
-                '$regex': f'^\\s*{escaped}\\s*$',
-                '$options': 'i'
-            }
+            '$and': [
+                not_invite,
+                {'email': {'$regex': f'^\\s*{escaped}\\s*$', '$options': 'i'}},
+            ]
         })
         if user:
             return user
 
         # Last-resort normalization query using Mongo expressions.
         return self.users_collection.find_one({
-            '$expr': {
-                '$eq': [
-                    {
-                        '$toLower': {
-                            '$trim': {
-                                'input': {'$ifNull': ['$email', '']}
-                            }
-                        }
-                    },
-                    normalized_email
-                ]
-            }
+            '$and': [
+                not_invite,
+                {'$expr': {
+                    '$eq': [
+                        {'$toLower': {'$trim': {'input': {'$ifNull': ['$email', '']}}}},
+                        normalized_email,
+                    ]
+                }},
+            ]
         })
 
     def check_email_account_type(self, email, requested_user_type='candidate'):
@@ -174,6 +195,8 @@ class AuthController:
                     'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
                 }, 409
             return {'error': 'Email already exists'}, 409
+
+        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
         
         # Send verification email if required
         if self.require_email_verification:
@@ -208,21 +231,25 @@ class AuthController:
             }
         }, 201
         
-    def login_user(self, email, password, user_type):
-        """Authenticate user and return token"""
-        if not email or not password:
-            return {'error': 'Email and password are required'}, 400
+    def login_user(self, identifier, password, user_type):
+        """Authenticate user (by email or username) and return token."""
+        if not identifier or not password:
+            return {'error': 'Email/username and password are required'}, 400
 
-        normalized_email = self._normalize_email(email)
+        identifier_str = str(identifier).strip()
         user_type = str(user_type or 'candidate').strip().lower()
-        
+
         # Support candidate, recruiter, and admin login
         if user_type not in ['candidate', 'recruiter', 'admin']:
             return {'error': 'Invalid credentials'}, 401
-        
-        user = self._find_user_by_email(normalized_email)
-        
+
+        user = self._find_user_by_identifier(identifier_str)
+
         if not user or not check_password_hash(user['password'], password):
+            return {'error': 'Invalid email or password'}, 401
+
+        # Block invite-only (burner) accounts from claiming recruiter or admin roles.
+        if user.get('is_invite_only') and user_type in ('recruiter', 'admin'):
             return {'error': 'Invalid email or password'}, 401
         
         # Check if user type matches
@@ -255,29 +282,38 @@ class AuthController:
         # Generate token
         token = self.generate_token(user['_id'])
 
-        if user.get('email') != normalized_email or not user.get('email_lower'):
+        # Backfill normalized email_lower for legacy rows when we logged in via email.
+        stored_email = user.get('email') or ''
+        canonical_email = self._normalize_email(stored_email)
+        if canonical_email and (stored_email != canonical_email or not user.get('email_lower')):
             self.users_collection.update_one(
                 {'_id': user['_id']},
                 {
                     '$set': {
-                        'email': normalized_email,
-                        'email_lower': normalized_email,
+                        'email': canonical_email,
+                        'email_lower': canonical_email,
                         'updated_at': datetime.datetime.utcnow()
                     }
                 }
             )
-        
+
+        invited_job_ids = [str(j) for j in (user.get('invited_job_ids') or [])]
+
         return {
             'message': 'Logged in successfully',
             'token': token,
             'user': {
                 'id': str(user['_id']),
-                'name': user['name'],
-                'email': user['email'],
+                'name': user.get('name') or '',
+                'email': user.get('email'),
+                'invite_id': user.get('invite_id') or user.get('username'),
                 'user_type': stored_user_type,
                 'email_verified': user.get('email_verified', False),
                 'is_verified': is_verified,
-                'permissions': user.get('permissions', [])
+                'permissions': user.get('permissions', []),
+                'is_invite_only': bool(user.get('is_invite_only')),
+                'invite_first_login_required': bool(user.get('invite_first_login_required')),
+                'invited_job_ids': invited_job_ids,
             }
         }, 200
         
@@ -313,13 +349,17 @@ class AuthController:
         """Get formatted current user information"""
         return {
             'id': str(user['_id']),
-            'name': user['name'],
-            'email': user['email'],
+            'name': user.get('name') or '',
+            'email': user.get('email'),
+            'invite_id': user.get('invite_id') or user.get('username'),
             'user_type': user.get('user_type', 'candidate'),
             'email_verified': user.get('email_verified', False),
             'auth_provider': user.get('auth_provider', 'local'),
             'is_verified': user.get('is_verified', True),
-            'permissions': user.get('permissions', [])
+            'permissions': user.get('permissions', []),
+            'is_invite_only': bool(user.get('is_invite_only')),
+            'invite_first_login_required': bool(user.get('invite_first_login_required')),
+            'invited_job_ids': [str(j) for j in (user.get('invited_job_ids') or [])],
         }
     
     def verify_email(self, token):
@@ -600,6 +640,8 @@ class AuthController:
                             'error': f'This email is already registered as a {existing_type}. One email can be used for only one account type.'
                         }, 409
                     return {'error': 'Email already exists'}, 409
+
+                self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
                 
                 # Generate token
                 jwt_token = self.generate_token(user_id)
