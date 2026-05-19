@@ -30,6 +30,20 @@ const JobDetails = () => {
 		setToast({ message, type });
 	};
 
+	const parseApplyResponse = async (response) => {
+		const contentType = response.headers.get('content-type') || '';
+		if (contentType.includes('application/json')) {
+			return response.json();
+		}
+
+		const text = await response.text();
+		return {
+			error: text
+				? `Server returned an unexpected response (${response.status}). Please try again.`
+				: 'Failed to submit application'
+		};
+	};
+
 	// Utility to normalize list-like fields
 	const toList = (val) => {
 		if (!val) return [];
@@ -260,10 +274,11 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				},
 				body: JSON.stringify({
 					cv_id: cvSelection.cv_id,
+					use_manual_cv: cvSelection.use_manual_cv,
 					cover_letter: `I am interested in applying for ${job?.title}.`
 				})
 			});
-			const data = await res.json();
+			const data = await parseApplyResponse(res);
 			if (!res.ok) {
 				// Revert optimistic update on error
 				setHasApplied(false);

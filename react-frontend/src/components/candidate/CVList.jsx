@@ -1,59 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useCandidateData } from '../../contexts/CandidateDataContext';
 import styles from './CVList.module.css';
 
-const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
+const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
+  const { cvs, cvsLoaded, loadCvsCached, invalidateCvs } = useCandidateData();
   const [cvList, setCvList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [settingPrimary, setSettingPrimary] = useState(null);
 
-  useEffect(() => {
-    fetchCVs();
-  }, [refreshTrigger]); // Re-fetch when refreshTrigger changes
-
-  const fetchCVs = async () => {
+  const fetchCVs = useCallback(async (force = false) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('companyxyz-token');
-      console.log('🔍 Fetching CVs from:', `${process.env.REACT_APP_API_URL}/api/cv/list`);
-      
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const loadedCvs = await loadCvsCached(force, async () => {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to load CVs');
         }
+
+        const data = await response.json();
+        return data.cvs || [];
       });
 
-      console.log('📡 CV list response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ CV list data received:', data);
-        console.log('📋 Number of CVs:', data.cvs?.length || 0);
-        if (data.cvs && data.cvs.length > 0) {
-          console.log('📄 First CV structure:', data.cvs[0]);
-          console.log('📄 Filename fields:', {
-            filename: data.cvs[0].filename,
-            file_name: data.cvs[0].file_name,
-            original_filename: data.cvs[0].original_filename
-          });
-        }
-        setCvList(data.cvs || []);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ CV list fetch failed:', response.status, errorData);
-        showToast?.(`Failed to load CVs: ${errorData.error || 'Unknown error'}`, 'error');
-      }
+      setCvList(loadedCvs || []);
     } catch (err) {
-      console.error('❌ Error fetching CVs:', err);
-      showToast?.('Failed to load CVs', 'error');
+      console.error('Error fetching CVs:', err);
+      showToast?.(err.message || 'Failed to load CVs', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadCvsCached, showToast]);
+
+  useEffect(() => {
+    if (cvsLoaded) {
+      setCvList(cvs || []);
+      setLoading(false);
+      return;
+    }
+
+    fetchCVs(false);
+  }, [cvsLoaded, cvs, fetchCVs]);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchCVs(true);
+    }
+  }, [refreshTrigger, fetchCVs]);
 
   const handleSetPrimary = async (cvId, e) => {
-    e.stopPropagation(); // Prevent CV click
+    e.stopPropagation();
     setSettingPrimary(cvId);
-    
+
     try {
       const token = localStorage.getItem('companyxyz-token');
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}/set-primary`, {
@@ -63,13 +66,15 @@ const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
         }
       });
 
-      if (response.ok) {
-        showToast?.('Primary CV updated successfully', 'success');
-        await fetchCVs(); // Refresh list
-      } else {
-        const data = await response.json();
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         showToast?.(data.error || 'Failed to set primary CV', 'error');
+        return;
       }
+
+      showToast?.('Primary CV updated successfully', 'success');
+      invalidateCvs();
+      await fetchCVs(true);
     } catch (err) {
       console.error('Error setting primary CV:', err);
       showToast?.('Failed to set primary CV', 'error');
@@ -79,47 +84,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
   };
 
   const handleCVClick = (cv) => {
-    // Open CV PDF in new tab using fetch with auth headers
-    const token = localStorage.getItem('companyxyz-token');
-    const url = `${process.env.REACT_APP_API_URL}/api/cv/${cv.cv_id}/preview`;
-    
-    fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to load CV');
-      }
-      return response.blob();
-    })
-    .then(blob => {
-      const blobUrl = window.URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank');
-    })
-    .catch(err => {
-      console.error('Error opening CV:', err);
-      showToast?.('Failed to open CV', 'error');
-    });
-    
     onCVClick?.(cv);
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return 'N/A';
-    return bytes < 1024 * 1024 
-      ? `${(bytes / 1024).toFixed(1)} KB`
-      : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
   };
 
   if (loading) {
@@ -149,7 +114,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
         </h4>
         <small>Click to view in new tab</small>
       </div>
-      
+
       <div className={styles.list}>
         {cvList.map((cv) => (
           <div
@@ -160,10 +125,10 @@ const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
             <div className={styles.cvIcon}>
               <i className="fa fa-file-pdf-o"></i>
             </div>
-            
+
             <div className={styles.cvInfo}>
               <div className={styles.cvFileName} title={cv.filename}>
-                {cv.filename}
+                {cv.filename || cv.file_name || cv.original_filename || 'Uploaded CV'}
               </div>
               <div className={styles.cvActions}>
                 {cv.is_primary ? (
@@ -192,7 +157,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger }) => {
           </div>
         ))}
       </div>
-      
+
       <div className={styles.footer}>
         <i className="fa fa-info-circle"></i>
         <small>Primary CV is auto-selected when applying for jobs or starting practice interviews</small>

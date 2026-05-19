@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useCandidateData } from '../contexts/CandidateDataContext';
+import { getProfile } from '../services/api';
+import { isProfileCvComplete } from '../utils/cvDetails';
 import styles from './CVSelectionModal.module.css';
 
 const CVSelectionModal = ({ 
@@ -9,7 +11,7 @@ const CVSelectionModal = ({
   jobTitle,
   mode = 'apply' // 'apply' or 'practice'
 }) => {
-  const { cvs: cachedCvs, cvsLoaded, loadCvsCached } = useCandidateData();
+  const { cvs: cachedCvs, cvsLoaded, loadCvsCached, loadProfileCached } = useCandidateData();
   const [cvList, setCvList] = useState([]);
   const [selectedCvId, setSelectedCvId] = useState(null);
   const [useManualCV, setUseManualCV] = useState(false);
@@ -18,38 +20,17 @@ const CVSelectionModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualCVComplete, setManualCVComplete] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      // Only fetch if not already loaded (caching via context)
-      if (!cvsLoaded) {
-        fetchCVs();
-        checkManualCVCompletion();
-      } else {
-        // Use cached data - instant loading!
-        console.log('📦 Using cached CVs from context');
-        setCvList(cachedCvs);
-        setLoading(false);
-        
-        // Auto-select primary CV if available
-        const primaryCV = cachedCvs?.find(cv => cv.is_primary);
-        if (primaryCV) {
-          setSelectedCvId(primaryCV.cv_id);
-          setUseManualCV(false);
-        } else if (cachedCvs?.length > 0) {
-          setSelectedCvId(cachedCvs[0].cv_id);
-          setUseManualCV(false);
-        } else {
-          setUseManualCV(true);
-        }
-      }
-    } else {
-      // Reset submitting state when modal closes
-      setIsSubmitting(false);
-      setError(null);
+  const checkManualCVCompletion = useCallback(async () => {
+    try {
+      const profile = await loadProfileCached(false, getProfile);
+      setManualCVComplete(isProfileCvComplete(profile?.cv_details));
+    } catch (err) {
+      console.error('Error checking manual CV:', err);
+      setManualCVComplete(false);
     }
-  }, [isOpen, cvsLoaded, cachedCvs]);
+  }, [loadProfileCached]);
 
-  const fetchCVs = async () => {
+  const fetchCVs = useCallback(async () => {
     setLoading(true);
     try {
       // Use cached data from context
@@ -90,22 +71,38 @@ const CVSelectionModal = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadCvsCached]);
 
-  const checkManualCVCompletion = async () => {
-    try {
-      const token = localStorage.getItem('companyxyz-token');
-      const user = JSON.parse(localStorage.getItem('companyxyz-user'));
-      
-      // Check if manual CV details are complete
-      // This is a basic check - you can make it more sophisticated
-      const hasBasicInfo = user?.name && user?.email;
-      setManualCVComplete(hasBasicInfo);
-    } catch (err) {
-      console.error('Error checking manual CV:', err);
-      setManualCVComplete(false);
+  useEffect(() => {
+    if (isOpen) {
+      checkManualCVCompletion();
+      // Only fetch if not already loaded (caching via context)
+      if (!cvsLoaded) {
+        fetchCVs();
+      } else {
+        // Use cached data - instant loading!
+        console.log('📦 Using cached CVs from context');
+        setCvList(cachedCvs);
+        setLoading(false);
+        
+        // Auto-select primary CV if available
+        const primaryCV = cachedCvs?.find(cv => cv.is_primary);
+        if (primaryCV) {
+          setSelectedCvId(primaryCV.cv_id);
+          setUseManualCV(false);
+        } else if (cachedCvs?.length > 0) {
+          setSelectedCvId(cachedCvs[0].cv_id);
+          setUseManualCV(false);
+        } else {
+          setUseManualCV(true);
+        }
+      }
+    } else {
+      // Reset submitting state when modal closes
+      setIsSubmitting(false);
+      setError(null);
     }
-  };
+  }, [isOpen, cvsLoaded, cachedCvs, checkManualCVCompletion, fetchCVs]);
 
   const handleSubmit = () => {
     // Validation

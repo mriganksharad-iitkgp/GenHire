@@ -39,23 +39,24 @@ const Dashboard = () => {
 		setToast({ message, type });
 	};
 
+	const parseApplyResponse = async (response) => {
+		const contentType = response.headers.get('content-type') || '';
+		if (contentType.includes('application/json')) {
+			return response.json();
+		}
+
+		const text = await response.text();
+		return {
+			error: text
+				? `Server returned an unexpected response (${response.status}). Please try again.`
+				: 'Failed to submit application'
+		};
+	};
+
 	// Reset page when filters change
 	useEffect(() => {
 		setCurrentPage(1);
 	}, [searchQuery, typeFilter, locationFilter, experienceFilter, jobRoleFilter, companyFilter, skillsFilter]);
-
-	// Single useEffect for authentication and initial data load (ONLY ONCE)
-	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
-		if (!isLoggedIn) {
-			navigate("/login");
-			return;
-		}
-		
-		// Load data only once on mount
-		loadJobs();
-		loadApplications();
-	}, []); // Empty dependency array - run only once
 
 	// Poll for application updates when there are pending/processing applications
 	useEffect(() => {
@@ -184,11 +185,12 @@ const Dashboard = () => {
 				},
 				body: JSON.stringify({
 					cv_id: cvSelection.cv_id,
+					use_manual_cv: cvSelection.use_manual_cv,
 					cover_letter: `I am interested in applying for this position and believe my skills align well with the requirements.`
 				})
 			});
 
-			const data = await response.json();
+			const data = await parseApplyResponse(response);
 
 			if (response.ok) {
 				// Application successful - backend is processing CV score

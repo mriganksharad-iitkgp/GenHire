@@ -9,6 +9,7 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
  */
 
 const CandidateDataContext = createContext(null);
+const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
 export const CandidateDataProvider = ({ children }) => {
   // Jobs data (from Dashboard)
@@ -27,9 +28,13 @@ export const CandidateDataProvider = ({ children }) => {
   const [cvs, setCvs] = useState([]);
   const [cvsLoaded, setCvsLoaded] = useState(false);
   const [cvsLoading, setCvsLoading] = useState(false);
-  
-  // Cache expiry time (5 minutes)
-  const CACHE_EXPIRY_MS = 5 * 60 * 1000;
+  const cvsLoadTimeRef = useRef(0);
+
+  // Candidate profile data
+  const [profile, setProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const profileLoadTimeRef = useRef(0);
   
   /**
    * Load jobs with caching
@@ -113,8 +118,11 @@ export const CandidateDataProvider = ({ children }) => {
    * @param {function} loadFn - Function that loads CVs from API
    */
   const loadCvsCached = useCallback(async (force, loadFn) => {
+    const now = Date.now();
+    const cacheAge = now - cvsLoadTimeRef.current;
+
     // Return cached data if valid and not forcing
-    if (!force && cvsLoaded && !cvsLoading) {
+    if (!force && cvsLoaded && cacheAge < CACHE_EXPIRY_MS && !cvsLoading) {
       console.log('📦 Using cached CVs data');
       return cvs;
     }
@@ -132,6 +140,7 @@ export const CandidateDataProvider = ({ children }) => {
       const loadedCvs = await loadFn();
       setCvs(loadedCvs);
       setCvsLoaded(true);
+      cvsLoadTimeRef.current = Date.now();
       return loadedCvs;
     } catch (error) {
       console.error('Error loading CVs:', error);
@@ -140,6 +149,48 @@ export const CandidateDataProvider = ({ children }) => {
       setCvsLoading(false);
     }
   }, [cvs, cvsLoaded, cvsLoading]);
+
+  const loadProfileCached = useCallback(async (force, loadFn) => {
+    const now = Date.now();
+    const cacheAge = now - profileLoadTimeRef.current;
+
+    if (!force && profileLoaded && cacheAge < CACHE_EXPIRY_MS && !profileLoading) {
+      console.log('ðŸ“¦ Using cached profile data');
+      return profile;
+    }
+
+    if (profileLoading) {
+      console.log('â³ Profile already loading, skipping...');
+      return profile;
+    }
+
+    console.log('ðŸ”„ Loading profile from API...');
+    setProfileLoading(true);
+
+    try {
+      const loadedProfile = await loadFn();
+      setProfile(loadedProfile);
+      setProfileLoaded(true);
+      profileLoadTimeRef.current = Date.now();
+      return loadedProfile;
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      throw error;
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [profile, profileLoaded, profileLoading]);
+
+  const updateCachedProfile = useCallback((updater) => {
+    setProfile(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (next) {
+        setProfileLoaded(true);
+        profileLoadTimeRef.current = Date.now();
+      }
+      return next;
+    });
+  }, []);
   
   /**
    * Invalidate jobs cache (use after applying to a job)
@@ -165,6 +216,13 @@ export const CandidateDataProvider = ({ children }) => {
   const invalidateCvs = useCallback(() => {
     console.log('🗑️ Invalidating CVs cache');
     setCvsLoaded(false);
+    cvsLoadTimeRef.current = 0;
+  }, []);
+  
+  const invalidateProfile = useCallback(() => {
+    console.log('Invalidating profile cache');
+    setProfileLoaded(false);
+    profileLoadTimeRef.current = 0;
   }, []);
   
   /**
@@ -175,8 +233,11 @@ export const CandidateDataProvider = ({ children }) => {
     setJobsLoaded(false);
     setApplicationsLoaded(false);
     setCvsLoaded(false);
+    setProfileLoaded(false);
     jobsLoadTimeRef.current = 0;
     applicationsLoadTimeRef.current = 0;
+    cvsLoadTimeRef.current = 0;
+    profileLoadTimeRef.current = 0;
   }, []);
   
   const value = {
@@ -200,6 +261,14 @@ export const CandidateDataProvider = ({ children }) => {
     cvsLoading,
     loadCvsCached,
     invalidateCvs,
+
+    // Profile
+    profile,
+    profileLoaded,
+    profileLoading,
+    loadProfileCached,
+    updateCachedProfile,
+    invalidateProfile,
     
     // Global
     clearAllCaches

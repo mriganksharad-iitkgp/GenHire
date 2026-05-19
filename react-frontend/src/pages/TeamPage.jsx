@@ -5,7 +5,7 @@ const teamMembers = [
   {
     name: "Nikhil Gupta",
     contribution:
-      "Delivered the HR and candidate portals end to end, spanning React flows, Python APIs, and CV/interview automation.",
+      "Developed the HR and candidate portals end to end, spanning React flows, Python APIs, and CV/interview automation.",
     linkedIn: "https://www.linkedin.com/in/nikhil-gupta-359742256/",
     imageUrl: "https://media.licdn.com/dms/image/v2/D4D03AQEYale5anIyzQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1684241864091?e=1779321600&v=beta&t=hTKjgiBn_DSMTHBEjLogvcT6eeAdDnNHr0gaddyqDMQ",
   },
