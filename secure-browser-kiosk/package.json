@@ -9,7 +9,11 @@
     "smoke:gaze": "npx --yes serve@14 . -l 3333",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "electron-builder --win",
-    "dist": "electron-builder --win --x64"
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "dist": "electron-builder --win --x64",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac --universal"
   },
   "build": {
     "appId": "com.genhire.securebrowser",
@@ -33,6 +37,29 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "build/genhire_logo.icns"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 130,
+          "y": 220,
+          "type": "file"
+        }
+      ]
     }
   },
   "keywords": [],

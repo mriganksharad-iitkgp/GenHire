@@ -36,7 +36,7 @@ sdist/
 var/
 *.manifest
 *.spec
-
+/public/apps/
 
 
 # === Node/React frontend ===
@@ -46,7 +46,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 package-lock.json
-
+react-frontend/public/apps/*
 # Build output
 react-frontend/dist/
 react-frontend/build/
