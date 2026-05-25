@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InterviewReportModal from "../components/InterviewReportModal";
 import Toast from "../components/Toast";
-import { useCandidateData } from "../contexts/CandidateDataContext";
 import styles from "./Profile.module.css";
 import SidebarProfile from "../components/candidate/SidebarProfile";
 import BioForm from "../components/candidate/BioForm";
@@ -13,7 +12,6 @@ import { viewCV as apiViewCV, viewApplicationCV } from "../services/api";
 
 const Profile = () => {
 	const navigate = useNavigate();
-	const { invalidateApplications, invalidateCvs } = useCandidateData();
 	const [activeTab, setActiveTab] = useState("bio"); // Add state for active tab
 	const [cvFile, setCvFile] = useState(null);
 
@@ -149,9 +147,6 @@ const Profile = () => {
 			if (interviewCompleted === 'true') {
 				localStorage.removeItem('interview-just-completed');
 				reloadApplications(true);
-			} else {
-				// Always refresh when switching to applications tab for latest data
-				reloadApplications(true);
 			}
 		}
 	};
@@ -166,8 +161,6 @@ const Profile = () => {
 		const ok = await uploadCvFile(cvFile);
 		if (ok) {
 			setCvFile(null);
-			// Invalidate CVs cache so next modal open fetches fresh list
-			invalidateCvs();
 		}
 	};
 
@@ -180,9 +173,19 @@ const Profile = () => {
 	// Handle CV viewing
 	const handleViewCV = async (application = null) => {
 		try {
-			const blob = application?.id
+			let blob;
+			if (application?.cv_id) {
+				const token = localStorage.getItem("companyxyz-token");
+				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${application.cv_id}/preview`, {
+					headers: { Authorization: `Bearer ${token}` }
+				});
+				if (!response.ok) throw new Error("Failed to load CV");
+				blob = await response.blob();
+			} else {
+				blob = application?.id
 				? await viewApplicationCV(application.id)
 				: await apiViewCV();
+			}
 			const url = window.URL.createObjectURL(blob);
 			window.open(url, '_blank');
 		} catch (e) {

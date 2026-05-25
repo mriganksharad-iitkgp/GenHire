@@ -111,9 +111,18 @@ class ApplicationController:
         cv_text = None
         cv_source = None  # Track where CV came from
         selected_cv = None  # Store CV metadata for snapshot
+        manual_cv_value = application_data.get("use_manual_cv")
+        use_manual_cv = manual_cv_value is True or str(manual_cv_value).lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
+        if use_manual_cv:
+            cv_id = None
 
         # Priority order: Selected CV → Primary CV → Manual CV details
-        if cv_id:
+        if not use_manual_cv and cv_id:
             # User explicitly selected a CV PDF
             if self.cv_controller:
                 selected_cv = self.cv_controller.get_cv_by_id(user_id, cv_id)
@@ -126,7 +135,7 @@ class ApplicationController:
             else:
                 return {"error": "CV management system not available"}, 500
 
-        elif user_profile.get("cv_uploads"):
+        elif not use_manual_cv and user_profile.get("cv_uploads"):
             # No CV selected, try primary CV
             if self.cv_controller:
                 primary_cv = self.cv_controller.get_primary_cv(user_id)
@@ -156,6 +165,7 @@ class ApplicationController:
                 }, 400
 
             cv_source = "cv_manual_entry"
+            cv_text = self._format_manual_cv_details(cv_details)
             logger.info("Using manual CV details")
 
         # Create CV snapshot (preserve CV content at application time)
@@ -172,7 +182,11 @@ class ApplicationController:
             }
         elif cv_text:
             # Manual entry formatted as text
-            cv_snapshot = {"text": cv_text, "source": cv_source}
+            cv_snapshot = {
+                "text": cv_text,
+                "source": cv_source,
+                "details": cv_details,
+            }
 
         # Create JD snapshot (preserve JD content at application time)
         jd_text = job.get("jd_extracted_text") or job.get("description", "")
@@ -677,31 +691,172 @@ class ApplicationController:
         }
         return payload, 200
 
+    def _has_value(self, value):
+        return bool(str(value or "").strip())
+
     def _validate_cv_completion(self, cv_details):
+        errors = []
+        if not isinstance(cv_details, dict):
+            return [
+                "- At least one complete education entry is required",
+                "- Technical Skills are required",
+                "- At least one complete project entry is required",
+                "- Expected Salary is required",
+            ]
+
+        education = cv_details.get("education", [])
+        if not isinstance(education, list):
+            education = []
+        has_valid_education = any(
+            self._has_value(edu.get("degree"))
+            and self._has_value(edu.get("institution"))
+            and self._has_value(edu.get("year"))
+            for edu in education
+            if isinstance(edu, dict)
+        )
         if not has_valid_education:
             errors.append("- At least one complete education entry is required")
 
-        # Skills validation
         skills = cv_details.get("skills", {})
-        technical_skills = skills.get("technical", [])
-        if not technical_skills or len(technical_skills) == 0:
+        technical_skills = skills.get("technical", []) if isinstance(skills, dict) else skills
+        if not isinstance(technical_skills, list):
+            technical_skills = []
+        if not any(self._has_value(skill) for skill in technical_skills):
             errors.append("- Technical Skills are required")
 
-        # Projects validation
         projects = cv_details.get("projects", [])
+        if not isinstance(projects, list):
+            projects = []
         has_valid_project = any(
-            project.get("title", "").strip() and project.get("description", "").strip()
+            (self._has_value(project.get("title")) or self._has_value(project.get("name")))
+            and self._has_value(project.get("description"))
             for project in projects
+            if isinstance(project, dict)
         )
         if not has_valid_project:
             errors.append("- At least one complete project entry is required")
 
-        # Salary Expectations validation
-        salary_expectations = cv_details.get("salaryExpectations", {})
-        if not salary_expectations.get("expectedSalary"):
+        salary_expectations = cv_details.get("salaryExpectations") or cv_details.get("salary_expectations") or {}
+        if isinstance(salary_expectations, dict):
+            has_expected_salary = self._has_value(
+                salary_expectations.get("expectedSalary")
+                or salary_expectations.get("expected_salary")
+            )
+        else:
+            has_expected_salary = self._has_value(salary_expectations)
+        if not has_expected_salary:
             errors.append("- Expected Salary is required")
 
         return errors
+
+    def _format_manual_cv_details(self, cv_details):
+        if not isinstance(cv_details, dict):
+            return ""
+
+        parts = []
+
+        personal_info = cv_details.get("personalInfo", {})
+        if isinstance(personal_info, dict):
+            personal_lines = []
+            for label, key in [
+                ("Name", "fullName"),
+                ("Email", "email"),
+                ("Phone", "phone"),
+                ("Location", "location"),
+                ("LinkedIn", "linkedin"),
+                ("GitHub", "github"),
+            ]:
+                if self._has_value(personal_info.get(key)):
+                    personal_lines.append(f"{label}: {personal_info.get(key)}")
+            if personal_lines:
+                parts.extend(["Personal Information", *personal_lines])
+
+        if self._has_value(cv_details.get("professionalSummary")):
+            parts.extend(["", "Professional Summary", str(cv_details.get("professionalSummary")).strip()])
+
+        education = cv_details.get("education", [])
+        if isinstance(education, list) and education:
+            parts.extend(["", "Education"])
+            for edu in education:
+                if not isinstance(edu, dict):
+                    continue
+                details = [
+                    edu.get("degree"),
+                    edu.get("field"),
+                    edu.get("institution"),
+                    edu.get("year"),
+                    edu.get("grade"),
+                ]
+                line = " | ".join(str(item).strip() for item in details if self._has_value(item))
+                if line:
+                    parts.append(f"- {line}")
+
+        experience = cv_details.get("experience", [])
+        if isinstance(experience, list) and experience:
+            parts.extend(["", "Work Experience"])
+            for exp in experience:
+                if not isinstance(exp, dict):
+                    continue
+                details = [
+                    exp.get("position"),
+                    exp.get("company"),
+                    exp.get("duration"),
+                    exp.get("location"),
+                ]
+                line = " | ".join(str(item).strip() for item in details if self._has_value(item))
+                if line:
+                    parts.append(f"- {line}")
+                if self._has_value(exp.get("description")):
+                    parts.append(f"  {str(exp.get('description')).strip()}")
+
+        skills = cv_details.get("skills", {})
+        if isinstance(skills, dict):
+            technical_skills = skills.get("technical", [])
+            soft_skills = skills.get("soft", [])
+        else:
+            technical_skills = skills
+            soft_skills = []
+        if not isinstance(technical_skills, list):
+            technical_skills = []
+        if not isinstance(soft_skills, list):
+            soft_skills = []
+        technical = [str(skill).strip() for skill in technical_skills if self._has_value(skill)]
+        soft = [str(skill).strip() for skill in soft_skills if self._has_value(skill)]
+        if technical or soft:
+            parts.extend(["", "Skills"])
+            if technical:
+                parts.append(f"Technical Skills: {', '.join(technical)}")
+            if soft:
+                parts.append(f"Soft Skills: {', '.join(soft)}")
+
+        projects = cv_details.get("projects", [])
+        if isinstance(projects, list) and projects:
+            parts.extend(["", "Projects"])
+            for project in projects:
+                if not isinstance(project, dict):
+                    continue
+                title = project.get("title") or project.get("name")
+                description = project.get("description")
+                if self._has_value(title):
+                    parts.append(f"- {str(title).strip()}")
+                if self._has_value(description):
+                    parts.append(f"  {str(description).strip()}")
+                if self._has_value(project.get("technologies")):
+                    parts.append(f"  Technologies: {str(project.get('technologies')).strip()}")
+
+        salary_expectations = cv_details.get("salaryExpectations") or cv_details.get("salary_expectations") or {}
+        expected_salary = (
+            salary_expectations.get("expectedSalary") or salary_expectations.get("expected_salary")
+            if isinstance(salary_expectations, dict)
+            else salary_expectations
+        )
+        if self._has_value(expected_salary):
+            parts.extend(["", "Salary Expectations"])
+            parts.append(f"Expected Salary: {expected_salary}")
+            if isinstance(salary_expectations, dict) and self._has_value(salary_expectations.get("currency")):
+                parts.append(f"Currency: {salary_expectations.get('currency')}")
+
+        return "\n".join(parts).strip()
 
     def recalculate_cv_score(self, application_id, user_id, user_type):
         """Recalculate CV score for an existing application"""

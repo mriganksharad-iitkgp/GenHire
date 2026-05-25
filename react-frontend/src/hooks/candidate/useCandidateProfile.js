@@ -7,8 +7,10 @@ import {
   viewPhoto,
   updateCvDetails,
 } from "../../services/api";
+import { useCandidateData } from "../../contexts/CandidateDataContext";
 
 export default function useCandidateProfile(toast) {
+  const { loadProfileCached, updateCachedProfile, invalidateCvs } = useCandidateData();
   const [bio, setBio] = useState({
     name: "",
     email: "",
@@ -28,7 +30,8 @@ export default function useCandidateProfile(toast) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const profile = await getProfile();
+      const profile = await loadProfileCached(false, getProfile);
+      if (!profile) return;
       setBio({
         name: profile.name || "",
         email: profile.email || "",
@@ -51,7 +54,7 @@ export default function useCandidateProfile(toast) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadProfileCached]);
 
   useEffect(() => {
     load();
@@ -60,13 +63,14 @@ export default function useCandidateProfile(toast) {
   const save = useCallback(async () => {
     try {
       await updateProfile(bio);
+      updateCachedProfile(prev => ({ ...(prev || {}), ...bio }));
       toast?.("Profile updated successfully!", "success");
       return true;
     } catch (e) {
       toast?.("Failed to update profile", "error");
       return false;
     }
-  }, [bio, toast]);
+  }, [bio, toast, updateCachedProfile]);
 
   const uploadCvFile = useCallback(
     async (file) => {
@@ -86,6 +90,7 @@ export default function useCandidateProfile(toast) {
           console.log('✅ Upload successful:', res.message);
           setCvPath('uploaded'); // Generic indicator
         }
+        invalidateCvs();
         toast?.("CV uploaded successfully!", "success");
         return true;
       } catch (e) {
@@ -96,7 +101,7 @@ export default function useCandidateProfile(toast) {
         setUploadingCV(false);
       }
     },
-    [toast]
+    [toast, invalidateCvs]
   );
 
   const uploadProfilePhoto = useCallback(
@@ -127,6 +132,7 @@ export default function useCandidateProfile(toast) {
       try {
         await updateCvDetails(cvDetailsData);
         setCvDetails(cvDetailsData);
+        updateCachedProfile(prev => ({ ...(prev || {}), cv_details: cvDetailsData }));
         toast?.("CV details saved successfully!", "success");
         return true;
       } catch (e) {
@@ -135,7 +141,7 @@ export default function useCandidateProfile(toast) {
         return false;
       }
     },
-    [toast]
+    [toast, updateCachedProfile]
   );
 
   return {

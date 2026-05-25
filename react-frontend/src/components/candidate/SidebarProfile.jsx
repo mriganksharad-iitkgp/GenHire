@@ -3,6 +3,7 @@ import styles from "../../pages/Profile.module.css";
 import CVDetailsForm from "./CVDetailsForm";
 import CVList from "./CVList";
 import CVDetailsModal from "./CVDetailsModal";
+import { isProfileCvComplete } from "../../utils/cvDetails";
 
 export default function SidebarProfile({
   photoUrl,
@@ -22,6 +23,7 @@ export default function SidebarProfile({
   const [showCvDetailsForm, setShowCvDetailsForm] = useState(false);
   const [showCvDetailsModal, setShowCvDetailsModal] = useState(false);
   const [cvRefreshTrigger, setCvRefreshTrigger] = useState(0);
+  const cvDetailsComplete = isProfileCvComplete(cvDetails);
 
   // Refresh CV list when upload completes
   React.useEffect(() => {
@@ -93,7 +95,7 @@ export default function SidebarProfile({
             Enter your details manually for AI-powered interview questions
           </p>
           <div className={styles.cvDetailsStatus}>
-            {cvDetails ? (
+            {cvDetailsComplete ? (
               <div className={styles.detailsComplete}>
                 <i className="fa fa-check-circle"></i>
                 <span>CV details completed</span>
