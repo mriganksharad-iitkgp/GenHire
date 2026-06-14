@@ -203,17 +203,45 @@ def get_application_cv(current_user, application_id):
     # Priority 1: Exact CV selected during application
     if cv_id:
         for cv in (student_user.get('cv_uploads') or []):
-            if cv.get('cv_id') == cv_id and cv.get('file_path') and os.path.exists(cv.get('file_path')):
-                cv_path = cv.get('file_path')
-                break
+            if cv.get('cv_id') == cv_id:
+                # Check GCS first (deployed version)
+                gcs_path = cv.get('gcs_path')
+                if gcs_path:
+                    try:
+                        from services import gcs_service
+                        if gcs_service.is_gcs_configured():
+                            from flask import redirect
+                            signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
+                            return redirect(signed_url)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).warning(f"GCS signed URL failed for application CV: {e}")
+                # Check local file
+                if cv.get('file_path') and not cv['file_path'].startswith('gs://') and os.path.exists(cv.get('file_path')):
+                    cv_path = cv.get('file_path')
+                    break
 
     # Priority 2: Snapshot path captured at application time
     if not cv_path:
         snapshot_file_path = cv_snapshot.get('file_path')
-        if snapshot_file_path and os.path.exists(snapshot_file_path):
+        if snapshot_file_path and not snapshot_file_path.startswith('gs://') and os.path.exists(snapshot_file_path):
             cv_path = snapshot_file_path
 
-    # Priority 3: Legacy fallback for older application records
+    # Priority 3: Try GCS for primary CV (deployed version fallback)
+    if not cv_path:
+        for cv in (student_user.get('cv_uploads') or []):
+            gcs_path = cv.get('gcs_path')
+            if gcs_path:
+                try:
+                    from services import gcs_service
+                    if gcs_service.is_gcs_configured():
+                        from flask import redirect
+                        signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
+                        return redirect(signed_url)
+                except Exception:
+                    pass
+
+    # Priority 4: Legacy fallback for older application records
     if not cv_path and student_user.get('cv_path') and os.path.exists(student_user.get('cv_path')):
         cv_path = student_user.get('cv_path')
 

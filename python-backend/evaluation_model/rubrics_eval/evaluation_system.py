@@ -68,6 +68,11 @@ class EvaluationSystem:
             question, student_answer
         )
 
+    def evaluate_single_answer_fast(
+        self, question: str, student_answer: str
+    ) -> Tuple[float, List[Dict[str, Any]]]:
+        return self.answer_evaluator.evaluate_answer_fast(question, student_answer)
+
     def generate_answer_spectrum(
         self, question: str, spectrum_type: str = "balanced"
     ) -> Tuple[List[str], List[str]]:

@@ -24,20 +24,32 @@ class PDFParserService:
         """Initialize PDF parser service"""
         logger.info("PDFParserService initialized")
     
-    def extract_text_from_pdf(self, file_path: str) -> str:
-        """
-        Extract text from a PDF file using PyPDF2
-        
-        Args:
-            file_path: Path to the PDF file
-            
-        Returns:
-            Extracted text as string
-            
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If file is not a valid PDF
-        """
+    def _extract_page_layout(self, page) -> tuple[str, str]:
+        fragments = []
+
+        def visitor(text, _cm, tm, _font_dict, _font_size):
+            clean = str(text or "").strip()
+            if clean:
+                fragments.append((float(tm[4]), float(tm[5]), clean))
+
+        page.extract_text(visitor_text=visitor)
+        if not fragments:
+            return page.extract_text() or "", "low"
+
+        page_width = float(page.mediabox.width)
+        left = [item for item in fragments if item[0] < page_width * 0.46]
+        right = [item for item in fragments if item[0] > page_width * 0.54]
+        center = [item for item in fragments if page_width * 0.46 <= item[0] <= page_width * 0.54]
+        is_two_column = len(left) >= 8 and len(right) >= 8 and len(center) < (len(fragments) * 0.2)
+
+        def ordered(items):
+            return "\n".join(text for _x, _y, text in sorted(items, key=lambda item: (-round(item[1], 1), item[0])))
+
+        if is_two_column:
+            return f"{ordered(left)}\n{ordered(center)}\n{ordered(right)}".strip(), "medium"
+        return ordered(fragments), "high"
+
+    def _extract_pdf_with_metadata(self, file_path: str) -> tuple[str, Dict[str, str]]:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"PDF file not found: {file_path}")
         
@@ -52,9 +64,11 @@ class PDFParserService:
             text_parts = []
             
             # Extract text from each page
+            confidences = []
             for page_num, page in enumerate(reader.pages, 1):
                 try:
-                    page_text = page.extract_text()
+                    page_text, confidence = self._extract_page_layout(page)
+                    confidences.append(confidence)
                     if page_text and page_text.strip():
                         text_parts.append(page_text)
                         logger.debug(f"Extracted {len(page_text)} characters from page {page_num}")
@@ -64,15 +78,29 @@ class PDFParserService:
             
             if not text_parts:
                 logger.warning(f"No text extracted from PDF: {file_path}")
-                return ""
+                return "", {
+                    "parsing_confidence": "low",
+                    "layout_detected": "unknown",
+                    "parser": "coordinate_aware_pypdf",
+                }
             
             full_text = "\n".join(text_parts)
             logger.info(f"Successfully extracted {len(full_text)} characters from {len(text_parts)} pages")
-            return full_text
+            confidence = "low" if "low" in confidences else "medium" if "medium" in confidences else "high"
+            return full_text, {
+                "parsing_confidence": confidence,
+                "layout_detected": "two_column" if "medium" in confidences else "single_column",
+                "parser": "coordinate_aware_pypdf",
+            }
             
         except Exception as e:
             logger.error(f"Error extracting text from PDF {file_path}: {e}")
             raise ValueError(f"Failed to parse PDF: {str(e)}")
+
+    def extract_text_from_pdf(self, file_path: str) -> str:
+        """Extract text from a PDF file using coordinate-aware ordering."""
+        text, _metadata = self._extract_pdf_with_metadata(file_path)
+        return text
     
     def extract_text_from_txt(self, file_path: str, encoding: str = 'utf-8') -> str:
         """
@@ -139,7 +167,16 @@ class PDFParserService:
         Returns:
             Dictionary containing extracted text and metadata
         """
-        text = self.extract_text(file_path)
+        file_ext = Path(file_path).suffix.lower()
+        if file_ext == '.pdf':
+            text, parse_metadata = self._extract_pdf_with_metadata(file_path)
+        else:
+            text = self.extract_text(file_path)
+            parse_metadata = {
+                'parsing_confidence': 'high',
+                'layout_detected': 'plain_text',
+                'parser': 'plain_text'
+            }
         file_size = os.path.getsize(file_path)
         
         # Count pages for PDFs
@@ -160,7 +197,8 @@ class PDFParserService:
                 'pages': pages,
                 'character_count': len(text),
                 'word_count': len(text.split()),
-                'file_type': Path(file_path).suffix.lower()
+                'file_type': Path(file_path).suffix.lower(),
+                **parse_metadata
             }
         }
     

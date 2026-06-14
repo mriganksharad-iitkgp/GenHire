@@ -15,19 +15,22 @@ class GoogleSpeechService:
         # The environment variable GOOGLE_APPLICATION_CREDENTIALS should be set
         try:
             creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+            if not creds_path or not os.path.exists(creds_path):
+                logger.info("Google Speech Service credentials not found. Speech features will be disabled.")
+                self.speech_client = None
+                self.tts_client = None
+                return
+
             logger.info(
                 f"Initializing Google Speech Service. Credentials path: {creds_path}"
             )
-
-            if creds_path and not os.path.exists(creds_path):
-                logger.error(f"Credentials file NOT FOUND at: {creds_path}")
 
             self.speech_client = speech.SpeechClient()
             self.tts_client = texttospeech.TextToSpeechClient()
             self.cost_tracker = CostTracker()
             logger.info("✅ Google Speech Service clients initialized successfully.")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Google Speech Service: {e}")
+            logger.warning(f"Failed to initialize Google Speech Service (features disabled): {e}")
             self.speech_client = None
             self.tts_client = None
 

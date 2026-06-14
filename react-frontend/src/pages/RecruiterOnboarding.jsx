@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./RecruiterOnboarding.module.css";
 
 const RecruiterOnboarding = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -38,6 +39,25 @@ const RecruiterOnboarding = () => {
 
   // Google auth data
   const [googleUser, setGoogleUser] = useState(null);
+
+  React.useEffect(() => {
+    const credential = location.state?.googleCredential;
+    const profile = location.state?.googleProfile;
+    if (!credential || !profile?.email) return;
+
+    setGoogleUser({
+      name: profile.name || "",
+      email: profile.email,
+      token: credential,
+    });
+    setAccountInfo(prev => ({
+      ...prev,
+      name: profile.name || "",
+      email: profile.email,
+    }));
+    setCurrentStep(2);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const industries = [
     "Technology",
@@ -234,11 +254,21 @@ const RecruiterOnboarding = () => {
         throw new Error(data.error || "Registration failed");
       }
 
-      setSuccessMessage("Your recruiter account has been created and is pending verification. You'll receive an email once approved.");
+      if (data.token && data.user) {
+        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
+        localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
+          ...data.user,
+          userType: data.user.user_type,
+          isVerified: data.user.is_verified,
+          permissions: data.user.permissions || [],
+        }));
+      }
+
+      setSuccessMessage("Your recruiter profile is complete and pending verification. You'll receive an email once approved.");
       
       // Don't auto-login, show success and redirect after delay
       setTimeout(() => {
-        navigate("/login");
+        navigate(data.token ? "/recruiter-dashboard" : "/login");
       }, 5000);
       
     } catch (err) {

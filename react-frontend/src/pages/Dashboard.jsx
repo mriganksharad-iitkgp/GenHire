@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import Pagination from "../components/Pagination";
@@ -11,6 +11,8 @@ const Dashboard = () => {
 	const navigate = useNavigate();
 	const { jobs: cachedJobs, loadJobsCached, invalidateJobs, applications: cachedApplications, loadApplicationsCached, invalidateApplications } = useCandidateData();
 	const [searchQuery, setSearchQuery] = useState("");
+	const deferredSearchQuery = useDeferredValue(searchQuery);
+	const normalizedSearchQuery = String(deferredSearchQuery ?? "").trim();
 	const [typeFilter, setTypeFilter] = useState("");
 	const [locationFilter, setLocationFilter] = useState("");
 	const [experienceFilter, setExperienceFilter] = useState("");
@@ -66,7 +68,10 @@ const Dashboard = () => {
 		if (!hasPending) return;
 
 		const interval = setInterval(() => {
-			loadApplications(true);
+			// Only poll if the user is actively viewing the page
+			if (document.visibilityState === 'visible') {
+				loadApplications(true);
+			}
 		}, 5000);
 
 		return () => clearInterval(interval);
@@ -221,7 +226,7 @@ const Dashboard = () => {
 		}
 	};
 
-	const hasApplied = (jobId) => {
+	const hasApplied = useCallback((jobId) => {
 		// Treat invite-created skeletons (no CV uploaded yet, awaiting candidate
 		// submission) as "not yet applied" so the Apply button stays available
 		// for invitees who haven't completed the apply step.
@@ -231,7 +236,7 @@ const Dashboard = () => {
 				app.processing_status === 'awaiting_candidate' || !app.cv_snapshot;
 			return !isSkeleton;
 		});
-	};
+	}, [applications]);
 
 	const getApplicationStatus = (jobId) => {
 		const application = applications.find(app => app.job_id === jobId.toString());
@@ -498,8 +503,8 @@ const Dashboard = () => {
 
 	// Recompute suggestions when searchQuery changes
 	useEffect(() => {
-		computeSuggestions(searchQuery);
-	}, [searchQuery, computeSuggestions]);
+		computeSuggestions(normalizedSearchQuery);
+	}, [normalizedSearchQuery, computeSuggestions]);
 
 	// Close suggestions on outside click
 	useEffect(() => {
@@ -537,70 +542,117 @@ const Dashboard = () => {
 	};
 	// --- End Search Suggestions Logic ---
 
-	const filteredJobs = jobOpenings.filter((job) => {
-		// Invite-only (burner) candidates only see jobs they were invited to.
-		// Direct URLs to other jobs still resolve, but they won't surface here.
-		if (isInviteOnly && !invitedJobIds.includes(String(job._id))) {
-			return false;
-		}
-
-		const q = searchQuery.trim().toLowerCase();
+	const getRelevanceScore = useCallback((job, query) => {
+		if (!query) return 0;
+		const q = query.toLowerCase();
 		const title = String(job.title || '').toLowerCase();
-		const desc = String(job.description || '').toLowerCase();
-		const dept = String(job.department || '').toLowerCase();
+		if (title.includes(q)) return 4;
+
 		const skills = Array.isArray(job.skills) ? job.skills : [];
+		if (skills.some((skill) => String(skill).toLowerCase().includes(q))) return 3;
 
-		const matchesSearch =
-			q === '' ||
-			title.includes(q) ||
-			desc.includes(q) ||
-			dept.includes(q) ||
-			skills.some((skill) => String(skill).toLowerCase().includes(q));
+		const desc = String(job.description || '').toLowerCase();
+		if (desc.includes(q)) return 2;
 
-		const typeSel = typeFilter.trim().toLowerCase();
-		const matchesType =
-			typeSel === '' || String(job.type || '').toLowerCase() === typeSel;
-
-		const locSel = locationFilter.trim().toLowerCase();
-		const matchesLocation =
-			locSel === '' || String(job.location || '').toLowerCase().includes(locSel);
-
-		const expSel = experienceFilter.trim();
-		const minYears = parseMinYears(job.experience);
-		let matchesExperience = true;
-		if (expSel === '0-1') {
-			matchesExperience = minYears === null || minYears <= 1;
-		} else if (expSel === '2+') {
-			matchesExperience = minYears !== null ? minYears >= 2 : true;
-		} else if (expSel === '5+') {
-			matchesExperience = minYears !== null ? minYears >= 5 : true;
-		}
-
-		const roleSel = jobRoleFilter.trim();
-		const canonicalJobRole = canonicalizeJobRole(job.title || '');
-		const matchesJobRole = roleSel === '' || canonicalJobRole === roleSel;
-
-		const companySel = companyFilter.trim();
-		const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
-
-		const skillSel = skillsFilter.trim();
-		const matchesSkill = skillSel === '' || (Array.isArray(job.skills) && job.skills.includes(skillSel));
-
-		return matchesSearch && matchesType && matchesLocation && matchesExperience && matchesJobRole && matchesCompany && matchesSkill;
-	}).sort((a, b) => {
-		// Sort jobs: unapplied jobs first, then applied jobs
-		const aApplied = hasApplied(a._id);
-		const bApplied = hasApplied(b._id);
+		const dept = String(job.department || '').toLowerCase();
+		const companyStr = String(job.company || 'TechCorp Solutions').toLowerCase();
+		const locationStr = String(job.location || '').toLowerCase();
 		
-		// If one is applied and other is not, prioritize unapplied
-		if (aApplied && !bApplied) return 1;
-		if (!aApplied && bApplied) return -1;
+		if (dept.includes(q) || companyStr.includes(q) || locationStr.includes(q)) return 1;
 		
-		// If both have same application status, sort by creation date (newest first)
-		const aDate = new Date(a.created_at || 0);
-		const bDate = new Date(b.created_at || 0);
-		return bDate - aDate;
-	});
+		return 0;
+	}, []);
+
+	const filteredJobs = useMemo(() => {
+		return jobOpenings.filter((job) => {
+			// Invite-only (burner) candidates only see jobs they were invited to.
+			// Direct URLs to other jobs still resolve, but they won't surface here.
+			if (isInviteOnly && !invitedJobIds.includes(String(job._id))) {
+				return false;
+			}
+
+			const q = normalizedSearchQuery.toLowerCase();
+			const title = String(job.title || '').toLowerCase();
+			const desc = String(job.description || '').toLowerCase();
+			const dept = String(job.department || '').toLowerCase();
+			const companyStr = String(job.company || 'TechCorp Solutions').toLowerCase();
+			const locationStr = String(job.location || '').toLowerCase();
+			const skills = Array.isArray(job.skills) ? job.skills : [];
+
+			const matchesSearch =
+				q === '' ||
+				title.includes(q) ||
+				desc.includes(q) ||
+				dept.includes(q) ||
+				companyStr.includes(q) ||
+				locationStr.includes(q) ||
+				skills.some((skill) => String(skill).toLowerCase().includes(q));
+
+			const typeSel = typeFilter.trim().toLowerCase();
+			const matchesType =
+				typeSel === '' || String(job.type || '').toLowerCase() === typeSel;
+
+			const locSel = locationFilter.trim().toLowerCase();
+			const matchesLocation =
+				locSel === '' || String(job.location || '').toLowerCase().includes(locSel);
+
+			const expSel = experienceFilter.trim();
+			const minYears = parseMinYears(job.experience);
+			let matchesExperience = true;
+			if (expSel === '0-1') {
+				matchesExperience = minYears === null || minYears <= 1;
+			} else if (expSel === '2+') {
+				matchesExperience = minYears !== null ? minYears >= 2 : true;
+			} else if (expSel === '5+') {
+				matchesExperience = minYears !== null ? minYears >= 5 : true;
+			}
+
+			const roleSel = jobRoleFilter.trim();
+			const canonicalJobRole = canonicalizeJobRole(job.title || '');
+			const matchesJobRole = roleSel === '' || canonicalJobRole === roleSel;
+
+			const companySel = companyFilter.trim();
+			const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
+
+			const skillSel = skillsFilter.trim();
+			const matchesSkill = skillSel === '' || (Array.isArray(job.skills) && job.skills.includes(skillSel));
+
+			return matchesSearch && matchesType && matchesLocation && matchesExperience && matchesJobRole && matchesCompany && matchesSkill;
+		}).sort((a, b) => {
+			// Sort 1: Application status (unapplied jobs first)
+			const aApplied = hasApplied(a._id);
+			const bApplied = hasApplied(b._id);
+			if (aApplied && !bApplied) return 1;
+			if (!aApplied && bApplied) return -1;
+			
+			// Sort 2: Relevance Score (highest first)
+			if (normalizedSearchQuery) {
+				const scoreA = getRelevanceScore(a, normalizedSearchQuery);
+				const scoreB = getRelevanceScore(b, normalizedSearchQuery);
+				if (scoreA !== scoreB) {
+					return scoreB - scoreA;
+				}
+			}
+
+			// Sort 3: Creation date (newest first)
+			const aDate = new Date(a.created_at || 0);
+			const bDate = new Date(b.created_at || 0);
+			return bDate - aDate;
+		});
+	}, [
+		jobOpenings, 
+		normalizedSearchQuery, 
+		typeFilter, 
+		locationFilter, 
+		experienceFilter, 
+		jobRoleFilter, 
+		companyFilter, 
+		skillsFilter, 
+		isInviteOnly, 
+		invitedJobIds, 
+		hasApplied,
+		getRelevanceScore
+	]);
 
 	return (
 		<div className={styles.dashboardContainer}>
@@ -620,15 +672,25 @@ const Dashboard = () => {
 							ref={searchInputRef}
 							type="text"
 							placeholder="Search for positions, skills, companies, or locations..."
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
+							value={String(searchQuery ?? "")}
+							onChange={(e) => setSearchQuery(String(e.target.value ?? ""))}
 							onFocus={() => setShowSuggestions(true)}
 							onKeyDown={(e) => {
 								if (e.key === 'Escape') setShowSuggestions(false);
+								if (e.key === 'Enter') {
+									setShowSuggestions(false);
+								}
 							}}
 							autoComplete="off"
 						/>
-						<button className={styles.searchButton}>
+						<button
+							type="button"
+							className={styles.searchButton}
+							onClick={() => {
+								setShowSuggestions(false);
+							}}
+							aria-label="Search jobs"
+						>
 							<i className="fa fa-search"></i>
 						</button>
 					</div>
@@ -800,6 +862,11 @@ const Dashboard = () => {
 				</div>
 
 				<div className={styles.jobListings}>
+					{searchQuery && searchQuery.trim() !== '' && (
+						<p style={{ fontStyle: 'italic', color: '#666', marginBottom: '10px' }}>
+							Showing search for "{searchQuery}"
+						</p>
+					)}
 					<h3>Current Openings ({filteredJobs.length})</h3>
 
 					{loading ? (

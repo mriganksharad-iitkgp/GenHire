@@ -75,14 +75,15 @@ class CVScoringService:
             formatted_cv.append("")
         
         # Work Experience
-        experience = cv_details.get('workExperience', [])
+        experience = cv_details.get('workExperience') or cv_details.get('experience', [])
         if experience:
             formatted_cv.append("=== WORK EXPERIENCE ===")
             for exp in experience:
-                if exp.get('jobTitle') or exp.get('company'):
+                if exp.get('jobTitle') or exp.get('position') or exp.get('company'):
                     exp_line = []
-                    if exp.get('jobTitle'):
-                        exp_line.append(exp['jobTitle'])
+                    job_title = exp.get('jobTitle') or exp.get('position')
+                    if job_title:
+                        exp_line.append(job_title)
                     if exp.get('company'):
                         exp_line.append(f"at {exp['company']}")
                     if exp.get('duration'):
@@ -114,7 +115,10 @@ class CVScoringService:
                     if project.get('description'):
                         formatted_cv.append(f"  - {project['description']}")
                     if project.get('technologies'):
-                        formatted_cv.append(f"  - Technologies: {', '.join(project['technologies'])}")
+                        technologies = project['technologies']
+                        if isinstance(technologies, list):
+                            technologies = ', '.join(technologies)
+                        formatted_cv.append(f"  - Technologies: {technologies}")
                     if project.get('link'):
                         formatted_cv.append(f"  - Link: {project['link']}")
             formatted_cv.append("")

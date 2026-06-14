@@ -225,7 +225,14 @@ class AdminController:
     def get_pending_recruiters(self, current_user):
         """Get list of recruiters pending verification"""
         try:
-            query = {"user_type": "recruiter", "is_verified": False}
+            query = {
+                "user_type": "recruiter", 
+                "is_verified": False,
+                "$or": [
+                    {"rejection_reason": None},
+                    {"rejection_reason": {"$exists": False}}
+                ]
+            }
 
             recruiters_cursor = self.users_collection.find(query).sort("created_at", -1)
 

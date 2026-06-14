@@ -501,6 +501,7 @@
   border-radius: 12px;
   border: 1px solid var(--admin-border);
   overflow: hidden;
+  overflow-x: auto;
 }
 
 .table {

@@ -90,8 +90,20 @@ export default function useCandidateProfile(toast) {
           console.log('✅ Upload successful:', res.message);
           setCvPath('uploaded'); // Generic indicator
         }
+        if (res.parsed_details) {
+          setCvDetails(res.parsed_details);
+          updateCachedProfile(prev => ({
+            ...(prev || {}),
+            cv_details: res.parsed_details,
+          }));
+        }
         invalidateCvs();
-        toast?.("CV uploaded successfully!", "success");
+        toast?.(
+          res.parsed_details
+            ? "CV uploaded and profile fields populated."
+            : "CV uploaded. Some fields need manual review.",
+          res.parsed_details ? "success" : "warning"
+        );
         return true;
       } catch (e) {
         console.error('❌ CV upload error:', e);
@@ -101,7 +113,7 @@ export default function useCandidateProfile(toast) {
         setUploadingCV(false);
       }
     },
-    [toast, invalidateCvs]
+    [toast, invalidateCvs, updateCachedProfile]
   );
 
   const uploadProfilePhoto = useCallback(

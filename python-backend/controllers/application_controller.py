@@ -147,7 +147,7 @@ class ApplicationController:
                     logger.info(f"Using primary CV PDF: {cv_id}")
 
         # Fallback to manual CV details if no PDF CV found
-        cv_details = user_profile.get("cv_details")
+        cv_details = (selected_cv or {}).get("parsed_details") or user_profile.get("cv_details")
         if not cv_text:
             if not cv_details:
                 return {
@@ -278,7 +278,16 @@ class ApplicationController:
         # Enqueue CV scoring task for background processing
         logger.info(f"Enqueueing CV scoring task for application {application_id}")
 
-        cv_data = {"cv_text": cv_text, "cv_details": cv_details, "cv_source": cv_source}
+        cv_data = {
+            "cv_text": cv_text,
+            "cv_details": cv_details,
+            "cv_source": cv_source,
+            "parsing_confidence": (
+                (selected_cv or {}).get("metadata", {}).get("parsing_confidence", "high")
+                if selected_cv
+                else "high"
+            ),
+        }
 
         jd_data = {
             "jd_text": jd_text,
@@ -340,6 +349,24 @@ class ApplicationController:
                 self.applications_collection.find({"student_id": user_id})
             )
 
+            # BULK FETCH JOBS
+            job_ids = list(set([ObjectId(app["job_id"]) for app in applications if "job_id" in app and len(str(app["job_id"])) == 24]))
+            all_jobs = list(self.jobs_collection.find({"_id": {"$in": job_ids}}))
+            jobs_by_id = {str(job["_id"]): job for job in all_jobs}
+
+            # BULK FETCH INTERVIEWS
+            app_ids_str = [str(app["_id"]) for app in applications]
+            all_interviews = list(self.interviews_collection.find({
+                "application_id": {"$in": app_ids_str},
+                "status": "completed"
+            }).sort("updated_at", -1))
+            
+            interviews_by_app = {}
+            for interview in all_interviews:
+                app_id = str(interview["application_id"])
+                if app_id not in interviews_by_app:
+                    interviews_by_app[app_id] = interview
+
             # Convert ObjectId to string and fetch job details
             for app in applications:
                 _coerce_objectids(app)
@@ -366,7 +393,7 @@ class ApplicationController:
                 if "interview_score" not in app:
                     app["interview_score"] = None
 
-                job = self.jobs_collection.find_one({"_id": ObjectId(app["job_id"])})
+                job = jobs_by_id.get(str(app.get("job_id")))
                 if job:
                     app["job_details"] = {
                         "title": job.get("title"),
@@ -378,10 +405,7 @@ class ApplicationController:
                     }
 
                 # Use proctoring_score from application if available, otherwise get from interview
-                completed_interview = self.interviews_collection.find_one(
-                    {"application_id": app["_id"], "status": "completed"},
-                    sort=[("updated_at", -1)],
-                )
+                completed_interview = interviews_by_app.get(app["_id"])
                 
                 # Check if job has gaze proctoring enabled
                 gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
@@ -431,9 +455,11 @@ class ApplicationController:
         elif user_type == "recruiter":
             # Recruiters see applications for their jobs - ONLY VISIBLE ONES (CV scoring completed)
             recruiter_jobs = list(
-                self.jobs_collection.find({"created_by": user_id}, {"_id": 1})
+                self.jobs_collection.find({"created_by": user_id}, {"_id": 1, "title": 1, "department": 1, "location": 1, "logo": 1, "company": 1, "gaze_proctoring": 1})
             )
             job_ids = [str(job["_id"]) for job in recruiter_jobs]
+
+            jobs_by_id = {str(job["_id"]): job for job in recruiter_jobs}
 
             applications = list(
                 self.applications_collection.find(
@@ -443,6 +469,19 @@ class ApplicationController:
                     }
                 )
             )
+
+            # BULK FETCH INTERVIEWS
+            app_ids_str = [str(app["_id"]) for app in applications]
+            all_interviews = list(self.interviews_collection.find({
+                "application_id": {"$in": app_ids_str},
+                "status": "completed"
+            }).sort("updated_at", -1))
+            
+            interviews_by_app = {}
+            for interview in all_interviews:
+                app_id = str(interview["application_id"])
+                if app_id not in interviews_by_app:
+                    interviews_by_app[app_id] = interview
 
             # Convert ObjectId to string and add job details
             for app in applications:
@@ -458,7 +497,7 @@ class ApplicationController:
                 if "interview_score" not in app:
                     app["interview_score"] = None
 
-                job = self.jobs_collection.find_one({"_id": ObjectId(app["job_id"])})
+                job = jobs_by_id.get(str(app.get("job_id")))
                 if job:
                     app["job_details"] = {
                         "title": job.get("title"),
@@ -472,10 +511,7 @@ class ApplicationController:
                 app["cv_url"] = f"/api/applications/{app['_id']}/cv"
 
                 # Get proctoring score from most recent completed interview
-                completed_interview = self.interviews_collection.find_one(
-                    {"application_id": app["_id"], "status": "completed"},
-                    sort=[("updated_at", -1)],
-                )
+                completed_interview = interviews_by_app.get(app["_id"])
                 
                 # Check if job has gaze proctoring enabled
                 gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False

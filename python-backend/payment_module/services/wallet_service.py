@@ -26,12 +26,22 @@ class WalletService:
         self.transaction_collection = db[CreditTransactionSchema.COLLECTION_NAME]
         self._ensure_indexes()
 
+    # Class-level flag: only create indexes once per process lifetime.
+    # WalletService is instantiated on every wallet-related request, so without
+    # this guard each request would issue multiple index-creation round-trips to
+    # MongoDB, adding ~50-100ms of unnecessary latency per request.
+    _indexes_created: bool = False
+
     def _ensure_indexes(self):
+        if WalletService._indexes_created:
+            return
         try:
             CreditWalletSchema.create_indexes(self.db)
             CreditTransactionSchema.create_indexes(self.db)
+            WalletService._indexes_created = True
         except Exception as exc:
             logger.error(f"Failed creating wallet indexes: {exc}")
+
 
     def _normalize_audience(self, audience: str) -> str:
         normalized = str(audience or "recruiter").strip().lower()

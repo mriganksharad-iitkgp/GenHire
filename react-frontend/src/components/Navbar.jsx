@@ -3,15 +3,19 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
 import { UpgradeButton } from "./recruiter/subscription";
 import { CandidatePlanButton } from "./candidate/subscription";
+import { useCandidateData } from "../contexts/CandidateDataContext";
+import { getProfile, viewPhoto } from "../services/api";
 
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [userName, setUserName] = useState("");
   const [companyName, setCompanyName] = useState("TechCorp Solutions");
   const userMenuRef = useRef(null);
+  const { loadProfileCached } = useCandidateData();
 
   useEffect(() => {
     // Load user data
@@ -24,19 +28,9 @@ const Navbar = ({ userType = "candidate" }) => {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       if (!token) return;
 
-      // Load profile data
-      const profileResponse = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/profile`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (profileResponse.ok) {
-        const profileData = await profileResponse.json();
+      const profileData = await loadProfileCached(false, getProfile);
+      
+      if (profileData) {
         setUserName(profileData.name || "User");
 
         // Set company name for recruiters
@@ -57,23 +51,9 @@ const Navbar = ({ userType = "candidate" }) => {
   // Load profile photo
   const loadProfilePhoto = async () => {
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      if (!token) return;
-
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/view-photo`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const photoUrl = URL.createObjectURL(blob);
-        setProfilePhoto(photoUrl);
-      }
+      const blob = await viewPhoto();
+      const photoUrl = URL.createObjectURL(blob);
+      setProfilePhoto(photoUrl);
     } catch (error) {
       console.error("Error loading profile photo in navbar:", error);
     }
@@ -289,7 +269,57 @@ const Navbar = ({ userType = "candidate" }) => {
             )}
           </div>
         </div>
+
+        {/* Hamburger Menu Button for Mobile */}
+        <button 
+          className={styles.mobileMenuBtn}
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle mobile menu"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
       </div>
+
+      {/* Mobile Nav Drawer */}
+      <div className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
+        <div className={styles.mobileNavLinks}>
+          {userType === "recruiter" ? (
+            <>
+              <Link to="/recruiter-dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
+              <Link to="/recruiter/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>
+              <Link to="/recruiter/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>
+              <div className={styles.mobileDivider}></div>
+              <Link to="/recruiter-dashboard?tab=profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Company Profile</Link>
+            </>
+          ) : (
+            <>
+              <Link to="/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Open Positions</Link>
+              <Link to="/profile#applications" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>My Applications</Link>
+              <Link to="/practice" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Practice</Link>
+              <Link to="/candidate/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>
+              <Link to="/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>
+              <div className={styles.mobileDivider}></div>
+              <Link to="/profile#bio" className={styles.mobileNavLink} onClick={() => {
+                setMobileMenuOpen(false);
+                if (window.location.pathname === "/profile") window.location.hash = "#bio";
+              }}>My Profile</Link>
+            </>
+          )}
+          <button className={styles.mobileNavLink} onClick={() => { setMobileMenuOpen(false); handleLogout(); }}>
+            <i className="fa fa-sign-out" style={{marginRight: '8px'}}></i> Logout
+          </button>
+        </div>
+      </div>
+      
+      {mobileMenuOpen && (
+        <div className={styles.drawerOverlay} onClick={() => setMobileMenuOpen(false)}></div>
+      )}
     </header>
   );
 };

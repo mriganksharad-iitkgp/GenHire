@@ -137,27 +137,31 @@ class BackgroundProcessor:
             jd_text = jd_data.get('jd_text', '')
             job = jd_data.get('job')
             minimum_cv_score = jd_data.get('minimum_cv_score', 50.0)
+            parsing_confidence = str(cv_data.get('parsing_confidence') or 'low').lower()
+            scoring_failed = False
             
             if cv_scoring_service:
                 try:
-                    if cv_text:
-                        # Score using CV PDF text
+                    if cv_details:
+                        # Structured data is safer than flattened PDF text,
+                        # especially for multi-column resumes.
+                        logger.info("Scoring CV from structured details")
+                        scoring_result = cv_scoring_service.calculate_cv_score(cv_details, job)
+                    elif cv_text:
                         logger.info(f"Scoring CV from text ({len(cv_text)} chars)")
                         scoring_result = cv_scoring_service.calculate_cv_score_from_text(cv_text, jd_text)
-                    elif cv_details:
-                        # Score using manual CV details
-                        logger.info("Scoring CV from manual details")
-                        scoring_result = cv_scoring_service.calculate_cv_score(cv_details, job)
                     else:
                         raise ValueError("No CV data available for scoring")
                         
                     cv_score = scoring_result.get('total_score', 75.0)
                     cv_score_breakdown = scoring_result.get('score_breakdown')
+                    scoring_failed = bool(scoring_result.get('error'))
                     logger.info(f"CV score calculated: {cv_score}")
                     
                 except Exception as e:
                     logger.error(f"Error calculating CV score: {e}", exc_info=True)
                     cv_score = 75.0
+                    scoring_failed = True
             
             # If this application was pre-shortlisted by a recruiter interview invite,
             # the CV score is informational only -- never auto-reject the candidate.
@@ -171,9 +175,18 @@ class BackgroundProcessor:
                 status_reason = (
                     f'CV score ({cv_score:.1f}); status preserved from recruiter interview invite'
                 )
+            elif scoring_failed:
+                application_status = 'pending'
+                status_reason = 'CV scoring requires manual review because automated scoring failed'
             elif cv_score >= minimum_cv_score:
                 application_status = 'shortlisted'
                 status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
+            elif parsing_confidence != 'high':
+                application_status = 'pending'
+                status_reason = (
+                    f'CV score ({cv_score:.1f}) requires manual review because '
+                    f'parsing confidence is {parsing_confidence}'
+                )
             else:
                 application_status = 'rejected'
                 status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'

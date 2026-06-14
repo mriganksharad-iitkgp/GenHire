@@ -32,7 +32,8 @@ def run_cleanup_once(db_collections: Dict[str, Any], *, max_age_days: int = 30) 
     """
     users = db_collections["users"]
     applications = db_collections["applications"]
-    invite_tokens = db_collections.get("invite_tokens") or users.database["invite_tokens"]
+    _invite_tokens_col = db_collections.get("invite_tokens")
+    invite_tokens = _invite_tokens_col if _invite_tokens_col is not None else users.database["invite_tokens"]
 
     cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=max_age_days)
 

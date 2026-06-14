@@ -128,19 +128,40 @@ class SubscriptionService:
             logger.warning(f"Skipping subscription credit backfill: {str(e)}")
     
 
+    # Class-level flag: only create indexes once per process lifetime to avoid
+    # repeated round-trips and spurious IndexOptionsConflict errors on restart.
+    _indexes_created: bool = False
+
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
+        if SubscriptionService._indexes_created:
+            return
         try:
             SubscriptionSchema.create_indexes(self.db)
-            self.usage_events_collection.create_index(
-                [("idempotency_key", 1)],
-                unique=True,
-                name="uniq_subscription_usage_idempotency",
-            )
-            self.usage_events_collection.create_index(
-                [("subscription_id", 1), ("created_at", -1)],
-                name="idx_subscription_usage_subscription_created",
-            )
+            try:
+                self.usage_events_collection.create_index(
+                    [("idempotency_key", 1)],
+                    unique=True,
+                    name="uniq_subscription_usage_idempotency",
+                )
+            except Exception:
+                pass  # Already exists — idempotent
+
+            try:
+                self.usage_events_collection.create_index(
+                    [("subscription_id", 1), ("created_at", -1)],
+                    name="idx_subscription_usage_subscription_created",
+                )
+            except Exception as e:
+                from pymongo.errors import OperationFailure
+                if isinstance(e, OperationFailure) and e.code == 85:
+                    # IndexOptionsConflict — index already exists under a
+                    # different name; functionally correct, safe to ignore.
+                    pass
+                else:
+                    logger.warning(f"Could not create usage events index: {e}")
+
+            SubscriptionService._indexes_created = True
             logger.info("Subscription indexes ensured")
         except Exception as e:
             logger.error(f"Error creating subscription indexes: {str(e)}")

@@ -5059,3 +5059,172 @@ body.dark .limitedAccessNotice p,
 :global(.dark) .limitedAccessNotice p {
 	color: #fcd34d;
 }
+
+/* Final candidate-card layout overrides. Keep these last in this legacy module. */
+.candidateDetails {
+	min-width: 0;
+}
+
+.candidateDetails h3,
+.candidateDetails p {
+	overflow-wrap: anywhere;
+}
+
+.candidateScores {
+	min-width: 0;
+}
+
+.scoreBar {
+	min-width: 120px;
+	overflow: hidden;
+}
+
+.scoreText {
+	position: static;
+	display: block;
+	margin-top: var(--spacing-xs);
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	padding: 0;
+}
+
+@media (max-width: 1400px) {
+	.candidateCard {
+		grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+		align-items: start;
+	}
+}
+
+@media (max-width: 1000px) {
+	.candidateCard {
+		grid-template-columns: minmax(0, 1fr);
+		text-align: left;
+	}
+
+	.candidateActions {
+		justify-content: flex-start;
+		flex-wrap: wrap;
+	}
+}
+
+@media (max-width: 768px) {
+  .dashboardContainer {
+    padding: 0;
+  }
+  
+  .tabNavigation {
+    margin-top: 60px !important;
+    top: 60px !important;
+    padding: 0 var(--spacing-md);
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  .tabList {
+    padding: 0;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mainContent {
+    padding: var(--spacing-md);
+  }
+  
+  .welcomeSection {
+    padding: var(--spacing-xl) var(--spacing-lg);
+  }
+  
+  .welcomeSection h2 {
+    font-size: 1.75rem;
+  }
+  
+  .welcomeSection p {
+    font-size: 1rem;
+  }
+  
+  .verificationBanner {
+    padding: 1rem;
+    top: 60px;
+  }
+  
+  .bannerContent {
+    flex-direction: column;
+  }
+  
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .tabButton {
+    min-width: 100px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.8rem;
+  }
+  
+  .candidateCard {
+    padding: var(--spacing-md);
+  }
+  
+  .candidateAvatar {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+  }
+}
+
+
+/* --- Global Mobile Overrides for Recruiter Dashboard --- */
+@media (max-width: 768px) {
+  .dashboardContainer, .mainContent, .overviewSection, .jobsContent, .candidatesContent, .tabNavigation {
+    box-sizing: border-box !important;
+    max-width: 100vw !important;
+  }
+  
+  .dashboardContainer {
+    overflow-x: hidden !important;
+  }
+  
+  .tabNavigation {
+    width: 100vw !important;
+    padding: 0 10px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .tabList {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .candidateFilters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  .filterSelect {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  
+  .candidateCard {
+    box-sizing: border-box !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .sectionHeader {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+}

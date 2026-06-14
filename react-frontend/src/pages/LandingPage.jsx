@@ -7,6 +7,7 @@ const LandingPage = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [workflowTab, setWorkflowTab] = useState("candidate"); // "candidate" or "recruiter"
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,7 +144,49 @@ const LandingPage = () => {
               Get Started Free
             </button>
           </div>
+
+          <button 
+            className={styles.mobileMenuBtn}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {mobileMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
         </div>
+
+        {/* Mobile Nav Drawer */}
+        <div className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
+          <div className={styles.mobileNavLinks}>
+            <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
+            <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)}>How It Works</a>
+            <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+            <a href="#testimonials" onClick={() => setMobileMenuOpen(false)}>Testimonials</a>
+          </div>
+          <div className={styles.mobileNavActions}>
+            <button
+              className={styles.loginBtn}
+              onClick={() => { setMobileMenuOpen(false); navigate("/login"); }}
+            >
+              Login
+            </button>
+            <button
+              className={styles.signupBtn}
+              onClick={() => { setMobileMenuOpen(false); navigate("/register"); }}
+            >
+              Get Started Free
+            </button>
+          </div>
+        </div>
+        
+        {mobileMenuOpen && (
+          <div className={styles.drawerOverlay} onClick={() => setMobileMenuOpen(false)}></div>
+        )}
       </nav>
 
       {/* Hero Section */}

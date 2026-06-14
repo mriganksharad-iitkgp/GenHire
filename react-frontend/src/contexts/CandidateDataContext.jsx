@@ -1,245 +1,215 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 /**
- * Global data cache for candidate pages to prevent unnecessary reloads
- * when switching between Dashboard (Open Positions) and Profile (My Applications)
- * 
- * This context stores jobs and applications data globally, so they persist
- * across route changes and component unmounts/remounts.
+ * Global data cache for candidate pages to prevent unnecessary reloads.
+ *
+ * ARCHITECTURE NOTE — why useRef for callbacks:
+ * The original implementation put state variables (jobs, cvs, etc.) in
+ * useCallback dependency arrays. This caused an infinite loop:
+ *   state update -> new callback reference -> child useCallback recreated
+ *   -> child useEffect fires -> API call -> state update -> repeat.
+ * This produced 10+ /api/cv/list calls per second.
+ *
+ * Fix: keep "mirror" refs that always hold the latest state value.
+ * Callbacks read from refs (stable references), so they never need to be
+ * recreated. State setters update both the React state (for re-renders)
+ * and the ref (for synchronous reads inside callbacks).
  */
 
 const CandidateDataContext = createContext(null);
 const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
 export const CandidateDataProvider = ({ children }) => {
-  // Jobs data (from Dashboard)
+  // ── Jobs ──────────────────────────────────────────────────────────────────
   const [jobs, setJobs] = useState([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
   const jobsLoadTimeRef = useRef(0);
-  
-  // Applications data (from Profile)
+  const jobsRef = useRef([]);
+  const jobsLoadedRef = useRef(false);
+  const jobsLoadingRef = useRef(false);
+
+  // ── Applications ──────────────────────────────────────────────────────────
   const [applications, setApplications] = useState([]);
   const [applicationsLoaded, setApplicationsLoaded] = useState(false);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const applicationsLoadTimeRef = useRef(0);
-  
-  // CVs data (from CV modal)
+  const applicationsRef = useRef([]);
+  const applicationsLoadedRef = useRef(false);
+  const applicationsLoadingRef = useRef(false);
+
+  // ── CVs ───────────────────────────────────────────────────────────────────
   const [cvs, setCvs] = useState([]);
   const [cvsLoaded, setCvsLoaded] = useState(false);
   const [cvsLoading, setCvsLoading] = useState(false);
   const cvsLoadTimeRef = useRef(0);
+  const cvsRef = useRef([]);
+  const cvsLoadedRef = useRef(false);
+  const cvsLoadingRef = useRef(false);
 
-  // Candidate profile data
+  // ── Profile ───────────────────────────────────────────────────────────────
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const profileLoadTimeRef = useRef(0);
-  
-  /**
-   * Load jobs with caching
-   * @param {boolean} force - Force reload even if cache is valid
-   * @param {function} loadFn - Function that loads jobs from API
-   */
+  const profileRef = useRef(null);
+  const profileLoadedRef = useRef(false);
+  const profileLoadingRef = useRef(false);
+
+  // ── Synced setters (update both React state AND the ref) ──────────────────
+  const _setJobs = (v) => { jobsRef.current = v; setJobs(v); };
+  const _setJobsLoaded = (v) => { jobsLoadedRef.current = v; setJobsLoaded(v); };
+  const _setJobsLoading = (v) => { jobsLoadingRef.current = v; setJobsLoading(v); };
+  const _setApplications = (v) => { applicationsRef.current = v; setApplications(v); };
+  const _setApplicationsLoaded = (v) => { applicationsLoadedRef.current = v; setApplicationsLoaded(v); };
+  const _setApplicationsLoading = (v) => { applicationsLoadingRef.current = v; setApplicationsLoading(v); };
+  const _setCvs = (v) => { cvsRef.current = v; setCvs(v); };
+  const _setCvsLoaded = (v) => { cvsLoadedRef.current = v; setCvsLoaded(v); };
+  const _setCvsLoading = (v) => { cvsLoadingRef.current = v; setCvsLoading(v); };
+  const _setProfile = (v) => { profileRef.current = v; setProfile(v); };
+  const _setProfileLoaded = (v) => { profileLoadedRef.current = v; setProfileLoaded(v); };
+  const _setProfileLoading = (v) => { profileLoadingRef.current = v; setProfileLoading(v); };
+
+  // ── Stable load callbacks (empty dep array — state read via refs) ──────────
+
   const loadJobsCached = useCallback(async (force, loadFn) => {
     const now = Date.now();
     const cacheAge = now - jobsLoadTimeRef.current;
-    
-    // Return cached data if valid and not forcing
-    if (!force && jobsLoaded && cacheAge < CACHE_EXPIRY_MS && !jobsLoading) {
-      console.log('📦 Using cached jobs data (age:', Math.round(cacheAge / 1000), 'seconds)');
-      return jobs;
+    if (!force && jobsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !jobsLoadingRef.current) {
+      return jobsRef.current;
     }
-    
-    // Don't reload if already loading
-    if (jobsLoading) {
-      console.log('⏳ Jobs already loading, skipping...');
-      return jobs;
-    }
-    
-    console.log('🔄 Loading jobs from API...');
-    setJobsLoading(true);
-    
+    if (jobsLoadingRef.current) return jobsRef.current;
+    _setJobsLoading(true);
     try {
       const loadedJobs = await loadFn();
-      setJobs(loadedJobs);
-      setJobsLoaded(true);
+      _setJobs(loadedJobs);
+      _setJobsLoaded(true);
       jobsLoadTimeRef.current = Date.now();
       return loadedJobs;
     } catch (error) {
       console.error('Error loading jobs:', error);
       throw error;
     } finally {
-      setJobsLoading(false);
+      _setJobsLoading(false);
     }
-  }, [jobs, jobsLoaded, jobsLoading]);
-  
-  /**
-   * Load applications with caching
-   * @param {boolean} force - Force reload even if cache is valid
-   * @param {function} loadFn - Function that loads applications from API
-   */
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadApplicationsCached = useCallback(async (force, loadFn) => {
     const now = Date.now();
     const cacheAge = now - applicationsLoadTimeRef.current;
-    
-    // Return cached data if valid and not forcing
-    if (!force && applicationsLoaded && cacheAge < CACHE_EXPIRY_MS && !applicationsLoading) {
-      console.log('📦 Using cached applications data (age:', Math.round(cacheAge / 1000), 'seconds)');
-      return applications;
+    if (!force && applicationsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !applicationsLoadingRef.current) {
+      return applicationsRef.current;
     }
-    
-    // Don't reload if already loading
-    if (applicationsLoading) {
-      console.log('⏳ Applications already loading, skipping...');
-      return applications;
-    }
-    
-    console.log('🔄 Loading applications from API...');
-    setApplicationsLoading(true);
-    
+    if (applicationsLoadingRef.current) return applicationsRef.current;
+    _setApplicationsLoading(true);
     try {
       const loadedApps = await loadFn();
-      setApplications(loadedApps);
-      setApplicationsLoaded(true);
+      _setApplications(loadedApps);
+      _setApplicationsLoaded(true);
       applicationsLoadTimeRef.current = Date.now();
       return loadedApps;
     } catch (error) {
       console.error('Error loading applications:', error);
       throw error;
     } finally {
-      setApplicationsLoading(false);
+      _setApplicationsLoading(false);
     }
-  }, [applications, applicationsLoaded, applicationsLoading]);
-  
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /**
-   * Load CVs with caching
-   * @param {boolean} force - Force reload even if cache is valid
-   * @param {function} loadFn - Function that loads CVs from API
+   * loadCvsCached — STABLE callback, never recreated after mount.
+   * Previously had [cvs, cvsLoaded, cvsLoading] in deps which caused
+   * state updates to recreate this fn -> children's fetchCVs also
+   * recreated -> useEffect fired -> API call -> infinite loop.
    */
   const loadCvsCached = useCallback(async (force, loadFn) => {
     const now = Date.now();
     const cacheAge = now - cvsLoadTimeRef.current;
-
-    // Return cached data if valid and not forcing
-    if (!force && cvsLoaded && cacheAge < CACHE_EXPIRY_MS && !cvsLoading) {
-      console.log('📦 Using cached CVs data');
-      return cvs;
+    if (!force && cvsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !cvsLoadingRef.current) {
+      return cvsRef.current;
     }
-    
-    // Don't reload if already loading
-    if (cvsLoading) {
-      console.log('⏳ CVs already loading, skipping...');
-      return cvs;
-    }
-    
-    console.log('🔄 Loading CVs from API...');
-    setCvsLoading(true);
-    
+    if (cvsLoadingRef.current) return cvsRef.current;
+    _setCvsLoading(true);
     try {
       const loadedCvs = await loadFn();
-      setCvs(loadedCvs);
-      setCvsLoaded(true);
+      _setCvs(loadedCvs);
+      _setCvsLoaded(true);
       cvsLoadTimeRef.current = Date.now();
       return loadedCvs;
     } catch (error) {
       console.error('Error loading CVs:', error);
       throw error;
     } finally {
-      setCvsLoading(false);
+      _setCvsLoading(false);
     }
-  }, [cvs, cvsLoaded, cvsLoading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfileCached = useCallback(async (force, loadFn) => {
     const now = Date.now();
     const cacheAge = now - profileLoadTimeRef.current;
-
-    if (!force && profileLoaded && cacheAge < CACHE_EXPIRY_MS && !profileLoading) {
-      console.log('ðŸ“¦ Using cached profile data');
-      return profile;
+    if (!force && profileLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !profileLoadingRef.current) {
+      return profileRef.current;
     }
-
-    if (profileLoading) {
-      console.log('â³ Profile already loading, skipping...');
-      return profile;
-    }
-
-    console.log('ðŸ”„ Loading profile from API...');
-    setProfileLoading(true);
-
+    if (profileLoadingRef.current) return profileRef.current;
+    _setProfileLoading(true);
     try {
       const loadedProfile = await loadFn();
-      setProfile(loadedProfile);
-      setProfileLoaded(true);
+      _setProfile(loadedProfile);
+      _setProfileLoaded(true);
       profileLoadTimeRef.current = Date.now();
       return loadedProfile;
     } catch (error) {
       console.error('Error loading profile:', error);
       throw error;
     } finally {
-      setProfileLoading(false);
+      _setProfileLoading(false);
     }
-  }, [profile, profileLoaded, profileLoading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateCachedProfile = useCallback((updater) => {
     setProfile(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (next) {
-        setProfileLoaded(true);
+        _setProfileLoaded(true);
         profileLoadTimeRef.current = Date.now();
       }
       return next;
     });
-  }, []);
-  
-  /**
-   * Invalidate jobs cache (use after applying to a job)
-   */
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Invalidators ──────────────────────────────────────────────────────────
+
   const invalidateJobs = useCallback(() => {
-    console.log('🗑️ Invalidating jobs cache');
-    setJobsLoaded(false);
+    _setJobsLoaded(false);
     jobsLoadTimeRef.current = 0;
-  }, []);
-  
-  /**
-   * Invalidate applications cache (use after interview completion, withdrawal, etc.)
-   */
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const invalidateApplications = useCallback(() => {
-    console.log('🗑️ Invalidating applications cache');
-    setApplicationsLoaded(false);
+    _setApplicationsLoaded(false);
     applicationsLoadTimeRef.current = 0;
-  }, []);
-  
-  /**
-   * Invalidate CVs cache (use after uploading a new CV)
-   */
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const invalidateCvs = useCallback(() => {
-    console.log('🗑️ Invalidating CVs cache');
-    setCvsLoaded(false);
+    _setCvsLoaded(false);
     cvsLoadTimeRef.current = 0;
-  }, []);
-  
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const invalidateProfile = useCallback(() => {
-    console.log('Invalidating profile cache');
-    setProfileLoaded(false);
+    _setProfileLoaded(false);
     profileLoadTimeRef.current = 0;
-  }, []);
-  
-  /**
-   * Clear all caches
-   */
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const clearAllCaches = useCallback(() => {
-    console.log('🗑️ Clearing all caches');
-    setJobsLoaded(false);
-    setApplicationsLoaded(false);
-    setCvsLoaded(false);
-    setProfileLoaded(false);
+    _setJobsLoaded(false);
+    _setApplicationsLoaded(false);
+    _setCvsLoaded(false);
+    _setProfileLoaded(false);
     jobsLoadTimeRef.current = 0;
     applicationsLoadTimeRef.current = 0;
     cvsLoadTimeRef.current = 0;
     profileLoadTimeRef.current = 0;
-  }, []);
-  
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const value = {
     // Jobs
     jobs,
@@ -247,14 +217,14 @@ export const CandidateDataProvider = ({ children }) => {
     jobsLoading,
     loadJobsCached,
     invalidateJobs,
-    
+
     // Applications
     applications,
     applicationsLoaded,
     applicationsLoading,
     loadApplicationsCached,
     invalidateApplications,
-    
+
     // CVs
     cvs,
     cvsLoaded,
@@ -269,11 +239,11 @@ export const CandidateDataProvider = ({ children }) => {
     loadProfileCached,
     updateCachedProfile,
     invalidateProfile,
-    
+
     // Global
-    clearAllCaches
+    clearAllCaches,
   };
-  
+
   return (
     <CandidateDataContext.Provider value={value}>
       {children}

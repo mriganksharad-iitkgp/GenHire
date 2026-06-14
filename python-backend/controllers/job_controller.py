@@ -59,21 +59,49 @@ class JobController:
 
         return None
         
-    def get_jobs(self, user_type, user_id):
+    def _job_search_filter(self, search_query):
+        normalized = self._normalize_text_key(search_query)
+        if not normalized:
+            return None
+        pattern = re.escape(normalized)
+        return {
+            '$or': [
+                {'title': {'$regex': pattern, '$options': 'i'}},
+                {'description': {'$regex': pattern, '$options': 'i'}},
+                {'department': {'$regex': pattern, '$options': 'i'}},
+                {'location': {'$regex': pattern, '$options': 'i'}},
+                {'skills': {'$regex': pattern, '$options': 'i'}},
+            ]
+        }
+
+    def get_jobs(self, user_type, user_id, search_query=''):
         """Retrieve jobs based on user type and permissions"""
+        search_filter = self._job_search_filter(search_query)
         if user_type == 'recruiter':
             # Return all jobs for recruiters
-            jobs = list(self.jobs_collection.find({'created_by': user_id}))
+            query = {'created_by': user_id}
+            if search_filter:
+                query = {'$and': [query, search_filter]}
+            jobs = list(self.jobs_collection.find(query))
             for job in jobs:
-                job_id_str = str(job['_id'])
+                job['_id'] = str(job['_id'])
 
-                # Derive counters from applications to avoid stale denormalized values
-                job_applications = list(
-                    self.applications_collection.find(
-                        {'job_id': job_id_str, 'is_visible': True},
-                        {'status': 1}
-                    )
-                )
+            job_ids_str = [job['_id'] for job in jobs]
+
+            # BULK FETCH APPLICATIONS
+            all_apps = list(self.applications_collection.find(
+                {'job_id': {'$in': job_ids_str}, 'is_visible': True},
+                {'job_id': 1, 'status': 1}
+            ))
+            
+            # Group applications by job_id
+            apps_by_job = {job_id: [] for job_id in job_ids_str}
+            for app in all_apps:
+                apps_by_job[app.get('job_id')].append(app)
+
+            for job in jobs:
+                job_id_str = job['_id']
+                job_applications = apps_by_job.get(job_id_str, [])
 
                 interviewed_count = 0
                 selected_count = 0
@@ -97,7 +125,6 @@ class JobController:
                 job['rejected'] = rejected_count
                 job['pending'] = pending_count
 
-                job['_id'] = str(job['_id'])
             return jobs, 200
         else:
             # For candidates: Show active jobs + jobs they have applied to
@@ -112,6 +139,8 @@ class JobController:
                     {'_id': {'$in': [ObjectId(job_id) for job_id in applied_job_ids]}}  # Show jobs user applied to
                 ]
             }
+            if search_filter:
+                query = {'$and': [query, search_filter]}
             
             jobs = list(self.jobs_collection.find(query))
             for job in jobs:

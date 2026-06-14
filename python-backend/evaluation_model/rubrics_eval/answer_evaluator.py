@@ -1,5 +1,7 @@
 """Answer evaluation module."""
 
+import json
+import re
 from typing import List, Dict, Any, Tuple
 from langchain_openai import ChatOpenAI
 from .config import Config
@@ -92,6 +94,29 @@ class AnswerEvaluator:
 
         final_average_score = sum(rubric_scores) / len(rubric_scores)
         return final_average_score, evaluation_details
+
+    def evaluate_answer_fast(
+        self, question: str, student_answer: str
+    ) -> Tuple[float, List[Dict[str, Any]]]:
+        """Evaluate the complete answer in one model request for live interviews."""
+        prompt = f"""
+Evaluate this interview answer for factual correctness, completeness, relevance,
+and technical depth. Return JSON only:
+{{"score": number from 0 to 100, "reasoning": "one concise sentence"}}
+
+Question: {question}
+Answer: {student_answer}
+"""
+        try:
+            response = self.llm.invoke(prompt)
+            content = str(response.content or "").replace("```json", "").replace("```", "")
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            parsed = json.loads(match.group(0)) if match else {}
+            score = max(0.0, min(100.0, float(parsed.get("score", 0))))
+            return score, [{"rubric": "overall technical quality", "score": score, "reasoning": parsed.get("reasoning", "")}]
+        except Exception as e:
+            print(f"Fast answer evaluation failed: {e}")
+            raise
 
     def _create_evaluation_prompt(
         self, student_answer: str, question: str, rubric_item: str

@@ -110,7 +110,9 @@ export default function useCandidateApplications(toast) {
     if (!hasPending) return;
 
     const interval = setInterval(() => {
-      load(true); // force reload from API
+      if (document.visibilityState === 'visible') {
+        load(true); // force reload from API
+      }
     }, 5000); // poll every 5 seconds
 
     return () => clearInterval(interval);

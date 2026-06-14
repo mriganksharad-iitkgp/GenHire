@@ -16,10 +16,13 @@ job_controller = JobController(collections)
 @token_required
 def get_jobs(current_user):
     """Get all jobs (for recruiters) or available jobs (for candidates)"""
+    # Normalize optional search input even though the current candidate UI
+    # filters locally. This keeps older/deployed clients from passing None.
+    search_query = str(request.args.get('query') or request.args.get('search') or '').strip()
     user_type = current_user.get('user_type', 'candidate')
     user_id = str(current_user['_id'])
     
-    result, status_code = job_controller.get_jobs(user_type, user_id)
+    result, status_code = job_controller.get_jobs(user_type, user_id, search_query)
     return jsonify(result), status_code
 
 @job_bp.route('/jobs', methods=['POST'])

@@ -63,6 +63,9 @@ class CreditWalletSchema:
     def create_indexes(cls, db):
         collection = db[cls.COLLECTION_NAME]
         for index in cls.INDEXES:
-            keys = index.pop("keys")
-            collection.create_index(keys, **index)
-            index["keys"] = keys
+            # Copy the spec dict so we don't mutate the shared class-level
+            # INDEXES list on each call (pop() would remove "keys" permanently,
+            # causing KeyError on every subsequent WalletService instantiation).
+            index_spec = dict(index)
+            keys = index_spec.pop("keys")
+            collection.create_index(keys, **index_spec)

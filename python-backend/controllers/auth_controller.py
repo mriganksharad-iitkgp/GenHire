@@ -23,6 +23,32 @@ class AuthController:
     def _normalize_email(self, email):
         return str(email or '').strip().lower()
 
+    def _recruiter_onboarding_complete(self, user_data):
+        if str((user_data or {}).get('user_type', '')).strip().lower() != 'recruiter':
+            return True
+        # Credential-based and legacy recruiter accounts already passed the
+        # normal registration flow. OAuth onboarding applies only to Google
+        # recruiter accounts, so never redirect local logins into signup.
+        auth_provider = str((user_data or {}).get('auth_provider', 'local')).strip().lower()
+        if auth_provider != 'google':
+            return True
+        required_fields = ('company_name', 'company_description', 'company_size', 'company_industry')
+        return all(str((user_data or {}).get(field) or '').strip() for field in required_fields)
+
+    def _google_onboarding_response(self, email, name, existing_user=None):
+        return {
+            'message': 'Complete your recruiter profile to continue',
+            'onboarding_required': True,
+            'user': {
+                'id': str(existing_user['_id']) if existing_user else None,
+                'name': name or (existing_user or {}).get('name', ''),
+                'email': email,
+                'user_type': 'recruiter',
+                'auth_provider': 'google',
+                'onboarding_complete': False,
+            }
+        }, 200
+
     def _find_user_by_identifier(self, identifier):
         """Resolve a user by email (if it contains '@') or by Invite ID otherwise.
         Email lookup intentionally skips invite-only burner accounts so a real
@@ -140,6 +166,9 @@ class AuthController:
         # Only allow candidate and recruiter registration (admins created manually)
         if user_type not in ['candidate', 'recruiter']:
             return {'error': 'Invalid user type'}, 400
+
+        verification_token = secrets.token_urlsafe(32) if self.require_email_verification else None
+        is_verified = user_type == 'candidate'
         
         # Check if user exists - enforce one email per role
         existing_user = self._find_user_by_email(normalized_email)
@@ -182,7 +211,8 @@ class AuthController:
                 'company_location': user_data.get('companyLocation') or user_data.get('company_location', ''),
                 # Additional onboarding fields
                 'reason_for_joining': user_data.get('reasonForJoining') or user_data.get('reason_for_joining', ''),
-                'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
+                'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', ''),
+                'onboarding_complete': True
             })
         
         try:
@@ -227,7 +257,8 @@ class AuthController:
                 'user_type': user_type,
                 'email_verified': user_doc['email_verified'],
                 'is_verified': is_verified,
-                'permissions': []
+                'permissions': [],
+                'onboarding_complete': user_doc.get('onboarding_complete', True)
             }
         }, 201
         
@@ -314,6 +345,8 @@ class AuthController:
                 'is_invite_only': bool(user.get('is_invite_only')),
                 'invite_first_login_required': bool(user.get('invite_first_login_required')),
                 'invited_job_ids': invited_job_ids,
+                'onboarding_complete': self._recruiter_onboarding_complete(user),
+                'rejection_reason': user.get('rejection_reason')
             }
         }, 200
         
@@ -360,6 +393,8 @@ class AuthController:
             'is_invite_only': bool(user.get('is_invite_only')),
             'invite_first_login_required': bool(user.get('invite_first_login_required')),
             'invited_job_ids': [str(j) for j in (user.get('invited_job_ids') or [])],
+            'onboarding_complete': self._recruiter_onboarding_complete(user),
+            'rejection_reason': user.get('rejection_reason')
         }
     
     def verify_email(self, token):
@@ -560,6 +595,36 @@ class AuthController:
                         'error': f'This email is already registered as a {existing_role}. Each email can only be associated with one role.'
                     }, 409
 
+                if user_type == 'recruiter' and not self._recruiter_onboarding_complete(user):
+                    has_onboarding_data = self._recruiter_onboarding_complete({
+                        'user_type': 'recruiter',
+                        'auth_provider': 'google',
+                        'company_name': user_data.get('companyName') or user_data.get('company_name'),
+                        'company_description': user_data.get('companyDescription') or user_data.get('company_description'),
+                        'company_size': user_data.get('companySize') or user_data.get('company_size'),
+                        'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry'),
+                    })
+                    if not has_onboarding_data:
+                        return self._google_onboarding_response(email, name, user)
+
+                    self.users_collection.update_one(
+                        {'_id': user['_id']},
+                        {'$set': {
+                            'name': name or user.get('name', ''),
+                            'company_name': user_data.get('companyName') or user_data.get('company_name', ''),
+                            'company_description': user_data.get('companyDescription') or user_data.get('company_description', ''),
+                            'company_website': user_data.get('companyWebsite') or user_data.get('company_website'),
+                            'company_size': user_data.get('companySize') or user_data.get('company_size'),
+                            'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry', ''),
+                            'company_location': user_data.get('companyLocation') or user_data.get('company_location', ''),
+                            'reason_for_joining': user_data.get('reasonForJoining') or user_data.get('reason_for_joining', ''),
+                            'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', ''),
+                            'onboarding_complete': True,
+                            'updated_at': datetime.datetime.utcnow(),
+                        }}
+                    )
+                    user = self.users_collection.find_one({'_id': user['_id']})
+
                 # Update existing user if they signed up with local auth
                 self.users_collection.update_one(
                     {'_id': user['_id']},
@@ -589,10 +654,24 @@ class AuthController:
                         'email_verified': True,
                         'auth_provider': 'google',
                         'is_verified': user.get('is_verified', True),
-                        'permissions': user.get('permissions', [])
+                        'permissions': user.get('permissions', []),
+                        'onboarding_complete': self._recruiter_onboarding_complete(user),
+                        'rejection_reason': user.get('rejection_reason')
                     }
                 }, 200
             else:
+                if user_type == 'recruiter':
+                    has_onboarding_data = self._recruiter_onboarding_complete({
+                        'user_type': 'recruiter',
+                        'auth_provider': 'google',
+                        'company_name': user_data.get('companyName') or user_data.get('company_name'),
+                        'company_description': user_data.get('companyDescription') or user_data.get('company_description'),
+                        'company_size': user_data.get('companySize') or user_data.get('company_size'),
+                        'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry'),
+                    })
+                    if not has_onboarding_data:
+                        return self._google_onboarding_response(email, name)
+
                 # Determine verification status for new users
                 # Candidates are auto-verified, recruiters need admin approval
                 is_verified = True if user_type == 'candidate' else False
@@ -627,7 +706,8 @@ class AuthController:
                         'company_industry': user_data.get('companyIndustry') or user_data.get('company_industry', ''),
                         'company_location': user_data.get('companyLocation') or user_data.get('company_location', ''),
                         'reason_for_joining': user_data.get('reasonForJoining') or user_data.get('reason_for_joining', ''),
-                        'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', '')
+                        'linkedin_profile': user_data.get('linkedinProfile') or user_data.get('linkedin_profile', ''),
+                        'onboarding_complete': True
                     })
                 
                 try:
@@ -662,10 +742,12 @@ class AuthController:
                         'email_verified': True,
                         'auth_provider': 'google',
                         'is_verified': is_verified,
-                        'permissions': []
+                        'permissions': [],
+                        'onboarding_complete': user_doc.get('onboarding_complete', True),
+                        'rejection_reason': user_doc.get('rejection_reason')
                     }
                 }, 201
-                
+
         except ValueError as e:
             # Invalid token (e.g. wrong audience, expired, or bad signature)
             err_msg = str(e)
@@ -674,3 +756,39 @@ class AuthController:
         except Exception as e:
             print(f"Google OAuth error: {str(e)}")
             return {'error': 'Failed to authenticate with Google'}, 500
+
+    def delete_account(self, current_user):
+        """Delete current user's account and related data"""
+        try:
+            user_id = current_user['_id']
+            user_type = current_user.get('user_type')
+            
+            # Prevent admin self-deletion through this route for safety
+            if user_type == 'admin':
+                return {'error': 'Admin accounts cannot be deleted through this endpoint'}, 403
+
+            # Hard delete the user
+            self.users_collection.delete_one({'_id': ObjectId(user_id)})
+            
+            # Delete related data
+            if user_type == 'candidate':
+                # Delete candidate's applications and practice sessions
+                applications_coll = self.users_collection.database['applications']
+                practice_coll = self.users_collection.database.get('practice_sessions')
+                applications_coll.delete_many({'student_id': str(user_id)})
+                if practice_coll is not None:
+                    practice_coll.delete_many({'user_id': str(user_id)})
+            elif user_type == 'recruiter':
+                # Delete recruiter's jobs and applications for those jobs
+                jobs_coll = self.users_collection.database['jobs']
+                applications_coll = self.users_collection.database['applications']
+                recruiter_jobs = list(jobs_coll.find({'created_by': str(user_id)}, {'_id': 1}))
+                job_ids = [str(job['_id']) for job in recruiter_jobs]
+                if job_ids:
+                    applications_coll.delete_many({'job_id': {'$in': job_ids}})
+                jobs_coll.delete_many({'created_by': str(user_id)})
+                
+            return {'message': 'Account deleted successfully'}, 200
+        except Exception as e:
+            print(f"Error deleting account: {str(e)}")
+            return {'error': 'Failed to delete account'}, 500

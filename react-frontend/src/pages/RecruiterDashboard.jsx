@@ -8,6 +8,7 @@ import JobEditModal from "../components/JobEditModal";
 import CVViewer from "../components/CVViewer";
 import InterviewReportModal from "../components/InterviewReportModal";
 import ProctoringResultModal from "../components/ProctoringResultModal";
+import DeleteAccountModal from "../components/common/DeleteAccountModal";
 import {
   Tabs,
   SectionHeader,
@@ -31,9 +32,10 @@ import {
 const RecruiterDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
-  const { user } = useAuth("recruiter");
+  const { user, rejectionReason } = useAuth("recruiter");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Check verification status from localStorage
   const [isVerified, setIsVerified] = useState(true);
@@ -525,8 +527,48 @@ const RecruiterDashboard = () => {
       {/* Use shared Navbar component */}
       <Navbar userType="recruiter" />
 
+      {/* Delete Account Modal */}
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
+
+      {/* Rejection Banner */}
+      {rejectionReason && (
+        <div className={styles.verificationBanner} style={{ backgroundColor: '#fff3f3', borderLeft: '4px solid #dc3545' }}>
+          <div className={styles.bannerContent}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="#dc3545"
+              style={{ width: "24px", height: "24px", flexShrink: 0 }}
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div>
+              <strong style={{ color: '#dc3545' }}>Account Application Rejected</strong>
+              <p style={{ color: '#842029' }}>
+                Your recruiter application has been rejected: {rejectionReason}
+                <br/>
+                Please delete your account and reapply with correct details to continue using our services.
+              </p>
+              <button 
+                onClick={() => setIsDeleteModalOpen(true)}
+                style={{ marginTop: '10px', padding: '8px 16px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '500' }}
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Verification Pending Banner */}
-      {!isVerified && (
+      {!isVerified && !rejectionReason && (
         <div className={styles.verificationBanner}>
           <div className={styles.bannerContent}>
             <svg
@@ -762,6 +804,7 @@ const RecruiterDashboard = () => {
               onChange={setCompanyProfile}
               onSave={handleSaveProfile}
               onCancel={handleCancelEdit}
+              onDeleteAccount={() => setIsDeleteModalOpen(true)}
             />
           </div>
         )}

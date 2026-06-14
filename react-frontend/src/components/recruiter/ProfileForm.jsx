@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 
-const ProfileForm = ({ companyProfile, isEditing, onChange, onSave, onCancel }) => (
+const ProfileForm = ({ companyProfile, isEditing, onChange, onSave, onCancel, onDeleteAccount }) => (
   <div className={styles.profileForm}>
     <div className={styles.formRow}>
       <div className={styles.formGroup}>
@@ -91,6 +91,42 @@ const ProfileForm = ({ companyProfile, isEditing, onChange, onSave, onCancel }) 
           <i className="fa fa-info-circle"></i> Click "Edit Profile" to modify company information
         </p>
       )}
+    </div>
+
+    {/* Account Settings Section */}
+    <div className={styles.formGroup} style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+      <h4 style={{ margin: '0 0 15px 0', color: '#dc3545' }}><i className="fa fa-cog"></i> Danger Zone</h4>
+      <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '15px' }}>
+        Once you delete your account, there is no going back. Please be certain.
+      </p>
+      <button 
+        type="button" 
+        onClick={onDeleteAccount} 
+        style={{ 
+          padding: '10px 20px', 
+          backgroundColor: 'white', 
+          color: '#dc3545', 
+          border: '1px solid #dc3545', 
+          borderRadius: '4px', 
+          cursor: 'pointer',
+          fontWeight: '500',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          transition: 'all 0.2s'
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.backgroundColor = '#dc3545';
+          e.currentTarget.style.color = 'white';
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.backgroundColor = 'white';
+          e.currentTarget.style.color = '#dc3545';
+        }}
+      >
+        <i className="fa fa-trash" aria-hidden="true"></i>
+        Delete Account
+      </button>
     </div>
   </div>
 );

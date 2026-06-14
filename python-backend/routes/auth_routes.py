@@ -118,3 +118,11 @@ def google_oauth():
     # Pass additional user data for recruiter onboarding
     result, status_code = auth_controller.google_oauth_login(token, user_type, data)
     return jsonify(result), status_code
+
+@auth_bp.route('/me', methods=['DELETE'])
+@cross_origin()
+@token_required
+def delete_account(current_user):
+    """Delete current user's account and related data"""
+    result, status_code = auth_controller.delete_account(current_user)
+    return jsonify(result), status_code

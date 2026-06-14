@@ -99,6 +99,29 @@ load_dotenv()
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
 
+# Setup Security Headers (Helmet equivalent) — optional
+try:
+    from flask_talisman import Talisman
+    Talisman(app, content_security_policy=None, force_https=False)
+    print("[OK] Flask-Talisman loaded")
+except ImportError:
+    print("[WARN] flask-talisman not installed, skipping security headers. Install with: pip install Flask-Talisman")
+
+# Setup Rate Limiting — optional
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://"
+    )
+    print("[OK] Flask-Limiter loaded")
+except ImportError:
+    limiter = None
+    print("[WARN] flask-limiter not installed, skipping rate limiting. Install with: pip install Flask-Limiter")
+
 # Custom JSON provider so any bson.ObjectId returned by a route auto-serializes.
 # Without this, Flask's default encoder raises 500 on ObjectIds nested inside
 # any response dict (cv_snapshot.metadata, recruiter_id stored as ObjectId on
@@ -138,6 +161,20 @@ CORS(
         }
     },
 )
+
+from werkzeug.exceptions import HTTPException
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if isinstance(e, HTTPException):
+        return jsonify(error=e.description, code=e.code), e.code
+    
+    # Log and return standard JSON for unhandled errors
+    logger.error(f"Unhandled Exception: {str(e)}")
+    logger.error(traceback.format_exc())
+    return jsonify(error="Internal Server Error", message="An unexpected error occurred.", code=500), 500
 
 
 # Handle preflight OPTIONS requests
@@ -1243,6 +1280,24 @@ def get_user_interviews(current_user):
             interviews_collection.find({"user_id": str(current_user["_id"])})
         )
 
+    # For recruiters: batch-fetch all candidate users in ONE query instead of
+    # N+1 individual find_one() calls (one per interview). With 100 interviews
+    # this reduces 101 MongoDB round-trips down to 2.
+    candidate_map = {}
+    if user_type == "recruiter" and user_interviews:
+        candidate_ids = []
+        for iv in user_interviews:
+            try:
+                candidate_ids.append(ObjectId(iv["user_id"]))
+            except Exception:
+                pass
+        if candidate_ids:
+            for u in users_collection.find(
+                {"_id": {"$in": candidate_ids}},
+                {"_id": 1, "name": 1, "email": 1},
+            ):
+                candidate_map[str(u["_id"])] = u
+
     # Format the interviews for JSON response
     formatted_interviews = []
     for interview in user_interviews:
@@ -1256,11 +1311,9 @@ def get_user_interviews(current_user):
             "jd_path": interview.get("jd_path"),
         }
 
-        # Include user info for recruiters
+        # Include user info for recruiters — use pre-fetched map, no extra queries
         if user_type == "recruiter":
-            user_info = users_collection.find_one(
-                {"_id": ObjectId(interview["user_id"])}
-            )
+            user_info = candidate_map.get(str(interview.get("user_id", "")))
             if user_info:
                 formatted_interview["candidate"] = {
                     "name": user_info["name"],
@@ -1270,6 +1323,7 @@ def get_user_interviews(current_user):
         formatted_interviews.append(formatted_interview)
 
     return jsonify(formatted_interviews)
+
 
 
 # ... other imports

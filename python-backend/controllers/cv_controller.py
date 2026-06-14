@@ -10,6 +10,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from bson import ObjectId
 from services.pdf_parser_service import get_pdf_parser
+from services.cv_structured_parser_service import get_cv_structured_parser
 from services import gcs_service
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ class CVController:
         except Exception as e:
             logger.warning(f"PDF parser initialization failed: {e}")
             self.pdf_parser = None
+        try:
+            self.structured_parser = get_cv_structured_parser()
+        except Exception as e:
+            logger.warning(f"Structured CV parser initialization failed: {e}")
+            self.structured_parser = None
     
     def _allowed_file(self, filename):
         """Check if file has allowed extension"""
@@ -89,12 +95,15 @@ class CVController:
             # Extract text using PDF parser
             extracted_text = ""
             metadata = {}
+            parsed_details = None
             
             try:
                 if self.pdf_parser:
                     result = self.pdf_parser.parse_cv_pdf(local_file_path)
                     extracted_text = result.get('text', '')
                     metadata = result.get('metadata', {})
+                    if self.structured_parser and extracted_text:
+                        parsed_details = self.structured_parser.parse(extracted_text)
                     logger.info(f"Extracted {len(extracted_text)} characters from CV: {original_filename}")
                 else:
                     logger.warning("PDF parser not available, CV text not extracted")
@@ -127,13 +136,18 @@ class CVController:
                 'file_path': file_path,
                 'gcs_path': gcs_path,
                 'extracted_text': extracted_text,
+                'parsed_details': parsed_details,
+                'parsing_status': 'completed' if parsed_details else 'needs_review',
                 'upload_date': datetime.utcnow(),
                 'is_primary': is_primary or len(cv_uploads) == 0,  # First CV is always primary
                 'metadata': {
                     'file_size': metadata.get('file_size', 0),
                     'pages': metadata.get('pages', 0),
                     'character_count': len(extracted_text),
-                    'word_count': metadata.get('word_count', 0)
+                    'word_count': metadata.get('word_count', 0),
+                    'parsing_confidence': metadata.get('parsing_confidence', 'low'),
+                    'layout_detected': metadata.get('layout_detected', 'unknown'),
+                    'parser': metadata.get('parser', 'unknown')
                 }
             }
             
@@ -146,14 +160,16 @@ class CVController:
             cv_uploads.append(cv_upload)
             
             # Update user document
+            update_fields = {
+                'cv_uploads': cv_uploads,
+                'updated_at': datetime.utcnow()
+            }
+            if cv_upload['is_primary'] and parsed_details:
+                update_fields['cv_details'] = parsed_details
+
             self.users_collection.update_one(
                 {'_id': ObjectId(user_id)},
-                {
-                    '$set': {
-                        'cv_uploads': cv_uploads,
-                        'updated_at': datetime.utcnow()
-                    }
-                }
+                {'$set': update_fields}
             )
             
             return {
@@ -163,8 +179,10 @@ class CVController:
                     'filename': original_filename,
                     'is_primary': cv_upload['is_primary'],
                     'upload_date': cv_upload['upload_date'].isoformat(),
-                    'metadata': cv_upload['metadata']
-                }
+                    'metadata': cv_upload['metadata'],
+                    'parsing_status': cv_upload['parsing_status'],
+                },
+                'parsed_details': parsed_details,
             }, 201
             
         except Exception as e:
@@ -208,7 +226,8 @@ class CVController:
                     'filename': filename,
                     'is_primary': cv.get('is_primary', False),
                     'upload_date': cv.get('upload_date').isoformat() if cv.get('upload_date') else None,
-                    'metadata': cv.get('metadata', {})
+                    'metadata': cv.get('metadata', {}),
+                    'parsing_status': cv.get('parsing_status', 'unknown')
                 })
             
             return {
@@ -250,7 +269,9 @@ class CVController:
                     'is_primary': cv.get('is_primary', False),
                     'upload_date': cv.get('upload_date').isoformat() if cv.get('upload_date') else None,
                     'extracted_text': cv.get('extracted_text', ''),
-                    'metadata': cv.get('metadata', {})
+                    'metadata': cv.get('metadata', {}),
+                    'parsed_details': cv.get('parsed_details'),
+                    'parsing_status': cv.get('parsing_status', 'unknown')
                 }
             }, 200
             

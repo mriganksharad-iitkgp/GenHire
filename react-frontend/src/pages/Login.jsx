@@ -12,6 +12,16 @@ const Login = () => {
 	const [userType, setUserType] = useState("candidate"); // 'candidate', 'recruiter', or 'admin'
 	const navigate = useNavigate();
 
+	const storeSession = (data, fallbackType) => {
+		localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
+		localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
+			...data.user,
+			userType: data.user.user_type || fallbackType,
+			isVerified: data.user.is_verified,
+			permissions: data.user.permissions || []
+		}));
+	};
+
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -45,13 +55,7 @@ const Login = () => {
 			}
 
 			// Store token and user data with user type, verification status, and permissions
-			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-			localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
-				...data.user,
-				userType: data.user.user_type || userType,
-				isVerified: data.user.is_verified,
-				permissions: data.user.permissions || []
-			}));
+			storeSession(data, userType);
 
 			console.log('Token stored:', data.token); // Debug log
 			console.log('User data stored:', data.user); // Debug log
@@ -96,14 +100,17 @@ const Login = () => {
 				throw new Error(data.error || "Google login failed");
 			}
 
-			// Store token and user data with verification status and permissions
-			localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-			localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
-				...data.user,
-				userType: data.user.user_type,
-				isVerified: data.user.is_verified,
-				permissions: data.user.permissions || []
-			}));
+			if (data.onboarding_required) {
+				navigate("/recruiter-signup", {
+					state: {
+						googleCredential: credentialResponse.credential,
+						googleProfile: data.user,
+					},
+				});
+				return;
+			}
+
+			storeSession(data, userType);
 
 			// Navigate based on user type
 			if (data.user.user_type === "admin") {

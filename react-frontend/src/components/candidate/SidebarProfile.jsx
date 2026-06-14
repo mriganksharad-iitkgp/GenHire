@@ -18,6 +18,7 @@ export default function SidebarProfile({
   cvDetails,
   onSaveCvDetails,
   showToast,
+  onDeleteAccount,
   children,
 }) {
   const [showCvDetailsForm, setShowCvDetailsForm] = useState(false);
@@ -61,7 +62,7 @@ export default function SidebarProfile({
               <label className={styles.fileInputLabel}>
                 <i className="fa fa-file-text" aria-hidden="true"></i>
                 <span>Resume/CV</span>
-                <input type="file" accept=".pdf,.docx" onChange={onCvFileChange} className={styles.hiddenInput} />
+                <input type="file" accept=".pdf" onChange={onCvFileChange} className={styles.hiddenInput} />
                 <div className={styles.fileInfo}>{cvFileName || "No file selected"}</div>
               </label>
               {cvPath && (
@@ -126,6 +127,42 @@ export default function SidebarProfile({
               View Profile CV Details
             </button>
           )}
+        </div>
+
+        {/* Account Settings Section */}
+        <div className={styles.cvSection}>
+          <h4><i className="fa fa-cog"></i> Account Settings</h4>
+          <button 
+            type="button" 
+            onClick={onDeleteAccount} 
+            style={{ 
+              width: '100%', 
+              padding: '10px', 
+              marginTop: '10px',
+              backgroundColor: 'white', 
+              color: '#dc3545', 
+              border: '1px solid #dc3545', 
+              borderRadius: '4px', 
+              cursor: 'pointer',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#dc3545';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.color = '#dc3545';
+            }}
+          >
+            <i className="fa fa-trash" aria-hidden="true"></i>
+            Delete Account
+          </button>
         </div>
       </div>
       

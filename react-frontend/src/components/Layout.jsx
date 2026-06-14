@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, Outlet } from "react-router-dom";
 import Navbar from "./Navbar";
 import styles from "./Layout.module.css";
 import axios from "axios";
 
-const Layout = ({ children }) => {
+const Layout = () => {
 	const navigate = useNavigate();
 	const [isAuthenticated, setIsAuthenticated] = useState(null);
 	const [userType, setUserType] = useState(null);
@@ -70,11 +70,10 @@ const Layout = ({ children }) => {
 		return <Navigate to="/login" replace />;
 	}
 
-	// If recruiter tries to access candidate layout, they've already been redirected
 	return (
 		<div className={styles.layoutContainer}>
 			<Navbar userType={userType} />
-			<main className={styles.mainContent}>{children}</main>
+			<main className={styles.mainContent}><Outlet /></main>
 		</div>
 	);
 };

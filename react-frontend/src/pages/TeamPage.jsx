@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import styles from "./TeamPage.module.css";
 
 const teamMembers = [
@@ -60,6 +60,62 @@ const teamMembers = [
   }
 ];
 
+const TeamMemberAvatar = ({ member }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+  
+  const initials = member.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const gradients = [
+    "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)", // Indigo to Purple
+    "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)", // Cyan to Blue
+    "linear-gradient(135deg, #f97316 0%, #ec4899 100%)", // Orange to Pink
+    "linear-gradient(135deg, #10b981 0%, #059669 100%)", // Emerald to Teal
+    "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", // Amber to Orange
+    "linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)", // Pink to Purple
+    "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", // Blue to Dark Blue
+    "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)", // Teal to Dark Teal
+  ];
+
+  const hashString = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash);
+  };
+
+  const gradientIndex = hashString(member.name) % gradients.length;
+  const gradient = gradients[gradientIndex];
+
+  if (imgFailed || !member.imageUrl) {
+    return (
+      <div
+        className={styles.avatarFallback}
+        style={{ background: gradient }}
+        title={`${member.name} profile`}
+      >
+        <span className={styles.avatarInitials}>{initials}</span>
+        <div className={styles.fallbackPattern} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={member.imageUrl}
+      alt={`${member.name} profile`}
+      className={styles.avatar}
+      loading="lazy"
+      onError={() => setImgFailed(true)}
+    />
+  );
+};
+
 const TeamPage = () => {
   return (
     <div className={styles.teamPage}>
@@ -82,12 +138,7 @@ const TeamPage = () => {
             <article className={styles.card} key={member.name}>
               <div className={styles.cardHeader}>
                 <div className={styles.avatarWrap}>
-                  <img
-                    src={member.imageUrl}
-                    alt={`${member.name} profile`}
-                    className={styles.avatar}
-                    loading="lazy"
-                  />
+                  <TeamMemberAvatar member={member} />
                   <a
                     className={styles.linkedInOverlay}
                     href={member.linkedIn}

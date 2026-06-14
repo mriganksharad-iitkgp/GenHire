@@ -30,10 +30,10 @@ def get_email_provider() -> EmailProvider:
 
     provider = provider_cls()
     if not provider.healthcheck():
-        print(
-            f"[email] provider {name!r} configured but credentials missing; "
-            f"falling back to noop. Set the appropriate env vars to enable real sending."
-        )
+        # print(
+        #     f"[email] provider {name!r} configured but credentials missing; "
+        #     f"falling back to noop. Set the appropriate env vars to enable real sending."
+        # )
         return NoopEmailProvider()
 
     return provider

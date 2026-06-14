@@ -26,7 +26,27 @@ def token_required(f):
             
             # Get database collections
             collections = db_config.get_collections()
-            current_user = collections['users'].find_one({'_id': ObjectId(data['user_id'])})
+            # Fetch only the fields needed for auth — loading the full user
+            # document (which includes large cv_details, raw_cv_text, etc.)
+            # on every authenticated request adds unnecessary latency and
+            # BSON transfer overhead (~20-50ms per request).
+            _AUTH_PROJECTION = {
+                "_id": 1,
+                "name": 1,
+                "email": 1,
+                "email_lower": 1,
+                "user_type": 1,
+                "is_verified": 1,
+                "is_invite_only": 1,
+                "invite_id_lower": 1,
+                "permissions": 1,
+                "cv_details": 1,   # needed by interview start route
+                "is_active": 1,
+            }
+            current_user = collections['users'].find_one(
+                {'_id': ObjectId(data['user_id'])},
+                _AUTH_PROJECTION,
+            )
 
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401

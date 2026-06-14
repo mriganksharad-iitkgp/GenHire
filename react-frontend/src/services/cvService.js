@@ -13,7 +13,7 @@ class CVService {
    * @returns {Promise} Upload response
    */
   async uploadCV(cvFile, isPrimary = false) {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -43,7 +43,7 @@ class CVService {
    * @returns {Promise} List of CVs
    */
   async listCVs() {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -69,7 +69,7 @@ class CVService {
    * @returns {Promise} CV details
    */
   async getCV(cvId) {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -95,7 +95,7 @@ class CVService {
    * @returns {Promise} Delete response
    */
   async deleteCV(cvId) {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -121,7 +121,7 @@ class CVService {
    * @returns {Promise} Update response
    */
   async setPrimaryCV(cvId) {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -142,17 +142,17 @@ class CVService {
   }
 
   /**
-   * Preview CV extracted text
+   * Preview/Download CV PDF
    * @param {string} cvId - CV ID
-   * @returns {Promise} CV preview
+   * @returns {Promise<Blob>} CV PDF blob
    */
   async previewCV(cvId) {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyxyz-token");
     if (!token) {
       throw new Error("No authentication token found");
     }
 
-    const response = await fetch(`${API_BASE_URL}/cv/preview/${cvId}`, {
+    const response = await fetch(`${API_BASE_URL}/cv/${cvId}/preview`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -160,11 +160,10 @@ class CVService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to preview CV");
+      throw new Error("Failed to preview CV");
     }
 
-    return response.json();
+    return response.blob();
   }
 }
 

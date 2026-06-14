@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 /**
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+
+/**
  * Authentication hook for managing user sessions
  * @param {string|null} requiredType - Required user type ('candidate', 'recruiter', 'admin', or null for any)
  * @returns {Object} Authentication state and helpers
@@ -10,6 +14,7 @@ export default function useAuth(requiredType = "recruiter") {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [isVerified, setIsVerified] = useState(true);
+  const [rejectionReason, setRejectionReason] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,6 +23,7 @@ export default function useAuth(requiredType = "recruiter") {
     const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
     
     if (!token || !userData) {
+      setIsLoading(false);
       navigate("/login");
       return;
     }
@@ -28,6 +34,7 @@ export default function useAuth(requiredType = "recruiter") {
       
       // Check if required type matches (if specified)
       if (requiredType && userType !== requiredType) {
+        setIsLoading(false);
         // Redirect based on actual user type
         if (userType === 'admin') {
           navigate("/admin");
@@ -38,7 +45,7 @@ export default function useAuth(requiredType = "recruiter") {
         }
         return;
       }
-      
+
       // Set user data
       setUser({
         ...parsed,
@@ -49,6 +56,7 @@ export default function useAuth(requiredType = "recruiter") {
       // Check both isVerified (frontend convention) and is_verified (backend convention)
       const verified = parsed.isVerified !== false && parsed.is_verified !== false;
       setIsVerified(verified);
+      setRejectionReason(parsed.rejection_reason || null);
       
       // Set permissions
       setPermissions(parsed.permissions || []);
@@ -61,6 +69,7 @@ export default function useAuth(requiredType = "recruiter") {
       setIsLoading(false);
     } catch (error) {
       console.error('Error parsing user data:', error);
+      setIsLoading(false);
       navigate("/login");
     }
   }, [navigate, requiredType]);
@@ -125,6 +134,7 @@ export default function useAuth(requiredType = "recruiter") {
           userType: parsed.userType || parsed.user_type || 'candidate'
         });
         setIsVerified(parsed.isVerified !== false && parsed.is_verified !== false);
+        setRejectionReason(parsed.rejection_reason || null);
         setPermissions(parsed.permissions || []);
       } catch (error) {
         console.error('Error refreshing user data:', error);
@@ -136,6 +146,7 @@ export default function useAuth(requiredType = "recruiter") {
     user, 
     logout,
     isVerified,
+    rejectionReason,
     permissions,
     hasPermission,
     isAdmin,

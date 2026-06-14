@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InterviewReportModal from "../components/InterviewReportModal";
+import DeleteAccountModal from "../components/common/DeleteAccountModal";
 import Toast from "../components/Toast";
 import styles from "./Profile.module.css";
 import SidebarProfile from "../components/candidate/SidebarProfile";
@@ -8,7 +9,8 @@ import BioForm from "../components/candidate/BioForm";
 import ApplicationsList from "../components/candidate/ApplicationsList";
 import useCandidateProfile from "../hooks/candidate/useCandidateProfile";
 import useCandidateApplications from "../hooks/candidate/useCandidateApplications";
-import { viewCV as apiViewCV, viewApplicationCV } from "../services/api";
+import { viewApplicationCV } from "../services/api";
+import cvService from "../services/cvService";
 
 const Profile = () => {
 	const navigate = useNavigate();
@@ -23,6 +25,9 @@ const Profile = () => {
 	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [reportData, setReportData] = useState(null);
 	const [reportScores, setReportScores] = useState({ cv: null, interview: null });
+
+	// Delete account modal state
+	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
 	// Toast state
 	const [toast, setToast] = useState(null);
@@ -174,6 +179,8 @@ const Profile = () => {
 	const handleViewCV = async (application = null) => {
 		try {
 			let blob;
+
+			// Case 1: Viewing CV for a specific application (from application card)
 			if (application?.cv_id) {
 				const token = localStorage.getItem("companyxyz-token");
 				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${application.cv_id}/preview`, {
@@ -181,15 +188,30 @@ const Profile = () => {
 				});
 				if (!response.ok) throw new Error("Failed to load CV");
 				blob = await response.blob();
+			} else if (application?.id) {
+				// Case 2: Application-level CV view (legacy path)
+				blob = await viewApplicationCV(application.id);
 			} else {
-				blob = application?.id
-				? await viewApplicationCV(application.id)
-				: await apiViewCV();
+				// Case 3: "View Uploaded CV" button — use the primary CV from new multi-CV system
+				try {
+					const res = await cvService.listCVs();
+					const cvs = res?.cvs || [];
+					const primaryCv = cvs.find(c => c.is_primary) || cvs[0];
+					if (!primaryCv) {
+						showToast("No CV uploaded yet. Please upload a CV first.", "error");
+						return;
+					}
+					blob = await cvService.previewCV(primaryCv.cv_id);
+				} catch (innerErr) {
+					showToast("No CV uploaded yet. Please upload a CV first.", "error");
+					return;
+				}
 			}
+
 			const url = window.URL.createObjectURL(blob);
 			window.open(url, '_blank');
 		} catch (e) {
-			showToast("Error viewing CV for this application", "error");
+			showToast("Failed to open CV. The file may no longer be available.", "error");
 		}
 	};
 
@@ -348,6 +370,7 @@ const Profile = () => {
 					cvDetails={cvDetails}
 					onSaveCvDetails={handleSaveCvDetails}
 					showToast={showToast}
+					onDeleteAccount={() => setIsDeleteModalOpen(true)}
 				>						{/* Application Statistics Card */}
 					<div className={styles.statsCard}>
 						<h3>Application Status</h3>
@@ -479,6 +502,11 @@ const Profile = () => {
 				report={reportData}
 				cvScore={reportScores.cv}
 				interviewScore={reportScores.interview}
+			/>
+			{/* Delete Account Modal */}
+			<DeleteAccountModal
+				isOpen={isDeleteModalOpen}
+				onClose={() => setIsDeleteModalOpen(false)}
 			/>
 			{/* Toast Notification */}
 			{toast && (

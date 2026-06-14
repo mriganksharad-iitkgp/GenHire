@@ -6,6 +6,7 @@ import re
 import uuid
 import sys
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict, field
 
@@ -135,23 +136,26 @@ class InterviewSessionManager:
         try:
             cost_tracker = CostTracker()
             token = cost_tracker.set_session_context(session_id)
-            # Evaluate the answer using rubrics-eval system
-            if self.evaluation_system:
+            provisional_evaluation = self._fallback_evaluation(question, answer)
+
+            def evaluate_answer():
+                if not self.evaluation_system:
+                    return provisional_evaluation
                 try:
-                    # Get technical evaluation
-                    score, details = self.evaluation_system.evaluate_single_answer(
-                        question=question, student_answer=answer
-                    )
-
-                    # Get communication score
-                    communication_score = (
-                        self.evaluation_system.evaluate_communication_score(
-                            question=question, student_answer=answer
+                    with ThreadPoolExecutor(max_workers=2) as evaluator_pool:
+                        technical_future = evaluator_pool.submit(
+                            self.evaluation_system.evaluate_single_answer_fast,
+                            question,
+                            answer,
                         )
-                    )
-
-                    # Convert scores to expected format
-                    evaluation = self._convert_scores_to_standard_format(
+                        communication_future = evaluator_pool.submit(
+                            self.evaluation_system.evaluate_communication_score,
+                            question,
+                            answer,
+                        )
+                        score, _details = technical_future.result()
+                        communication_score = communication_future.result()
+                    return self._convert_scores_to_standard_format(
                         technical_score=score,
                         communication_score=communication_score,
                         question=question,
@@ -159,28 +163,38 @@ class InterviewSessionManager:
                     )
                 except Exception as e:
                     print(f"Evaluation failed: {e}")
-                    # Fallback to basic evaluation
-                    evaluation = self._fallback_evaluation(question, answer)
-            else:
-                # Fallback to basic evaluation
-                evaluation = self._fallback_evaluation(question, answer)
+                    return provisional_evaluation
 
-            # Check AI content if enabled
+            # Generate next question using natural conversation flow
+            if session.conversation_context is None:
+                return {"error": "Conversation context not initialized"}
+
+            # Evaluation and question generation are independent enough for the
+            # live path. Use the provisional score for adaptive topic selection.
+            with ThreadPoolExecutor(max_workers=2) as live_pool:
+                evaluation_future = live_pool.submit(evaluate_answer)
+                question_future = live_pool.submit(
+                    self.question_generator.get_next_question,
+                    session.conversation_context,
+                    answer,
+                    provisional_evaluation,
+                )
+                evaluation = evaluation_future.result()
+                next_question, next_metadata = question_future.result()
+
             if session.proctoring_config and session.proctoring_config.get("ai_detection", False):
                 ai_result = check_ai_content(answer)
                 if ai_result:
                     evaluation["ai_probability"] = ai_result.get("score")
                     evaluation["ai_detection_raw"] = ai_result.get("raw_response")
 
-            # Record the interaction
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
             session.questions_asked += 1
-
             session.interview_data.append(
                 {
                     "question": question,
                     "answer": answer,
-                    "evaluation": evaluation,  # evaluation is already a dict
+                    "evaluation": evaluation,
                     "question_metadata": (
                         asdict(session.current_question_metadata)
                         if session.current_question_metadata
@@ -188,16 +202,6 @@ class InterviewSessionManager:
                     ),
                     "timestamp": self._get_timestamp(),
                 }
-            )
-
-            # Generate next question using natural conversation flow
-            if session.conversation_context is None:
-                return {"error": "Conversation context not initialized"}
-
-            next_question, next_metadata = self.question_generator.get_next_question(
-                session.conversation_context,
-                last_answer=answer,
-                answer_evaluation=evaluation,  # evaluation is already a dict
             )
 
             # Update session with next question
