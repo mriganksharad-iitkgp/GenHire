@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { viewPhoto } from '../services/api';
 
 /**
  * Global data cache for candidate pages to prevent unnecessary reloads.
@@ -28,6 +29,7 @@ export const CandidateDataProvider = ({ children }) => {
   const jobsRef = useRef([]);
   const jobsLoadedRef = useRef(false);
   const jobsLoadingRef = useRef(false);
+  const jobsPromiseRef = useRef(null);
 
   // ── Applications ──────────────────────────────────────────────────────────
   const [applications, setApplications] = useState([]);
@@ -37,6 +39,7 @@ export const CandidateDataProvider = ({ children }) => {
   const applicationsRef = useRef([]);
   const applicationsLoadedRef = useRef(false);
   const applicationsLoadingRef = useRef(false);
+  const applicationsPromiseRef = useRef(null);
 
   // ── CVs ───────────────────────────────────────────────────────────────────
   const [cvs, setCvs] = useState([]);
@@ -46,6 +49,7 @@ export const CandidateDataProvider = ({ children }) => {
   const cvsRef = useRef([]);
   const cvsLoadedRef = useRef(false);
   const cvsLoadingRef = useRef(false);
+  const cvsPromiseRef = useRef(null);
 
   // ── Profile ───────────────────────────────────────────────────────────────
   const [profile, setProfile] = useState(null);
@@ -55,6 +59,12 @@ export const CandidateDataProvider = ({ children }) => {
   const profileRef = useRef(null);
   const profileLoadedRef = useRef(false);
   const profileLoadingRef = useRef(false);
+  const profilePromiseRef = useRef(null);
+
+  // ── Profile Photo ─────────────────────────────────────────────────────────
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(null);
+  const profilePhotoUrlRef = useRef(null);
+  const photoPromiseRef = useRef(null);
 
   // ── Synced setters (update both React state AND the ref) ──────────────────
   const _setJobs = (v) => { jobsRef.current = v; setJobs(v); };
@@ -69,51 +79,106 @@ export const CandidateDataProvider = ({ children }) => {
   const _setProfile = (v) => { profileRef.current = v; setProfile(v); };
   const _setProfileLoaded = (v) => { profileLoadedRef.current = v; setProfileLoaded(v); };
   const _setProfileLoading = (v) => { profileLoadingRef.current = v; setProfileLoading(v); };
+  const _setProfilePhotoUrl = (url) => { profilePhotoUrlRef.current = url; setProfilePhotoUrl(url); };
+
+  const lastTokenRef = useRef(localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"));
+
+  const checkTokenAndClearIfChanged = useCallback(() => {
+    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    if (token !== lastTokenRef.current) {
+      console.log("🔑 Token changed, clearing all context caches.");
+      lastTokenRef.current = token;
+      _setJobs([]);
+      _setJobsLoaded(false);
+      _setJobsLoading(false);
+      _setApplications([]);
+      _setApplicationsLoaded(false);
+      _setApplicationsLoading(false);
+      _setCvs([]);
+      _setCvsLoaded(false);
+      _setCvsLoading(false);
+      _setProfile(null);
+      _setProfileLoaded(false);
+      _setProfileLoading(false);
+      _setProfilePhotoUrl(null);
+      jobsLoadTimeRef.current = 0;
+      applicationsLoadTimeRef.current = 0;
+      cvsLoadTimeRef.current = 0;
+      profileLoadTimeRef.current = 0;
+      jobsPromiseRef.current = null;
+      applicationsPromiseRef.current = null;
+      cvsPromiseRef.current = null;
+      profilePromiseRef.current = null;
+      photoPromiseRef.current = null;
+      return true;
+    }
+    return false;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stable load callbacks (empty dep array — state read via refs) ──────────
 
   const loadJobsCached = useCallback(async (force, loadFn) => {
+    checkTokenAndClearIfChanged();
     const now = Date.now();
     const cacheAge = now - jobsLoadTimeRef.current;
-    if (!force && jobsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !jobsLoadingRef.current) {
+    if (!force && jobsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS) {
       return jobsRef.current;
     }
-    if (jobsLoadingRef.current) return jobsRef.current;
-    _setJobsLoading(true);
-    try {
-      const loadedJobs = await loadFn();
-      _setJobs(loadedJobs);
-      _setJobsLoaded(true);
-      jobsLoadTimeRef.current = Date.now();
-      return loadedJobs;
-    } catch (error) {
-      console.error('Error loading jobs:', error);
-      throw error;
-    } finally {
-      _setJobsLoading(false);
+    if (jobsPromiseRef.current) {
+      return jobsPromiseRef.current;
     }
+
+    const promise = (async () => {
+      _setJobsLoading(true);
+      try {
+        const loadedJobs = await loadFn();
+        _setJobs(loadedJobs);
+        _setJobsLoaded(true);
+        jobsLoadTimeRef.current = Date.now();
+        return loadedJobs;
+      } catch (error) {
+        console.error('Error loading jobs:', error);
+        throw error;
+      } finally {
+        _setJobsLoading(false);
+        jobsPromiseRef.current = null;
+      }
+    })();
+
+    jobsPromiseRef.current = promise;
+    return promise;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadApplicationsCached = useCallback(async (force, loadFn) => {
+    checkTokenAndClearIfChanged();
     const now = Date.now();
     const cacheAge = now - applicationsLoadTimeRef.current;
-    if (!force && applicationsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !applicationsLoadingRef.current) {
+    if (!force && applicationsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS) {
       return applicationsRef.current;
     }
-    if (applicationsLoadingRef.current) return applicationsRef.current;
-    _setApplicationsLoading(true);
-    try {
-      const loadedApps = await loadFn();
-      _setApplications(loadedApps);
-      _setApplicationsLoaded(true);
-      applicationsLoadTimeRef.current = Date.now();
-      return loadedApps;
-    } catch (error) {
-      console.error('Error loading applications:', error);
-      throw error;
-    } finally {
-      _setApplicationsLoading(false);
+    if (applicationsPromiseRef.current) {
+      return applicationsPromiseRef.current;
     }
+
+    const promise = (async () => {
+      _setApplicationsLoading(true);
+      try {
+        const loadedApps = await loadFn();
+        _setApplications(loadedApps);
+        _setApplicationsLoaded(true);
+        applicationsLoadTimeRef.current = Date.now();
+        return loadedApps;
+      } catch (error) {
+        console.error('Error loading applications:', error);
+        throw error;
+      } finally {
+        _setApplicationsLoading(false);
+        applicationsPromiseRef.current = null;
+      }
+    })();
+
+    applicationsPromiseRef.current = promise;
+    return promise;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
@@ -123,47 +188,101 @@ export const CandidateDataProvider = ({ children }) => {
    * recreated -> useEffect fired -> API call -> infinite loop.
    */
   const loadCvsCached = useCallback(async (force, loadFn) => {
+    checkTokenAndClearIfChanged();
     const now = Date.now();
     const cacheAge = now - cvsLoadTimeRef.current;
-    if (!force && cvsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !cvsLoadingRef.current) {
+    if (!force && cvsLoadedRef.current && cacheAge < CACHE_EXPIRY_MS) {
       return cvsRef.current;
     }
-    if (cvsLoadingRef.current) return cvsRef.current;
-    _setCvsLoading(true);
-    try {
-      const loadedCvs = await loadFn();
-      _setCvs(loadedCvs);
-      _setCvsLoaded(true);
-      cvsLoadTimeRef.current = Date.now();
-      return loadedCvs;
-    } catch (error) {
-      console.error('Error loading CVs:', error);
-      throw error;
-    } finally {
-      _setCvsLoading(false);
+    if (cvsPromiseRef.current) {
+      return cvsPromiseRef.current;
     }
+
+    const promise = (async () => {
+      _setCvsLoading(true);
+      try {
+        const loadedCvs = await loadFn();
+        _setCvs(loadedCvs);
+        _setCvsLoaded(true);
+        cvsLoadTimeRef.current = Date.now();
+        return loadedCvs;
+      } catch (error) {
+        console.error('Error loading CVs:', error);
+        throw error;
+      } finally {
+        _setCvsLoading(false);
+        cvsPromiseRef.current = null;
+      }
+    })();
+
+    cvsPromiseRef.current = promise;
+    return promise;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadProfilePhoto = useCallback(async (force = false) => {
+    if (!force && profilePhotoUrlRef.current) {
+      return profilePhotoUrlRef.current;
+    }
+    if (photoPromiseRef.current) {
+      return photoPromiseRef.current;
+    }
+
+    const promise = (async () => {
+      try {
+        const blob = await viewPhoto();
+        const url = URL.createObjectURL(blob);
+        _setProfilePhotoUrl(url);
+        return url;
+      } catch (error) {
+        console.warn('Failed to load profile photo:', error);
+        _setProfilePhotoUrl(null);
+        return null;
+      } finally {
+        photoPromiseRef.current = null;
+      }
+    })();
+
+    photoPromiseRef.current = promise;
+    return promise;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfileCached = useCallback(async (force, loadFn) => {
+    checkTokenAndClearIfChanged();
     const now = Date.now();
     const cacheAge = now - profileLoadTimeRef.current;
-    if (!force && profileLoadedRef.current && cacheAge < CACHE_EXPIRY_MS && !profileLoadingRef.current) {
+    if (!force && profileLoadedRef.current && cacheAge < CACHE_EXPIRY_MS) {
       return profileRef.current;
     }
-    if (profileLoadingRef.current) return profileRef.current;
-    _setProfileLoading(true);
-    try {
-      const loadedProfile = await loadFn();
-      _setProfile(loadedProfile);
-      _setProfileLoaded(true);
-      profileLoadTimeRef.current = Date.now();
-      return loadedProfile;
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      throw error;
-    } finally {
-      _setProfileLoading(false);
+    if (profilePromiseRef.current) {
+      return profilePromiseRef.current;
     }
+
+    const promise = (async () => {
+      _setProfileLoading(true);
+      try {
+        const loadedProfile = await loadFn();
+        _setProfile(loadedProfile);
+        _setProfileLoaded(true);
+        profileLoadTimeRef.current = Date.now();
+
+        if (loadedProfile && loadedProfile.profile_photo) {
+          loadProfilePhoto(force);
+        } else {
+          _setProfilePhotoUrl(null);
+        }
+
+        return loadedProfile;
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        throw error;
+      } finally {
+        _setProfileLoading(false);
+        profilePromiseRef.current = null;
+      }
+    })();
+
+    profilePromiseRef.current = promise;
+    return promise;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateCachedProfile = useCallback((updater) => {
@@ -200,14 +319,28 @@ export const CandidateDataProvider = ({ children }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearAllCaches = useCallback(() => {
+    _setJobs([]);
     _setJobsLoaded(false);
+    _setJobsLoading(false);
+    _setApplications([]);
     _setApplicationsLoaded(false);
+    _setApplicationsLoading(false);
+    _setCvs([]);
     _setCvsLoaded(false);
+    _setCvsLoading(false);
+    _setProfile(null);
     _setProfileLoaded(false);
+    _setProfileLoading(false);
+    _setProfilePhotoUrl(null);
     jobsLoadTimeRef.current = 0;
     applicationsLoadTimeRef.current = 0;
     cvsLoadTimeRef.current = 0;
     profileLoadTimeRef.current = 0;
+    jobsPromiseRef.current = null;
+    applicationsPromiseRef.current = null;
+    cvsPromiseRef.current = null;
+    profilePromiseRef.current = null;
+    photoPromiseRef.current = null;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value = {
@@ -239,6 +372,8 @@ export const CandidateDataProvider = ({ children }) => {
     loadProfileCached,
     updateCachedProfile,
     invalidateProfile,
+    profilePhotoUrl,
+    loadProfilePhoto,
 
     // Global
     clearAllCaches,

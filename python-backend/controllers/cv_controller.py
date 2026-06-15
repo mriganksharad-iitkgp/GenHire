@@ -1,14 +1,16 @@
 """
 CV Controller - Manage multiple CV uploads for candidates
-Handles CV PDF upload, storage (GCS or local), extraction, and management
+Handles CV PDF upload, storage (GCS, GridFS or local), extraction, and management
 """
 
 import os
 import uuid
 import logging
+import tempfile
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from bson import ObjectId
+import gridfs
 from services.pdf_parser_service import get_pdf_parser
 from services.cv_structured_parser_service import get_cv_structured_parser
 from services import gcs_service
@@ -24,9 +26,11 @@ class CVController:
     
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
-        self.upload_folder = 'uploads/cvs'
+        self.db = self.users_collection.database
+        self.fs = gridfs.GridFS(self.db)
         
-        # Ensure upload directory exists
+        # Use system temp directory for temporary parsing
+        self.upload_folder = os.path.join(tempfile.gettempdir(), 'hrtech_cvs')
         os.makedirs(self.upload_folder, exist_ok=True)
         
         # Initialize PDF parser
@@ -102,8 +106,9 @@ class CVController:
                     result = self.pdf_parser.parse_cv_pdf(local_file_path)
                     extracted_text = result.get('text', '')
                     metadata = result.get('metadata', {})
-                    if self.structured_parser and extracted_text:
-                        parsed_details = self.structured_parser.parse(extracted_text)
+                    # Removed structured parsing to make upload faster
+                    # if self.structured_parser and extracted_text:
+                    #     parsed_details = self.structured_parser.parse(extracted_text)
                     logger.info(f"Extracted {len(extracted_text)} characters from CV: {original_filename}")
                 else:
                     logger.warning("PDF parser not available, CV text not extracted")
@@ -111,23 +116,29 @@ class CVController:
                 logger.error(f"Failed to extract text from CV: {e}")
                 # Continue with upload but without extracted text
             
-            # Upload to GCS if configured, otherwise keep local
-            file_path = local_file_path
+            # Upload to GridFS
+            with open(local_file_path, 'rb') as f:
+                gridfs_id = self.fs.put(f, filename=filename, content_type='application/pdf')
+            
+            file_path = f"gridfs://{gridfs_id}"
+            
+            # Upload to GCS if configured (as backup/primary)
             gcs_path = None
             if gcs_service.is_gcs_configured():
                 try:
                     gcs_path = f"cvs/{user_id}/{filename}"
                     gcs_service.upload_from_path(local_file_path, gcs_path)
                     file_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{gcs_path}"
-                    # Remove local file after successful GCS upload
-                    try:
-                        os.remove(local_file_path)
-                    except OSError:
-                        pass
                     logger.info(f"CV uploaded to GCS: {gcs_path}")
                 except Exception as e:
-                    logger.warning(f"GCS upload failed, keeping local: {e}")
+                    logger.warning(f"GCS upload failed: {e}")
                     gcs_path = None
+                    
+            # Remove local temp file
+            try:
+                os.remove(local_file_path)
+            except OSError:
+                pass
             
             # Create CV upload record
             cv_upload = {
@@ -476,9 +487,22 @@ class CVController:
                     logger.error(f"Failed to generate signed URL: {e}")
                     return {'error': 'Failed to generate download link'}, 500
             
+            # Handle GridFS download
+            file_path = cv.get('file_path', '')
+            if file_path.startswith('gridfs://'):
+                gridfs_id = file_path.split('gridfs://')[1]
+                from flask import url_for
+                # We will expose an endpoint in app.py to serve GridFS files: /api/files/<gridfs_id>
+                # For now, just return the direct URL path
+                return {
+                    'download_url': f"/api/files/{gridfs_id}",
+                    'filename': cv.get('filename', f'{cv_id}.pdf'),
+                    'source': 'gridfs'
+                }, 200
+
             # Fallback to local file path
-            local_path = cv.get('file_path', '')
-            if local_path and not local_path.startswith('gs://') and os.path.exists(local_path):
+            local_path = file_path
+            if local_path and not local_path.startswith('gs://') and not local_path.startswith('gridfs://') and os.path.exists(local_path):
                 return {
                     'download_url': None,
                     'local_path': local_path,

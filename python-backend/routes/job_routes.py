@@ -49,20 +49,29 @@ def create_job(current_user):
     # Check if request has files (multipart/form-data)
     jd_file = request.files.get('jd_file')
     
-    # Get job data from either JSON or form data
-    if request.is_json:
-        data = request.get_json()
-    else:
-        # Convert form data to dictionary
-        data = request.form.to_dict()
+    try:
+        # Get job data from either JSON or form data
+        if request.is_json:
+            data = request.get_json()
+        else:
+            # Convert form data to dictionary
+            data = request.form.to_dict()
+            
+            # Handle array fields that come as comma-separated strings
+            for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
+                if field in data and isinstance(data[field], str):
+                    data[field] = [item.strip() for item in data[field].split(',') if item.strip()]
         
-        # Handle array fields that come as comma-separated strings
-        for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
-            if field in data and isinstance(data[field], str):
-                data[field] = [item.strip() for item in data[field].split(',') if item.strip()]
-    
-    result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
-    return jsonify(result), status_code
+        with open('debug_payload.txt', 'a') as f:
+            f.write(f"Payload: {data}\n")
+            
+        result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
+        return jsonify(result), status_code
+    except Exception as e:
+        import traceback
+        with open('debug_error.txt', 'a') as f:
+            f.write(f"Exception: {e}\n{traceback.format_exc()}\n")
+        raise
 
 @job_bp.route('/jobs/generate-ai', methods=['POST'])
 @cross_origin()

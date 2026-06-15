@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onSTTError: (callback) => {
         ipcRenderer.removeAllListeners('stt-error');
         ipcRenderer.on('stt-error', callback);
-    }
+    },
+
+    // Open URL in default browser
+    openExternal: (url) => ipcRenderer.send('open-external', url),
 });

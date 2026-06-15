@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
+import { useCandidateData } from "../contexts/CandidateDataContext";
 
 const Login = () => {
 	const [identifier, setIdentifier] = useState("");
@@ -11,8 +12,10 @@ const Login = () => {
 	const [error, setError] = useState("");
 	const [userType, setUserType] = useState("candidate"); // 'candidate', 'recruiter', or 'admin'
 	const navigate = useNavigate();
+	const { clearAllCaches } = useCandidateData();
 
 	const storeSession = (data, fallbackType) => {
+		clearAllCaches();
 		localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
 		localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
 			...data.user,

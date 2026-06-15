@@ -4,18 +4,17 @@ import styles from "./Navbar.module.css";
 import { UpgradeButton } from "./recruiter/subscription";
 import { CandidatePlanButton } from "./candidate/subscription";
 import { useCandidateData } from "../contexts/CandidateDataContext";
-import { getProfile, viewPhoto } from "../services/api";
+import { getProfile } from "../services/api";
 
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [profilePhoto, setProfilePhoto] = useState(null);
-  const [userName, setUserName] = useState("");
-  const [companyName, setCompanyName] = useState("TechCorp Solutions");
   const userMenuRef = useRef(null);
-  const { loadProfileCached } = useCandidateData();
+  const { profile, profilePhotoUrl, loadProfileCached, clearAllCaches } = useCandidateData();
+
+  const userName = profile?.name || "User";
 
   useEffect(() => {
     // Load user data
@@ -28,34 +27,9 @@ const Navbar = ({ userType = "candidate" }) => {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
       if (!token) return;
 
-      const profileData = await loadProfileCached(false, getProfile);
-      
-      if (profileData) {
-        setUserName(profileData.name || "User");
-
-        // Set company name for recruiters
-        if (userType === "recruiter" && profileData.company_name) {
-          setCompanyName(profileData.company_name);
-        }
-
-        // Load profile photo if it exists
-        if (profileData.profile_photo) {
-          loadProfilePhoto();
-        }
-      }
+      await loadProfileCached(false, getProfile);
     } catch (error) {
       console.error("Error loading user data in navbar:", error);
-    }
-  };
-
-  // Load profile photo
-  const loadProfilePhoto = async () => {
-    try {
-      const blob = await viewPhoto();
-      const photoUrl = URL.createObjectURL(blob);
-      setProfilePhoto(photoUrl);
-    } catch (error) {
-      console.error("Error loading profile photo in navbar:", error);
     }
   };
 
@@ -63,6 +37,9 @@ const Navbar = ({ userType = "candidate" }) => {
   const handleLogout = () => {
     localStorage.removeItem("companyxyz-token");
     localStorage.removeItem("companyxyz-user");
+    if (clearAllCaches) {
+      clearAllCaches();
+    }
     navigate("/login");
   };
 
@@ -192,7 +169,8 @@ const Navbar = ({ userType = "candidate" }) => {
             >
               <div className={styles.avatar}>
                 <img
-                  src={profilePhoto || "../android-chrome-192x192.png"}
+                  key={profilePhotoUrl || 'default'}
+                  src={profilePhotoUrl || "../android-chrome-192x192.png"}
                   alt="User"
                   onError={(e) => {
                     e.target.onerror = null;

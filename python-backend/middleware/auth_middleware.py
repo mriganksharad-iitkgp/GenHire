@@ -99,8 +99,10 @@ def verified_required(f):
                     'error': 'verification_required',
                     'is_verified': False
                 }), 403
-        
-        return f(current_user, *args, **kwargs)
+            return f(current_user, *args, **kwargs)
+            
+        # Default fallback for unrecognized user types
+        return jsonify({'error': 'Unauthorized user type.'}), 403
     return decorated
 
 

@@ -4,13 +4,18 @@ import {
   updateProfile,
   uploadCV,
   uploadPhoto,
-  viewPhoto,
   updateCvDetails,
 } from "../../services/api";
 import { useCandidateData } from "../../contexts/CandidateDataContext";
 
 export default function useCandidateProfile(toast) {
-  const { loadProfileCached, updateCachedProfile, invalidateCvs } = useCandidateData();
+  const {
+    loadProfileCached,
+    updateCachedProfile,
+    invalidateCvs,
+    profilePhotoUrl,
+    loadProfilePhoto,
+  } = useCandidateData();
   const [bio, setBio] = useState({
     name: "",
     email: "",
@@ -20,7 +25,6 @@ export default function useCandidateProfile(toast) {
     about: "",
     skills: [],
   });
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState(null);
   const [cvPath, setCvPath] = useState(null);
   const [cvDetails, setCvDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,12 +47,6 @@ export default function useCandidateProfile(toast) {
       });
       if (profile.cv_path) setCvPath(profile.cv_path);
       if (profile.cv_details) setCvDetails(profile.cv_details);
-      if (profile.profile_photo) {
-        try {
-          const blob = await viewPhoto();
-          setProfilePhotoUrl(URL.createObjectURL(blob));
-        } catch {}
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -98,12 +96,7 @@ export default function useCandidateProfile(toast) {
           }));
         }
         invalidateCvs();
-        toast?.(
-          res.parsed_details
-            ? "CV uploaded and profile fields populated."
-            : "CV uploaded. Some fields need manual review.",
-          res.parsed_details ? "success" : "warning"
-        );
+        toast?.("CV uploaded successfully.", "success");
         return true;
       } catch (e) {
         console.error('❌ CV upload error:', e);
@@ -122,21 +115,23 @@ export default function useCandidateProfile(toast) {
       setUploadingPhoto(true);
       try {
         await uploadPhoto(file);
-        // reload photo blob
-        try {
-          const blob = await viewPhoto();
-          setProfilePhotoUrl(URL.createObjectURL(blob));
-        } catch {}
+        // update cached profile and trigger reload of photo
+        updateCachedProfile(prev => ({
+          ...(prev || {}),
+          profile_photo: true
+        }));
+        await loadProfilePhoto(true);
         toast?.("Photo uploaded successfully!", "success");
         return true;
       } catch (e) {
-        toast?.("Failed to upload photo", "error");
+        console.error('❌ Photo upload error:', e);
+        toast?.(e?.message || "Failed to upload photo", "error");
         return false;
       } finally {
         setUploadingPhoto(false);
       }
     },
-    [toast]
+    [toast, updateCachedProfile, loadProfilePhoto]
   );
 
   const saveCvDetails = useCallback(

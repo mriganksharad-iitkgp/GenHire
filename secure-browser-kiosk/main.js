@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -91,6 +91,15 @@ app.on('open-url', (event, url) => {
 // Listen for the quit signal from the frontend renderer
 ipcMain.on('quit-app', () => {
     app.quit();
+});
+
+// Open URL in default browser (for returning to GenHire dashboard)
+ipcMain.on('open-external', (event, url) => {
+    if (url && typeof url === 'string') {
+        shell.openExternal(url).catch(err => {
+            console.error('Failed to open external URL:', err);
+        });
+    }
 });
 
 // ==========================================

@@ -37,7 +37,7 @@ export default function SidebarProfile({
     <div className={styles.sidebar}>
       <div className={styles.profilePicSection}>
         <div className={styles.profilePic}>
-          <img src={photoUrl || "../android-chrome-192x192.png"} alt="Profile" />
+          <img key={photoUrl || 'default'} src={photoUrl || "../android-chrome-192x192.png"} alt="Profile" />
         </div>
         <label className={styles.changePhotoBtn}>
           {isUploadingPhoto ? "Uploading..." : "Change Photo"}

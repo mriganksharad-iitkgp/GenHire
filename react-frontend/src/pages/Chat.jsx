@@ -32,6 +32,7 @@ export default function Chat({ interviewId }) {
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("idle");
   const [gazeRecorderStatus, setGazeRecorderStatus] = useState("idle"); // idle | calibrating | tracking | submitted | failed
+  const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [proctoringAlert, setProctoringAlert] = useState({
     active: false,
     message: "",
@@ -256,6 +257,11 @@ export default function Chat({ interviewId }) {
         gazeRecorderTrackingRef.current = true;
         gazeStartTimeRef.current = Date.now();
         setGazeRecorderStatus("tracking");
+        
+        // Progress interview status to ready once tracking starts
+        if (interviewStatus === "calibrating") {
+           setInterviewStatus("ready_to_start");
+        }
       };
 
       // Handle camera denial / errors from GazeCloudAPI
@@ -263,12 +269,27 @@ export default function Chat({ interviewId }) {
         console.warn("⚠️ GazeCloudAPI camera access denied.");
         gazeRecorderTrackingRef.current = false;
         setGazeRecorderStatus("failed");
+        if (interviewStatus === "calibrating") {
+           setInterviewStatus("ready_to_start"); // degrade gracefully
+        }
       };
 
       window.GazeCloudAPI.StartEyeTracking();
+      
+      // Simulate calibration progress
+      let p = 0;
+      const progressInterval = setInterval(() => {
+        p += 5;
+        if (p <= 95) setCalibrationProgress(p);
+        if (gazeRecorderTrackingRef.current || p >= 100) clearInterval(progressInterval);
+      }, 500);
+
     } catch (error) {
       console.error("Failed to start inline GazeRecorder:", error);
       setGazeRecorderStatus("failed");
+      if (interviewStatus === "calibrating") {
+         setInterviewStatus("ready_to_start");
+      }
     }
   }, [loadScript]);
 
@@ -448,12 +469,12 @@ export default function Chat({ interviewId }) {
       console.log(
         "✅ Face registered successfully, starting live proctoring...",
       );
+      setInterviewStatus("calibrating");
       await startInlineGazeRecorder();
 
       // IMPORTANT: Start live proctoring AFTER successful face registration
       // startLiveProctoring();
 
-      setInterviewStatus("active");
     } catch (error) {
       console.error("Face registration error:", error);
       alert(`Could not register face: ${error.message}.`);
@@ -1600,10 +1621,66 @@ export default function Chat({ interviewId }) {
                 onClick={handleFaceRegistration}
                 className={Styles.registerButton}
               >
-                ▶ Start Interview
+                Register Face & Calibrate
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (interviewStatus === "calibrating") {
+    return (
+      <div className={Styles.registrationContainer}>
+        <h2 className={Styles.registrationHeader}>
+          👀 Eye Tracking Calibration
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
+          Please look at the red dots as they appear on your screen to calibrate eye tracking.
+        </p>
+        
+        <div style={{
+          width: "100%",
+          maxWidth: "400px",
+          background: "#e2e8f0",
+          borderRadius: "8px",
+          height: "12px",
+          overflow: "hidden",
+          margin: "0 auto 20px"
+        }}>
+          <div style={{
+             width: `${calibrationProgress}%`,
+             height: "100%",
+             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+             transition: "width 0.5s ease"
+          }}></div>
+        </div>
+        
+        <div style={{ marginTop: "15px", fontSize: "14px", color: "#94a3b8", textAlign: "center" }}>
+          Calibrating... {calibrationProgress}%
+        </div>
+      </div>
+    );
+  }
+
+  if (interviewStatus === "ready_to_start") {
+    return (
+      <div className={Styles.registrationContainer}>
+        <h2 className={Styles.registrationHeader}>
+          ✅ Ready to Begin
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
+          Your camera, microphone, and tracking systems are verified.
+        </p>
+        <div style={{ textAlign: "center", marginTop: "20px" }}>
+          <button 
+             className={Styles.registerButton}
+             onClick={() => setInterviewStatus("active")}
+             style={{ padding: "16px 40px", fontSize: "18px" }}
+          >
+             ▶ Start Interview Now
+          </button>
         </div>
       </div>
     );
@@ -1823,6 +1900,30 @@ export default function Chat({ interviewId }) {
             </>
           )}
         </button>
+
+        {/* End Interview Early Button */}
+        <button
+          onClick={() => {
+             if (window.confirm("Are you sure you want to end the interview early? Your answers so far will be submitted for evaluation.")) {
+               endInterview();
+             }
+          }}
+          style={{
+             background: "#ef4444",
+             color: "white",
+             border: "none",
+             padding: "12px 24px",
+             borderRadius: "8px",
+             fontWeight: "600",
+             cursor: "pointer",
+             alignSelf: "center",
+             marginTop: "16px",
+             boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+          }}
+        >
+          End Interview Early
+        </button>
+
       </div>{" "}
       {interviewStatus === "completed" && evaluation && (
         <div className={Styles["evaluation-overlay"]}>

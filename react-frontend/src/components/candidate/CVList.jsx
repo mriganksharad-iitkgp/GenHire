@@ -83,6 +83,37 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
     }
   };
 
+  const handleDeleteCV = async (cvId, e) => {
+    e.stopPropagation();
+    
+    if (!window.confirm("Are you sure you want to delete this CV?")) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('companyxyz-token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        showToast?.(data.error || 'Failed to delete CV', 'error');
+        return;
+      }
+
+      showToast?.('CV deleted successfully', 'success');
+      invalidateCvs();
+      await fetchCVs(true);
+    } catch (err) {
+      console.error('Error deleting CV:', err);
+      showToast?.('Failed to delete CV', 'error');
+    }
+  };
+
   const handleCVClick = (cv) => {
     onCVClick?.(cv);
   };
@@ -136,21 +167,40 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
                     <i className="fa fa-star"></i> Primary
                   </span>
                 ) : (
-                  <button
-                    className={styles.primaryButton}
-                    onClick={(e) => handleSetPrimary(cv.cv_id, e)}
-                    disabled={settingPrimary === cv.cv_id}
-                    title="Set as primary CV"
-                  >
-                    {settingPrimary === cv.cv_id ? (
-                      <i className="fa fa-spinner fa-spin"></i>
-                    ) : (
-                      <>
-                        <i className="fa fa-star-o"></i>
-                        <span>Make Primary</span>
-                      </>
-                    )}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      className={styles.primaryButton}
+                      onClick={(e) => handleSetPrimary(cv.cv_id, e)}
+                      disabled={settingPrimary === cv.cv_id}
+                      title="Set as primary CV"
+                    >
+                      {settingPrimary === cv.cv_id ? (
+                        <i className="fa fa-spinner fa-spin"></i>
+                      ) : (
+                        <>
+                          <i className="fa fa-star-o"></i>
+                          <span>Make Primary</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteCV(cv.cv_id, e)}
+                      title="Delete CV"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc3545",
+                        cursor: "pointer",
+                        padding: "5px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "14px"
+                      }}
+                    >
+                      <i className="fa fa-trash"></i>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

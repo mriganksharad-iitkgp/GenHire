@@ -133,6 +133,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnStart.addEventListener('click', startInterview);
     btnEndInterview.addEventListener('click', endInterview);
     btnDownload.addEventListener('click', saveResultsAsPhoto);
+
+    // Return to GenHire Dashboard button
+    const btnReturnDashboard = document.getElementById('btn-return-dashboard');
+    if (btnReturnDashboard) {
+        btnReturnDashboard.addEventListener('click', () => {
+            // Build dashboard URL from API URL (strip /api suffix)
+            let dashboardUrl = 'http://localhost:3000/profile#applications';
+            if (apiUrl) {
+                // apiUrl is like "http://127.0.0.1:5000/api" — derive the frontend URL
+                // The frontend typically runs on port 3000
+                try {
+                    const urlObj = new URL(apiUrl);
+                    dashboardUrl = `${urlObj.protocol}//${urlObj.hostname}:3000/profile#applications`;
+                } catch (e) {
+                    console.warn('Could not parse apiUrl, using default:', e);
+                }
+            }
+
+            // Open in default browser
+            if (window.electronAPI && window.electronAPI.openExternal) {
+                window.electronAPI.openExternal(dashboardUrl);
+            }
+
+            // Close the Electron app after a short delay
+            setTimeout(() => {
+                if (window.electronAPI && window.electronAPI.quitApp) {
+                    window.electronAPI.quitApp();
+                }
+            }, 1500);
+        });
+    }
+
     document.getElementById('btn-ack-warning').addEventListener('click', () => {
         proctoringModal.style.display = 'none';
     });

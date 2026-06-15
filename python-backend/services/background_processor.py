@@ -67,8 +67,8 @@ class BackgroundProcessor:
             'cv_scoring_service': cv_scoring_service,
             'enqueued_at': datetime.utcnow()
         }
-        self.task_queue.put(task)
-        logger.info(f"CV scoring task enqueued for application {application_id}")
+        logger.info(f"Processing CV scoring synchronously for application {application_id}")
+        self._process_cv_scoring(task)
         
     def _worker(self):
         """Worker thread that processes tasks from the queue"""

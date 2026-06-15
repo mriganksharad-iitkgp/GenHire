@@ -1,5 +1,16 @@
+import sys
+import io
 import os
 import warnings
+
+# Force UTF-8 encoding for standard output/error to prevent crash on printing emojis in Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+elif hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Suppress pydantic warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
@@ -111,16 +122,22 @@ except ImportError:
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
+    
+    # In development, we use very high limits to avoid rate limiting developers
+    is_development = os.getenv("FLASK_ENV") == "development"
+    default_limits = ["100000 per day", "10000 per hour"] if is_development else ["200 per day", "50 per hour"]
+    
     limiter = Limiter(
         get_remote_address,
         app=app,
-        default_limits=["200 per day", "50 per hour"],
+        default_limits=default_limits,
         storage_uri="memory://"
     )
-    print("[OK] Flask-Limiter loaded")
+    print(f"[OK] Flask-Limiter loaded with limits: {default_limits}")
 except ImportError:
     limiter = None
     print("[WARN] flask-limiter not installed, skipping rate limiting. Install with: pip install Flask-Limiter")
+
 
 # Custom JSON provider so any bson.ObjectId returned by a route auto-serializes.
 # Without this, Flask's default encoder raises 500 on ObjectIds nested inside
@@ -252,6 +269,20 @@ app.register_blueprint(job_bp)
 app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(practice_bp)
+
+@app.route("/api/files/<gridfs_id>")
+def serve_gridfs_file(gridfs_id):
+    try:
+        import gridfs
+        fs = gridfs.GridFS(db)
+        file_data = fs.get(ObjectId(gridfs_id))
+        return Response(
+            file_data.read(),
+            mimetype=file_data.content_type,
+            headers={"Content-Disposition": f"inline; filename={file_data.filename}"}
+        )
+    except Exception as e:
+        return jsonify({"error": "File not found"}), 404
 
 # Register CV routes (requires collections, so created after database initialization)
 cv_bp = create_cv_routes(collections)
@@ -809,46 +840,70 @@ def end_interview(current_user, session_id):
     final_evaluation = {}
     interview_transcript = []
 
-    # HARDCODED SCORES - To be replaced with actual model calculations
-    interview_score = 85  # Hardcoded interview score
+    # Interview score will be computed from final_evaluation below
+    interview_score = None  # Calculated after evaluation is generated
     usage_summary = CostTracker().end_session(session_id, clear_events=True)
     usage_deduction = None
     session_doc = interviews_collection.find_one(
         {"session_id": session_id, "user_id": str(current_user["_id"])}
     )
 
-    if session and session.is_complete:
-        # Generate evaluation from the session manager instead of accessing session attribute
-        final_evaluation = interview_manager._generate_final_evaluation(session)
+    if session:
+        # If ended prematurely or completed normally, generate evaluation now
+        try:
+            final_evaluation = interview_manager._generate_final_evaluation(session)
+        except Exception as e:
+            print(f"⚠️ Error generating final evaluation: {e}")
+            import traceback
+            traceback.print_exc()
+            final_evaluation = {
+                "error": "Failed to generate AI evaluation.",
+                "details": str(e),
+                "final_score": 0
+            }
 
-        # Extract transcript from interview data
+        # Always extract transcript regardless of evaluation success
         if hasattr(session, "interview_data") and session.interview_data:
             for qa in session.interview_data:
-                interview_transcript.append(
-                    {"role": "assistant", "text": qa.get("question", "")}
-                )
-                interview_transcript.append(
-                    {"role": "user", "text": qa.get("answer", ""), "ai_probability": (qa.get("evaluation") or {}).get("ai_probability")}
-                )
-
-    elif session:
-        # If ended prematurely, generate evaluation now
-        final_evaluation = interview_manager._generate_final_evaluation(session)
-
-        # Extract transcript
-        if hasattr(session, "interview_data") and session.interview_data:
-            for qa in session.interview_data:
-                interview_transcript.append(
-                    {"role": "assistant", "text": qa.get("question", "")}
-                )
-                interview_transcript.append(
-                    {"role": "user", "text": qa.get("answer", ""), "ai_probability": (qa.get("evaluation") or {}).get("ai_probability")}
-                )
+                if qa.get("question"):
+                    interview_transcript.append(
+                        {"role": "assistant", "text": qa.get("question", "")}
+                    )
+                if qa.get("answer"):
+                    interview_transcript.append(
+                        {"role": "user", "text": qa.get("answer", ""), "ai_probability": (qa.get("evaluation") or {}).get("ai_probability")}
+                    )
     else:
         final_evaluation = {
             "summary": "Evaluation not computed in this build.",
             "final_score": None,
         }
+
+    # Compute interview_score from final_evaluation
+    if final_evaluation:
+        qs = final_evaluation.get("quantitative_scores", {})
+        answer_score = qs.get("answer_score")
+        language_score = qs.get("language_score")
+        if answer_score is not None or language_score is not None:
+            # Weighted: 70% answer quality, 30% language quality
+            ans = float(answer_score or 0)
+            lang = float(language_score or 0)
+            interview_score = round((ans * 0.7 + lang * 0.3) * 100)
+        elif final_evaluation.get("final_score") is not None:
+            interview_score = final_evaluation["final_score"]
+        else:
+            # Try conversation_summary average scores as fallback
+            conv = final_evaluation.get("conversation_summary", {})
+            avg_ans = conv.get("average_answer_score")
+            avg_lang = conv.get("average_language_score")
+            if avg_ans is not None or avg_lang is not None:
+                a = float(avg_ans or 0)
+                l = float(avg_lang or 0)
+                interview_score = round((a * 0.7 + l * 0.3) * 100)
+            else:
+                interview_score = 0
+    else:
+        interview_score = 0
 
     proctoring_score = (session_doc or {}).get("proctoring_score")
     if proctoring_score is None:

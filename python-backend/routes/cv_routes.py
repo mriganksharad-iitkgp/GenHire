@@ -121,8 +121,25 @@ def create_cv_routes(db_collections):
                 except Exception as e:
                     return jsonify({'error': f'Failed to generate download link: {str(e)}'}), 500
             
-            # Fallback to local file
             file_path = cv.get('file_path')
+            
+            # Handle GridFS
+            if file_path and file_path.startswith('gridfs://'):
+                gridfs_id = file_path.split('gridfs://')[1]
+                from bson import ObjectId
+                import io
+                try:
+                    grid_out = cv_controller.fs.get(ObjectId(gridfs_id))
+                    return send_file(
+                        io.BytesIO(grid_out.read()),
+                        mimetype='application/pdf',
+                        as_attachment=False,
+                        download_name=cv.get('filename', 'cv.pdf')
+                    )
+                except Exception as e:
+                    return jsonify({'error': f'CV file not found in GridFS: {str(e)}'}), 404
+            
+            # Fallback to local file
             if not file_path or file_path.startswith('gs://') or not os.path.exists(file_path):
                 return jsonify({'error': 'CV file not found'}), 404
             
