@@ -59,6 +59,7 @@ react-frontend/.env
 .env.local
 .env.development.local
 .env.test.local
+.env.production
 .env.production.local
 
 # === IDE / Editors ===
@@ -73,3 +74,5 @@ Thumbs.db
 desktop.ini
 
 python-backend/aptidude-485412-a8ed71c96e9e.json
+python-backend/hr-tech-2026-d1c05c0b9aa6.json
+*.json

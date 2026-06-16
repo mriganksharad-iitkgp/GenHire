@@ -67,18 +67,38 @@ class FileController:
         cv_filename = secure_filename(str(uuid.uuid4()) + cv_ext)
         cv_path = os.path.join(self.cv_folder, cv_filename)
         
-        # Save file
+        # Save file temporarily
         cv_file.save(cv_path)
+        
+        # Upload directly to GCS
+        gcs_path = None
+        if gcs_service.is_gcs_configured():
+            try:
+                gcs_path = f"cvs/{user_id}/{cv_filename}"
+                gcs_service.upload_from_path(cv_path, gcs_path, content_type='application/pdf')
+                gcs_url = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{gcs_path}"
+            except Exception as e:
+                try: os.remove(cv_path)
+                except OSError: pass
+                return {'error': 'Failed to upload CV to cloud storage'}, 500
+        else:
+            try: os.remove(cv_path)
+            except OSError: pass
+            return {'error': 'Cloud storage is not configured'}, 500
+            
+        # Clean up temp file
+        try: os.remove(cv_path)
+        except OSError: pass
         
         # Update user record with CV path
         self.users_collection.update_one(
             {'_id': user_id},
-            {'$set': {'cv_path': cv_path, 'cv_filename': cv_filename}}
+            {'$set': {'cv_path': gcs_url, 'cv_gcs_path': gcs_path, 'cv_filename': cv_filename}}
         )
         
         return {
             'message': 'CV uploaded successfully',
-            'cv_path': cv_path,
+            'cv_path': gcs_url,
             'filename': cv_filename
         }, 200
         
@@ -101,14 +121,9 @@ class FileController:
         # Save file locally
         photo_file.save(local_photo_path)
         
-        # Upload to GridFS
+        # Upload directly to GCS (enforced for both localhost and production)
         content_type = f"image/{photo_ext.replace('.', '')}"
-        with open(local_photo_path, 'rb') as f:
-            gridfs_id = self.fs.put(f, filename=photo_filename, content_type=content_type)
         
-        photo_path = f"gridfs://{gridfs_id}"
-        
-        # Upload to GCS if configured
         gcs_path = None
         if gcs_service.is_gcs_configured():
             try:
@@ -116,7 +131,13 @@ class FileController:
                 gcs_service.upload_from_path(local_photo_path, gcs_path, content_type=content_type)
                 photo_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{gcs_path}"
             except Exception as e:
-                gcs_path = None
+                try: os.remove(local_photo_path)
+                except OSError: pass
+                return {'error': 'Failed to upload photo to cloud storage'}, 500
+        else:
+            try: os.remove(local_photo_path)
+            except OSError: pass
+            return {'error': 'Cloud storage is not configured'}, 500
                 
         # Remove local file
         try:
@@ -217,7 +238,42 @@ class FileController:
             if not user:
                 return jsonify({'error': 'User not found'}), 404
             
-            cv_path = user.get('cv_path')
+            # Check new cv_uploads array first
+            cvs = user.get('cv_uploads', [])
+            primary_cv = next((cv for cv in cvs if cv.get('is_primary')), cvs[0] if cvs else None)
+            
+            cv_path = None
+            cv_gcs_path = None
+            
+            if primary_cv:
+                cv_path = primary_cv.get('file_path')
+                cv_gcs_path = primary_cv.get('gcs_path')
+            else:
+                cv_path = user.get('cv_path')
+
+            if cv_gcs_path and gcs_service.is_gcs_configured():
+                try:
+                    from flask import redirect
+                    signed_url = gcs_service.generate_signed_url(cv_gcs_path, expiration_minutes=60)
+                    return redirect(signed_url)
+                except Exception:
+                    pass
+
+            if cv_path and cv_path.startswith('gridfs://'):
+                from flask import redirect
+                gridfs_id = cv_path.split('gridfs://')[1]
+                from bson import ObjectId
+                import io
+                try:
+                    grid_out = self.fs.get(ObjectId(gridfs_id))
+                    return send_file(
+                        io.BytesIO(grid_out.read()),
+                        mimetype='application/pdf',
+                        as_attachment=False
+                    )
+                except Exception as e:
+                    pass
+
             if not cv_path or not os.path.exists(cv_path):
                 return jsonify({'error': 'CV not found'}), 404
             

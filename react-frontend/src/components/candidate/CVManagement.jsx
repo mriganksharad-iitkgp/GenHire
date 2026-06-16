@@ -97,11 +97,11 @@ const CVManagement = () => {
   const handlePreview = async (cvId) => {
     try {
       setError('');
-      const response = await cvService.previewCV(cvId);
+      const response = await cvService.getCVText(cvId);
       setPreviewCV(response);
       setShowPreview(true);
     } catch (err) {
-      setError(err.message || 'Failed to preview CV');
+      setError(err.message || 'Failed to fetch CV text');
     }
   };
 

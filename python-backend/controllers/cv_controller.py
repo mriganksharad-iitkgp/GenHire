@@ -116,13 +116,7 @@ class CVController:
                 logger.error(f"Failed to extract text from CV: {e}")
                 # Continue with upload but without extracted text
             
-            # Upload to GridFS
-            with open(local_file_path, 'rb') as f:
-                gridfs_id = self.fs.put(f, filename=filename, content_type='application/pdf')
-            
-            file_path = f"gridfs://{gridfs_id}"
-            
-            # Upload to GCS if configured (as backup/primary)
+            # Upload directly to GCS (enforced for both localhost and production)
             gcs_path = None
             if gcs_service.is_gcs_configured():
                 try:
@@ -131,10 +125,18 @@ class CVController:
                     file_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{gcs_path}"
                     logger.info(f"CV uploaded to GCS: {gcs_path}")
                 except Exception as e:
-                    logger.warning(f"GCS upload failed: {e}")
-                    gcs_path = None
+                    logger.error(f"GCS upload failed: {e}")
+                    # Clean up local file on failure
+                    try: os.remove(local_file_path)
+                    except OSError: pass
+                    return {'error': 'Failed to upload CV to cloud storage'}, 500
+            else:
+                # Clean up local file
+                try: os.remove(local_file_path)
+                except OSError: pass
+                return {'error': 'Cloud storage is not configured'}, 500
                     
-            # Remove local temp file
+            # Remove local temp file now that upload is complete
             try:
                 os.remove(local_file_path)
             except OSError:

@@ -165,6 +165,31 @@ class CVService {
 
     return response.blob();
   }
+
+  /**
+   * Get extracted text from CV
+   * @param {string} cvId - CV ID
+   * @returns {Promise} Extracted text data
+   */
+  async getCVText(cvId) {
+    const token = localStorage.getItem("companyxyz-token");
+    if (!token) {
+      throw new Error("No authentication token found");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/cv/${cvId}/text`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch CV text");
+    }
+
+    return response.json();
+  }
 }
 
 export default new CVService();

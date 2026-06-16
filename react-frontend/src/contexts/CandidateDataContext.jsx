@@ -220,30 +220,13 @@ export const CandidateDataProvider = ({ children }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfilePhoto = useCallback(async (force = false) => {
-    if (!force && profilePhotoUrlRef.current) {
-      return profilePhotoUrlRef.current;
-    }
-    if (photoPromiseRef.current) {
-      return photoPromiseRef.current;
-    }
-
-    const promise = (async () => {
-      try {
-        const blob = await viewPhoto();
-        const url = URL.createObjectURL(blob);
-        _setProfilePhotoUrl(url);
-        return url;
-      } catch (error) {
-        console.warn('Failed to load profile photo:', error);
-        _setProfilePhotoUrl(null);
-        return null;
-      } finally {
-        photoPromiseRef.current = null;
-      }
-    })();
-
-    photoPromiseRef.current = promise;
-    return promise;
+    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    if (!token) return null;
+    
+    // Instead of fetching a blob which fails on GCS redirects, we construct the direct URL
+    const url = `${process.env.REACT_APP_API_URL || ''}/api/view-photo?token=${token}&t=${Date.now()}`;
+    _setProfilePhotoUrl(url);
+    return url;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfileCached = useCallback(async (force, loadFn) => {

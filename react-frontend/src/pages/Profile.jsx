@@ -178,19 +178,15 @@ const Profile = () => {
 	// Handle CV viewing
 	const handleViewCV = async (application = null) => {
 		try {
-			let blob;
+			const token = localStorage.getItem("companyxyz-token");
+			let url;
 
 			// Case 1: Viewing CV for a specific application (from application card)
 			if (application?.cv_id) {
-				const token = localStorage.getItem("companyxyz-token");
-				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${application.cv_id}/preview`, {
-					headers: { Authorization: `Bearer ${token}` }
-				});
-				if (!response.ok) throw new Error("Failed to load CV");
-				blob = await response.blob();
+				url = `${process.env.REACT_APP_API_URL}/api/cv/${application.cv_id}/preview?token=${token}`;
 			} else if (application?.id) {
 				// Case 2: Application-level CV view (legacy path)
-				blob = await viewApplicationCV(application.id);
+				url = `${process.env.REACT_APP_API_URL}/api/applications/${application.id}/cv?token=${token}`;
 			} else {
 				// Case 3: "View Uploaded CV" button — use the primary CV from new multi-CV system
 				try {
@@ -201,15 +197,16 @@ const Profile = () => {
 						showToast("No CV uploaded yet. Please upload a CV first.", "error");
 						return;
 					}
-					blob = await cvService.previewCV(primaryCv.cv_id);
+					url = `${process.env.REACT_APP_API_URL}/api/cv/${primaryCv.cv_id}/preview?token=${token}`;
 				} catch (innerErr) {
 					showToast("No CV uploaded yet. Please upload a CV first.", "error");
 					return;
 				}
 			}
 
-			const url = window.URL.createObjectURL(blob);
-			window.open(url, '_blank');
+			if (url) {
+				window.open(url, '_blank');
+			}
 		} catch (e) {
 			showToast("Failed to open CV. The file may no longer be available.", "error");
 		}

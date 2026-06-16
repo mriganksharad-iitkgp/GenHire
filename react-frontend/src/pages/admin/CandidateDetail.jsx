@@ -206,31 +206,13 @@ const CandidateDetail = () => {
     setCvLoading(true);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      // Try to get the CV used in application first
-      let url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}`;
+      let url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
       if (app.cv_id) {
-        url = `${process.env.REACT_APP_API_URL}/api/cv/${app.cv_id}/preview`;
+        url = `${process.env.REACT_APP_API_URL}/api/cv/${app.cv_id}/preview?token=${token}`;
       }
-      
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (!response.ok) {
-        // If CV file not available, show CV details modal
-        if (candidate?.cv_details) {
-          setShowCVDetailsModal(true);
-          return;
-        }
-        throw new Error("Failed to fetch CV");
-      }
-      
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      window.open(blobUrl, "_blank");
+      window.open(url, "_blank");
     } catch (error) {
       console.error("Error viewing CV:", error);
-      // Fall back to CV details modal
       if (candidate?.cv_details) {
         setShowCVDetailsModal(true);
       } else {
@@ -245,19 +227,7 @@ const CandidateDetail = () => {
     setCvLoading(true);
     try {
       const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to fetch CV");
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
       window.open(url, "_blank");
     } catch (error) {
       console.error("Error viewing CV:", error);
@@ -386,14 +356,8 @@ const CandidateDetail = () => {
     if (session.cv_id) {
       try {
         const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-        const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('Failed to load CV');
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        window.open(blobUrl, '_blank');
+        const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview?token=${token}`;
+        window.open(url, '_blank');
       } catch (err) {
         console.error('Error opening CV:', err);
         showNotification('Failed to open CV', 'error');

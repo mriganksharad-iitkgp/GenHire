@@ -168,15 +168,16 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     title: '',
     department: '',
     location: '',
-    type: '',
+    type: 'Full-time',
     experience: '',
     salary: '',
     description: '',
     skills: [],
-    responsibilities: [],
-    requirements: [],
-    benefits: [],
+    responsibilities: '',
+    requirements: '',
+    benefits: '',
     deadline: '',
+    status: 'draft',
     minimum_cv_score: 50,  // Default minimum CV score
     proctoring_config: DEFAULT_PROCTORING_CONFIG
   });
@@ -274,14 +275,15 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
   const applyTemplate = (templateName) => {
     const template = JOB_TEMPLATES[templateName];
     if (template) {
-      setJobData({
+      setJobData(prev => ({
+        ...prev,
         title: templateName,
         department: template.department,
-        location: jobData.location || 'Remote',
+        location: prev.location || 'Remote',
         type: 'Full-time',
         experience: template.experience,
         salary: template.salary,
-        deadline: '',
+        deadline: prev.deadline || '',
         skills: template.skills,
         description: template.description,
         responsibilities: template.responsibilities.join('\n'),
@@ -289,9 +291,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
         benefits: template.benefits.join('\n'),
         proctoring_config: {
           ...DEFAULT_PROCTORING_CONFIG,
-          ...(jobData.proctoring_config || {})
+          ...(prev.proctoring_config || {})
         }
-      });
+      }));
       setShowTemplates(false);
     }
   };

@@ -62,14 +62,14 @@ def create_job(current_user):
                 if field in data and isinstance(data[field], str):
                     data[field] = [item.strip() for item in data[field].split(',') if item.strip()]
         
-        with open('debug_payload.txt', 'a') as f:
+        with open('debug_payload.txt', 'a', encoding='utf-8') as f:
             f.write(f"Payload: {data}\n")
             
         result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
         return jsonify(result), status_code
     except Exception as e:
         import traceback
-        with open('debug_error.txt', 'a') as f:
+        with open('debug_error.txt', 'a', encoding='utf-8') as f:
             f.write(f"Exception: {e}\n{traceback.format_exc()}\n")
         raise
 
