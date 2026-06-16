@@ -24,9 +24,32 @@ def _get_client():
     if _client is not None:
         return _client
 
+    import json
+    
+    # Check for direct JSON string in env var
+    key_json = os.getenv("GCS_SERVICE_ACCOUNT_JSON")
+    if key_json and key_json.strip().startswith("{"):
+        try:
+            creds_dict = json.loads(key_json)
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            _client = storage.Client(credentials=credentials, project=credentials.project_id)
+            return _client
+        except Exception as e:
+            logger.error(f"Failed to parse GCS_SERVICE_ACCOUNT_JSON: {e}")
+
     key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if not key_path:
         raise RuntimeError("GCS_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS not set")
+
+    # If the key_path itself is a JSON string
+    if key_path.strip().startswith("{"):
+        try:
+            creds_dict = json.loads(key_path)
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            _client = storage.Client(credentials=credentials, project=credentials.project_id)
+            return _client
+        except Exception as e:
+            logger.error(f"Failed to parse JSON from GCS_SERVICE_ACCOUNT_KEY: {e}")
 
     if not os.path.isabs(key_path):
         # Resolve relative to backend root
@@ -59,9 +82,19 @@ def is_gcs_configured():
     """Check if GCS is properly configured."""
     try:
         bucket_name = os.getenv("GCS_BUCKET_NAME")
-        key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not bucket_name or not key_path:
+        if not bucket_name:
             return False
+            
+        key_json = os.getenv("GCS_SERVICE_ACCOUNT_JSON")
+        if key_json and key_json.strip().startswith("{"):
+            return True
+
+        key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not key_path:
+            return False
+            
+        if key_path.strip().startswith("{"):
+            return True
 
         if not os.path.isabs(key_path):
             key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), key_path)

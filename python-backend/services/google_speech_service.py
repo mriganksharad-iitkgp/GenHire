@@ -12,21 +12,40 @@ logger = logging.getLogger(__name__)
 
 class GoogleSpeechService:
     def __init__(self):
-        # The environment variable GOOGLE_APPLICATION_CREDENTIALS should be set
+        import json
+        from google.oauth2 import service_account
         try:
+            creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
             creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-            if not creds_path or not os.path.exists(creds_path):
+            credentials = None
+            
+            if creds_json and creds_json.strip().startswith("{"):
+                try:
+                    creds_dict = json.loads(creds_json)
+                    credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                    logger.info("Google Speech Service: Using JSON credentials from environment variable.")
+                except Exception as e:
+                    logger.error(f"Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+            elif creds_path:
+                if creds_path.strip().startswith("{"):
+                    try:
+                        creds_dict = json.loads(creds_path)
+                        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                        logger.info("Google Speech Service: Using JSON credentials from GOOGLE_APPLICATION_CREDENTIALS.")
+                    except Exception as e:
+                        logger.error(f"Failed to parse JSON from GOOGLE_APPLICATION_CREDENTIALS: {e}")
+                elif os.path.exists(creds_path):
+                    credentials = service_account.Credentials.from_service_account_file(creds_path)
+                    logger.info(f"Google Speech Service: Using credentials from path: {creds_path}")
+            
+            if not credentials:
                 logger.info("Google Speech Service credentials not found. Speech features will be disabled.")
                 self.speech_client = None
                 self.tts_client = None
                 return
 
-            logger.info(
-                f"Initializing Google Speech Service. Credentials path: {creds_path}"
-            )
-
-            self.speech_client = speech.SpeechClient()
-            self.tts_client = texttospeech.TextToSpeechClient()
+            self.speech_client = speech.SpeechClient(credentials=credentials)
+            self.tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
             self.cost_tracker = CostTracker()
             logger.info("✅ Google Speech Service clients initialized successfully.")
         except Exception as e:
