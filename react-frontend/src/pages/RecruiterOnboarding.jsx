@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./RecruiterOnboarding.module.css";
+import { setToken, setUser } from "../utils/sessionManager";
 
 const RecruiterOnboarding = () => {
   const navigate = useNavigate();
@@ -255,13 +256,13 @@ const RecruiterOnboarding = () => {
       }
 
       if (data.token && data.user) {
-        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-        localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
+        setToken(data.token);
+        setUser({
           ...data.user,
           userType: data.user.user_type,
           isVerified: data.user.is_verified,
           permissions: data.user.permissions || [],
-        }));
+        });
       }
 
       setSuccessMessage("Your recruiter profile is complete and pending verification. You'll receive an email once approved.");
@@ -406,7 +407,6 @@ const RecruiterOnboarding = () => {
                         theme="outline"
                         size="large"
                         text="signup_with"
-                        width="100%"
                       />
                     </div>
                     

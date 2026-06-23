@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "../recruiter/RecruiterCostStatistics.module.css";
+import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
 import {
   addMonths,
   buildContinuousMonthlySeries,
@@ -50,9 +51,7 @@ const CandidateCostStatistics = () => {
       setError(null);
 
       try {
-        const token = localStorage.getItem(
-          process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-        );
+        const token = getToken();
 
         if (!token) {
           setError("Please login to view your usage dashboard");

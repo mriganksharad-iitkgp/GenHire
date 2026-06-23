@@ -1,5 +1,6 @@
 import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
+import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
 
 const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const cvScorePct = (typeof application.cv_score === 'number')
@@ -135,7 +136,7 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
         <button
           className={styles.secondaryButton}
           onClick={() => {
-            const token = localStorage.getItem('companyxyz-token');
+            const token = getToken();
             const base = application.cv_url?.startsWith('http') ? application.cv_url : `${process.env.REACT_APP_API_URL}${application.cv_url || ''}`;
             const url = token ? `${base}?token=${encodeURIComponent(token)}` : base;
             window.open(url, '_blank', 'noopener');

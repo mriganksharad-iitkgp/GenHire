@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./AdminDashboard.module.css";
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 // Custom debounce hook
 const useDebounce = (value, delay) => {
@@ -64,13 +65,13 @@ const AdminDashboard = () => {
   ], []);
 
   const getToken = useCallback(() => {
-    return localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    return getToken();
   }, []);
 
   // Check auth on mount
   useEffect(() => {
     const token = getToken();
-    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    const userData = getUser();
     
     if (!token || !userData) {
       navigate("/login");
@@ -281,8 +282,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-    localStorage.removeItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    clearSession();
     navigate("/login");
   };
 

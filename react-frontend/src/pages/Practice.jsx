@@ -9,6 +9,7 @@ import PracticeDetailsModal from "../components/PracticeDetailsModal";
 import JDDetailsModal from "../components/JDDetailsModal";
 import { PRACTICE_ROLE_OPTIONS } from "../constants/jobTaxonomy";
 import styles from "./Practice.module.css";
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 const Practice = () => {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ const Practice = () => {
   const fetchPracticeHistory = async () => {
     setIsLoadingHistory(true);
     try {
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/api/practice/history`,
         {
@@ -71,7 +72,7 @@ const Practice = () => {
   // View practice interview report
   const viewPracticeReport = async (sessionId) => {
     try {
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/api/practice/${sessionId}/report`,
         {
@@ -144,7 +145,7 @@ const Practice = () => {
         formData.append("cv_id", cvSelection.cv_id);
       }
 
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/api/practice/start`,
         {
@@ -201,7 +202,7 @@ const Practice = () => {
           eyeball_tracking: proctoringEnabled,
           gaze_heatmap: proctoringEnabled
         },
-        token: localStorage.getItem("companyxyz-token"),
+        token: getToken(),
         apiUrl: process.env.REACT_APP_API_URL || window.location.origin
       };
 
@@ -270,7 +271,7 @@ const Practice = () => {
     // If cv_id exists, open PDF
     if (session.cv_id) {
       try {
-        const token = localStorage.getItem("companyxyz-token");
+        const token = getToken();
         const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
 
         const response = await fetch(url, {
@@ -293,7 +294,7 @@ const Practice = () => {
     } else {
       // If no cv_id, show manual CV details modal
       try {
-        const token = localStorage.getItem("companyxyz-token");
+        const token = getToken();
         const response = await fetch(
           `${process.env.REACT_APP_API_URL}/api/cv-details`,
           {

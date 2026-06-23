@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
 import { useCandidateData } from "../contexts/CandidateDataContext";
+import { setToken, setUser } from "../utils/sessionManager";
 
 const Login = () => {
 	const [identifier, setIdentifier] = useState("");
@@ -16,13 +17,13 @@ const Login = () => {
 
 	const storeSession = (data, fallbackType) => {
 		clearAllCaches();
-		localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-		localStorage.setItem(process.env.REACT_APP_USER_KEY || "companyxyz-user", JSON.stringify({
+		setToken(data.token);
+		setUser({
 			...data.user,
 			userType: data.user.user_type || fallbackType,
 			isVerified: data.user.is_verified,
 			permissions: data.user.permissions || []
-		}));
+		});
 	};
 
 	const handleSubmit = async (e) => {
@@ -285,8 +286,7 @@ const Login = () => {
 								onError={handleGoogleError}
 								theme="outline"
 								size="large"
-								text="continue_with"
-								width="100%"
+								text="signin_with"
 							/>
 						</div>
 					</div>

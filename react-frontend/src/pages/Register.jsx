@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
+import { setToken, setUser } from "../utils/sessionManager";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -69,19 +70,16 @@ const Register = () => {
         // Don't auto-login, user must verify email first
       } else {
         // Store token and user data with user type, verification status, and permissions
-        localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-        localStorage.setItem(
-          process.env.REACT_APP_USER_KEY || "companyxyz-user",
-          JSON.stringify({ 
+        setToken(data.token);
+        setUser({ 
             ...data.user, 
             userType: data.user.user_type || userType,
             isVerified: data.user.is_verified,
             permissions: data.user.permissions || []
-          })
-        );
+          });
 
         // Navigate to candidate dashboard
-        navigate("/");
+        navigate("/dashboard");
       }
     } catch (err) {
       setError(err.message);
@@ -114,19 +112,16 @@ const Register = () => {
       }
 
       // Store token and user data with verification status and permissions
-      localStorage.setItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token", data.token);
-      localStorage.setItem(
-        process.env.REACT_APP_USER_KEY || "companyxyz-user",
-        JSON.stringify({
+      setToken(data.token);
+      setUser({
           ...data.user,
           userType: data.user.user_type,
           isVerified: data.user.is_verified,
           permissions: data.user.permissions || []
-        })
-      );
+        });
 
       // Navigate to candidate dashboard
-      navigate("/");
+      navigate("/dashboard");
     } catch (error) {
       setError(error.message);
     } finally {
@@ -291,7 +286,6 @@ const Register = () => {
               theme="outline"
               size="large"
               text="signup_with"
-              width="100%"
             />
           </div>
         </div>

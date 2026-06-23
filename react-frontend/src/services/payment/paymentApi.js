@@ -1,13 +1,13 @@
 // Payment & Wallet API Layer
 // Centralized recharge and wallet endpoints
 
+import { getToken } from "../../utils/sessionManager";
+
 const API_BASE =
   process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function authHeaders() {
-  const token = localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-  );
+  const token = getToken();
   return {
     Authorization: `Bearer ${token}`,
   };

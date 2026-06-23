@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styles from './CVViewer.module.css';
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 const CVViewer = ({ isOpen, onClose, candidate }) => {
   // Handle Escape key to close modal
@@ -42,7 +43,7 @@ const CVViewer = ({ isOpen, onClose, candidate }) => {
       if (!isOpen || !pdfUrl || pdfUrl === '#') return;
       try {
         // Try fetching with Authorization; if cross-origin and no auth needed, fallback to using the URL directly
-        const token = localStorage.getItem('companyxyz-token');
+        const token = getToken();
         const res = await fetch(pdfUrl, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });

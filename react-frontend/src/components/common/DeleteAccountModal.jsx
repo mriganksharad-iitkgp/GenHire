@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './DeleteAccountModal.module.css';
+import { getToken, clearSession } from '../../utils/sessionManager';
 
 const DeleteAccountModal = ({ isOpen, onClose, onLogout }) => {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -13,7 +14,7 @@ const DeleteAccountModal = ({ isOpen, onClose, onLogout }) => {
     setIsDeleting(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/me`, {
         method: 'DELETE',
         headers: {
@@ -29,9 +30,8 @@ const DeleteAccountModal = ({ isOpen, onClose, onLogout }) => {
 
       // Successfully deleted, now clear auth and redirect
       if (onLogout) {
-        onLogout();
-      } else {
-        localStorage.removeItem('token');
+        // Clear token from session storage
+        clearSession();
         navigate('/');
         window.location.reload();
       }

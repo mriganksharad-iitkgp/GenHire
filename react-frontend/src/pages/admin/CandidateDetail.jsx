@@ -12,6 +12,7 @@ import ApplicationHistoryList from "../../components/shared/ApplicationHistoryLi
 import JDDetailsModal from "../../components/JDDetailsModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "../../services/adminApi";
+import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
 
 const CandidateDetail = () => {
   const navigate = useNavigate();
@@ -178,7 +179,7 @@ const CandidateDetail = () => {
   // Handle application status change
   const handleApplicationStatusChange = async (appId, newStatus) => {
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/applications/${appId}/status`, {
         method: 'PUT',
         headers: {
@@ -205,7 +206,7 @@ const CandidateDetail = () => {
   const handleViewApplicationCV = async (app) => {
     setCvLoading(true);
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       let url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
       if (app.cv_id) {
         url = `${process.env.REACT_APP_API_URL}/api/cv/${app.cv_id}/preview?token=${token}`;
@@ -226,7 +227,7 @@ const CandidateDetail = () => {
   const handleViewCV = async () => {
     setCvLoading(true);
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       const url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
       window.open(url, "_blank");
     } catch (error) {
@@ -257,7 +258,7 @@ const CandidateDetail = () => {
   const fetchPracticeHistory = useCallback(async () => {
     setPracticeLoading(true);
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       console.log(`[Admin] Fetching practice history for candidate: ${candidateId}`);
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/practice-history`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -283,7 +284,7 @@ const CandidateDetail = () => {
     console.log("[Admin] handleViewReport called with app:", app);
     console.log("[Admin] Application ID:", app.id);
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       const url = `${process.env.REACT_APP_API_URL}/api/admin/applications/${app.id}/report`;
       console.log("[Admin] Fetching report from:", url);
       
@@ -316,7 +317,7 @@ const CandidateDetail = () => {
   // View practice report
   const handleViewPracticeReport = async (session) => {
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${session.session_id}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -335,7 +336,7 @@ const CandidateDetail = () => {
   // View practice report by session ID (for PracticeHistoryList component)
   const handleViewPracticeReportById = async (sessionId) => {
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${sessionId}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -355,7 +356,7 @@ const CandidateDetail = () => {
   const handleViewPracticeCV = async (session) => {
     if (session.cv_id) {
       try {
-        const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+        const token = getToken();
         const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview?token=${token}`;
         window.open(url, '_blank');
       } catch (err) {

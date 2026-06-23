@@ -4,6 +4,7 @@ import { getProfile } from '../services/api';
 import { isProfileCvComplete } from '../utils/cvDetails';
 import styles from './CVSelectionModal.module.css';
 
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 const CVSelectionModal = ({ 
   isOpen, 
   onClose, 
@@ -35,7 +36,7 @@ const CVSelectionModal = ({
     try {
       // Use cached data from context
       const cvs = await loadCvsCached(false, async () => {
-        const token = localStorage.getItem('companyxyz-token');
+        const token = getToken();
         const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
           headers: {
             'Authorization': `Bearer ${token}`

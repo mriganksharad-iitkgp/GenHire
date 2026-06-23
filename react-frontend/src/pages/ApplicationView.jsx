@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import styles from "./ApplicationView.module.css";
 import "./darkModeOverride.css";
 import "./emergency-fixes.css";
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 const ApplicationView = () => {
 	const { applicationId } = useParams();
@@ -23,7 +24,7 @@ const ApplicationView = () => {
 
 	useEffect(() => {
 			// Check authentication
-			const token = localStorage.getItem("companyxyz-token");
+			const token = getToken();
 			if (!token) {
 				navigate("/login");
 				return;

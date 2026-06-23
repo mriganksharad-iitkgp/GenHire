@@ -7,6 +7,7 @@ import io from "socket.io-client";
 import Avatar from "../components/Avatar"; // Import the new Avatar component
 import QRCode from "react-qr-code";
 import { proctoringConfig } from "../config/proctoring";
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 export default function Chat({ interviewId }) {
   const MAX_QUESTIONS = 10;
@@ -311,7 +312,7 @@ export default function Chat({ interviewId }) {
         return;
       }
 
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const apiBase = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
       const response = await fetch(
         `${apiBase}/api/interviews/${currentSessionId}/gaze-recorder-results`,
@@ -449,7 +450,7 @@ export default function Chat({ interviewId }) {
     context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL("image/jpeg");
     try {
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/register-face`,
         {
@@ -513,7 +514,7 @@ export default function Chat({ interviewId }) {
           new Blob([data.buffer], { type: "video/mp4" }),
           `interview_${currentSessionId}.mp4`,
         );
-        const token = localStorage.getItem("companyxyz-token");
+        const token = getToken();
         const response = await fetch(
           `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`,
           {
@@ -657,7 +658,7 @@ export default function Chat({ interviewId }) {
       // Get application ID from navigation state (not needed for practice mode)
       const applicationId = location.state?.applicationId;
 
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
 
       // For real interviews (not practice with pre-created session)
       const endpoint = `${process.env.REACT_APP_API_URL}/api/interviews/start`;
@@ -801,7 +802,7 @@ export default function Chat({ interviewId }) {
     try {
       await stopAndUploadRecording();
 
-      const token = localStorage.getItem("companyxyz-token");
+      const token = getToken();
       const isPracticeMode = location.state?.isPractice || false;
 
       // Use different endpoint for practice mode
@@ -828,8 +829,8 @@ export default function Chat({ interviewId }) {
 
       const deduction = data?.usage_deduction || null;
       if (deduction) {
-        localStorage.setItem("credits-needs-refresh", "true");
-        localStorage.setItem(
+        sessionStorage.setItem("credits-needs-refresh", "true");
+        sessionStorage.setItem(
           "last-usage-deduction",
           JSON.stringify({
             ...deduction,
@@ -909,7 +910,7 @@ export default function Chat({ interviewId }) {
       }));
 
       // Store interview completion flag for Profile page to detect
-      localStorage.setItem("interview-just-completed", "true");
+      sessionStorage.setItem("interview-just-completed", "true");
     } catch (error) {
       console.error("Failed to end interview:", error);
       setInterviewStatus("active"); // Revert status on failure
@@ -943,7 +944,7 @@ export default function Chat({ interviewId }) {
       setIsSubmittingAnswer(true);
 
       try {
-        const token = localStorage.getItem("companyxyz-token");
+        const token = getToken();
 
         // Use different endpoint for practice mode
         const endpoint = isPracticeMode

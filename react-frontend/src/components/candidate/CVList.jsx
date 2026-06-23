@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useCandidateData } from '../../contexts/CandidateDataContext';
 import styles from './CVList.module.css';
+import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
 
 const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
   const { cvs, cvsLoaded, loadCvsCached, invalidateCvs } = useCandidateData();
@@ -11,7 +12,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
   const fetchCVs = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('companyxyz-token');
+      const token = getToken();
       const loadedCvs = await loadCvsCached(force, async () => {
         const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
           headers: {
@@ -58,7 +59,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
     setSettingPrimary(cvId);
 
     try {
-      const token = localStorage.getItem('companyxyz-token');
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}/set-primary`, {
         method: 'PUT',
         headers: {
@@ -91,7 +92,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
     }
 
     try {
-      const token = localStorage.getItem('companyxyz-token');
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}`, {
         method: 'DELETE',
         headers: {

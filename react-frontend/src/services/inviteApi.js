@@ -3,13 +3,13 @@
 // - Redeem endpoints are public; we hit them without an auth header so an
 //   already-logged-in candidate clicking a magic link doesn't trip the JWT check.
 
+import { getToken } from "../utils/sessionManager";
+
 const API_BASE =
   process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
 
 function authHeaders() {
-  const token = localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-  );
+  const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

@@ -3,6 +3,7 @@ import { Navigate, useNavigate, Outlet } from "react-router-dom";
 import Navbar from "./Navbar";
 import styles from "./Layout.module.css";
 import axios from "axios";
+import { getToken, getUser, clearSession } from "../utils/sessionManager";
 
 const Layout = () => {
 	const navigate = useNavigate();
@@ -11,8 +12,7 @@ const Layout = () => {
 
 	useEffect(() => {
 		const verifyAuth = async () => {
-			const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY);
-			const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY);
+			const token = getToken();
 
 			if (!token) {
 				setIsAuthenticated(false);
@@ -42,15 +42,13 @@ const Layout = () => {
 						return;
 					}
 				} else {
-					console.log('No response data, clearing localStorage'); // Debug log
-					localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY);
-					localStorage.removeItem(process.env.REACT_APP_USER_KEY);
+					console.log('No response data, clearing session'); // Debug log
+					clearSession();
 					setIsAuthenticated(false);
 				}
 			} catch (error) {
 				console.error('Auth verification failed:', error); // Debug log
-				localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY);
-				localStorage.removeItem(process.env.REACT_APP_USER_KEY);
+				clearSession();
 				setIsAuthenticated(false);
 			}
 		};

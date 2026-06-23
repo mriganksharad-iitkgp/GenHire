@@ -11,6 +11,7 @@ import useCandidateProfile from "../hooks/candidate/useCandidateProfile";
 import useCandidateApplications from "../hooks/candidate/useCandidateApplications";
 import { viewApplicationCV } from "../services/api";
 import cvService from "../services/cvService";
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 const Profile = () => {
 	const navigate = useNavigate();
@@ -39,7 +40,7 @@ const Profile = () => {
 
 	// Check authentication when component mounts
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
+		const isLoggedIn = getToken() !== null;
 		if (!isLoggedIn) {
 			navigate("/login");
 			return;
@@ -90,10 +91,10 @@ const Profile = () => {
 
 	// Check for interview completion on mount and force immediate refresh
 	useEffect(() => {
-		const interviewCompleted = localStorage.getItem('interview-just-completed');
+		const interviewCompleted = sessionStorage.getItem('interview-just-completed');
 		if (interviewCompleted === 'true') {
 			console.log('Interview completion detected on Profile mount - forcing immediate refresh...');
-			localStorage.removeItem('interview-just-completed'); // Clear immediately
+			sessionStorage.removeItem('interview-just-completed'); // Clear immediately
 
 			// Force multiple refreshes with delays to ensure database sync
 			reloadApplications(true);
@@ -109,9 +110,9 @@ const Profile = () => {
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === 'visible') {
 				// Check if interview was just completed
-				const interviewCompleted = localStorage.getItem('interview-just-completed');
+				const interviewCompleted = sessionStorage.getItem('interview-just-completed');
 				if (interviewCompleted === 'true') {
-					localStorage.removeItem('interview-just-completed'); // Clear the flag
+					sessionStorage.removeItem('interview-just-completed'); // Clear the flag
 
 					// Multiple refresh attempts with increasing delays to ensure update is caught
 					reloadApplications(true);
@@ -148,9 +149,9 @@ const Profile = () => {
 
 		// If switching to applications tab, check for interview completion and refresh
 		if (tab === 'applications') {
-			const interviewCompleted = localStorage.getItem('interview-just-completed');
+			const interviewCompleted = sessionStorage.getItem('interview-just-completed');
 			if (interviewCompleted === 'true') {
-				localStorage.removeItem('interview-just-completed');
+				sessionStorage.removeItem('interview-just-completed');
 				reloadApplications(true);
 			}
 		}
@@ -178,7 +179,7 @@ const Profile = () => {
 	// Handle CV viewing
 	const handleViewCV = async (application = null) => {
 		try {
-			const token = localStorage.getItem("companyxyz-token");
+			const token = getToken();
 			let url;
 
 			// Case 1: Viewing CV for a specific application (from application card)
@@ -319,7 +320,7 @@ const Profile = () => {
 			// Generate the initialization payload identical to the manual copy-paste one
 			const payload = {
 				applicationId: application.id,
-				token: localStorage.getItem("companyxyz-token"),
+				token: getToken(),
 				apiUrl: process.env.REACT_APP_API_URL || window.location.origin
 			};
 			const encodedPayload = btoa(JSON.stringify(payload));

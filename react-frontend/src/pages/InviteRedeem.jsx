@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { redeemInvite } from "../services/inviteApi";
+import { setToken, setUser } from "../utils/sessionManager";
 
 const containerStyle = {
   minHeight: "100vh",
@@ -59,8 +60,7 @@ const primaryBtnStyle = {
   cursor: "pointer",
 };
 
-const tokenKey = process.env.REACT_APP_TOKEN_KEY || "companyxyz-token";
-const userKey = process.env.REACT_APP_USER_KEY || "companyxyz-user";
+
 
 const InviteRedeem = () => {
   const [searchParams] = useSearchParams();
@@ -84,16 +84,13 @@ const InviteRedeem = () => {
     (async () => {
       try {
         const data = await redeemInvite({ token });
-        localStorage.setItem(tokenKey, data.token);
-        localStorage.setItem(
-          userKey,
-          JSON.stringify({
+        setToken(data.token);
+        setUser({
             ...data.user,
             userType: data.user.user_type,
             isVerified: data.user.is_verified,
             permissions: data.user.permissions || [],
-          })
-        );
+          });
         navigate(data.redirect || "/dashboard", { replace: true });
       } catch (err) {
         setError(

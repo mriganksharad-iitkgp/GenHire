@@ -5,6 +5,7 @@ import { UpgradeButton } from "./recruiter/subscription";
 import { CandidatePlanButton } from "./candidate/subscription";
 import { useCandidateData } from "../contexts/CandidateDataContext";
 import { getProfile } from "../services/api";
+import { getToken, clearSession } from "../utils/sessionManager";
 
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ const Navbar = ({ userType = "candidate" }) => {
   // Load user data (profile photo and name)
   const loadUserData = async () => {
     try {
-      const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+      const token = getToken();
       if (!token) return;
 
       await loadProfileCached(false, getProfile);
@@ -35,8 +36,7 @@ const Navbar = ({ userType = "candidate" }) => {
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem("companyxyz-token");
-    localStorage.removeItem("companyxyz-user");
+    clearSession();
     if (clearAllCaches) {
       clearAllCaches();
     }

@@ -5,6 +5,7 @@ import JobEditModal from "../components/JobEditModal";
 import CVSelectionModal from "../components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
 import InterviewReportModal from '../components/InterviewReportModal';
+import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 
 const JobDetails = () => {
 	const { jobId } = useParams();
@@ -90,8 +91,8 @@ const JobDetails = () => {
 	// Load job details from backend
 	useEffect(() => {
 		const init = async () => {
-			const token = localStorage.getItem("companyxyz-token");
-			const user = JSON.parse(localStorage.getItem("companyxyz-user") || "null");
+			const token = getToken();
+			const user = JSON.parse(getUser() || "null");
 			const currentUserType = user?.user_type || user?.userType || "candidate";
 			setUserType(currentUserType);
 			if (!token) {
@@ -247,7 +248,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 	};
 	// Apply for job from details page
 	const handleCVSelectionSubmit = async (cvSelection) => {
-		const token = localStorage.getItem("companyxyz-token");
+		const token = getToken();
 		if (!token) {
 			navigate("/login");
 			return;
@@ -300,7 +301,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 
 	// Withdraw application
 	const handleWithdraw = async () => {
-		const token = localStorage.getItem("companyxyz-token");
+		const token = getToken();
 		if (!token) {
 			navigate("/login");
 			return;
@@ -346,7 +347,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 	// Handle job update
 	const handleJobUpdate = async (updatedJobData) => {
 		try {
-			const token = localStorage.getItem("companyxyz-token");
+			const token = getToken();
 			if (!token) {
 				navigate("/login");
 				return;

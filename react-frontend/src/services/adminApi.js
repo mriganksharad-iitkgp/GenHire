@@ -1,13 +1,9 @@
 // Admin API Service - Centralized API layer for admin operations
 
+import { getToken, getUser } from "../utils/sessionManager";
+
 const API_BASE =
   process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
-
-function getToken() {
-  return localStorage.getItem(
-    process.env.REACT_APP_TOKEN_KEY || "companyxyz-token",
-  );
-}
 
 function authHeaders() {
   return {
@@ -257,12 +253,5 @@ export const getAvailablePermissions = () => request("/admin/permissions");
 
 // Helper to get current admin info
 export const getCurrentAdmin = () => {
-  try {
-    const userData = localStorage.getItem(
-      process.env.REACT_APP_USER_KEY || "companyxyz-user",
-    );
-    return userData ? JSON.parse(userData) : null;
-  } catch {
-    return null;
-  }
+  return getUser();
 };

@@ -6,6 +6,7 @@ import JobDetailModal from "../../components/admin/JobDetailModal";
 import JobEditModal from "../../components/JobEditModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "../../services/adminApi";
+import { getToken } from "../../utils/sessionManager";
 
 const RecruiterDetail = () => {
   const navigate = useNavigate();
@@ -230,7 +231,7 @@ const RecruiterDetail = () => {
         `${process.env.REACT_APP_API_URL}/api/jobs/${job.id}`,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getToken()}`,
           },
         },
       );

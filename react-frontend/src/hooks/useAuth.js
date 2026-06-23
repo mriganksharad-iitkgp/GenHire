@@ -2,14 +2,16 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 /**
-import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-
-/**
- * Authentication hook for managing user sessions
+ * Authentication hook for managing user sessions.
+ *
+ * Uses sessionStorage (via sessionManager) so each browser tab maintains
+ * its own independent session — no cross-tab overwrites on login/refresh.
+ *
  * @param {string|null} requiredType - Required user type ('candidate', 'recruiter', 'admin', or null for any)
  * @returns {Object} Authentication state and helpers
  */
+import { getToken, getUser, clearSession } from "../utils/sessionManager";
+
 export default function useAuth(requiredType = "recruiter") {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -19,17 +21,16 @@ export default function useAuth(requiredType = "recruiter") {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    const token = getToken();
+    const parsed = getUser();
     
-    if (!token || !userData) {
+    if (!token || !parsed) {
       setIsLoading(false);
       navigate("/login");
       return;
     }
     
     try {
-      const parsed = JSON.parse(userData);
       const userType = parsed.userType || parsed.user_type || 'candidate';
       
       // Check if required type matches (if specified)
@@ -63,7 +64,7 @@ export default function useAuth(requiredType = "recruiter") {
       
       // Store display name for convenience
       if (userType === 'recruiter') {
-        localStorage.setItem("recruiterName", parsed.name || "Recruiter");
+        sessionStorage.setItem("recruiterName", parsed.name || "Recruiter");
       }
       
       setIsLoading(false);
@@ -115,20 +116,17 @@ export default function useAuth(requiredType = "recruiter") {
    * Logout user and redirect to login page
    */
   const logout = useCallback(() => {
-    localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-    localStorage.removeItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
-    localStorage.removeItem("recruiterName");
+    clearSession();
     navigate("/login");
   }, [navigate]);
 
   /**
-   * Refresh user data from localStorage (useful after profile updates)
+   * Refresh user data from sessionStorage (useful after profile updates)
    */
   const refreshUser = useCallback(() => {
-    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
-    if (userData) {
+    const parsed = getUser();
+    if (parsed) {
       try {
-        const parsed = JSON.parse(userData);
         setUser({
           ...parsed,
           userType: parsed.userType || parsed.user_type || 'candidate'

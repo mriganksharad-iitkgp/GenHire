@@ -6,6 +6,7 @@ import CVSelectionModal from "../components/CVSelectionModal";
 import { useCandidateData } from "../contexts/CandidateDataContext";
 import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "../constants/jobTaxonomy";
 import styles from "./Dashboard.module.css";
+import { getToken, getUser, isLoggedIn } from "../utils/sessionManager";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
@@ -79,7 +80,7 @@ const Dashboard = () => {
 
 	const loadJobs = async (force = false) => {
 		try {
-			const token = localStorage.getItem('companyxyz-token');
+			const token = getToken();
 			if (!token) {
 				navigate('/login');
 				return;
@@ -112,8 +113,8 @@ const Dashboard = () => {
 	};
 
 	useEffect(() => {
-		const isLoggedIn = localStorage.getItem("companyxyz-token") !== null;
-		if (!isLoggedIn) {
+		const loggedIn = isLoggedIn();
+		if (!loggedIn) {
 			navigate("/login");
 			return;
 		}
@@ -123,7 +124,7 @@ const Dashboard = () => {
 
 	const loadApplications = async (force = false) => {
 		try {
-			const token = localStorage.getItem('companyxyz-token');
+			const token = getToken();
 			if (!token) return;
 
 			// Use cached data if available
@@ -149,8 +150,8 @@ const Dashboard = () => {
 	};
 
 	const applyForJob = (jobId) => {
-		const token = localStorage.getItem('companyxyz-token');
-		const user = JSON.parse(localStorage.getItem('companyxyz-user') || 'null');
+		const token = getToken();
+		const user = getUser();
 		
 		if (!token) {
 			navigate('/login');
@@ -181,7 +182,7 @@ const Dashboard = () => {
 		setSelectedJobForApplication(null);
 		
 		try {
-			const token = localStorage.getItem('companyxyz-token');
+			const token = getToken();
 			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
@@ -253,7 +254,7 @@ const Dashboard = () => {
 	// for invite-only (burner) accounts.
 	const cachedUser = (() => {
 		try {
-			return JSON.parse(localStorage.getItem(process.env.REACT_APP_USER_KEY || "companyxyz-user") || "null");
+			return getUser();
 		} catch (_) {
 			return null;
 		}
@@ -356,7 +357,7 @@ const Dashboard = () => {
 
 	const withdrawApplication = async (jobId) => {
 		try {
-			const token = localStorage.getItem('companyxyz-token');
+			const token = getToken();
 			if (!token) {
 				navigate('/login');
 				return;

@@ -3,6 +3,7 @@
  * Handles script loading, checkout, and payment verification
  */
 import { useState, useCallback, useRef } from "react";
+import { getUser } from "../utils/sessionManager";
 import { initiatePayment, verifyPayment } from "../services/payment";
 
 const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
@@ -40,7 +41,7 @@ const loadScript = () => {
  */
 const getUserInfo = () => {
   try {
-    return JSON.parse(localStorage.getItem("user") || "{}");
+    return getUser() || {};
   } catch {
     return {};
   }

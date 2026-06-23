@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { viewPhoto } from '../services/api';
+import { getToken } from '../utils/sessionManager';
 
 /**
  * Global data cache for candidate pages to prevent unnecessary reloads.
@@ -81,10 +82,10 @@ export const CandidateDataProvider = ({ children }) => {
   const _setProfileLoading = (v) => { profileLoadingRef.current = v; setProfileLoading(v); };
   const _setProfilePhotoUrl = (url) => { profilePhotoUrlRef.current = url; setProfilePhotoUrl(url); };
 
-  const lastTokenRef = useRef(localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token"));
+  const lastTokenRef = useRef(getToken());
 
   const checkTokenAndClearIfChanged = useCallback(() => {
-    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    const token = getToken();
     if (token !== lastTokenRef.current) {
       console.log("🔑 Token changed, clearing all context caches.");
       lastTokenRef.current = token;
@@ -220,7 +221,7 @@ export const CandidateDataProvider = ({ children }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfilePhoto = useCallback(async (force = false) => {
-    const token = localStorage.getItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
+    const token = getToken();
     if (!token) return null;
     
     // Instead of fetching a blob which fails on GCS redirects, we construct the direct URL

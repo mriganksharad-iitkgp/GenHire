@@ -28,6 +28,7 @@ import {
   getProfile,
   updateCompanyProfile as apiUpdateCompanyProfile,
 } from "../services/api";
+import { getUser } from "../utils/sessionManager";
 
 const RecruiterDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,14 +38,13 @@ const RecruiterDashboard = () => {
   const [toasts, setToasts] = useState([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  // Check verification status from localStorage
+  // Check verification status from sessionStorage
   const [isVerified, setIsVerified] = useState(true);
 
   useEffect(() => {
-    const userData = localStorage.getItem(process.env.REACT_APP_USER_KEY);
-    if (userData) {
+    const parsed = getUser();
+    if (parsed) {
       try {
-        const parsed = JSON.parse(userData);
         // Check both isVerified (frontend) and is_verified (backend)
         setIsVerified(
           parsed.isVerified !== false && parsed.is_verified !== false

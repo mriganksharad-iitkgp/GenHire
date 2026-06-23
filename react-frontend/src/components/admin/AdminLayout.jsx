@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styles from "./AdminLayout.module.css";
 import * as adminApi from "../../services/adminApi";
+import { clearSession } from "../../utils/sessionManager";
 
 const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
   const navigate = useNavigate();
@@ -42,8 +43,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
   }, []);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem(process.env.REACT_APP_TOKEN_KEY || "companyxyz-token");
-    localStorage.removeItem(process.env.REACT_APP_USER_KEY || "companyxyz-user");
+    clearSession();
     navigate("/login");
   }, [navigate]);
 

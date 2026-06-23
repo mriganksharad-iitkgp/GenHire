@@ -3,6 +3,8 @@
  * Handles all CV-related API calls
  */
 
+import { getToken } from "../utils/sessionManager";
+
 const API_BASE_URL = `${process.env.REACT_APP_API_URL}/api`;
 
 class CVService {
@@ -13,7 +15,7 @@ class CVService {
    * @returns {Promise} Upload response
    */
   async uploadCV(cvFile, isPrimary = false) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -43,7 +45,7 @@ class CVService {
    * @returns {Promise} List of CVs
    */
   async listCVs() {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -69,7 +71,7 @@ class CVService {
    * @returns {Promise} CV details
    */
   async getCV(cvId) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -95,7 +97,7 @@ class CVService {
    * @returns {Promise} Delete response
    */
   async deleteCV(cvId) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -121,7 +123,7 @@ class CVService {
    * @returns {Promise} Update response
    */
   async setPrimaryCV(cvId) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -147,7 +149,7 @@ class CVService {
    * @returns {Promise<Blob>} CV PDF blob
    */
   async previewCV(cvId) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
@@ -172,7 +174,7 @@ class CVService {
    * @returns {Promise} Extracted text data
    */
   async getCVText(cvId) {
-    const token = localStorage.getItem("companyxyz-token");
+    const token = getToken();
     if (!token) {
       throw new Error("No authentication token found");
     }
