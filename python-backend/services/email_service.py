@@ -13,11 +13,11 @@ from services.invite_email_templates import (
 class EmailService:
     def __init__(self):
         self.provider = get_email_provider()
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").strip().rstrip("/")
 
     def send_email(self, to_email, subject, html_content, text_content=None):
         """Send an email via the configured provider."""
-        return self.provider.send(to_email, subject, html_content, text_content)
+        return bool(self.provider.send(to_email, subject, html_content, text_content))
 
     def send_verification_email(self, to_email, verification_token, user_name):
         """Send email verification link."""

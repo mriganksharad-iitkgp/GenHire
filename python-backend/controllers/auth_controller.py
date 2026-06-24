@@ -226,15 +226,19 @@ class AuthController:
                 }, 409
             return {'error': 'Email already exists'}, 409
 
-        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
-        
         # Send verification email if required
         if self.require_email_verification:
             try:
-                self.email_service.send_verification_email(normalized_email, verification_token, name)
+                email_sent = self.email_service.send_verification_email(normalized_email, verification_token, name)
             except Exception as e:
                 print(f"Error sending verification email: {str(e)}")
-                # Continue registration even if email fails
+                email_sent = False
+
+            if not email_sent:
+                self.users_collection.delete_one({'_id': user_id})
+                return {'error': 'Could not send verification email. Please try again later.'}, 502
+
+        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
         
         # Generate token (but user may need to verify email before full access)
         token = self.generate_token(user_id)
@@ -466,7 +470,9 @@ class AuthController:
         
         # Send verification email
         try:
-            self.email_service.send_verification_email(normalized_email, verification_token, user['name'])
+            email_sent = self.email_service.send_verification_email(normalized_email, verification_token, user['name'])
+            if not email_sent:
+                return {'error': 'Failed to send verification email'}, 502
             return {'message': 'Verification email sent successfully'}, 200
         except Exception as e:
             print(f"Error sending verification email: {str(e)}")
@@ -502,9 +508,12 @@ class AuthController:
         
         # Send reset email
         try:
-            self.email_service.send_password_reset_email(normalized_email, reset_token, user['name'])
+            email_sent = self.email_service.send_password_reset_email(normalized_email, reset_token, user['name'])
+            if not email_sent:
+                return {'error': 'Could not send password reset email. Please try again later.'}, 502
         except Exception as e:
             print(f"Error sending password reset email: {str(e)}")
+            return {'error': 'Could not send password reset email. Please try again later.'}, 500
         
         return {'message': 'If your email is registered, you will receive a password reset link'}, 200
     

@@ -31,7 +31,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 from flask import Flask, request, jsonify, Response
 from utils.gaze_recorder_service import GazeRecorderService
 from flask_socketio import SocketIO
-from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 import datetime
 import uuid
@@ -42,6 +41,7 @@ import numpy as np
 import time
 
 # Import configuration
+from config.env_loader import load_environment
 from config.database import db_config
 from middleware.cors_middleware import setup_cors
 from flask_cors import CORS
@@ -103,7 +103,7 @@ except ImportError as e:
     PaymentConfig = None
 
 # Load environment variables
-load_dotenv()
+load_environment()
 
 
 # Initialize Flask app

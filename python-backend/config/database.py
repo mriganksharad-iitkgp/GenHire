@@ -1,8 +1,8 @@
 import os
 from pymongo import MongoClient
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 
-load_dotenv()
+load_environment()
 
 class DatabaseConfig:
     def __init__(self):
