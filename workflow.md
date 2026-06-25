@@ -1,6 +1,6 @@
-# 🔄 HR Tech Platform — Complete Workflow Documentation
+# GenHire Platform - Complete Workflow Documentation
 
-> **Purpose**: This document explains *every* workflow in the HR Tech platform in depth — what happens when a user clicks a button, which API is called, what the backend does with that request, and what response comes back. By the end you will understand the full working mechanism of the website.
+> **Purpose**: This document explains *every* workflow in the GenHire platform in depth - what happens when a user clicks a button, which API is called, what the backend does with that request, and what response comes back. By the end you will understand the full working mechanism of the website.
 
 ---
 

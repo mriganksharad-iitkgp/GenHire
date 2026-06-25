@@ -17,6 +17,18 @@ const LandingPage = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    document.title = "GenHire | AI Hiring, Interviews, CV Screening & Shortlisting";
+
+    const description = document.querySelector('meta[name="description"]');
+    if (description) {
+      description.setAttribute(
+        "content",
+        "GenHire is an AI recruitment platform for automated hiring, AI interviews, candidate evaluation, CV screening, CV shortlisting, proctoring, and recruiter analytics."
+      );
+    }
+  }, []);
+
   // Auto-rotate workflow steps within the selected tab
   useEffect(() => {
     const interval = setInterval(() => {
@@ -28,14 +40,14 @@ const LandingPage = () => {
   const features = [
     {
       icon: "🤖",
-      title: "AI-Powered Interviews",
-      description: "Conduct intelligent mock interviews with real-time feedback and evaluation using advanced AI models.",
+      title: "AI Interview Automation",
+      description: "Run structured AI interviews with real-time candidate evaluation, scoring, transcripts, and hiring recommendations.",
       gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
     },
     {
       icon: "📄",
-      title: "Smart CV Analysis",
-      description: "Get instant CV scoring and matching against job descriptions with detailed skill gap analysis.",
+      title: "AI CV Screening & Shortlisting",
+      description: "Screen resumes, match CVs against job descriptions, shortlist qualified candidates, and identify skill gaps faster.",
       gradient: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
     },
     {
@@ -46,8 +58,8 @@ const LandingPage = () => {
     },
     {
       icon: "📊",
-      title: "Detailed Analytics",
-      description: "Track performance with comprehensive reports, transcripts, and actionable insights.",
+      title: "Recruitment Analytics",
+      description: "Track interview performance, CV fit, proctoring signals, recruiter spend, and candidate readiness with actionable reports.",
       gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
     },
     {
@@ -59,7 +71,7 @@ const LandingPage = () => {
     {
       icon: "🔒",
       title: "Secure & Reliable",
-      description: "Production-grade security with encrypted data storage and GDPR compliance.",
+      description: "Secure hiring workflows with protected data, controlled access, and reliable interview assessment infrastructure.",
       gradient: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)"
     }
   ];
@@ -103,6 +115,57 @@ const LandingPage = () => {
       author: "Michael Chen",
       role: "Talent Acquisition Lead",
       avatar: "M"
+    }
+  ];
+
+  const seoServices = [
+    {
+      title: "AI Recruitment Platform",
+      description:
+        "GenHire brings job posting, candidate screening, AI interviews, interview evaluation, and recruiter analytics into one hiring automation workflow."
+    },
+    {
+      title: "Automated Candidate Screening",
+      description:
+        "Recruiters can reduce manual screening by using AI to compare candidate profiles, CV data, job requirements, skills, and interview performance."
+    },
+    {
+      title: "AI Resume Screening Software",
+      description:
+        "Upload CVs and resumes, score job-description match, identify skill gaps, and shortlist candidates for the next hiring round with clearer evidence."
+    },
+    {
+      title: "AI Interview Evaluation",
+      description:
+        "Run structured AI interviews, capture transcripts, evaluate answers, track proctoring signals, and generate hiring reports for faster decisions."
+    },
+    {
+      title: "CV Shortlisting for Recruiters",
+      description:
+        "GenHire helps hiring teams shortlist applicants by role fit, assessment score, CV score, and interview readiness instead of only keyword matching."
+    },
+    {
+      title: "Talent Acquisition Automation",
+      description:
+        "Use GenHire for AI hiring, recruitment automation, interview analytics, candidate assessment, resume screening, and remote interview monitoring."
+    }
+  ];
+
+  const faqs = [
+    {
+      question: "What is GenHire?",
+      answer:
+        "GenHire is an AI hiring and recruitment automation platform for AI interviews, CV screening, candidate evaluation, resume shortlisting, and recruiter analytics."
+    },
+    {
+      question: "Does GenHire support AI CV screening?",
+      answer:
+        "Yes. GenHire screens CVs and resumes against job descriptions, scores candidate fit, highlights gaps, and helps recruiters shortlist qualified candidates."
+    },
+    {
+      question: "Can GenHire automate interviews?",
+      answer:
+        "Yes. GenHire supports AI-powered interviews with answer evaluation, reports, transcripts, proctoring signals, and analytics for hiring decisions."
     }
   ];
 
@@ -200,15 +263,17 @@ const LandingPage = () => {
           <div className={styles.heroText}>
             <div className={styles.heroBadge}>
               <span className={styles.badgePulse}></span>
-              AI-Powered Hiring Platform
+              GenHire AI Recruitment Platform
             </div>
             <h1 className={styles.heroTitle}>
-              Transform Your <br />
-              <span className={styles.gradientText}>Hiring Process</span>
+              AI Hiring That Screens, Interviews, <br />
+              <span className={styles.gradientText}>and Shortlists Talent</span>
             </h1>
             <p className={styles.heroSubtitle}>
-              Streamline recruitment with AI-powered interviews, smart CV analysis,
-              and comprehensive analytics. Save time, reduce bias, and hire the best talent.
+              GenHire helps teams automate recruitment with AI interviews, AI
+              candidate evaluation, CV screening, resume shortlisting, secure
+              proctoring, and recruiter analytics. Save time, reduce manual
+              screening, and hire better talent.
             </p>
             <div className={styles.heroCta}>
               <button
@@ -352,10 +417,10 @@ const LandingPage = () => {
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTag}>Features</span>
             <h2 className={styles.sectionTitle}>
-              Everything You Need for <span className={styles.gradientText}>Smart Hiring</span>
+              Everything You Need for <span className={styles.gradientText}>AI Hiring</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              Powerful tools designed to streamline your recruitment process from start to finish
+              AI recruitment tools for automated interviews, CV screening, candidate shortlisting, proctoring, and hiring analytics.
             </p>
           </div>
 
@@ -371,6 +436,32 @@ const LandingPage = () => {
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SEO Services Section */}
+      <section className={styles.featuresSection} aria-labelledby="genhire-services-title">
+        <div className={styles.container}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionTag}>AI Recruitment Software</span>
+            <h2 id="genhire-services-title" className={styles.sectionTitle}>
+              What <span className={styles.gradientText}>GenHire</span> Does for Hiring Teams
+            </h2>
+            <p className={styles.sectionSubtitle}>
+              GenHire is built for recruiters and candidates searching for AI hiring,
+              automated interviews, AI evaluation, CV screening, resume screening,
+              candidate shortlisting, and end-to-end recruitment automation.
+            </p>
+          </div>
+
+          <div className={styles.featuresGrid}>
+            {seoServices.map((service, index) => (
+              <article key={index} className={styles.featureCard}>
+                <h3>{service.title}</h3>
+                <p>{service.description}</p>
+              </article>
             ))}
           </div>
         </div>
@@ -667,12 +758,33 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* FAQ Section */}
+      <section className={styles.featuresSection} aria-labelledby="genhire-faq-title">
+        <div className={styles.container}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionTag}>FAQ</span>
+            <h2 id="genhire-faq-title" className={styles.sectionTitle}>
+              AI Hiring and <span className={styles.gradientText}>Recruitment Automation</span> FAQs
+            </h2>
+          </div>
+
+          <div className={styles.featuresGrid}>
+            {faqs.map((faq, index) => (
+              <article key={index} className={styles.featureCard}>
+                <h3>{faq.question}</h3>
+                <p>{faq.answer}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className={styles.ctaSection}>
         <div className={styles.container}>
           <div className={styles.ctaContent}>
-            <h2>Ready to Transform Your Hiring?</h2>
-            <p>Join thousands of companies and candidates using GenHire to streamline recruitment.</p>
+            <h2>Ready to Automate Hiring with GenHire?</h2>
+            <p>Use GenHire for AI interviews, AI CV screening, candidate evaluation, shortlisting, and recruitment analytics.</p>
             <div className={styles.ctaButtons}>
               <button
                 className={styles.ctaPrimary}
@@ -707,7 +819,7 @@ const LandingPage = () => {
                 </div>
                 <span>GenHire</span>
               </div>
-              <p>AI-powered hiring platform that helps companies find the best talent efficiently.</p>
+              <p>GenHire is an AI recruitment platform for automated hiring, AI interviews, CV screening, resume shortlisting, candidate evaluation, and recruiter analytics.</p>
               <div className={styles.socialLinks}>
                 <a href="#" aria-label="Twitter">
                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" /></svg>

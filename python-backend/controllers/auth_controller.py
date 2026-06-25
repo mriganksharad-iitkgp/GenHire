@@ -245,7 +245,7 @@ class AuthController:
         
         response_message = 'User registered successfully'
         if self.require_email_verification:
-            response_message += '. Please check your email to verify your HR Tech account.'
+            response_message += '. Please check your email to verify your GenHire account.'
         if user_type == 'recruiter':
             response_message += ' Your recruiter account is pending admin verification.'
         
@@ -307,7 +307,7 @@ class AuthController:
             # Allow OAuth users to login without verification
             if user.get('auth_provider') != 'google':
                 return {
-                    'error': 'Please verify your email before logging in to your HR Tech account',
+                    'error': 'Please verify your email before logging in to your GenHire account',
                     'email_verification_required': True
                 }, 403
         

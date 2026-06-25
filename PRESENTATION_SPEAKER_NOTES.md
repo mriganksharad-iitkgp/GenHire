@@ -45,7 +45,7 @@ Total Credits Deducted:    351 credits (at 1000:1 ratio)
 **What to Say:**
 
 - "I'm presenting on the Payment & Billing Module"
-- "This is the system that enables HRTech to monetize"
+- "This is the system that enables GenHire to monetize"
 - "My contributions: Razorpay integration, testing, and admin panel"
 
 **Key Point**: Quick intro, move to problem statement

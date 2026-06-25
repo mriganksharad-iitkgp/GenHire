@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation adds comprehensive authentication features to HR Tech:
+This implementation adds comprehensive authentication features to GenHire:
 
 - ✉️ **Email Verification** - Verify user emails via Mailgun
 - 🔑 **Password Reset** - Secure forgot password flow
@@ -296,7 +296,7 @@ Professional HTML email templates included for:
    - Welcome message
    - Clear call-to-action button
    - Token expiry information
-   - HR Tech branding
+   - GenHire branding
 
 2. **Password Reset Email**
 
@@ -451,7 +451,7 @@ Potential additions:
 
 ## ✨ Summary
 
-Your HR Tech platform now features:
+Your GenHire platform now features:
 
 ✅ **Professional email verification** with beautiful templates  
 ✅ **Secure password reset** with time-limited tokens  

@@ -9,7 +9,7 @@ import { initiatePayment, verifyPayment } from "../services/payment";
 const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
 
 const RAZORPAY_CONFIG = {
-  name: "HRTech",
+  name: "GenHire",
   theme: {
     color: "#6366f1",
   },

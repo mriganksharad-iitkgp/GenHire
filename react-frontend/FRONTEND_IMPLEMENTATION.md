@@ -2,7 +2,7 @@
 
 ## What's Been Implemented
 
-I've successfully implemented all the frontend authentication features for your HR Tech platform:
+I've successfully implemented all the frontend authentication features for your GenHire platform:
 
 ### 🆕 New Pages Created:
 
@@ -246,7 +246,7 @@ All new pages use your existing design system:
 
 ## 🎉 You're All Set!
 
-Your HR Tech platform now has:
+Your GenHire platform now has:
 
 - ✅ Email verification for new users
 - ✅ Password reset functionality

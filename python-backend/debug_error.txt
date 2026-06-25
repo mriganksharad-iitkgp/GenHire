@@ -1,6 +1,6 @@
 Exception: 'charmap' codec can't encode character '\u20b9' in position 192: character maps to <undefined>
 Traceback (most recent call last):
-  File "D:\HR Tech\product-prototyping-lab\python-backend\routes\job_routes.py", line 66, in create_job
+  File "[project-root]\python-backend\routes\job_routes.py", line 66, in create_job
     f.write(f"Payload: {data}\n")
   File "C:\Python312\Lib\encodings\cp1252.py", line 19, in encode
     return codecs.charmap_encode(input,self.errors,encoding_table)[0]
@@ -9,7 +9,7 @@ UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 
 
 Exception: 'charmap' codec can't encode character '\u20b9' in position 173: character maps to <undefined>
 Traceback (most recent call last):
-  File "D:\HR Tech\product-prototyping-lab\python-backend\routes\job_routes.py", line 66, in create_job
+  File "[project-root]\python-backend\routes\job_routes.py", line 66, in create_job
     f.write(f"Payload: {data}\n")
   File "C:\Python312\Lib\encodings\cp1252.py", line 19, in encode
     return codecs.charmap_encode(input,self.errors,encoding_table)[0]
@@ -18,7 +18,7 @@ UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 
 
 Exception: 'charmap' codec can't encode character '\u20b9' in position 162: character maps to <undefined>
 Traceback (most recent call last):
-  File "D:\HR Tech\product-prototyping-lab\python-backend\routes\job_routes.py", line 66, in create_job
+  File "[project-root]\python-backend\routes\job_routes.py", line 66, in create_job
     f.write(f"Payload: {data}\n")
   File "C:\Python312\Lib\encodings\cp1252.py", line 19, in encode
     return codecs.charmap_encode(input,self.errors,encoding_table)[0]

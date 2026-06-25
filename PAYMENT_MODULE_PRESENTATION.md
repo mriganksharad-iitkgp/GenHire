@@ -10,7 +10,7 @@
 
 **Making AI Interviews Sustainable**
 
-- **Project**: HRTech - AI-Powered Interview Platform
+- **Project**: GenHire - AI-Powered Interview Platform
 - **My Contribution**: Payment Integration & Testing
 - **Impact**: Enabled monetization of interview platform
 - **Year**: 2026

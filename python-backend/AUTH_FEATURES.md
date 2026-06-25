@@ -1,6 +1,6 @@
 # Authentication Enhancement - Email Verification, Password Reset & Google OAuth
 
-This document describes the new authentication features added to HR Tech's Python backend.
+This document describes the new authentication features added to GenHire's Python backend.
 
 ## Features Implemented
 
@@ -358,7 +358,7 @@ The email service includes professional HTML email templates for:
 
 All emails include:
 
-- HR Tech branding
+- GenHire branding
 - Clear call-to-action buttons
 - Plain text fallback
 - Security warnings where appropriate

@@ -1,4 +1,4 @@
-$srcDir = "d:\HR Tech\product-prototyping-lab\react-frontend\src"
+$srcDir = Join-Path $PSScriptRoot "src"
 
 $files = @(
     "pages\Profile.jsx",

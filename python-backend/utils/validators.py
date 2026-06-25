@@ -1,5 +1,5 @@
 """
-Input validation helpers for the HR Tech application
+Input validation helpers for the GenHire application
 """
 import re
 from typing import List, Dict, Any

@@ -1,3 +1,22 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
 Disallow:
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /recruiter-dashboard
+Disallow: /recruiter-dashboard/
+Disallow: /interview
+Disallow: /interview/
+Disallow: /application
+Disallow: /application/
+Disallow: /mobile-cam
+Disallow: /mobile-cam/
+Disallow: /payment/
+Disallow: /invite/redeem
+Disallow: /reset-password
+Disallow: /verify-email
+
+Sitemap: https://genhire.in/sitemap.xml

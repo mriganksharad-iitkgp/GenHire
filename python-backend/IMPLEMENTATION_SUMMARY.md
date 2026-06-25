@@ -126,7 +126,7 @@ Beautiful, professional email templates included for:
 All emails feature:
 
 - Responsive HTML design
-- HR Tech branding
+- GenHire branding
 - Clear call-to-action buttons
 - Plain text fallback
 - Security warnings
@@ -241,7 +241,7 @@ Comprehensive documentation provided in:
 
 ## ✨ Summary
 
-Your HR Tech platform now has:
+Your GenHire platform now has:
 
 - ✅ Professional email verification system
 - ✅ Secure password reset functionality

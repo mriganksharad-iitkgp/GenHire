@@ -1,4 +1,4 @@
-# HR Tech Product Prototyping Lab - Project Overview
+# GenHire Product Prototyping Lab - Project Overview
 
 ## 🎯 Project Summary
 
@@ -382,4 +382,4 @@ The backend provides comprehensive REST endpoints:
 
 ## 📞 Support
 
-For questions or contributions, please refer to the project's repository issues or contact the development team. This overview should provide you with a solid foundation to understand and contribute to the HR Tech platform.
+For questions or contributions, please refer to the project's repository issues or contact the development team. This overview should provide you with a solid foundation to understand and contribute to the GenHire platform.

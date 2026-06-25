@@ -43,7 +43,7 @@ START
 
 During Interview:
 ┌────────────────────────────────────┐
-│  HRTech Interview Session          │
+│  GenHire Interview Session         │
 │  ────────────────────────────────  │
 │                                    │
 │  [Interview in progress...]        │

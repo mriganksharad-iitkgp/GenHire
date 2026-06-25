@@ -1,6 +1,9 @@
 {
-    "name": "",
-    "short_name": "",
+    "name": "GenHire - AI Recruitment Platform",
+    "short_name": "GenHire",
+    "description": "AI hiring platform for automated interviews, CV screening, candidate shortlisting, and recruiter analytics.",
+    "start_url": "/",
+    "scope": "/",
     "icons": [
         {
             "src": "/android-chrome-192x192.png",
@@ -13,7 +16,7 @@
             "type": "image/png"
         }
     ],
-    "theme_color": "#ffffff",
+    "theme_color": "#5b46f6",
     "background_color": "#ffffff",
     "display": "standalone"
 }

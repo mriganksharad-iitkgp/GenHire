@@ -1,5 +1,5 @@
 """
-Common utility functions for the HR Tech application
+Common utility functions for the GenHire application
 """
 import datetime
 from typing import List, Union

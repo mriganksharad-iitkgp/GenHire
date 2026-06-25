@@ -352,7 +352,7 @@ User Migration Script - Authentication Features
 
 ⚠️  This will update existing user records. Continue? (yes/no): yes
 🔄 Starting user migration...
-📊 Database: hrtech
+Database: hrtech
 ✅ Updated user: user1@example.com
 ✅ Updated user: user2@example.com
 
@@ -377,7 +377,7 @@ Check that emails look good:
    - ✅ Clear "Verify Email" button
    - ✅ Working link
    - ✅ Expiry information
-   - ✅ HR Tech branding
+   - GenHire branding
 
 Do the same for password reset email.
 
