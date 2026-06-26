@@ -1,27 +1,26 @@
 import os
 import json
 import re
+import logging
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict, Any, Optional
-from pydantic import SecretStr
-from services.usage_telemetry_service import extract_usage_from_response
+from services.llm_fallback_service import (
+    get_llm_fallback_service,
+    LLMAllProvidersExhaustedError,
+)
+
+logger = logging.getLogger(__name__)
 
 class CVScoringService:
-    """Service for calculating CV-JD matching scores using AI"""
-    
+    """Service for calculating CV-JD matching scores using AI.
+
+    Uses the LLMFallbackService to invoke prompts with automatic
+    provider failover (Google → OpenAI → Groq) on quota exhaustion.
+    """
+
     def __init__(self):
         load_dotenv()
-        load_dotenv()
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY not found in .env file")
-        # Use gemini-flash-latest for better stability and automatic model updates
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-flash-latest",
-            temperature=0.3,  # Lower temperature for more consistent scoring
-            google_api_key=self.google_api_key
-        )
+        self.llm_service = get_llm_fallback_service()
     def format_cv_details(self, cv_details: Dict[str, Any]) -> str:
         """Format CV details dictionary into readable text for AI processing"""
         if not cv_details:
@@ -243,72 +242,39 @@ class CVScoringService:
             if not jd_text or not jd_text.strip():
                 return self._get_fallback_score("Empty JD text provided")
             
-            # Build prompt
-            system_prompt = """You are an AI evaluator that compares a candidate's resume with a given job description. 
-                            Your task is to assess the technical alignment and compute a score out of 100, along with 
-                            a breakdown of the score per category. 
-
-                            You must strictly evaluate based on factual alignment between the candidate's resume 
-                            and the job description. Do not hallucinate skills or experience. 
-                            If information is missing in the resume, assume it is not present.
-
-                            Scoring should be based only on measurable, technical, and experience-based factors. 
-                            Exclude soft skills, leadership, communication, or cultural fit. 
-
-                            Provide your final output in JSON with two keys:
-                            1. "score_breakdown": { category: { "score": X, "reasoning": "..."} }
-                            2. "total_score": X"""
+            input_prompt = self._build_scoring_prompt(cv_text, jd_text)
             
-            user_prompt = f"""Compare the following Resume and Job Description. 
-                            Use the evaluation rubrics below. Assign a score out of 10 for each category with reasoning, 
-                            then compute the total score out of 100. 
-
-                            Resume:
-                            {cv_text}
-
-                            Job Description:
-                            {jd_text}
-
-                            Rubrics (10 points each):
-                            1. **Core Technical Skills** - Match between candidate's listed technical skills and JD requirements (e.g., programming languages, frameworks, tools).
-                            2. **Domain Knowledge** - Relevance of past experience or education to the specific industry/domain mentioned in JD.
-                            3. **Educational Background** - Alignment of degree(s), specialization, and academic level with JD requirements.
-                            4. **Work Experience Relevance** - Years of experience and alignment of roles/projects with JD expectations.
-                            5. **Project/Research Experience** - Quality and relevance of academic/industrial projects, internships, or research contributions.
-                            6. **Tools & Platforms** - Exposure to databases, cloud services, version control, ML/DL libraries, or other technical platforms required by the JD.
-                            7. **Certifications & Training** - Relevant professional certifications, coursework, or specialized training that enhance JD alignment.
-                            8. **Publications / Competitions / Achievements** - Evidence of technical depth via papers, hackathons, competitions, or notable technical recognition.
-                            9. **Problem-Solving & Analytical Skills** - Evidence from projects, coding competitions, or technical challenges solved.
-                            10. **Overall Fit for Role** - Aggregate judgment of how well candidate's background meets technical expectations of the JD.
-
-                            Rules:
-                            - Each category gets 0-10 points.
-                            - Provide reasoning for each score.
-                            - Output in strict JSON format."""
-            
-            input_prompt = f"""<s>[INST] <<SYS>>
-                            {system_prompt}
-                            <</SYS>>
-                        {user_prompt} [/INST]"""
-            
-            # Get AI response
-            response = self.llm.invoke(input_prompt)
+            # Get AI response via fallback service
+            result = self.llm_service.invoke(input_prompt)
             
             # Parse and clean response
-            response_content = response.content
-            if not isinstance(response_content, str):
-                response_content = str(response_content)
+            response_content = result['content']
             parsed_result = self._parse_ai_response(response_content)
-            usage = extract_usage_from_response(response)
+            
+            # Attach provider and usage metadata
+            usage = result.get('usage') or {}
             parsed_result['usage'] = {
                 'prompt_tokens': usage.get('prompt_tokens'),
                 'completion_tokens': usage.get('completion_tokens'),
                 'usage_source': usage.get('usage_source', 'assumed'),
             }
+            parsed_result['provider_used'] = result.get('provider_used')
+            parsed_result['model_used'] = result.get('model_used')
+            parsed_result['fallback_triggered'] = result.get('fallback_triggered', False)
+            
+            if parsed_result.get('fallback_triggered'):
+                logger.info(
+                    f"CV scoring used fallback provider: "
+                    f"{parsed_result['provider_used']} ({parsed_result['model_used']})"
+                )
+            
             return parsed_result
             
+        except LLMAllProvidersExhaustedError as e:
+            logger.error(f"All LLM providers exhausted for CV scoring: {e}")
+            return self._get_fallback_score(f"All providers exhausted: {str(e)[:200]}")
         except Exception as e:
-            print(f"Error in CV scoring from text: {str(e)}")
+            logger.error(f"Error in CV scoring from text: {str(e)}")
             return self._get_fallback_score(str(e))
     
     def calculate_cv_score(self, cv_details: Dict[str, Any], job_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -327,72 +293,11 @@ class CVScoringService:
             cv_text = self.format_cv_details(cv_details)
             jd_text = self.format_job_description(job_data)
             
-            # Build prompt
-            system_prompt = """You are an AI evaluator that compares a candidate's resume with a given job description. 
-                            Your task is to assess the technical alignment and compute a score out of 100, along with 
-                            a breakdown of the score per category. 
-
-                            You must strictly evaluate based on factual alignment between the candidate's resume 
-                            and the job description. Do not hallucinate skills or experience. 
-                            If information is missing in the resume, assume it is not present.
-
-                            Scoring should be based only on measurable, technical, and experience-based factors. 
-                            Exclude soft skills, leadership, communication, or cultural fit. 
-
-                            Provide your final output in JSON with two keys:
-                            1. "score_breakdown": { category: { "score": X, "reasoning": "..."} }
-                            2. "total_score": X"""
-            
-            user_prompt = f"""Compare the following Resume and Job Description. 
-                            Use the evaluation rubrics below. Assign a score out of 10 for each category with reasoning, 
-                            then compute the total score out of 100. 
-
-                            Resume:
-                            {cv_text}
-
-                            Job Description:
-                            {jd_text}
-
-                            Rubrics (10 points each):
-                            1. **Core Technical Skills** - Match between candidate's listed technical skills and JD requirements (e.g., programming languages, frameworks, tools).
-                            2. **Domain Knowledge** - Relevance of past experience or education to the specific industry/domain mentioned in JD.
-                            3. **Educational Background** - Alignment of degree(s), specialization, and academic level with JD requirements.
-                            4. **Work Experience Relevance** - Years of experience and alignment of roles/projects with JD expectations.
-                            5. **Project/Research Experience** - Quality and relevance of academic/industrial projects, internships, or research contributions.
-                            6. **Tools & Platforms** - Exposure to databases, cloud services, version control, ML/DL libraries, or other technical platforms required by the JD.
-                            7. **Certifications & Training** - Relevant professional certifications, coursework, or specialized training that enhance JD alignment.
-                            8. **Publications / Competitions / Achievements** - Evidence of technical depth via papers, hackathons, competitions, or notable technical recognition.
-                            9. **Problem-Solving & Analytical Skills** - Evidence from projects, coding competitions, or technical challenges solved.
-                            10. **Overall Fit for Role** - Aggregate judgment of how well candidate's background meets technical expectations of the JD.
-
-                            Rules:
-                            - Each category gets 0-10 points.
-                            - Provide reasoning for each score.
-                            - Output in strict JSON format."""
-            
-            input_prompt = f"""<s>[INST] <<SYS>>
-                            {system_prompt}
-                            <</SYS>>
-                        {user_prompt} [/INST]"""
-            
-            # Get AI response
-            response = self.llm.invoke(input_prompt)
-            
-            # Parse and clean response
-            response_content = response.content
-            if not isinstance(response_content, str):
-                response_content = str(response_content)
-            parsed_result = self._parse_ai_response(response_content)
-            usage = extract_usage_from_response(response)
-            parsed_result['usage'] = {
-                'prompt_tokens': usage.get('prompt_tokens'),
-                'completion_tokens': usage.get('completion_tokens'),
-                'usage_source': usage.get('usage_source', 'assumed'),
-            }
-            return parsed_result
+            # Reuse the text-based scorer which has the fallback chain
+            return self.calculate_cv_score_from_text(cv_text, jd_text)
             
         except Exception as e:
-            print(f"Error in CV scoring: {str(e)}")
+            logger.error(f"Error in CV scoring: {str(e)}")
             return self._get_fallback_score(str(e))
     
     def _parse_ai_response(self, response_content: str) -> Dict[str, Any]:
@@ -426,21 +331,68 @@ class CVScoringService:
             print(f"Error parsing AI response: {str(e)}")
             return self._get_fallback_score(f"Parsing error: {str(e)}")
     
+    def _build_scoring_prompt(self, cv_text: str, jd_text: str) -> str:
+        """Build the CV scoring prompt from CV and JD text."""
+        system_prompt = """You are an AI evaluator that compares a candidate's resume with a given job description. 
+                        Your task is to assess the technical alignment and compute a score out of 100, along with 
+                        a breakdown of the score per category. 
+
+                        You must strictly evaluate based on factual alignment between the candidate's resume 
+                        and the job description. Do not hallucinate skills or experience. 
+                        If information is missing in the resume, assume it is not present.
+
+                        Scoring should be based only on measurable, technical, and experience-based factors. 
+                        Exclude soft skills, leadership, communication, or cultural fit. 
+
+                        Provide your final output in JSON with two keys:
+                        1. "score_breakdown": { category: { "score": X, "reasoning": "..."} }
+                        2. "total_score": X"""
+        
+        user_prompt = f"""Compare the following Resume and Job Description. 
+                        Use the evaluation rubrics below. Assign a score out of 10 for each category with reasoning, 
+                        then compute the total score out of 100. 
+
+                        Resume:
+                        {cv_text}
+
+                        Job Description:
+                        {jd_text}
+
+                        Rubrics (10 points each):
+                        1. **Core Technical Skills** - Match between candidate's listed technical skills and JD requirements (e.g., programming languages, frameworks, tools).
+                        2. **Domain Knowledge** - Relevance of past experience or education to the specific industry/domain mentioned in JD.
+                        3. **Educational Background** - Alignment of degree(s), specialization, and academic level with JD requirements.
+                        4. **Work Experience Relevance** - Years of experience and alignment of roles/projects with JD expectations.
+                        5. **Project/Research Experience** - Quality and relevance of academic/industrial projects, internships, or research contributions.
+                        6. **Tools & Platforms** - Exposure to databases, cloud services, version control, ML/DL libraries, or other technical platforms required by the JD.
+                        7. **Certifications & Training** - Relevant professional certifications, coursework, or specialized training that enhance JD alignment.
+                        8. **Publications / Competitions / Achievements** - Evidence of technical depth via papers, hackathons, competitions, or notable technical recognition.
+                        9. **Problem-Solving & Analytical Skills** - Evidence from projects, coding competitions, or technical challenges solved.
+                        10. **Overall Fit for Role** - Aggregate judgment of how well candidate's background meets technical expectations of the JD.
+
+                        Rules:
+                        - Each category gets 0-10 points.
+                        - Provide reasoning for each score.
+                        - Output in strict JSON format."""
+        
+        return f"""<s>[INST] <<SYS>>
+                        {system_prompt}
+                        <</SYS>>
+                    {user_prompt} [/INST]"""
+
     def _get_fallback_score(self, error_message: str) -> Dict[str, Any]:
-        """Return fallback score when AI scoring fails"""
+        """Return fallback score when ALL AI scoring providers fail.
+        
+        The score is clearly marked as a fallback so downstream logic
+        (background_processor) knows this is NOT a real evaluation.
+        """
+        logger.warning(f"Using fallback CV score due to error: {error_message}")
         return {
-            "score_breakdown": {
-                "Core Technical Skills": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Domain Knowledge": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Educational Background": {"score": 8, "reasoning": "Unable to evaluate due to technical error"},
-                "Work Experience Relevance": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Project/Research Experience": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Tools & Platforms": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Certifications & Training": {"score": 8, "reasoning": "Unable to evaluate due to technical error"},
-                "Publications / Competitions / Achievements": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Problem-Solving & Analytical Skills": {"score": 7, "reasoning": "Unable to evaluate due to technical error"},
-                "Overall Fit for Role": {"score": 8, "reasoning": "Unable to evaluate due to technical error"}
-            },
-            "total_score": 75.0,
-            "error": error_message
+            "score_breakdown": None,
+            "total_score": None,
+            "is_fallback": True,
+            "error": error_message,
+            "provider_used": None,
+            "model_used": None,
+            "fallback_triggered": True,
         }

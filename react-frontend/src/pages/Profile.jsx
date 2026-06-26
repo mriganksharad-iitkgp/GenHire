@@ -326,18 +326,31 @@ const Profile = () => {
 			const encodedPayload = btoa(JSON.stringify(payload));
 			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
 
-			// Deep Link Attempt
-			window.location.href = customUri;
+			// Deep Link Attempt via hidden iframe to prevent canceling the prompt
+			const iframe = document.createElement("iframe");
+			iframe.style.display = "none";
+			iframe.src = customUri;
+			document.body.appendChild(iframe);
 
-			// Fallback if app isn't installed
+			setTimeout(() => {
+				if (document.body.contains(iframe)) {
+					document.body.removeChild(iframe);
+				}
+			}, 10000); // Wait 10 seconds before removing iframe so prompt doesn't break
+
+			// Fallback if app isn't installed (giving user enough time to click 'Open')
 			const timeoutId = setTimeout(() => {
 				if (document.hasFocus()) {
 					console.log("Secure browser not installed. Showing download prompt.");
-					// Automatically download the installer
-					window.location.href = "/apps/Genhire.exe";
 					showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
+					const link = document.createElement('a');
+					link.href = '/apps/Genhire.exe';
+					link.download = 'Genhire.exe';
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
 				}
-			}, 2500);
+			}, 10000); // 10 seconds instead of 2.5s
 
 			window.addEventListener('blur', () => {
 				clearTimeout(timeoutId);

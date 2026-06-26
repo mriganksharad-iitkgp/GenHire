@@ -3,7 +3,7 @@
 import json
 import re
 from typing import List, Dict, Any, Tuple
-from langchain_openai import ChatOpenAI
+from services.llm_fallback_service import LLMFallbackService
 from .config import Config
 from interview.core.cost_tracker import CostTracker
 
@@ -18,11 +18,7 @@ class AnswerEvaluator:
         """
         # Ensure config is loaded
         Config.load_from_environment()
-        self.llm = ChatOpenAI(
-            model=Config.EVALUATION_MODEL,
-            api_key=Config.OPENAI_API_KEY,
-            temperature=Config.EVALUATION_TEMPERATURE,
-        )
+        self.llm_service = LLMFallbackService()
 
     def evaluate_single_rubric(
         self, student_answer: str, question: str, rubric_item: str
@@ -40,24 +36,23 @@ class AnswerEvaluator:
         prompt = self._create_evaluation_prompt(student_answer, question, rubric_item)
 
         try:
-            response = self.llm.invoke(prompt)
+            response = self.llm_service.invoke(prompt)
             
             # Track cost
-            usage = {}
-            if hasattr(response, "response_metadata") and response.response_metadata:
-                usage = response.response_metadata.get("token_usage", {})
+            usage = response.get("usage", {})
+            model_used = response.get("model_used", Config.EVALUATION_MODEL)
             
             CostTracker().add_usage(
                 source="answer_evaluation",
-                model=Config.EVALUATION_MODEL,
+                model=model_used,
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
                 prompt_text=prompt,
-                completion_text=response.content if hasattr(response, "content") else "",
+                completion_text=response.get("content", ""),
                 usage=usage,
             )
 
-            result = response.content.strip()
+            result = response.get("content", "").strip()
             return float(result)
         except ValueError:
             print(
@@ -108,8 +103,8 @@ Question: {question}
 Answer: {student_answer}
 """
         try:
-            response = self.llm.invoke(prompt)
-            content = str(response.content or "").replace("```json", "").replace("```", "")
+            response = self.llm_service.invoke(prompt, json_mode=True)
+            content = str(response.get("content", "")).replace("```json", "").replace("```", "")
             match = re.search(r"\{.*\}", content, re.DOTALL)
             parsed = json.loads(match.group(0)) if match else {}
             score = max(0.0, min(100.0, float(parsed.get("score", 0))))

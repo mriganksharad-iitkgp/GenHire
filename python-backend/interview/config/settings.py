@@ -35,8 +35,8 @@ class QuestionType(Enum):
 class InterviewConfig:
     """Configuration for interview sessions."""
 
-    max_questions: int = 20
-    min_questions: int = 8
+    max_questions: int = 10
+    min_questions: int = 10
     question_timeout_seconds: int = 300
     similarity_threshold: float = 0.7
     default_llm_provider: LLMProvider = LLMProvider.OPENAI

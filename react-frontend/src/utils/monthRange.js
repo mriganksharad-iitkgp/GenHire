@@ -51,7 +51,10 @@ export const buildContinuousMonthlySeries = (monthlySeries, from, to) => {
   if (!from || !to || from > to) return [];
 
   const valueMap = new Map(
-    monthlySeries.map((item) => [item.month, item.interviews]),
+    monthlySeries.map((item) => [
+      item.month, 
+      item.interviews !== undefined ? item.interviews : item.credits_used
+    ]),
   );
   const result = [];
 
@@ -63,9 +66,11 @@ export const buildContinuousMonthlySeries = (monthlySeries, from, to) => {
 
   while (year < toYear || (year === toYear && month <= toMonth)) {
     const key = `${year}-${String(month).padStart(2, "0")}`;
+    const val = Number(valueMap.get(key) || 0);
     result.push({
       month: key,
-      interviews: Number(valueMap.get(key) || 0),
+      interviews: val,
+      credits_used: val,
     });
 
     month += 1;

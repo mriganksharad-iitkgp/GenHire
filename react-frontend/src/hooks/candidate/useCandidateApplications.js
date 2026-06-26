@@ -8,6 +8,10 @@ const mapApplication = (a) => {
     c.toUpperCase(),
   );
 
+  const processingStatus = a.processing_status || "completed";
+  const isScoringFailed = processingStatus === "scoring_failed";
+  const isScoringRetrying = processingStatus === "scoring_retrying";
+
   return {
     id: a._id,
     company: a.job_details?.company || "TechCorp Solutions",
@@ -18,7 +22,11 @@ const mapApplication = (a) => {
     position: a.job_title || a.job_details?.title || "",
     appliedDate: a.applied_at,
     status: mappedStatus,
-    processingStatus: a.processing_status || "completed",
+    processingStatus,
+    scoringError: isScoringFailed,
+    scoringRetrying: isScoringRetrying,
+    scoringErrorMessage: a.processing_error || null,
+    scoringRetryCount: a.scoring_retry_count || 0,
     cvScore:
       typeof a.cv_score === "number"
         ? Math.round(a.cv_score)
@@ -35,6 +43,8 @@ const mapApplication = (a) => {
         : null,
     reportAvailable: !!a.report_available,
     interviews: [],
+    minimum_cv_score_required: a.minimum_cv_score_required || null,
+    auto_processed: a.auto_processed || false,
   };
 };
 
@@ -101,16 +111,30 @@ export default function useCandidateApplications(toast) {
     }
   }, [load, applicationsLoaded, cachedApplications]);
 
-  // Poll for updates when there are pending/processing applications
+  // Poll for updates when there are pending/processing/retrying applications
+  // Cap at 2 minutes (24 polls × 5s) to avoid infinite polling
+  const pollCountRef = useRef(0);
+  const MAX_POLLS = 24;
+
   useEffect(() => {
     const hasPending = applications.some(
       (a) =>
-        a.processingStatus === "pending" || a.processingStatus === "processing",
+        a.processingStatus === "pending" ||
+        a.processingStatus === "processing" ||
+        a.processingStatus === "scoring_retrying",
     );
-    if (!hasPending) return;
+    if (!hasPending) {
+      pollCountRef.current = 0;
+      return;
+    }
 
     const interval = setInterval(() => {
+      if (pollCountRef.current >= MAX_POLLS) {
+        clearInterval(interval);
+        return;
+      }
       if (document.visibilityState === 'visible') {
+        pollCountRef.current += 1;
         load(true); // force reload from API
       }
     }, 5000); // poll every 5 seconds

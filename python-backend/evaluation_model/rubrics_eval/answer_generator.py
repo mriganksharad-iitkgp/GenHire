@@ -1,7 +1,7 @@
 """Answer generation module for creating test answer spectrums."""
 
 from typing import List, Tuple
-from langchain_openai import ChatOpenAI
+from services.llm_fallback_service import LLMFallbackService
 from .config import Config
 
 
@@ -15,11 +15,7 @@ class AnswerGenerator:
         """
         # Ensure config is loaded
         Config.load_from_environment()
-        self.llm = ChatOpenAI(
-            model=Config.ANSWER_GENERATION_MODEL,
-            api_key=Config.OPENAI_API_KEY,
-            temperature=Config.ANSWER_GENERATION_TEMPERATURE,
-        )
+        self.llm_service = LLMFallbackService()
 
     def generate_balanced_spectrum(self, question: str) -> Tuple[List[str], List[str]]:
         """Generate a balanced spectrum of 6 answers with smooth quality degradation.
@@ -125,8 +121,8 @@ class AnswerGenerator:
         Question: "{question}"
         """
         try:
-            response = self.llm.invoke(prompt)
-            return response.content.strip()
+            response = self.llm_service.invoke(prompt)
+            return response.get("content", "").strip()
         except Exception as e:
             print(f"Failed to generate the initial answer. Error: {e}")
             return ""
@@ -139,8 +135,8 @@ class AnswerGenerator:
         Question: "{question}"
         """
         try:
-            response = self.llm.invoke(prompt)
-            return response.content.strip()
+            response = self.llm_service.invoke(prompt)
+            return response.get("content", "").strip()
         except Exception as e:
             print(f"Failed to generate the initial answer. Error: {e}")
             return ""
@@ -162,8 +158,8 @@ class AnswerGenerator:
         Now, provide the revised answer as a single, spoken-style paragraph.
         """
 
-        response = self.llm.invoke(revision_prompt)
-        return response.content.strip()
+        response = self.llm_service.invoke(revision_prompt)
+        return response.get("content", "").strip()
 
     def _get_degradation_tasks(self) -> List[dict]:
         """Get the list of degradation tasks for balanced spectrum generation."""

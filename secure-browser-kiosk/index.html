@@ -238,7 +238,7 @@
     /* Video Preview Bottom Left */
     .video-preview {
       position: fixed;
-      bottom: 20px;
+      top: 20px;
       left: 20px;
       width: 240px;
       height: 180px;
@@ -514,7 +514,7 @@
     <!-- Top Header -->
     <div class="interview-header">
       <div class="progress-info">
-        <span class="question-counter">Question <span id="q-count">1</span> of 3</span>
+        <span class="question-counter">Question <span id="q-count">1</span> of 10</span>
         <span class="time-elapsed">⏱️ <span id="time-display">0:00</span></span>
       </div>
     </div>
@@ -622,6 +622,11 @@
         'Removing initializer',
         'inference_feedback_manager',
         'face_landmarker_graph',
+        'webgazer',
+        'WebGazer',
+        'MediaPipe',
+        'tfjs',
+        'GL_INVALID_OPERATION'
       ];
       function check(a) {
         var m = Array.prototype.join.call(a, ' ');

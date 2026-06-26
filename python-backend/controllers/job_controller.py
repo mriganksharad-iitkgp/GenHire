@@ -528,18 +528,9 @@ class JobController:
                         "credits_remaining": int(deduction.get("credits_remaining", 0) or 0),
                     }, 402
 
-            load_dotenv()
-            groq_api_key = os.getenv("GROQ_API_KEY")
-            if not groq_api_key:
-                refund = refund_ai_jd("groq_api_key_not_configured")
-                return {
-                    'error': 'Groq API key not configured',
-                    'credit_refund': refund,
-                }, 500
-
-            from groq import Groq
-
-            client = Groq(api_key=groq_api_key)
+            from services.llm_fallback_service import LLMFallbackService
+            
+            fallback_service = LLMFallbackService()
 
             system_prompt = """You are an expert HR recruiter and job description writer. Based on the user's input, generate a complete, professional job posting.
 
@@ -568,20 +559,20 @@ Rules:
 - If the user mentions specific details (salary, location, etc.), use those
 - Return ONLY the JSON object, nothing else"""
 
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Generate a complete job posting for: {prompt_text}"}
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-                response_format={"type": "json_object"}
-            )
+            full_prompt = f"{system_prompt}\n\nUser request: Generate a complete job posting for: {prompt_text}"
 
-            response_text = response.choices[0].message.content.strip()
+            try:
+                result = fallback_service.invoke(full_prompt, json_mode=True)
+                response_text = result["content"]
+                usage = result.get("usage", {})
+            except Exception as e:
+                refund = refund_ai_jd(f"llm_fallback_exhausted: {str(e)}")
+                return {
+                    'error': 'AI JD generation failed due to service limits. All providers exhausted.',
+                    'details': str(e),
+                    'credit_refund': refund,
+                }, 503
 
-            usage = getattr(response, 'usage', None) or {}
             prompt_tokens = usage.get('prompt_tokens') if isinstance(usage, dict) else None
             completion_tokens = usage.get('completion_tokens') if isinstance(usage, dict) else None
             usage_source = 'actual' if (prompt_tokens is not None or completion_tokens is not None) else 'assumed'

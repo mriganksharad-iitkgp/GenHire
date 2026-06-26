@@ -6,6 +6,7 @@ import CVSelectionModal from "../components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
 import InterviewReportModal from '../components/InterviewReportModal';
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
+import { useCandidateData } from "../contexts/CandidateDataContext";
 
 const JobDetails = () => {
 	const { jobId } = useParams();
@@ -22,6 +23,8 @@ const JobDetails = () => {
 	const [applicationStatus, setApplicationStatus] = useState(null);
 	const [pendingWithdrawal, setPendingWithdrawal] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+	
+	const { invalidateApplications } = useCandidateData();
 	
 	// Toast state
 	const [toast, setToast] = useState(null);
@@ -290,6 +293,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 			}
 			// Application successful - backend is processing CV score
 			console.log('Application submitted:', data);
+			invalidateApplications();
 		} catch (e) {
 			// Revert optimistic update on error
 			setHasApplied(false);
@@ -328,6 +332,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				setAppliedAt(null);
 				setApplicationStatus(null);
 				setPendingWithdrawal(false);
+				invalidateApplications();
 			} catch (e) {
 				showToast('Failed to withdraw application', 'error');
 				setPendingWithdrawal(false);

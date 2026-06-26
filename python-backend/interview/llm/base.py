@@ -6,6 +6,12 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, TYPE_CHECKING
 from dataclasses import dataclass
 
+
+class LLMQuotaExhaustedError(Exception):
+    """Raised when an LLM provider's quota/rate-limit is exhausted after retries."""
+    pass
+
+
 if TYPE_CHECKING:
     from llama_index.core.llms.llm import LLM as LlamaIndexLLM
     from llama_index.core.base.llms.types import CompletionResponse
@@ -82,13 +88,46 @@ class BaseLLM(ABC):
         return self._llama_index_llm
 
     def complete(self, prompt: str, **kwargs) -> LLMResponse:
-        """Generate a completion for the given prompt."""
-        try:
-            llm = self.llama_index_llm
-            response = llm.complete(prompt)
-            return LLMResponse.from_llama_index(response, self.model_name)
-        except Exception as e:
-            raise RuntimeError(f"LLM completion failed: {str(e)}")
+        """Generate a completion for the given prompt with retry on transient errors."""
+        import time
+        import re
+
+        max_retries = 3
+        retry_delays = [1, 2, 4]  # exponential backoff in seconds
+
+        # Pattern to detect quota/rate-limit errors
+        quota_re = re.compile(
+            r"429|rate.?limit|quota|resource.?exhausted|too.?many.?requests|"
+            r"capacity|exceeded|insufficient_quota|tokens.?per.?min|RPM|TPM",
+            re.IGNORECASE,
+        )
+
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                llm = self.llama_index_llm
+                response = llm.complete(prompt)
+                return LLMResponse.from_llama_index(response, self.model_name)
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                status = getattr(e, "status_code", None) or getattr(e, "http_status", None)
+                is_quota = bool(quota_re.search(error_str)) or status == 429
+
+                if is_quota and attempt < max_retries - 1:
+                    delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                    time.sleep(delay)
+                    continue
+                elif is_quota:
+                    raise LLMQuotaExhaustedError(
+                        f"LLM quota exhausted for {self.model_name}: {error_str}"
+                    ) from e
+                else:
+                    raise RuntimeError(f"LLM completion failed: {error_str}") from e
+
+        # Should not reach here, but safety net
+        raise RuntimeError(f"LLM completion failed after {max_retries} attempts: {last_error}")
+
 
     @abstractmethod
     def is_available(self) -> bool:

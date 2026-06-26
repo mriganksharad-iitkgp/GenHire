@@ -16,6 +16,7 @@ export default function Chat({ interviewId }) {
   const currentAudioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const isSubmittingAnswerRef = useRef(false);
   const [chatContent, setChatContent] = useState({});
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -65,6 +66,7 @@ export default function Chat({ interviewId }) {
   const socketRef = useRef(null);
   const proctoringIntervalRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const proctoringCanvasRef = useRef(null);
   const interviewStartInitiated = useRef(false);
   const gazeRecorderScriptsLoadedRef = useRef(false);
   const gazeRecorderTrackingRef = useRef(false);
@@ -383,12 +385,17 @@ export default function Chat({ interviewId }) {
         if (
           videoRef.current &&
           videoRef.current.srcObject &&
-          videoRef.current.readyState === 4
+          videoRef.current.readyState === 4 &&
+          videoRef.current.videoWidth > 0 &&
+          videoRef.current.videoHeight > 0
         ) {
-          const canvas = document.createElement("canvas");
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
-          const context = canvas.getContext("2d");
+          if (!proctoringCanvasRef.current) {
+            proctoringCanvasRef.current = document.createElement("canvas");
+          }
+          const canvas = proctoringCanvasRef.current;
+          if (canvas.width !== videoRef.current.videoWidth) canvas.width = videoRef.current.videoWidth;
+          if (canvas.height !== videoRef.current.videoHeight) canvas.height = videoRef.current.videoHeight;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
           context.drawImage(
             videoRef.current,
             0,
@@ -441,6 +448,10 @@ export default function Chat({ interviewId }) {
       videoRef.current.readyState < 3
     ) {
       alert("Webcam not ready or session not started.");
+      return;
+    }
+    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      alert("Webcam is still initializing. Please wait a moment and try again.");
       return;
     }
     const canvas = document.createElement("canvas");
@@ -935,13 +946,15 @@ export default function Chat({ interviewId }) {
       if (
         !currentQuestion ||
         !currentSessionId ||
-        interviewStatus !== "active"
+        interviewStatus !== "active" ||
+        isSubmittingAnswerRef.current
       ) {
         return;
       }
 
       setInput("");
       setIsSubmittingAnswer(true);
+      isSubmittingAnswerRef.current = true;
 
       try {
         const token = getToken();
@@ -967,6 +980,7 @@ export default function Chat({ interviewId }) {
         if (data.interview_complete || questionCount >= MAX_QUESTIONS) {
           // Reset submitting state before ending
           setIsSubmittingAnswer(false);
+          isSubmittingAnswerRef.current = false;
           await endInterview();
         } else {
           // Increment question count for the NEXT question
@@ -979,6 +993,7 @@ export default function Chat({ interviewId }) {
         speakResponse(`An error occurred: ${error.message}`);
       } finally {
         setIsSubmittingAnswer(false);
+        isSubmittingAnswerRef.current = false;
       }
     },
     [
@@ -1295,36 +1310,39 @@ export default function Chat({ interviewId }) {
         );
         const audioSrc = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioSrc);
+        
+        if (currentAudioRef.current) {
+          currentAudioRef.current.pause();
+          currentAudioRef.current.src = '';
+        }
         currentAudioRef.current = audio;
 
         audio.onplay = () => {
           console.log("🔊 TTS audio playback started.");
           setIsSpeaking(true);
 
-          // Start progressive text animation
-          let currentIndex = 0;
+          // Start progressive text animation synced with audio
           const words = text.split(" ");
 
-          // Estimate speech duration from audio length if possible
-          // Otherwise use a default word-based timing
-          const intervalDelay = audio.duration
-            ? (audio.duration * 1000) / words.length
-            : 300;
-          console.log(`🔊 Text animation interval: ${intervalDelay}ms`);
-
-          typingIntervalRef.current = setInterval(
-            () => {
-              if (currentIndex < words.length) {
-                const wordsToShow = words.slice(0, currentIndex + 1).join(" ");
-                setDisplayedText(wordsToShow);
-                currentIndex++;
-              } else {
-                clearInterval(typingIntervalRef.current);
-                setDisplayedText(text);
-              }
-            },
-            Math.max(intervalDelay, 150),
-          );
+          typingIntervalRef.current = setInterval(() => {
+            // Fallback duration if metadata isn't loaded yet
+            const duration = isFinite(audio.duration) && audio.duration > 0 
+                ? audio.duration 
+                : (words.length * 0.3);
+            
+            // Calculate progress based on actual audio playback time
+            const progress = audio.currentTime / duration;
+            // Reveal words proportionally
+            const currentIndex = Math.min(words.length, Math.floor(progress * words.length) + 1);
+            
+            const wordsToShow = words.slice(0, currentIndex).join(" ");
+            setDisplayedText(wordsToShow);
+            
+            if (currentIndex >= words.length || audio.ended) {
+              clearInterval(typingIntervalRef.current);
+              setDisplayedText(text);
+            }
+          }, 100);
         };
 
         audio.onended = () => {

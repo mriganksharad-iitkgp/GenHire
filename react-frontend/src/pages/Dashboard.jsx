@@ -234,7 +234,7 @@ const Dashboard = () => {
 		return applications.some(app => {
 			if (String(app.job_id) !== String(jobId)) return false;
 			const isSkeleton =
-				app.processing_status === 'awaiting_candidate' || !app.cv_snapshot;
+				app.processing_status === 'awaiting_candidate';
 			return !isSkeleton;
 		});
 	}, [applications]);

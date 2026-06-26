@@ -96,25 +96,31 @@ class BackgroundProcessor:
                 
         logger.info("Background worker thread stopped")
         
+    # Maximum retry attempts for CV scoring
+    MAX_SCORING_RETRIES = 3
+    # Backoff delays in seconds between retries: 30s, 60s, 120s
+    RETRY_DELAYS = [30, 60, 120]
+
     def _process_cv_scoring(self, task: Dict[str, Any]):
         """
-        Process CV scoring task
-        
+        Process CV scoring task with retry on provider exhaustion.
+
         Updates application with:
         - cv_score and cv_score_breakdown
-        - processing_status = 'completed' or 'failed'
-        - is_visible = True (when successful)
-        - status = 'shortlisted' or 'rejected' based on score
+        - processing_status = 'completed' | 'scoring_retrying' | 'scoring_failed'
+        - is_visible = True (always — user should see their application)
+        - status = 'shortlisted' | 'rejected' | 'pending' based on score
         """
         application_id = task['application_id']
         cv_data = task['cv_data']
         jd_data = task['jd_data']
         db_collections = task['db_collections']
         cv_scoring_service = task['cv_scoring_service']
-        
+        retry_count = task.get('retry_count', 0)
+
         applications_collection = db_collections['applications']
         jobs_collection = db_collections['jobs']
-        
+
         try:
             # Update status to processing
             applications_collection.update_one(
@@ -122,16 +128,17 @@ class BackgroundProcessor:
                 {
                     '$set': {
                         'processing_status': 'processing',
+                        'is_visible': True,  # Always visible so user sees their app
                         'updated_at': datetime.utcnow()
                     }
                 }
             )
-            
+
             # Calculate CV score
-            cv_score = 75.0  # fallback
+            cv_score = None
             cv_score_breakdown = None
             scoring_result = {}
-            
+
             cv_text = cv_data.get('cv_text')
             cv_details = cv_data.get('cv_details')
             jd_text = jd_data.get('jd_text', '')
@@ -139,12 +146,10 @@ class BackgroundProcessor:
             minimum_cv_score = jd_data.get('minimum_cv_score', 50.0)
             parsing_confidence = str(cv_data.get('parsing_confidence') or 'low').lower()
             scoring_failed = False
-            
+
             if cv_scoring_service:
                 try:
                     if cv_details:
-                        # Structured data is safer than flattened PDF text,
-                        # especially for multi-column resumes.
                         logger.info("Scoring CV from structured details")
                         scoring_result = cv_scoring_service.calculate_cv_score(cv_details, job)
                     elif cv_text:
@@ -152,19 +157,106 @@ class BackgroundProcessor:
                         scoring_result = cv_scoring_service.calculate_cv_score_from_text(cv_text, jd_text)
                     else:
                         raise ValueError("No CV data available for scoring")
-                        
-                    cv_score = scoring_result.get('total_score', 75.0)
-                    cv_score_breakdown = scoring_result.get('score_breakdown')
-                    scoring_failed = bool(scoring_result.get('error'))
-                    logger.info(f"CV score calculated: {cv_score}")
-                    
+
+                    # Check if the result is a real score or a fallback
+                    is_fallback = bool(scoring_result.get('is_fallback'))
+
+                    if is_fallback:
+                        # All providers exhausted — this is NOT a real score
+                        scoring_failed = True
+                        cv_score = None
+                        cv_score_breakdown = None
+                        logger.warning(
+                            f"CV scoring returned fallback for application "
+                            f"{application_id}: {scoring_result.get('error')}"
+                        )
+                    else:
+                        cv_score = scoring_result.get('total_score')
+                        cv_score_breakdown = scoring_result.get('score_breakdown')
+                        if cv_score is None:
+                            scoring_failed = True
+                        else:
+                            logger.info(
+                                f"CV score calculated: {cv_score} "
+                                f"(provider: {scoring_result.get('provider_used', 'unknown')})"
+                            )
+
                 except Exception as e:
                     logger.error(f"Error calculating CV score: {e}", exc_info=True)
-                    cv_score = 75.0
                     scoring_failed = True
-            
-            # If this application was pre-shortlisted by a recruiter interview invite,
-            # the CV score is informational only -- never auto-reject the candidate.
+            else:
+                scoring_failed = True
+                logger.error("CV scoring service not available")
+
+            # ──────────────────────────────────────────────────────────────
+            # Handle scoring failure with retry
+            # ──────────────────────────────────────────────────────────────
+            if scoring_failed:
+                if retry_count < self.MAX_SCORING_RETRIES:
+                    delay = self.RETRY_DELAYS[min(retry_count, len(self.RETRY_DELAYS) - 1)]
+                    next_retry = retry_count + 1
+                    logger.warning(
+                        f"CV scoring failed for application {application_id} "
+                        f"(attempt {next_retry}/{self.MAX_SCORING_RETRIES}). "
+                        f"Retrying in {delay}s..."
+                    )
+                    applications_collection.update_one(
+                        {'_id': ObjectId(application_id)},
+                        {
+                            '$set': {
+                                'processing_status': 'scoring_retrying',
+                                'processing_error': str(scoring_result.get('error', 'Scoring failed')),
+                                'scoring_retry_count': next_retry,
+                                'scoring_next_retry_at': datetime.utcnow(),
+                                'is_visible': True,
+                                'updated_at': datetime.utcnow()
+                            }
+                        }
+                    )
+
+                    # Schedule retry with a timer thread
+                    retry_task = dict(task)
+                    retry_task['retry_count'] = next_retry
+                    timer = threading.Timer(delay, self._process_cv_scoring, args=[retry_task])
+                    timer.daemon = True
+                    timer.start()
+                    return
+                else:
+                    # All retries exhausted — mark as permanently failed
+                    logger.error(
+                        f"CV scoring permanently failed for application "
+                        f"{application_id} after {retry_count} retries. Falling back to 75.0"
+                    )
+                    
+                    fallback_score = 75.0
+                    application_status = 'shortlisted' if fallback_score >= minimum_cv_score else 'rejected'
+                    
+                    applications_collection.update_one(
+                        {'_id': ObjectId(application_id)},
+                        {
+                            '$set': {
+                                'cv_score': fallback_score,
+                                'cv_score_breakdown': '{"Error": "API quota exhausted. Fallback score assigned."}',
+                                'status': application_status,
+                                'status_reason': (
+                                    f'CV scoring service unavailable. Fallback score ({fallback_score}) '
+                                    f'assigned. Minimum required: {minimum_cv_score}'
+                                ),
+                                'processing_status': 'completed',
+                                'processing_error': str(scoring_result.get('error', 'All providers exhausted')),
+                                'scoring_retry_count': retry_count,
+                                'is_visible': True,
+                                'updated_at': datetime.utcnow(),
+                                'auto_processed': True,
+                            }
+                        }
+                    )
+                    self.failed_count += 1
+                    return
+
+            # ──────────────────────────────────────────────────────────────
+            # Scoring succeeded — determine application status
+            # ──────────────────────────────────────────────────────────────
             current_app = applications_collection.find_one({'_id': ObjectId(application_id)})
             auto_shortlisted_via_invite = bool(
                 current_app and current_app.get('auto_shortlisted_via_invite')
@@ -175,9 +267,6 @@ class BackgroundProcessor:
                 status_reason = (
                     f'CV score ({cv_score:.1f}); status preserved from recruiter interview invite'
                 )
-            elif scoring_failed:
-                application_status = 'pending'
-                status_reason = 'CV scoring requires manual review because automated scoring failed'
             elif cv_score >= minimum_cv_score:
                 application_status = 'shortlisted'
                 status_reason = f'CV score ({cv_score:.1f}) meets minimum requirement ({minimum_cv_score:.1f})'
@@ -190,11 +279,13 @@ class BackgroundProcessor:
             else:
                 application_status = 'rejected'
                 status_reason = f'CV score ({cv_score:.1f}) below minimum requirement ({minimum_cv_score:.1f})'
-            
+
             usage_data = (scoring_result or {}).get('usage', {}) if isinstance(scoring_result, dict) else {}
             prompt_tokens = usage_data.get('prompt_tokens')
             completion_tokens = usage_data.get('completion_tokens')
             usage_source = usage_data.get('usage_source', 'assumed')
+            provider_used = scoring_result.get('provider_used', 'unknown')
+            model_used = scoring_result.get('model_used', 'unknown')
 
             # Update application with results
             update_result = applications_collection.update_one(
@@ -206,12 +297,15 @@ class BackgroundProcessor:
                         'status': application_status,
                         'status_reason': status_reason,
                         'processing_status': 'completed',
-                        'is_visible': True,  # Now visible to users
+                        'processing_error': None,
+                        'is_visible': True,
                         'cv_score_calculated_at': datetime.utcnow(),
                         'cv_scoring_usage': {
                             'prompt_tokens': int(prompt_tokens or 0),
                             'completion_tokens': int(completion_tokens or 0),
                             'usage_source': usage_source,
+                            'provider_used': provider_used,
+                            'model_used': model_used,
                         },
                         'prompt_tokens': int(prompt_tokens or 0),
                         'completion_tokens': int(completion_tokens or 0),
@@ -220,7 +314,7 @@ class BackgroundProcessor:
                     }
                 }
             )
-            
+
             if update_result.modified_count > 0:
                 # Update job statistics
                 job_id = jd_data.get('job_id')
@@ -230,21 +324,25 @@ class BackgroundProcessor:
                         job_update['selected'] = 1
                     elif application_status == 'rejected':
                         job_update['rejected'] = 1
-                        
+
                     if job_update:
                         jobs_collection.update_one(
                             {'_id': ObjectId(job_id)},
                             {'$inc': job_update}
                         )
-                
-                logger.info(f"Application {application_id} scored successfully: {cv_score} -> {application_status}")
+
+                logger.info(
+                    f"Application {application_id} scored successfully: "
+                    f"{cv_score} -> {application_status} "
+                    f"(provider: {provider_used})"
+                )
 
                 record_usage_event(
                     db_collections,
                     action_type='cv_scoring',
                     actor_type='recruiter',
                     actor_id=str((jd_data.get('job') or {}).get('created_by') or ''),
-                    model='gemini-1.5-flash-latest',
+                    model=model_used,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     usage_source='actual' if usage_source == 'actual' else 'assumed',
@@ -257,29 +355,31 @@ class BackgroundProcessor:
                     metadata={
                         'job_id': jd_data.get('job_id'),
                         'cv_score': cv_score,
+                        'provider_used': provider_used,
                     }
                 )
             else:
                 logger.warning(f"Application {application_id} not found or not updated")
-                
+
         except Exception as e:
             logger.error(f"Failed to process CV scoring for application {application_id}: {e}", exc_info=True)
-            
-            # Mark as failed
+
+            # Mark as failed but VISIBLE
             try:
                 applications_collection.update_one(
                     {'_id': ObjectId(application_id)},
                     {
                         '$set': {
-                            'processing_status': 'failed',
+                            'processing_status': 'scoring_failed',
                             'processing_error': str(e),
+                            'is_visible': True,
                             'updated_at': datetime.utcnow()
                         }
                     }
                 )
             except Exception as update_error:
                 logger.error(f"Failed to update error status: {update_error}")
-                
+
     def get_stats(self) -> Dict[str, Any]:
         """Get processor statistics"""
         return {

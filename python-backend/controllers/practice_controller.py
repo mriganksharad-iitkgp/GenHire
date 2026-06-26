@@ -339,6 +339,8 @@ class PracticeController:
                 cv_score = 75.0
 
             # Convert to 0-1 range for storage (will be converted back to 0-100 for display)
+            if cv_score is None:
+                cv_score = 75.0
             cv_score_normalized = cv_score / 100.0
 
             # Start interview session using the interview API

@@ -147,7 +147,17 @@ export default function ApplicationsList({
 
                 <div className={styles.applicationActions}>
                   <div className={styles.scoresRow}>
-                    {app.processingStatus && app.processingStatus !== 'completed' ? (
+                    {app.scoringError ? (
+                      <div className={`${styles.scorePill} ${styles.scorePillError}`} title={app.scoringErrorMessage || "CV scoring failed due to service limits. Will be manually reviewed."}>
+                        <span className={styles.pillLabel}>CV Score</span>
+                        <span className={styles.pillValue} style={{color: '#d32f2f'}}><i className="fa fa-exclamation-triangle"></i> Failed</span>
+                      </div>
+                    ) : app.scoringRetrying ? (
+                      <div className={`${styles.scorePill} ${styles.scorePillWarning}`} title={`Retrying CV scoring... (Attempt ${app.scoringRetryCount})`}>
+                        <span className={styles.pillLabel}>CV Score</span>
+                        <span className={styles.pillValue} style={{color: '#ed6c02'}}><i className="fa fa-refresh fa-spin"></i> Retrying</span>
+                      </div>
+                    ) : app.processingStatus && app.processingStatus !== 'completed' ? (
                       <div className={styles.scorePill} title="CV scoring in progress">
                         <span className={styles.pillLabel}>CV Score</span>
                         <span className={styles.pillValue}><i className="fa fa-spinner fa-spin"></i> Processing...</span>
@@ -186,14 +196,6 @@ export default function ApplicationsList({
                       </div>
                     )}
                   </div>
-                  {app.auto_processed && (
-                    <div className={styles.autoProcessedBadge}>
-                      <span className={styles.robotIcon}>🤖</span>
-                      <span className={styles.autoLabel}>
-                        Auto-{app.status === 'shortlisted' ? 'shortlisted' : 'rejected'}
-                      </span>
-                    </div>
-                  )}
 
                   <div className={styles.actionsRight}>
                     {/* Always show View CV button */}

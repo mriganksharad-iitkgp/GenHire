@@ -3,7 +3,7 @@
 import json
 import re
 from typing import List
-from langchain_openai import ChatOpenAI
+from services.llm_fallback_service import LLMFallbackService
 from .config import Config
 from interview.core.cost_tracker import CostTracker
 
@@ -18,11 +18,7 @@ class RubricGenerator:
         """
         # Ensure config is loaded
         Config.load_from_environment()
-        self.llm = ChatOpenAI(
-            model=Config.RUBRIC_GENERATION_MODEL,
-            api_key=Config.OPENAI_API_KEY,
-            temperature=Config.RUBRIC_GENERATION_TEMPERATURE,
-        )
+        self.llm_service = LLMFallbackService()
 
     def generate_rubrics(self, question: str) -> List[str]:
         """Generate grading rubrics for a given question.
@@ -36,24 +32,23 @@ class RubricGenerator:
         prompt = self._create_rubric_prompt(question)
 
         try:
-            response = self.llm.invoke(prompt)
+            response = self.llm_service.invoke(prompt, json_mode=True)
             
             # Track cost
-            usage = {}
-            if hasattr(response, "response_metadata") and response.response_metadata:
-                usage = response.response_metadata.get("token_usage", {})
+            usage = response.get("usage", {})
+            model_used = response.get("model_used", Config.RUBRIC_GENERATION_MODEL)
             
             CostTracker().add_usage(
                 source="rubrics_generation",
-                model=Config.RUBRIC_GENERATION_MODEL,
+                model=model_used,
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
                 prompt_text=prompt,
-                completion_text=response.content if hasattr(response, "content") else "",
+                completion_text=response.get("content", ""),
                 usage=usage,
             )
             
-            content = response.content.strip()
+            content = response.get("content", "").strip()
             return self._parse_rubrics_response(content)
         except Exception as e:
             print(f"An error occurred during rubric generation: {e}")

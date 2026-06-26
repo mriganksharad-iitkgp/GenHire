@@ -48,6 +48,7 @@ let questionCount = 0;
 let isSubmittingAnswer = false;
 
 // GazeCloud Recorder State
+let currentAudioObj = null;
 let gazePointsTracker = [];
 let gazeStartedAtMs = null;
 let gazeEndedAtMs = null;
@@ -225,13 +226,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingOverlay.style.display = 'none';
 
         // Only enable if we also have deep link data (or just enable it to let user click, but it requires link)
-        btnStart.textContent = "Begin Interview Setup";
         if (globalSessionData) {
+            btnStart.textContent = "Begin Interview Setup";
             btnStart.disabled = false;
         } else {
+            btnStart.textContent = "Please launch from your browser";
             // Setup an interval to enable it once data drops in
             const waitData = setInterval(() => {
                 if (globalSessionData) {
+                    btnStart.textContent = "Begin Interview Setup";
                     btnStart.disabled = false;
                     clearInterval(waitData);
                 }
@@ -587,15 +590,19 @@ function finalizeStartInterview() {
         try {
             const base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
             const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
-            const audioObj = new Audio(audioDataUrl);
+            if (currentAudioObj) {
+                currentAudioObj.pause();
+                currentAudioObj.currentTime = 0;
+            }
+            currentAudioObj = new Audio(audioDataUrl);
 
-            audioObj.onended = () => {
+            currentAudioObj.onended = () => {
                 // start recording when TTS is done speaking FIRST question
                 if (isInterviewActive && !isRecording && !speechNetworkFailed) {
                     if (proctoringConfig.voice_detection) startRecording();
                 }
             };
-            audioObj.play();
+            currentAudioObj.play();
         } catch (err) {
             console.error("Failed to speak first question", err);
             // Fallback: Start immediately if speech fails
@@ -776,7 +783,7 @@ async function submitAnswer() {
 
         const data = await response.json();
 
-        if (data.interview_complete || questionCount >= 5) {
+        if (data.interview_complete || questionCount >= 10) {
             endInterview();
             return;
         }
@@ -796,14 +803,18 @@ async function submitAnswer() {
         try {
             const base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
             const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
-            const audioObj = new Audio(audioDataUrl);
+            if (currentAudioObj) {
+                currentAudioObj.pause();
+                currentAudioObj.currentTime = 0;
+            }
+            currentAudioObj = new Audio(audioDataUrl);
 
-            audioObj.onended = () => {
+            currentAudioObj.onended = () => {
                 if (isInterviewActive && !isRecording && !speechNetworkFailed) {
                     startRecording();
                 }
             };
-            audioObj.play();
+            currentAudioObj.play();
         } catch (ttsErr) {
             console.error("Google TTS failed:", ttsErr);
             // Fallback immediately to recording if TTS fails
@@ -1011,6 +1022,18 @@ async function loadModels() {
         runningMode: "VIDEO",
         numFaces: 2,
     });
+    
+    // Background pre-initialization of WebGazer to remove start lag
+    if (window.webgazer) {
+        window.webgazer.setRegression('ridge').setTracker('TFFacemesh').showVideoPreview(false).showPredictionPoints(false);
+        const origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = async function (c) {
+            try { if (video && video.srcObject) return video.srcObject; } catch (_) {}
+            return origGUM(c);
+        };
+        // We don't await this so it happens silently in the background
+        window.webgazer.begin().finally(() => { navigator.mediaDevices.getUserMedia = origGUM; }).catch(() => {});
+    }
 }
 
 /** Dynamically inject a <script> tag and wait for it to load. */

@@ -16,6 +16,11 @@ profile_controller = ProfileController(collections)
 def _format_tx_timestamp(value):
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            pass
     text = str(value or "")
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
@@ -27,8 +32,18 @@ def _format_tx_timestamp(value):
 def _get_tx_month(value):
     if isinstance(value, datetime):
         return value.strftime("%Y-%m")
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value).strftime("%Y-%m")
+        except Exception:
+            pass
     text = str(value or "")
-    if len(text) >= 7:
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.strftime("%Y-%m")
+    except Exception:
+        pass
+    if len(text) >= 7 and "-" in text:
         return text[:7]
     return datetime.utcnow().strftime("%Y-%m")
 

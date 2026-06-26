@@ -9,6 +9,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict, field
+import threading
 
 from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
 from ..config.settings import InterviewConfig, LLMConfig
@@ -39,6 +40,7 @@ class InterviewSession:
     current_question: Optional[str] = None
     current_question_metadata: Optional[QuestionMetadata] = None
     proctoring_config: Optional[dict] = None
+    init_event: Optional[threading.Event] = None
 
 
 class InterviewSessionManager:
@@ -49,14 +51,52 @@ class InterviewSessionManager:
         self.llm_config = llm_config
         self.sessions: Dict[str, InterviewSession] = {}
 
-        # Initialize LLM
-        self.llm = LLMFactory.create(llm_config)
+        # Build fallback LLM chain from available API keys
+        self.llm = self._create_fallback_llm(llm_config)
 
         # Initialize components
         self.question_generator = QuestionGenerator(self.llm, config=self.config)
 
         # Initialize evaluation system if available
         self.evaluation_system = EvaluationSystem()
+
+    @staticmethod
+    def _create_fallback_llm(primary_config: LLMConfig):
+        """
+        Create an LLM with fallback providers from available .env keys.
+
+        Priority: primary_config provider first, then other available providers.
+        """
+        import os
+        from ..config.settings import LLMProvider
+
+        configs = [primary_config]
+        seen_providers = {primary_config.provider}
+
+        # Map of provider -> (env_key, default_model)
+        fallback_options = [
+            (LLMProvider.OPENAI, "OPENAI_API_KEY", "gpt-4o-mini"),
+            (LLMProvider.GEMINI, "GOOGLE_API_KEY", "models/gemini-1.5-flash"),
+            (LLMProvider.GROQ, "GROQ_API_KEY", "llama-3.3-70b-versatile"),
+        ]
+
+        for provider, env_key, default_model in fallback_options:
+            if provider in seen_providers:
+                continue
+            api_key = os.getenv(env_key)
+            if api_key:
+                configs.append(LLMConfig(
+                    provider=provider,
+                    model_name=default_model,
+                    api_key=api_key,
+                    temperature=primary_config.temperature,
+                    max_tokens=primary_config.max_tokens,
+                    timeout_seconds=primary_config.timeout_seconds,
+                ))
+                seen_providers.add(provider)
+
+        return LLMFactory.create_with_fallback(configs)
+
 
     def create_session(
         self, cv_path: str, jd_path: str, reference_paths: List[str], proctoring_config: Optional[dict] = None
@@ -71,49 +111,53 @@ class InterviewSessionManager:
             # Load documents
             document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
 
-            # Validate documents
+            # Validate documents synchronously
             validation = document_loader.validate_documents()
             if not all(validation.values()):
                 return {"error": "Document validation failed", "validation": validation}
 
-            # Get resume sections
-            resume_sections = document_loader.get_cv_sections()
+            # Hardcoded first question for zero-lag initialization
+            first_question = "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
+            first_metadata = {
+                "intent": "ICEBREAKER",
+                "difficulty_level": "fresher",
+                "expected_depth": "BRIEF",
+                "topic_area": "General",
+                "prerequisites": [],
+                "interview_phase": "INTRODUCTION",
+                "source": "fallback"
+            }
 
-            # Get job description text
-            job_description = document_loader.get_jd_text()
-
-            # Initialize conversation context
-            conversation_context = self.question_generator.initialize_conversation(
-                resume_sections, job_description
-            )
-
-            # Generate the first question
-            first_question, first_metadata = self.question_generator.get_next_question(
-                conversation_context
-            )
-
-            # Create session
+            # Create session without conversation_context
             session = InterviewSession(
                 session_id=session_id,
                 cv_path=cv_path,
                 jd_path=jd_path,
                 reference_paths=reference_paths,
-                conversation_context=conversation_context,
+                conversation_context=None,
                 current_question=first_question,
                 current_question_metadata=first_metadata,
-                proctoring_config=proctoring_config or {}
+                proctoring_config=proctoring_config or {},
+                init_event=threading.Event()
             )
 
             self.sessions[session_id] = session
 
+            # Start background thread to build context
+            threading.Thread(
+                target=self._initialize_context_background,
+                args=(session_id, cv_path, jd_path, reference_paths),
+                daemon=True
+            ).start()
+
             return {
                 "session_id": session_id,
                 "first_question": first_question,
-                "question_metadata": asdict(first_metadata),
+                "question_metadata": first_metadata,
                 "conversation_context": {
-                    "candidate_skill_level": conversation_context.candidate_skill_level,
-                    "current_topic": conversation_context.current_topic,
-                    "interview_phase": conversation_context.interview_phase.value,
+                    "candidate_skill_level": "unknown",
+                    "current_topic": "Introduction",
+                    "interview_phase": "INTRODUCTION",
                 },
             }
 
@@ -121,6 +165,27 @@ class InterviewSessionManager:
             return {"error": f"Failed to create session: {str(e)}"}
         finally:
             cost_tracker.clear_session_context(token)
+
+    def _initialize_context_background(self, session_id: str, cv_path: str, jd_path: str, reference_paths: List[str]):
+        """Background task to initialize the conversation context."""
+        session = self._get_session(session_id)
+        if not session:
+            return
+        
+        try:
+            document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
+            resume_sections = document_loader.get_cv_sections()
+            job_description = document_loader.get_jd_text()
+            
+            conversation_context = self.question_generator.initialize_conversation(
+                resume_sections, job_description
+            )
+            session.conversation_context = conversation_context
+        except Exception as e:
+            print(f"Background context init failed: {e}")
+        finally:
+            if session.init_event:
+                session.init_event.set()
 
     def submit_answer(
         self, session_id: str, question: str, answer: str
@@ -165,28 +230,68 @@ class InterviewSessionManager:
                     print(f"Evaluation failed: {e}")
                     return provisional_evaluation
 
+            # Wait for background initialization if it's still running
+            if getattr(session, 'init_event', None):
+                session.init_event.wait(timeout=45.0)
+
             # Generate next question using natural conversation flow
             if session.conversation_context is None:
                 return {"error": "Conversation context not initialized"}
 
-            # Evaluation and question generation are independent enough for the
             # live path. Use the provisional score for adaptive topic selection.
-            with ThreadPoolExecutor(max_workers=2) as live_pool:
-                evaluation_future = live_pool.submit(evaluate_answer)
-                question_future = live_pool.submit(
-                    self.question_generator.get_next_question,
+
+            evaluation = provisional_evaluation.copy()
+
+            def bg_evaluate_and_update():
+                try:
+                    eval_result = evaluate_answer()
+                    evaluation.update(eval_result)
+                    
+                    if session.proctoring_config and session.proctoring_config.get("ai_detection", False):
+                        ai_result = check_ai_content(answer)
+                        if ai_result:
+                            evaluation["ai_probability"] = ai_result.get("score")
+                            evaluation["ai_detection_raw"] = ai_result.get("raw_response")
+                except Exception as e:
+                    print(f"Background evaluation failed: {e}")
+
+            # Run heavy evaluation in background so the UI doesn't lag
+            threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
+
+            # Generate next question using natural conversation flow
+            try:
+                next_question, next_metadata = self.question_generator.get_next_question(
                     session.conversation_context,
                     answer,
                     provisional_evaluation,
                 )
-                evaluation = evaluation_future.result()
-                next_question, next_metadata = question_future.result()
-
-            if session.proctoring_config and session.proctoring_config.get("ai_detection", False):
-                ai_result = check_ai_content(answer)
-                if ai_result:
-                    evaluation["ai_probability"] = ai_result.get("score")
-                    evaluation["ai_detection_raw"] = ai_result.get("raw_response")
+            except Exception as e:
+                # If we hit quota or all providers fail, gracefully end the interview
+                error_str = str(e).lower()
+                if "quota" in error_str or "limit" in error_str or "exhaust" in error_str or "failed" in error_str:
+                    session.is_complete = True
+                    # Record the current answer before ending
+                    session.interview_history += f"Q: {question}\nA: {answer}\n\n"
+                    session.questions_asked += 1
+                    session.interview_data.append(
+                        {
+                            "question": question,
+                            "answer": answer,
+                            "evaluation": evaluation,
+                            "question_metadata": None,
+                            "timestamp": self._get_timestamp(),
+                        }
+                    )
+                    final_evaluation = self._generate_final_evaluation(session)
+                    return {
+                        "interview_complete": True,
+                        "current_evaluation": evaluation,
+                        "final_evaluation": final_evaluation,
+                        "conversation_summary": self._generate_conversation_summary(session),
+                        "quota_exhausted": True,
+                        "message": "The interview has ended early due to system capacity limits. Your progress has been saved."
+                    }
+                raise e
 
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
             session.questions_asked += 1
@@ -197,9 +302,9 @@ class InterviewSessionManager:
                     "evaluation": evaluation,
                     "question_metadata": (
                         asdict(session.current_question_metadata)
-                        if session.current_question_metadata
-                        else None
-                    ),
+                        if hasattr(session.current_question_metadata, "__dataclass_fields__")
+                        else session.current_question_metadata
+                    ) if session.current_question_metadata else None,
                     "timestamp": self._get_timestamp(),
                 }
             )
@@ -228,7 +333,7 @@ class InterviewSessionManager:
                     "interview_complete": False,
                     "current_evaluation": evaluation,  # evaluation is already a dict
                     "next_question": next_question,
-                    "question_metadata": asdict(next_metadata),
+                    "question_metadata": asdict(next_metadata) if hasattr(next_metadata, "__dataclass_fields__") else next_metadata,
                     "conversation_context": {
                         "current_topic": (
                             session.conversation_context.current_topic
@@ -331,9 +436,9 @@ class InterviewSessionManager:
             "question": session.current_question,
             "question_metadata": (
                 asdict(session.current_question_metadata)
-                if session.current_question_metadata
-                else None
-            ),
+                if hasattr(session.current_question_metadata, "__dataclass_fields__")
+                else session.current_question_metadata
+            ) if session.current_question_metadata else None,
             "context": {
                 "current_topic": (
                     session.conversation_context.current_topic
@@ -377,15 +482,15 @@ class InterviewSessionManager:
         if session.questions_asked >= self.config.max_questions:
             return False
 
-        # Always continue if we haven't asked at least 8 questions (increased from min_questions)
-        if session.questions_asked < 8:
+        # Always continue if we haven't reached max_questions (enforcing fixed length)
+        if session.questions_asked < self.config.max_questions:
             return True
 
-        # 2. Check quality of conversation (if average answer score is very low after many questions)
-        if session.questions_asked >= 8:
+        # Check quality of conversation (if average answer score is very low)
+        if session.questions_asked >= self.config.max_questions:
             avg_answer = sum(
                 item["evaluation"].get("answer_score", 0.0) for item in session.interview_data
-            ) / len(session.interview_data)
+            ) / len(session.interview_data) if session.interview_data else 0
             if avg_answer < 0.2:
                 return False
 
@@ -514,6 +619,8 @@ class InterviewSessionManager:
         2. Key strengths observed
         3. Areas for improvement
         4. Recommendation (hire/no hire/further assessment)
+        
+        CRITICAL INSTRUCTION: Do NOT sugarcoat your feedback. Be extremely critical, objective, and blunt. Explicitly call out flaws such as verbosity, lack of technical depth, poor communication, or grammatical errors. If the candidate blabbers or gives irrelevant answers, state it clearly.
         """
 
         try:

@@ -1483,7 +1483,7 @@ def handle_mobile_status(data):
 if __name__ == "__main__":
     try:
         # Use socketio.run instead of app.run to enable WebSocket eventlet server
-        socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=False)
+        socketio.run(app, debug=True, host="0.0.0.0", port=5000, use_reloader=True)
     finally:
         # Cleanup background processor on shutdown
         logger.info("Shutting down background processor...")

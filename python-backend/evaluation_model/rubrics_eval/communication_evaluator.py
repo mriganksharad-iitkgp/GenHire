@@ -1,7 +1,7 @@
 """Simple communication skill evaluator for interview responses."""
 
 from typing import Optional
-from langchain_openai import ChatOpenAI
+from services.llm_fallback_service import LLMFallbackService
 from .config import Config
 
 
@@ -11,12 +11,9 @@ class CommunicationEvaluator:
     def __init__(self):
         """Initialize the communication evaluator."""
         # Ensure config is loaded
+        # Ensure config is loaded
         Config.load_from_environment()
-        self.llm = ChatOpenAI(
-            model=Config.EVALUATION_MODEL,
-            api_key=Config.OPENAI_API_KEY,
-            temperature=Config.EVALUATION_TEMPERATURE,
-        )
+        self.llm_service = LLMFallbackService()
 
     def evaluate_communication_score(self, question: str, answer: str) -> float:
         """Evaluate communication skills and return a single score (0-100).
@@ -62,8 +59,8 @@ class CommunicationEvaluator:
         """
 
         try:
-            response = self.llm.invoke(prompt)
-            score = float(response.content.strip())
+            response = self.llm_service.invoke(prompt)
+            score = float(response.get("content", "").strip())
             return max(0.0, min(100.0, score))  # Ensure score is within bounds
         except (ValueError, AttributeError) as e:
             print(f"Warning: Could not parse communication score: {e}. Using fallback.")
