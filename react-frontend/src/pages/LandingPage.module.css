@@ -192,7 +192,7 @@
   min-height: 100vh;
   display: flex;
   align-items: center;
-  padding: 8rem 2rem 4rem;
+  padding: 5rem 2rem 3rem;
   overflow: hidden;
 }
 
@@ -224,7 +224,7 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4rem;
+  gap: 2.5rem;
   align-items: center;
 }
 
@@ -260,7 +260,7 @@
 }
 
 .heroTitle {
-  font-size: 3.5rem;
+  font-size: 2.75rem;
   font-weight: 800;
   line-height: 1.1;
   color: #1e293b;
@@ -631,7 +631,7 @@
 
 .statValue {
   display: block;
-  font-size: 3rem;
+  font-size: 2.25rem;
   font-weight: 800;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   -webkit-background-clip: text;
@@ -649,7 +649,7 @@
 .sectionHeader {
   text-align: center;
   max-width: 700px;
-  margin: 0 auto 4rem;
+  margin: 0 auto 2.5rem;
 }
 
 .sectionTag {
@@ -664,7 +664,7 @@
 }
 
 .sectionTitle {
-  font-size: 2.5rem;
+  font-size: 1.875rem;
   font-weight: 800;
   color: #1e293b;
   margin-bottom: 1rem;
@@ -678,7 +678,7 @@
 
 /* Features Section */
 .featuresSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: #f8fafc;
 }
 
@@ -728,7 +728,7 @@
 
 /* How It Works Section */
 .howItWorksSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: white;
 }
 
@@ -918,7 +918,7 @@
 }
 
 .bigIcon {
-  font-size: 4rem;
+  font-size: 2.75rem;
   display: block;
   margin-bottom: 1rem;
 }
@@ -937,7 +937,7 @@
 
 /* Pricing Section */
 .pricingSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: #f8fafc;
 }
 
@@ -1018,7 +1018,7 @@
 }
 
 .amount {
-  font-size: 3rem;
+  font-size: 2.25rem;
   font-weight: 800;
   color: #1e293b;
 }
@@ -1112,7 +1112,7 @@
 
 /* Testimonials Section */
 .testimonialsSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: white;
 }
 
@@ -1191,7 +1191,7 @@
 
 /* CTA Section */
 .ctaSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 
@@ -1202,7 +1202,7 @@
 }
 
 .ctaContent h2 {
-  font-size: 2.5rem;
+  font-size: 1.875rem;
   font-weight: 800;
   color: white;
   margin-bottom: 1rem;
@@ -1475,7 +1475,7 @@
 
 /* Credit Usage Section */
 .creditSection {
-  padding: 6rem 2rem;
+  padding: 4rem 2rem;
   background: #ffffff;
 }
 

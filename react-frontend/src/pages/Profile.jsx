@@ -93,8 +93,7 @@ const Profile = () => {
 	useEffect(() => {
 		const interviewCompleted = sessionStorage.getItem('interview-just-completed');
 		if (interviewCompleted === 'true') {
-			console.log('Interview completion detected on Profile mount - forcing immediate refresh...');
-			sessionStorage.removeItem('interview-just-completed'); // Clear immediately
+			sessionStorage.removeItem('interview-just-completed');
 
 			// Force multiple refreshes with delays to ensure database sync
 			reloadApplications(true);
@@ -341,7 +340,6 @@ const Profile = () => {
 			// Fallback if app isn't installed (giving user enough time to click 'Open')
 			const timeoutId = setTimeout(() => {
 				if (document.hasFocus()) {
-					console.log("Secure browser not installed. Showing download prompt.");
 					showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
 					const link = document.createElement('a');
 					link.href = '/apps/Genhire.exe';

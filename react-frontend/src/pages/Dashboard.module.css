@@ -120,13 +120,13 @@ body.dark .header,
 /* Welcome section */
 .welcomeSection {
   text-align: center;
-  margin-bottom: var(--spacing-4xl);
-  padding: var(--spacing-3xl) 0;
+  margin-bottom: 2rem;
+  padding: 1.5rem 0;
 }
 
 .welcomeSection h2 {
   margin: 0 0 var(--spacing-lg);
-  font-size: 3rem;
+  font-size: 2.25rem;
   font-weight: 700;
   color: var(--gray-900);
   line-height: 1.1;
@@ -137,7 +137,7 @@ body.dark .welcomeSection h2,
 :global(.dark) .welcomeSection h2 { color: var(--dark-text); }
 
 .welcomeSection p {
-  margin: 0 auto var(--spacing-3xl);
+  margin: 0 auto 1.5rem;
   max-width: 600px;
   font-size: 1.125rem;
   color: var(--gray-600);
@@ -1308,6 +1308,46 @@ body.dark .viewButton,
     font-size: 1.25rem;
   }
 }
+
+/* Job listing section labels — theme-aware replacements for inline colors */
+.searchHint {
+  font-style: italic;
+  color: var(--gray-500);
+  margin-bottom: 0.625rem;
+}
+body.dark .searchHint,
+:global(.dark) .searchHint { color: var(--dark-muted, #a0aec0); }
+
+.jobSectionHeader {
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.jobSectionHeaderAvailable { color: #16a34a; }
+body.dark .jobSectionHeaderAvailable,
+:global(.dark) .jobSectionHeaderAvailable { color: #4ade80; }
+
+.jobSectionHeaderApplied { color: #2563eb; }
+body.dark .jobSectionHeaderApplied,
+:global(.dark) .jobSectionHeaderApplied { color: #60a5fa; }
+
+.appliedBadge {
+  margin-left: 0.625rem;
+  font-size: 0.8em;
+  font-weight: normal;
+  color: #2563eb;
+}
+body.dark .appliedBadge,
+:global(.dark) .appliedBadge { color: #60a5fa; }
+
+.applicationStatusText {
+  margin-left: 0.625rem;
+  font-weight: 700;
+  color: #16a34a;
+}
+body.dark .applicationStatusText,
+:global(.dark) .applicationStatusText { color: #4ade80; }
 
 @media (max-width: 480px) {
   .dashboardContainer {

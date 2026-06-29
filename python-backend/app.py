@@ -24,9 +24,27 @@ logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 ch.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(ch)
-# Suppress TensorFlow and mediapipe warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # 0=all, 1=info, 2=warn, 3=error
+# ── Silence all TF / MediaPipe / glog noise before any import triggers them ──
+# TF C++ backend: 0=DEBUG 1=INFO 2=WARNING 3=ERROR(only)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# glog (Google Logging used by MediaPipe/TFLite): 0=INFO 1=WARNING 2=ERROR 3=FATAL
+os.environ["GLOG_minloglevel"] = "2"
+# abseil-py
+os.environ["ABSL_MIN_LOG_LEVEL"] = "3"
+# suppress Python-level TF / tf_keras / absl loggers
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
+logging.getLogger("tf_keras").setLevel(logging.ERROR)
+logging.getLogger("absl").setLevel(logging.ERROR)
+logging.getLogger("mediapipe").setLevel(logging.ERROR)
+# suppress absl-py programmatic API if available
+try:
+    import absl.logging as _absl_log
+    _absl_log.set_verbosity(_absl_log.ERROR)
+except Exception:
+    pass
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorflow")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="tf_keras")
 
 from flask import Flask, request, jsonify, Response
 from utils.gaze_recorder_service import GazeRecorderService

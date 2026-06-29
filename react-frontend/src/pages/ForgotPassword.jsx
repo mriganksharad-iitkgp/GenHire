@@ -53,18 +53,7 @@ const ForgotPassword = () => {
         </div>
 
         {message && (
-          <div
-            className={styles.successMessage}
-            style={{
-              backgroundColor: "#d1fae5",
-              color: "#065f46",
-              padding: "1rem",
-              borderRadius: "8px",
-              marginBottom: "1rem",
-              border: "1px solid #10b981",
-            }}
-          >
-            <strong>✓ </strong>
+          <div className={styles.successMessage}>
             {message}
           </div>
         )}
@@ -80,6 +69,7 @@ const ForgotPassword = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
+              autoComplete="email"
               required
             />
           </div>

@@ -865,7 +865,7 @@ const Dashboard = () => {
 
 				<div className={styles.jobListings}>
 					{searchQuery && searchQuery.trim() !== '' && (
-						<p style={{ fontStyle: 'italic', color: '#666', marginBottom: '10px' }}>
+						<p className={styles.searchHint}>
 							Showing search for "{searchQuery}"
 						</p>
 					)}
@@ -906,8 +906,8 @@ const Dashboard = () => {
 										{/* Available Jobs First */}
 										{paginatedUnappliedJobs.length > 0 && (
 											<div className={styles.jobSection}>
-												<h4 style={{color: '#27ae60', marginBottom: '1rem'}}>
-													<i className="fa fa-circle" style={{marginRight: '8px'}}></i>
+												<h4 className={styles.jobSectionHeader + ' ' + styles.jobSectionHeaderAvailable}>
+													<i className="fa fa-circle"></i>
 													Available Jobs ({unappliedJobs.length})
 												</h4>
 												{paginatedUnappliedJobs.map((job) => (
@@ -994,8 +994,8 @@ const Dashboard = () => {
 										{/* Applied Jobs Section */}
 										{paginatedAppliedJobs.length > 0 && (
 											<div className={styles.jobSection} style={{marginTop: '2rem'}}>
-												<h4 style={{color: '#3498db', marginBottom: '1rem'}}>
-													<i className="fa fa-check-circle" style={{marginRight: '8px'}}></i>
+												<h4 className={styles.jobSectionHeader + ' ' + styles.jobSectionHeaderApplied}>
+													<i className="fa fa-check-circle"></i>
 													Your Applications ({appliedJobs.length})
 												</h4>
 												{paginatedAppliedJobs.map((job) => (
@@ -1004,7 +1004,7 @@ const Dashboard = () => {
 															<div className={styles.jobTitleSection}>
 																<h4 className={styles.jobTitle}>
 																	{job.title}
-																	<span style={{marginLeft: '10px', fontSize: '0.8em', color: '#3498db', fontWeight: 'normal'}}>
+																	<span className={styles.appliedBadge}>
 																		<i className="fa fa-check"></i> Applied
 																	</span>
 																</h4>
@@ -1015,7 +1015,7 @@ const Dashboard = () => {
 																	<span className={styles.jobLocation}>
 																		<i className="fa fa-map-marker"></i> {job.location}
 																	</span>
-																	<span style={{marginLeft: '10px', fontWeight: 'bold', color: '#27ae60'}}>
+																	<span className={styles.applicationStatusText}>
 																		Status: {getApplicationStatus(job._id) || 'Pending'}
 																	</span>
 																</div>

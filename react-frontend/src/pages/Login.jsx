@@ -158,15 +158,7 @@ const Login = () => {
 				</div>
 
 				{sessionExpired && (
-					<div style={{
-						backgroundColor: "#fef3c7",
-						color: "#92400e",
-						padding: "0.75rem 1rem",
-						borderRadius: "8px",
-						marginBottom: "1rem",
-						border: "1px solid #f59e0b",
-						fontSize: "0.9rem",
-					}}>
+					<div className={styles.sessionExpiredBanner}>
 						Your session has expired. Please log in again.
 					</div>
 				)}
@@ -246,6 +238,7 @@ const Login = () => {
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
 							placeholder="Enter your password"
+							autoComplete="current-password"
 							required
 						/>
 						<button

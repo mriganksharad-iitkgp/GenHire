@@ -314,8 +314,6 @@ const SubscriptionPlans = () => {
       );
 
       setPlans([getRecruiterSignupBonusPlan(), ...recruiterPlans]);
-      console.log("Fetched plans:", normalizedPlans);
-      console.log("Fetched plansres:", plansRes);
 
       // Normalize history response
       const normalizedHistory =

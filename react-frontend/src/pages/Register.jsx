@@ -216,6 +216,7 @@ const Register = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter your full name"
+              autoComplete="name"
               required
             />
           </div>
@@ -228,6 +229,7 @@ const Register = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
+              autoComplete="email"
               required
             />
           </div>
@@ -241,6 +243,7 @@ const Register = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Create a password"
+                autoComplete="new-password"
                 required
               />
               <button

@@ -13,6 +13,7 @@ import JDDetailsModal from "../../components/JDDetailsModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "../../services/adminApi";
 import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
+import { authedFetch } from "../../utils/authedFetch";
 
 const CandidateDetail = () => {
   const navigate = useNavigate();
@@ -180,7 +181,7 @@ const CandidateDetail = () => {
   const handleApplicationStatusChange = async (appId, newStatus) => {
     try {
       const token = getToken();
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/applications/${appId}/status`, {
+      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/applications/${appId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -259,14 +260,11 @@ const CandidateDetail = () => {
     setPracticeLoading(true);
     try {
       const token = getToken();
-      console.log(`[Admin] Fetching practice history for candidate: ${candidateId}`);
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/practice-history`, {
+      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/practice-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log(`[Admin] Practice history response status: ${response.status}`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`[Admin] Practice history data:`, data);
         setPracticeHistory(data.sessions || []);
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -281,22 +279,14 @@ const CandidateDetail = () => {
 
   // View interview report for an application
   const handleViewReport = async (app) => {
-    console.log("[Admin] handleViewReport called with app:", app);
-    console.log("[Admin] Application ID:", app.id);
     try {
       const token = getToken();
       const url = `${process.env.REACT_APP_API_URL}/api/admin/applications/${app.id}/report`;
-      console.log("[Admin] Fetching report from:", url);
-      
-      const response = await fetch(url, {
+      const response = await authedFetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      console.log("[Admin] Response status:", response.status);
-      
       if (response.ok) {
         const report = await response.json();
-        console.log("[Admin] Report received:", report);
         setReportModal({
           open: true,
           report: report,
@@ -318,7 +308,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReport = async (session) => {
     try {
       const token = getToken();
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${session.session_id}/report`, {
+      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${session.session_id}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -337,7 +327,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReportById = async (sessionId) => {
     try {
       const token = getToken();
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${sessionId}/report`, {
+      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${sessionId}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {

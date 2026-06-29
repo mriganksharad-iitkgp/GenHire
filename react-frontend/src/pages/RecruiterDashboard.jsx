@@ -376,9 +376,6 @@ const RecruiterDashboard = () => {
   const handleJobCreate = async (newJob) => {
     // Save to backend
     const success = await saveJobPosting(newJob);
-    if (success) {
-      console.log("New job created:", newJob);
-    }
   };
 
   // Function to handle candidate actions
@@ -386,7 +383,6 @@ const RecruiterDashboard = () => {
     setSelectedCandidate(candidate);
     setIsCVViewerOpen(true);
     showToast(`Opening CV for ${candidate.name}`, "info");
-    console.log("Viewing CV for:", candidate);
   };
 
   const handleCloseCVViewer = () => {
@@ -416,7 +412,6 @@ const RecruiterDashboard = () => {
 
   const handleScheduleInterview = (candidate) => {
     showToast(`Interview scheduling for ${candidate.name}`, "info");
-    console.log("Scheduling interview for:", candidate);
   };
 
   // Function to handle job actions
@@ -450,7 +445,6 @@ const RecruiterDashboard = () => {
   const handleEditProfile = () => {
     setIsEditingProfile(true);
     showToast("Profile editing enabled", "info");
-    console.log("Enabling profile editing...");
   };
 
   const handleSaveProfile = async () => {
@@ -474,7 +468,6 @@ const RecruiterDashboard = () => {
   const handleCancelEdit = () => {
     setIsEditingProfile(false);
     showToast("Changes cancelled", "warning");
-    console.log("Cancelling profile edit...");
   };
 
   // Job modal handlers

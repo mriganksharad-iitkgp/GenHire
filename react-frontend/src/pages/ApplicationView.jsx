@@ -4,6 +4,7 @@ import styles from "./ApplicationView.module.css";
 import "./darkModeOverride.css";
 import "./emergency-fixes.css";
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
+import { authedFetch } from "../utils/authedFetch";
 
 const ApplicationView = () => {
 	const { applicationId } = useParams();
@@ -33,17 +34,12 @@ const ApplicationView = () => {
 			const fetchApplication = async () => {
 				try {
 					setIsLoading(true);
-					const res = await fetch(
+					const res = await authedFetch(
 						`${process.env.REACT_APP_API_URL}/api/applications/${applicationId}`,
-						{
-							headers: {
-								Authorization: `Bearer ${token}`,
-							},
-						}
+						{ headers: { Authorization: `Bearer ${token}` } }
 					);
 
 					if (!res.ok) {
-						// Unauthorized or not found -> back to profile
 						navigate("/profile");
 						return;
 					}
@@ -172,16 +168,6 @@ const ApplicationView = () => {
 
 		const windowStart = new Date(interview.getTime() - 30 * 60000); // 30 minutes before
 		const windowEnd = new Date(interview.getTime() + 30 * 60000); // 30 minutes after
-
-		// For debugging
-		console.log("Current time:", currentDate);
-		console.log("Interview time:", interview);
-		console.log("Window start:", windowStart);
-		console.log("Window end:", windowEnd);
-		console.log(
-			"Is within window:",
-			currentDate >= windowStart && currentDate <= windowEnd
-		);
 
 		return currentDate >= windowStart && currentDate <= windowEnd;
 	};

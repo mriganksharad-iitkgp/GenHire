@@ -116,22 +116,8 @@ const ResetPassword = () => {
         </div>
 
         {message && (
-          <div
-            className={styles.successMessage}
-            style={{
-              backgroundColor: "#d1fae5",
-              color: "#065f46",
-              padding: "1rem",
-              borderRadius: "8px",
-              marginBottom: "1rem",
-              border: "1px solid #10b981",
-            }}
-          >
-            <strong>✓ </strong>
-            {message}
-            <p style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
-              Redirecting to login...
-            </p>
+          <div className={styles.successMessage}>
+            {message} Redirecting to login...
           </div>
         )}
 
@@ -146,6 +132,7 @@ const ResetPassword = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter new password"
+              autoComplete="new-password"
               required
               minLength={8}
             />
@@ -181,6 +168,7 @@ const ResetPassword = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
+              autoComplete="new-password"
               required
               minLength={8}
             />

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import styles from "./RecruiterCostStatistics.module.css";
 import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
+import { authedFetch } from "../../utils/authedFetch";
 import {
   addMonths,
   buildContinuousMonthlySeries,
@@ -33,7 +34,7 @@ const RecruiterCostStatistics = () => {
           return;
         }
 
-        const response = await fetch(
+        const response = await authedFetch(
           `${API_BASE_URL}/api/recruiter/cost-statistics?period=month`,
           {
             headers: {
@@ -51,8 +52,9 @@ const RecruiterCostStatistics = () => {
           setCostData(generateFallbackData());
         }
       } catch (err) {
-        console.error("Error fetching usage data:", err);
-        setCostData(generateFallbackData());
+        if (err.status !== 401) {
+          setCostData(generateFallbackData());
+        }
       } finally {
         setLoading(false);
       }
