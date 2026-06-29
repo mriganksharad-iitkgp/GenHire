@@ -4,10 +4,14 @@ import Styles from "./Chat.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
-import Avatar from "../components/Avatar"; // Import the new Avatar component
+import Avatar from "../components/Avatar";
 import QRCode from "react-qr-code";
 import { proctoringConfig } from "../config/proctoring";
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
+import LoadingScreen, { LOADING_STEPS } from "../components/interview/LoadingScreen";
+import InterviewHeader from "../components/interview/InterviewHeader";
+import PhaseIndicator from "../components/interview/PhaseIndicator";
+import PreInterviewChecklist from "../components/interview/PreInterviewChecklist";
 
 export default function Chat({ interviewId }) {
   const MAX_QUESTIONS = 10;
@@ -52,7 +56,9 @@ export default function Chat({ interviewId }) {
   const [interviewElapsedTime, setInterviewElapsedTime] = useState(0); // Track total interview time
   const interviewStartTimeRef = useRef(null);
   const initialGreetingSpoken = useRef(false);
-  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false); // Track answer submission
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0);
+  const [checklistDone, setChecklistDone] = useState(false);
 
   // Add state for progressive text display
   const [displayedText, setDisplayedText] = useState("");
@@ -63,6 +69,9 @@ export default function Chat({ interviewId }) {
   const ffmpegRef = useRef(new FFmpeg());
   const stopPromiseResolver = useRef(null);
   const recordedChunksRef = useRef([]);
+  // Ref mirror of warningCount so long-lived callbacks (startLiveProctoring) always
+  // read the latest value without being recreated on every count change.
+  const warningCountRef = useRef(0);
   const socketRef = useRef(null);
   const proctoringIntervalRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -76,6 +85,8 @@ export default function Chat({ interviewId }) {
   const gazeStartTimeRef = useRef(null);
   const gazeRecordingDataRef = useRef(null);
   const gazeMessageGuardHandlerRef = useRef(null);
+  // Holds { text, audioSrc } when TTS is pre-fetched during registering phase
+  const prefetchedTTSRef = useRef(null);
 
   const transcriptRef = useRef("");
   // Track the currently active MediaStream explicitly to guarantee full shutdown
@@ -85,13 +96,6 @@ export default function Chat({ interviewId }) {
   // --- HOOKS ---
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Helper function to format elapsed time (MM:SS)
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
 
   useEffect(() => {
     // GazeRecorderAPI expects event.data to be a string in message handlers.
@@ -115,6 +119,11 @@ export default function Chat({ interviewId }) {
       }
     };
   }, []);
+
+  // Keep the ref in sync so long-lived callbacks always see the current count.
+  useEffect(() => {
+    warningCountRef.current = warningCount;
+  }, [warningCount]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -193,6 +202,39 @@ export default function Chat({ interviewId }) {
       document.body.appendChild(script);
     });
   }, []);
+
+  // Pre-load all GazeRecorder CDN scripts as soon as the component mounts so
+  // they are already in the DOM by the time the user clicks "Register Face".
+  // Previously these were loaded inside the button handler, adding ~1-2s of
+  // CDN latency right before calibration started.
+  useEffect(() => {
+    const preloadGazeScripts = async () => {
+      try {
+        await loadScript("https://app.gazerecorder.com/GazeCloudAPI.js");
+        await loadScript("https://app.gazerecorder.com/GazeRecorderAPI.js");
+        await loadScript("https://app.gazerecorder.com/GazePlayer.js");
+        gazeRecorderScriptsLoadedRef.current = true;
+      } catch (e) {
+        // Non-fatal — startInlineGazeRecorder will fall back gracefully
+        console.warn("GazeRecorder script preload failed:", e.message);
+      }
+    };
+    preloadGazeScripts();
+  }, [loadScript]);
+
+  // Cycle the loading-step messages every 800 ms while the interview session
+  // is being created on the backend.  Gives users a sense of forward progress
+  // instead of a static spinner.
+  useEffect(() => {
+    if (interviewStatus !== "starting") return;
+    const id = setInterval(() => {
+      setLoadingStepIndex((i) => Math.min(i + 1, LOADING_STEPS.length - 1));
+    }, 800);
+    return () => {
+      clearInterval(id);
+      setLoadingStepIndex(0); // reset for next time
+    };
+  }, [interviewStatus]);
 
   const startInlineGazeRecorder = useCallback(async () => {
     if (gazeRecorderTrackingRef.current) return;
@@ -348,39 +390,59 @@ export default function Chat({ interviewId }) {
     }
   }, []);
 
-  // --- LIVE PROCTORING & WEBSOCKETS (No changes needed) ---
+  // --- LIVE PROCTORING & WEBSOCKETS ---
 
   const startLiveProctoring = useCallback(() => {
     const currentSessionId = sessionIdRef.current;
     if (!currentSessionId || (socketRef.current && socketRef.current.connected))
       return;
+
     const socket = io(process.env.REACT_APP_API_URL);
     socketRef.current = socket;
+
+    // Register ALL event handlers at the socket level (not inside "connect") so
+    // they are not duplicated when the socket auto-reconnects.
+
+    socket.on("gaze_data", (data) => {
+      setGazeDirection(data.gaze_direction);
+      setGazeTimes(data.gaze_times);
+      if (data.is_cheating_alert) {
+        const newCount = warningCountRef.current + 1;
+        warningCountRef.current = newCount;
+        setWarningCount(newCount);
+        setProctoringAlert({
+          active: true,
+          message: `Suspicious gaze detected! This is warning #${newCount}.`,
+        });
+        socket.emit("proctoring_violation", {
+          session_id: sessionIdRef.current,
+          type: "gaze_violation",
+        });
+      }
+    });
+
+    // proctoring_alert comes from the backend's frame analysis (face/head-pose check)
+    socket.on("proctoring_alert", (data) => {
+      if (data.status && data.status !== "Status: OK") {
+        const newCount = warningCountRef.current + 1;
+        warningCountRef.current = newCount;
+        setWarningCount(newCount);
+        setProctoringAlert({
+          active: true,
+          message: `${data.status} — Warning #${newCount}. This has been recorded.`,
+        });
+      }
+    });
+
     socket.on("connect", () => {
       console.log("✅ WebSocket connected.");
       socket.emit("start_proctoring", { session_id: currentSessionId });
-      console.log("📡 Signaling mobile to START...");
       socket.emit("control_mobile_recording", {
         session_id: currentSessionId,
         action: "start",
       });
-      socket.on("gaze_data", (data) => {
-        setGazeDirection(data.gaze_direction);
-        setGazeTimes(data.gaze_times);
-        if (data.is_cheating_alert) {
-          const newWarningCount = warningCount + 1;
-          setWarningCount(newWarningCount);
-          setProctoringAlert({
-            active: true,
-            message: `Suspicious gaze detected! This is warning #${newWarningCount}.`,
-          });
-          socket.emit("proctoring_violation", {
-            session_id: sessionIdRef.current,
-            type: "gaze_violation",
-          });
-        }
-      });
 
+      // Send 1 frame per second — enough for face verification without flooding backend.
       proctoringIntervalRef.current = setInterval(() => {
         if (
           videoRef.current &&
@@ -395,26 +457,22 @@ export default function Chat({ interviewId }) {
           const canvas = proctoringCanvasRef.current;
           if (canvas.width !== videoRef.current.videoWidth) canvas.width = videoRef.current.videoWidth;
           if (canvas.height !== videoRef.current.videoHeight) canvas.height = videoRef.current.videoHeight;
-          const context = canvas.getContext("2d", { willReadFrequently: true });
-          context.drawImage(
-            videoRef.current,
-            0,
-            0,
-            canvas.width,
-            canvas.height,
-          );
-          const imageData = canvas.toDataURL("image/jpeg", 0.5);
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
           socket.emit("proctoring_frame", {
             session_id: currentSessionId,
-            image: imageData,
+            image: canvas.toDataURL("image/jpeg", 0.5),
           });
         }
-      }, 100);
+      }, 1000);
     });
+
     socket.on("disconnect", () => {
       console.log("❌ WebSocket disconnected.");
-      if (proctoringIntervalRef.current)
+      if (proctoringIntervalRef.current) {
         clearInterval(proctoringIntervalRef.current);
+        proctoringIntervalRef.current = null;
+      }
     });
   }, []);
 
@@ -483,15 +541,14 @@ export default function Chat({ interviewId }) {
       );
       setInterviewStatus("calibrating");
       await startInlineGazeRecorder();
-
-      // IMPORTANT: Start live proctoring AFTER successful face registration
-      // startLiveProctoring();
+      // Start live proctoring after face registration so we have the registered face
+      startLiveProctoring();
 
     } catch (error) {
       console.error("Face registration error:", error);
       alert(`Could not register face: ${error.message}.`);
     }
-  }, [startInlineGazeRecorder]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
+  }, [startInlineGazeRecorder, startLiveProctoring]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
   const uploadRecording = useCallback(
     async (blob) => {
@@ -716,6 +773,42 @@ export default function Chat({ interviewId }) {
         });
     }
   }, [interviewId, interviewStatus, navigate, location.state]);
+
+  // Pre-fetch TTS audio for the very first question as soon as the session is
+  // created (status = "registering").  By the time the user finishes face
+  // registration + gaze calibration and clicks "Start Interview Now", the
+  // audio blob is already cached in prefetchedTTSRef and speakResponse()
+  // plays it instantly instead of waiting for another round-trip.
+  useEffect(() => {
+    if (interviewStatus !== "registering" || !currentQuestion || !sessionIdRef.current) return;
+
+    const textToSpeak = `Your CV has a ${Math.round((similarityScore || 0) * 100)}% match. ${currentQuestion}`;
+
+    const prefetch = async () => {
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+        const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToSpeak, session_id: sessionIdRef.current }),
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.audio_base64) {
+          prefetchedTTSRef.current = {
+            text: textToSpeak,
+            audioSrc: `data:audio/mp3;base64,${data.audio_base64}`,
+          };
+          console.log("✅ TTS pre-fetched and cached for instant playback.");
+        }
+      } catch (e) {
+        // Ignore — speakResponse will fall back to a live fetch
+        console.warn("TTS pre-fetch failed (non-fatal):", e.message);
+      }
+    };
+
+    prefetch();
+  }, [currentQuestion, interviewStatus, similarityScore]);
 
   useEffect(() => {
     const setupWebcam = async () => {
@@ -1249,6 +1342,12 @@ export default function Chat({ interviewId }) {
     try {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      // Show the "Alex is thinking..." indicator immediately — it covers both
+      // the STT transcription phase and the backend answer-submission phase so
+      // the user never stares at a silent, unresponsive screen.
+      // NOTE: we deliberately do NOT set isSubmittingAnswerRef.current here
+      // so that onSend() isn't blocked by its duplicate-submission guard.
+      setIsSubmittingAnswer(true);
 
       // Clean up volume detection
       if (volumeDetectionIntervalRef.current) {
@@ -1275,22 +1374,97 @@ export default function Chat({ interviewId }) {
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
       }
-      // Clear any existing typing animation
       clearInterval(typingIntervalRef.current);
     }
 
-    // Set full text and start progressive display
     setFullQuestionText(text);
-    setDisplayedText(""); // Reset displayed text
+    setDisplayedText("");
 
+    // Shared helper: wire up an <Audio> element and start word-sync animation.
+    // Extracted so both the cache path and the live-fetch path reuse the same logic.
+    const setupAndPlayAudio = (audioSrc) => {
+      const audio = new Audio(audioSrc);
+
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.src = "";
+      }
+      currentAudioRef.current = audio;
+
+      audio.onplay = () => {
+        console.log("🔊 TTS audio playback started.");
+        setIsSpeaking(true);
+
+        const words = text.split(" ");
+        // Show the first word immediately so the display is never blank
+        // while the browser is loading the audio metadata/duration.
+        setDisplayedText(words[0] || "");
+
+        typingIntervalRef.current = setInterval(() => {
+          const duration =
+            isFinite(audio.duration) && audio.duration > 0
+              ? audio.duration
+              : words.length * 0.3;
+          const progress = audio.currentTime / duration;
+          const currentIndex = Math.min(
+            words.length,
+            Math.floor(progress * words.length) + 1,
+          );
+          setDisplayedText(words.slice(0, currentIndex).join(" "));
+          if (currentIndex >= words.length || audio.ended) {
+            clearInterval(typingIntervalRef.current);
+            setDisplayedText(text);
+          }
+        }, 100);
+      };
+
+      audio.onended = () => {
+        console.log("🔊 TTS audio playback ended.");
+        setIsSpeaking(false);
+        currentAudioRef.current = null;
+        clearInterval(typingIntervalRef.current);
+        setDisplayedText(text);
+        if (interviewStatus === "active") {
+          console.log("🎤 AI finished speaking. Starting silence detection & recording...");
+          setSilenceTimer(0);
+          lastSpeechTimeRef.current = Date.now();
+          setIsTimerRunning(true);
+          startRecording();
+        }
+      };
+
+      audio.onerror = (e) => {
+        console.error("❌ Audio playback error:", e);
+        setIsSpeaking(false);
+        currentAudioRef.current = null;
+        clearInterval(typingIntervalRef.current);
+        setDisplayedText(text);
+      };
+
+      audio.play().catch((e) => {
+        console.error("❌ Audio play() failed:", e);
+        setIsSpeaking(false);
+        setDisplayedText(text);
+      });
+    };
+
+    // Fast path: use the pre-fetched audio blob if it matches this text.
+    // This eliminates the TTS round-trip at the moment the interview starts.
+    const cached = prefetchedTTSRef.current;
+    if (cached && cached.text === text) {
+      console.log("⚡ Using pre-fetched TTS audio (instant playback).");
+      prefetchedTTSRef.current = null;
+      setupAndPlayAudio(cached.audioSrc);
+      return;
+    }
+
+    // Slow path: fetch TTS from the backend.
     try {
       const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
       console.log(`🔊 Fetching TTS from: ${apiUrl}/api/speech/synthesize`);
       const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, session_id: sessionIdRef.current }),
       });
 
@@ -1304,79 +1478,8 @@ export default function Chat({ interviewId }) {
 
       const data = await response.json();
       if (data.audio_base64) {
-        console.log(
-          "✅ TTS audio received, base64 length:",
-          data.audio_base64.length,
-        );
-        const audioSrc = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioSrc);
-        
-        if (currentAudioRef.current) {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.src = '';
-        }
-        currentAudioRef.current = audio;
-
-        audio.onplay = () => {
-          console.log("🔊 TTS audio playback started.");
-          setIsSpeaking(true);
-
-          // Start progressive text animation synced with audio
-          const words = text.split(" ");
-
-          typingIntervalRef.current = setInterval(() => {
-            // Fallback duration if metadata isn't loaded yet
-            const duration = isFinite(audio.duration) && audio.duration > 0 
-                ? audio.duration 
-                : (words.length * 0.3);
-            
-            // Calculate progress based on actual audio playback time
-            const progress = audio.currentTime / duration;
-            // Reveal words proportionally
-            const currentIndex = Math.min(words.length, Math.floor(progress * words.length) + 1);
-            
-            const wordsToShow = words.slice(0, currentIndex).join(" ");
-            setDisplayedText(wordsToShow);
-            
-            if (currentIndex >= words.length || audio.ended) {
-              clearInterval(typingIntervalRef.current);
-              setDisplayedText(text);
-            }
-          }, 100);
-        };
-
-        audio.onended = () => {
-          console.log("🔊 TTS audio playback ended.");
-          setIsSpeaking(false);
-          currentAudioRef.current = null;
-          clearInterval(typingIntervalRef.current);
-          setDisplayedText(text);
-
-          if (interviewStatus === "active") {
-            console.log(
-              "🎤 AI finished speaking. Starting silence detection & recording...",
-            );
-            setSilenceTimer(0);
-            lastSpeechTimeRef.current = Date.now();
-            setIsTimerRunning(true);
-            startRecording();
-          }
-        };
-
-        audio.onerror = (e) => {
-          console.error("❌ Audio playback error:", e);
-          setIsSpeaking(false);
-          currentAudioRef.current = null;
-          clearInterval(typingIntervalRef.current);
-          setDisplayedText(text);
-        };
-
-        audio.play().catch((e) => {
-          console.error("❌ Audio play() failed:", e);
-          // Auto-resume if blocked by browser policy (common issue)
-          setIsSpeaking(false);
-          setDisplayedText(text);
-        });
+        console.log("✅ TTS audio received, base64 length:", data.audio_base64.length);
+        setupAndPlayAudio(`data:audio/mp3;base64,${data.audio_base64}`);
       } else {
         console.error("❌ No audio_base64 in TTS response.");
         setIsSpeaking(false);
@@ -1523,30 +1626,47 @@ export default function Chat({ interviewId }) {
     }
   }, [interviewStatus, stopLiveProctoring, mediaRecorder, stopCamera]);
 
+  // --- DERIVED VALUES (memoized so timers don't recompute them every second) ---
+
+  const answerScorePct = React.useMemo(() => {
+    if (!evaluation) return null;
+    let score = null;
+    if (evaluation?.quantitative_scores?.answer_score) {
+      score = evaluation.quantitative_scores.answer_score;
+    } else if (evaluation?.quantitative?.average_relevance_score) {
+      score = evaluation.quantitative.average_relevance_score;
+    } else if (evaluation?.quantitative_scores) {
+      if (typeof evaluation.quantitative_scores === "number") {
+        score = evaluation.quantitative_scores;
+      } else if (typeof evaluation.quantitative_scores === "object") {
+        score =
+          evaluation.quantitative_scores.answer_score ||
+          evaluation.quantitative_scores.average ||
+          evaluation.quantitative_scores.overall ||
+          Object.values(evaluation.quantitative_scores)[0];
+      }
+    }
+    if (score === null) return null;
+    return score <= 1 ? Math.round(score * 100) : Math.round(score);
+  }, [evaluation]);
+
+  const langScorePct = React.useMemo(() => {
+    if (!evaluation) return null;
+    let langScore = null;
+    if (evaluation?.quantitative_scores?.language_score) {
+      langScore = evaluation.quantitative_scores.language_score;
+    } else if (evaluation?.quantitative_scores?.communication) {
+      langScore = evaluation.quantitative_scores.communication;
+    } else if (evaluation?.quantitative?.communication) {
+      langScore = evaluation.quantitative.communication;
+    }
+    if (langScore === null) return null;
+    return langScore <= 1 ? Math.round(langScore * 100) : Math.round(langScore);
+  }, [evaluation]);
+
   // --- RENDER LOGIC ---
   if (interviewStatus === "starting") {
-    return (
-      <div className={Styles.loadingContainer}>
-        <div className={Styles.spinner}></div>
-        <h3 style={{ marginTop: "20px", color: "#4338ca", fontSize: "24px", fontWeight: "600" }}>
-          Preparing Your Interview
-        </h3>
-        <p
-          style={{
-            color: "#475569",
-            maxWidth: "400px",
-            textAlign: "center",
-            lineHeight: "1.6",
-          }}
-        >
-          We're analyzing your CV and the job description to generate
-          personalized questions...
-        </p>
-        <div style={{ marginTop: "15px", fontSize: "14px", color: "#94a3b8" }}>
-          This usually takes 3-5 seconds
-        </div>
-      </div>
-    );
+    return <LoadingScreen loadingStepIndex={loadingStepIndex} />;
   }
 
   if (interviewStatus === "registering") {
@@ -1556,8 +1676,13 @@ export default function Chat({ interviewId }) {
     return (
       <div className={Styles.registrationContainer}>
         <h2 className={Styles.registrationHeader}>
-          🔐 Camera Setup & Security Check
+          {checklistDone ? "🔐 Camera Setup & Security Check" : "📋 Before You Begin"}
         </h2>
+        <PhaseIndicator currentStep={checklistDone ? 1 : 0} />
+        {!checklistDone ? (
+          <PreInterviewChecklist onConfirm={() => setChecklistDone(true)} />
+        ) : (
+          <>
         <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
           Complete the steps below to verify your identity and begin your interview.
         </p>
@@ -1645,6 +1770,8 @@ export default function Chat({ interviewId }) {
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
     );
   }
@@ -1655,6 +1782,7 @@ export default function Chat({ interviewId }) {
         <h2 className={Styles.registrationHeader}>
           👀 Eye Tracking Calibration
         </h2>
+        <PhaseIndicator currentStep={2} />
         <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
           Please look at the red dots as they appear on your screen to calibrate eye tracking.
         </p>
@@ -1689,6 +1817,7 @@ export default function Chat({ interviewId }) {
         <h2 className={Styles.registrationHeader}>
           ✅ Ready to Begin
         </h2>
+        <PhaseIndicator currentStep={3} />
         <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
           Your camera, microphone, and tracking systems are verified.
         </p>
@@ -1777,24 +1906,15 @@ export default function Chat({ interviewId }) {
     <div className={Styles["page-container-fullscreen"]}>
       {/* Interview progress header */}
       {interviewStatus === "active" && (
-        <div className={Styles["interview-header"]}>
-          <div className={Styles["progress-info"]}>
-            <span className={Styles["question-counter"]}>
-              Question {questionCount} of {MAX_QUESTIONS}
-            </span>
-            <span className={Styles["time-elapsed"]}>
-              ⏱️ {formatTime(interviewElapsedTime)}
-            </span>
-          </div>
-          {isTimerRunning && transcriptRef.current.trim().length > 0 && (
-            <div className={Styles["silence-indicator"]}>
-              {silenceTimer < 5
-                ? `Speaking... ${5 - silenceTimer}s until auto-submit`
-                : "Auto-submitting..."}
-            </div>
-          )}
-        </div>
-      )}{" "}
+        <InterviewHeader
+          questionCount={questionCount}
+          maxQuestions={MAX_QUESTIONS}
+          interviewElapsedTime={interviewElapsedTime}
+          silenceTimer={silenceTimer}
+          isTimerRunning={isTimerRunning}
+          transcriptLength={transcriptRef.current.trim().length}
+        />
+      )}
       {proctoringAlert.active && (
         <div className={Styles.modalOverlay}>
           {" "}
@@ -1808,12 +1928,14 @@ export default function Chat({ interviewId }) {
             </button>{" "}
           </div>{" "}
         </div>
-      )}{" "}
+      )}
+      {/* Candidate webcam — positioned top-left, always visible */}
       <div className={Styles["video-preview"]}>
-        <video ref={videoRef} autoPlay muted playsInline />       {" "}
-      </div>{" "}
+        <video ref={videoRef} autoPlay muted playsInline />
+        <div className={Styles["video-preview-label"]}>YOU</div>
+      </div>
       <div className={Styles["avatar-container"]}>
-        <Avatar />       {" "}
+        <Avatar />
       </div>
       <div className={Styles["controls-container"]}>
         <div
@@ -1824,11 +1946,26 @@ export default function Chat({ interviewId }) {
             gap: "8px",
           }}
         >
-          <p className={Styles["transcript-display"]}>
-            {isSpeaking
-              ? displayedText
-              : currentQuestion || "Waiting for next question..."}
-          </p>
+          <div className={Styles["transcript-display"]}>
+            {isSubmittingAnswer ? (
+              /* Shown during STT processing + answer submission + question generation.
+                 Covers the entire "silent gap" so the user always has feedback. */
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                <div className={Styles["thinking-dots-container"]}>
+                  <div className={Styles["thinking-dot"]}></div>
+                  <div className={Styles["thinking-dot"]}></div>
+                  <div className={Styles["thinking-dot"]}></div>
+                </div>
+                <span style={{ color: "rgba(148,163,184,0.9)", fontSize: "0.95rem", fontStyle: "italic" }}>
+                  Alex is thinking...
+                </span>
+              </div>
+            ) : isSpeaking ? (
+              displayedText
+            ) : (
+              currentQuestion || "Waiting for next question..."
+            )}
+          </div>
           {input && input.trim().length > 0 && (
             <div
               style={{
@@ -1922,22 +2059,11 @@ export default function Chat({ interviewId }) {
 
         {/* End Interview Early Button */}
         <button
+          className={Styles["end-interview-btn"]}
           onClick={() => {
-             if (window.confirm("Are you sure you want to end the interview early? Your answers so far will be submitted for evaluation.")) {
-               endInterview();
-             }
-          }}
-          style={{
-             background: "#ef4444",
-             color: "white",
-             border: "none",
-             padding: "12px 24px",
-             borderRadius: "8px",
-             fontWeight: "600",
-             cursor: "pointer",
-             alignSelf: "center",
-             marginTop: "16px",
-             boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+            if (window.confirm("Are you sure you want to end the interview early? Your answers so far will be submitted for evaluation.")) {
+              endInterview();
+            }
           }}
         >
           End Interview Early
@@ -2034,46 +2160,7 @@ export default function Chat({ interviewId }) {
                   Answer Evaluation
                 </div>
                 <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {(() => {
-                    // Handle different evaluation data structures
-                    let score = null;
-
-                    // Try quantitative_scores.answer_score (new format)
-                    if (evaluation?.quantitative_scores?.answer_score) {
-                      score = evaluation.quantitative_scores.answer_score;
-                    }
-                    // Fallback to average_relevance_score
-                    else if (
-                      evaluation?.quantitative?.average_relevance_score
-                    ) {
-                      score = evaluation.quantitative.average_relevance_score;
-                    }
-                    // Try quantitative_scores (numeric or object fallback)
-                    else if (evaluation?.quantitative_scores) {
-                      if (typeof evaluation.quantitative_scores === "number") {
-                        score = evaluation.quantitative_scores;
-                      } else if (
-                        typeof evaluation.quantitative_scores === "object"
-                      ) {
-                        score =
-                          evaluation.quantitative_scores.answer_score ||
-                          evaluation.quantitative_scores.average ||
-                          evaluation.quantitative_scores.overall ||
-                          Object.values(evaluation.quantitative_scores)[0];
-                      }
-                    }
-
-                    // Convert to percentage if score is decimal (0-1 range)
-                    if (score !== null) {
-                      if (score <= 1) {
-                        return `${Math.round(score * 100)}%`;
-                      } else {
-                        return `${Math.round(score)}%`;
-                      }
-                    }
-
-                    return "N/A";
-                  })()}
+                  {answerScorePct != null ? `${answerScorePct}%` : "N/A"}
                 </div>
               </div>
               <div
@@ -2098,32 +2185,7 @@ export default function Chat({ interviewId }) {
                   Language Evaluation
                 </div>
                 <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {(() => {
-                    // Extract language score from evaluation
-                    let langScore = null;
-
-                    // Try to get language score from quantitative_scores (new format)
-                    if (evaluation?.quantitative_scores?.language_score) {
-                      langScore = evaluation.quantitative_scores.language_score;
-                    }
-                    // Fallback to communication
-                    else if (evaluation?.quantitative_scores?.communication) {
-                      langScore = evaluation.quantitative_scores.communication;
-                    } else if (evaluation?.quantitative?.communication) {
-                      langScore = evaluation.quantitative.communication;
-                    }
-
-                    // Convert to percentage if score is decimal (0-1 range)
-                    if (langScore !== null) {
-                      if (langScore <= 1) {
-                        return `${Math.round(langScore * 100)}%`;
-                      } else {
-                        return `${Math.round(langScore)}%`;
-                      }
-                    }
-
-                    return "N/A";
-                  })()}
+                  {langScorePct != null ? `${langScorePct}%` : "N/A"}
                 </div>
               </div>
               <div

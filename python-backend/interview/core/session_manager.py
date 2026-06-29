@@ -99,22 +99,34 @@ class InterviewSessionManager:
 
 
     def create_session(
-        self, cv_path: str, jd_path: str, reference_paths: List[str], proctoring_config: Optional[dict] = None
+        self,
+        cv_path: str,
+        jd_path: str,
+        reference_paths: List[str],
+        proctoring_config: Optional[dict] = None,
+        pre_validated: bool = False,
     ) -> Dict[str, Any]:
-        """Create a new interview session with natural conversation flow."""
+        """Create a new interview session with natural conversation flow.
+
+        Args:
+            pre_validated: Skip document validation when the caller already wrote
+                           the files from trusted DB data (avoids redundant I/O).
+        """
         session_id = str(uuid.uuid4())
         cost_tracker = CostTracker()
         cost_tracker.start_session(session_id)
         token = cost_tracker.set_session_context(session_id)
 
         try:
-            # Load documents
+            # Load documents once — reuse the same loader for validation AND the
+            # background context thread so we never read the files twice.
             document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
 
-            # Validate documents synchronously
-            validation = document_loader.validate_documents()
-            if not all(validation.values()):
-                return {"error": "Document validation failed", "validation": validation}
+            # Validate only when the caller hasn't already guaranteed validity.
+            if not pre_validated:
+                validation = document_loader.validate_documents()
+                if not all(validation.values()):
+                    return {"error": "Document validation failed", "validation": validation}
 
             # Hardcoded first question for zero-lag initialization
             first_question = "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
@@ -143,10 +155,12 @@ class InterviewSessionManager:
 
             self.sessions[session_id] = session
 
-            # Start background thread to build context
+            # Start background thread to build context.
+            # Pass the already-created loader so the thread reuses the text
+            # that was already read from disk — no second file read needed.
             threading.Thread(
                 target=self._initialize_context_background,
-                args=(session_id, cv_path, jd_path, reference_paths),
+                args=(session_id, document_loader),
                 daemon=True
             ).start()
 
@@ -166,17 +180,19 @@ class InterviewSessionManager:
         finally:
             cost_tracker.clear_session_context(token)
 
-    def _initialize_context_background(self, session_id: str, cv_path: str, jd_path: str, reference_paths: List[str]):
-        """Background task to initialize the conversation context."""
+    def _initialize_context_background(self, session_id: str, document_loader) -> None:
+        """Background task to initialize the conversation context.
+
+        Receives the already-loaded DocumentLoader so it never touches disk again.
+        """
         session = self._get_session(session_id)
         if not session:
             return
-        
+
         try:
-            document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
             resume_sections = document_loader.get_cv_sections()
             job_description = document_loader.get_jd_text()
-            
+
             conversation_context = self.question_generator.initialize_conversation(
                 resume_sections, job_description
             )

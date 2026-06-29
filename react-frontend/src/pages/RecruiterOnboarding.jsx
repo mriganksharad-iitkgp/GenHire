@@ -4,6 +4,32 @@ import { GoogleLogin } from "@react-oauth/google";
 import styles from "./RecruiterOnboarding.module.css";
 import { setToken, setUser } from "../utils/sessionManager";
 
+const STRENGTH_LEVELS = [
+  { label: "Too short", color: "#ef4444" },
+  { label: "Weak",      color: "#f97316" },
+  { label: "Fair",      color: "#eab308" },
+  { label: "Strong",    color: "#22c55e" },
+];
+
+function getPasswordStrength(pwd) {
+  if (!pwd || pwd.length < 8) return 0;
+  const types = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter(r => r.test(pwd)).length;
+  if (types <= 1) return 1;
+  if (types === 2 || pwd.length < 12) return 2;
+  return 3;
+}
+
+function getStrengthHint(pwd) {
+  if (!pwd) return "";
+  if (pwd.length < 8) return "Use at least 8 characters";
+  const missing = [];
+  if (!/[A-Z]/.test(pwd)) missing.push("uppercase letter");
+  if (!/[0-9]/.test(pwd)) missing.push("number");
+  if (!/[^a-zA-Z0-9]/.test(pwd)) missing.push("symbol");
+  if (missing.length) return `Add a ${missing.slice(0, 2).join(" or ")} to strengthen`;
+  return "";
+}
+
 const RecruiterOnboarding = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -489,6 +515,28 @@ const RecruiterOnboarding = () => {
                           )}
                         </button>
                       </div>
+                      {accountInfo.password && (() => {
+                        const level = getPasswordStrength(accountInfo.password);
+                        const { label, color } = STRENGTH_LEVELS[level];
+                        const hint = getStrengthHint(accountInfo.password);
+                        return (
+                          <div className={styles.strengthMeter} role="status" aria-live="polite">
+                            <div className={styles.strengthBar}>
+                              {STRENGTH_LEVELS.map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={styles.strengthSegment}
+                                  style={{ background: i <= level ? color : undefined }}
+                                />
+                              ))}
+                            </div>
+                            <div className={styles.strengthRow}>
+                              {hint && <span className={styles.strengthHint}>{hint}</span>}
+                              <span className={styles.strengthLabel} style={{ color }}>{label}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     <div className={styles.inputGroup}>

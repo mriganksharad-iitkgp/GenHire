@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import styles from "./JobDetailsModal.module.css";
+import GazeHeatmapPanel from "./GazeHeatmapPanel";
 
 export default function InterviewReportModal({
   isOpen,
@@ -8,7 +9,7 @@ export default function InterviewReportModal({
   cvScore,
   interviewScore,
 }) {
-  const [tab, setTab] = useState("summary"); // summary | transcript | raw
+  const [tab, setTab] = useState("summary"); // summary | transcript | gaze | raw
 
   const finalScore = useMemo(() => {
     if (typeof interviewScore === "number") return Math.round(interviewScore);
@@ -238,6 +239,7 @@ export default function InterviewReportModal({
           >
             <TabButton id="summary">Summary</TabButton>
             <TabButton id="transcript">Transcript</TabButton>
+            <TabButton id="gaze">Gaze Analysis</TabButton>
             <TabButton id="raw">Raw</TabButton>
           </div>
 
@@ -515,6 +517,42 @@ export default function InterviewReportModal({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {tab === "gaze" && (
+              <div>
+                <SectionTitle>Gaze Analysis</SectionTitle>
+                {report?.gaze_recorder_analysis || report?.gaze_recorder_points_path ? (
+                  <div
+                    style={{
+                      background: "#0b1020",
+                      borderRadius: 12,
+                      padding: "20px 18px",
+                    }}
+                  >
+                    <GazeHeatmapPanel
+                      analysis={report?.gaze_recorder_analysis}
+                      pointsPath={report?.gaze_recorder_points_path}
+                      apiUrl={process.env.REACT_APP_API_URL}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      background: "#f8f9fb",
+                      border: "1px dashed #dfe6ee",
+                      padding: 18,
+                      borderRadius: 8,
+                      color: "#5f6b7a",
+                      fontSize: 13,
+                    }}
+                  >
+                    No gaze tracking data was recorded for this interview session.
+                    Eye-tracking may have been skipped or the calibration did not
+                    complete successfully.
+                  </div>
+                )}
               </div>
             )}
 

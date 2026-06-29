@@ -1,0 +1,76 @@
+.root {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: 32px;
+  padding: 0 8px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.done .circle {
+  background: #22c55e;
+  color: white;
+  border: 2px solid #16a34a;
+}
+
+.active .circle {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.22);
+}
+
+.pending .circle {
+  background: white;
+  color: #94a3b8;
+  border: 2px solid #e2e8f0;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.done .label   { color: #22c55e; }
+.active .label { color: #667eea; }
+.pending .label { color: #94a3b8; }
+
+/* Horizontal bar connecting steps */
+.connector {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  margin: 0 6px;
+  /* Align with centre of the 36px circles: offset by half circle + gap */
+  margin-top: 17px;
+  align-self: flex-start;
+  transition: background 0.3s ease;
+  min-width: 24px;
+}
+
+.connectorDone {
+  background: #22c55e;
+}

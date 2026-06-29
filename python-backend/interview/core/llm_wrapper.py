@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import threading
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -69,12 +70,15 @@ def _persist_log(
     log_data: Dict[str, Any],
     logs_collection: Optional[Any] = None,
 ) -> None:
+    """Fire-and-forget cost log persistence so LLM calls don't block on DB I/O."""
     if logs_collection is not None:
-        try:
-            logs_collection.insert_one(log_data)
-            return
-        except Exception as exc:
-            logger.warning("Failed to persist OpenAI cost log to DB: %s", exc)
+        def _insert():
+            try:
+                logs_collection.insert_one(log_data)
+            except Exception as exc:
+                logger.warning("Failed to persist OpenAI cost log to DB: %s", exc)
+        threading.Thread(target=_insert, daemon=True).start()
+        return
 
     logger.info("openai_cost_log=%s", json.dumps(log_data, default=str, sort_keys=True))
 

@@ -910,3 +910,38 @@
     margin-left: 0;
   }
 }
+
+/* Password strength indicator */
+.strengthMeter { margin-top: 8px; }
+
+.strengthBar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.strengthSegment {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  transition: background 0.25s ease;
+}
+
+.strengthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strengthHint {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.strengthLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

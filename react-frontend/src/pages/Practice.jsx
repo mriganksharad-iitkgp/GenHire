@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
+import SkeletonCard from "../components/SkeletonCard";
 import InterviewReportModal from "../components/InterviewReportModal";
 import Pagination from "../components/Pagination";
 import CVSelectionModal from "../components/CVSelectionModal";
@@ -10,10 +11,42 @@ import JDDetailsModal from "../components/JDDetailsModal";
 import { PRACTICE_ROLE_OPTIONS } from "../constants/jobTaxonomy";
 import styles from "./Practice.module.css";
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
+import { authedFetch } from "../utils/authedFetch";
 
 const Practice = () => {
   const navigate = useNavigate();
+  const DIFFICULTIES = [
+    {
+      id: "easy",
+      label: "Easy",
+      icon: "fa-leaf",
+      color: "#22c55e",
+      bg: "#f0fdf4",
+      border: "#86efac",
+      desc: "Broad questions, forgiving pace — ideal for warming up or beginners.",
+    },
+    {
+      id: "medium",
+      label: "Medium",
+      icon: "fa-bar-chart",
+      color: "#6366f1",
+      bg: "#eef2ff",
+      border: "#a5b4fc",
+      desc: "Standard depth and follow-ups — the typical real-world interview experience.",
+    },
+    {
+      id: "hard",
+      label: "Hard",
+      icon: "fa-bolt",
+      color: "#ef4444",
+      bg: "#fef2f2",
+      border: "#fca5a5",
+      desc: "Challenging probing questions and tight pacing — sharpen under pressure.",
+    },
+  ];
+
   const [selectedRole, setSelectedRole] = useState("");
+  const [difficulty, setDifficulty] = useState("medium");
   const [uploadedJD, setUploadedJD] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [practiceHistory, setPracticeHistory] = useState([]);
@@ -48,7 +81,7 @@ const Practice = () => {
     setIsLoadingHistory(true);
     try {
       const token = getToken();
-      const response = await fetch(
+      const response = await authedFetch(
         `${process.env.REACT_APP_API_URL}/api/practice/history`,
         {
           method: "GET",
@@ -73,7 +106,7 @@ const Practice = () => {
   const viewPracticeReport = async (sessionId) => {
     try {
       const token = getToken();
-      const response = await fetch(
+      const response = await authedFetch(
         `${process.env.REACT_APP_API_URL}/api/practice/${sessionId}/report`,
         {
           method: "GET",
@@ -133,7 +166,7 @@ const Practice = () => {
     try {
       const formData = new FormData();
       formData.append("role", selectedRole);
-      formData.append("difficulty", "medium");
+      formData.append("difficulty", difficulty);
       formData.append("proctoring_enabled", proctoringEnabled ? "true" : "false");
 
       if (selectedRole === "custom" && uploadedJD) {
@@ -146,7 +179,7 @@ const Practice = () => {
       }
 
       const token = getToken();
-      const response = await fetch(
+      const response = await authedFetch(
         `${process.env.REACT_APP_API_URL}/api/practice/start`,
         {
           method: "POST",
@@ -224,7 +257,6 @@ const Practice = () => {
       // Fallback if app isn't installed (giving user enough time to click 'Open')
       const timeoutId = setTimeout(() => {
         if (document.hasFocus()) {
-          console.log("Secure browser not installed. Showing download prompt.");
           showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
           const link = document.createElement('a');
           link.href = '/apps/Genhire.exe';
@@ -288,7 +320,7 @@ const Practice = () => {
         const token = getToken();
         const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
 
-        const response = await fetch(url, {
+        const response = await authedFetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -309,7 +341,7 @@ const Practice = () => {
       // If no cv_id, show manual CV details modal
       try {
         const token = getToken();
-        const response = await fetch(
+        const response = await authedFetch(
           `${process.env.REACT_APP_API_URL}/api/cv-details`,
           {
             headers: {
@@ -441,7 +473,49 @@ const Practice = () => {
             </div>
           )}
 
-          {/* Start Button */}
+          {/* Difficulty Selection */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <i className="fa fa-sliders"></i> Interview Difficulty
+            </h3>
+            <div className={styles.difficultyGrid}>
+              {DIFFICULTIES.map((d) => {
+                const active = difficulty === d.id;
+                return (
+                  <div
+                    key={d.id}
+                    className={`${styles.difficultyCard} ${active ? styles.difficultyActive : ""}`}
+                    style={active ? { background: d.bg, borderColor: d.border } : {}}
+                    onClick={() => setDifficulty(d.id)}
+                    role="radio"
+                    aria-checked={active}
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === " " && setDifficulty(d.id)}
+                  >
+                    <div
+                      className={styles.difficultyIcon}
+                      style={{ color: active ? d.color : "#94a3b8" }}
+                    >
+                      <i className={`fa ${d.icon}`}></i>
+                    </div>
+                    <div className={styles.difficultyLabel}
+                      style={{ color: active ? d.color : "#1e293b" }}
+                    >
+                      {d.label}
+                    </div>
+                    <div className={styles.difficultyDesc}>{d.desc}</div>
+                    {active && (
+                      <div className={styles.difficultyCheck} style={{ color: d.color }}>
+                        <i className="fa fa-check-circle"></i>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Proctoring */}
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>
               <i className="fa fa-shield"></i> Practice Proctoring
@@ -494,8 +568,10 @@ const Practice = () => {
             </h3>
 
             {isLoadingHistory ? (
-              <div className={styles.loadingState}>
-                <i className="fa fa-spinner fa-spin"></i> Loading history...
+              <div>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonCard key={i} variant="practice" />
+                ))}
               </div>
             ) : practiceHistory.length === 0 ? (
               <div className={styles.emptyState}>

@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 from flask import Flask, request, jsonify, Response
 from utils.gaze_recorder_service import GazeRecorderService
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, join_room
 from werkzeug.utils import secure_filename
 import datetime
 import uuid
@@ -39,6 +39,12 @@ from bson import ObjectId
 
 import numpy as np
 import time
+
+try:
+    from security_check import analyze_frame_for_proctoring
+    _proctoring_available = True
+except Exception:
+    _proctoring_available = False
 
 # Import configuration
 from config.env_loader import load_environment
@@ -64,7 +70,9 @@ except ImportError as e:
     print(f"--- DEBUG: google.cloud.speech FAILED before speech_routes in app.py: {e} ---")
 from routes.speech_routes import speech_bp
 
+import threading
 from services.cv_scoring_service import CVScoringService
+from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
 from payment_module.services.subscription_service import SubscriptionService
@@ -109,6 +117,7 @@ load_environment()
 # Initialize Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB — rejects oversized request bodies before they're read
 
 # Setup Security Headers (Helmet equivalent) — optional
 try:
@@ -319,9 +328,8 @@ interview_manager = InterviewSessionManager(
 # === INTERVIEW SYSTEM (REMAINS IN APP.PY) ===
 # All interview-related routes and Socket.IO handlers remain here
 
-# Add this dictionary for live sessions
-# Add this dictionary for live sessions
-# live_sessions = {} # Moved to proctoring_server
+# In-memory store: session_id -> { registered_face_bytes, proctoring_score, infractions }
+live_sessions = {}
 
 # Define directories for storing files
 UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
@@ -707,8 +715,14 @@ def start_interview(current_user):
     with open(jd_txt_path, "w", encoding="utf-8") as f:
         f.write(jd_text)
 
+    # pre_validated=True: we just wrote these files from trusted MongoDB data
+    # so there is no need to re-read and validate them inside create_session.
     session_details = interview_manager.create_session(
-        cv_path=cv_txt_path, jd_path=jd_txt_path, reference_paths=[], proctoring_config=proctoring_config
+        cv_path=cv_txt_path,
+        jd_path=jd_txt_path,
+        reference_paths=[],
+        proctoring_config=proctoring_config,
+        pre_validated=True,
     )
 
     if "error" in session_details:
@@ -1109,6 +1123,28 @@ def end_interview(current_user, session_id):
                     {"$inc": job_counter_update},
                 )
 
+            # Fire-and-forget: notify the recruiter that the interview is done
+            try:
+                recruiter_doc = users_collection.find_one(
+                    {"_id": ObjectId(recruiter_actor_id)},
+                    {"email": 1, "name": 1},
+                ) if recruiter_actor_id else None
+                if recruiter_doc and recruiter_doc.get("email"):
+                    _email_svc = EmailService()
+                    _cand_name = current_user.get("name") or "A candidate"
+                    _job_title = existing_app.get("job_title") or "the position"
+                    _score = int(interview_score) if interview_score is not None else None
+                    _rec_name = recruiter_doc.get("name") or "Recruiter"
+                    _rec_email = recruiter_doc["email"]
+                    _app_id = str(application_id)
+                    threading.Thread(
+                        target=_email_svc.send_interview_complete_notification,
+                        args=(_rec_email, _rec_name, _cand_name, _job_title, _score, _app_id),
+                        daemon=True,
+                    ).start()
+            except Exception as _notify_exc:
+                print(f"⚠️ Interview completion notification failed: {_notify_exc}")
+
             if result.modified_count == 0:
                 print(
                     f"❌ Warning: Application {application_id} was not updated (no documents modified)"
@@ -1387,40 +1423,23 @@ def get_user_interviews(current_user):
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
 def register_face(current_user, session_id):
-    # This might now be handled by the proctoring service directly,
-    # OR we just acknowledge it here if the frontend still calls this for status updates.
-    # For now, we'll just update status and let the proctoring service handle the image if the frontend calls it there too.
-
-    # If the frontend calls THIS endpoint with the image, we might need to forward it or just ignore it
-    # if the frontend calls the proctoring service separately.
-    # Assuming frontend will be updated to call proctoring service for face reg,
-    # but we still need to set status to active.
-
-    # Update the interview status in the database
-    interviews_collection.update_one(
-        {"session_id": session_id, "user_id": str(current_user["_id"])},
-        {"$set": {"status": "active"}},
-    )
-    return jsonify({"message": "Interview activated"}), 200
-
-    # def register_face(current_user, session_id):_OLD
     data = request.get_json()
-    if "image" not in data:
+    if not data or "image" not in data:
         return jsonify({"error": "No image data provided"}), 400
     try:
-        header, encoded = data["image"].split(",", 1)
+        # Strip the data-URL prefix (e.g. "data:image/jpeg;base64,...")
+        raw = data["image"]
+        encoded = raw.split(",", 1)[1] if "," in raw else raw
         decoded_image = base64.b64decode(encoded)
 
-        # Initialize the session in our live store, including the manual_infractions list
+        # Store face bytes and initialise proctoring state for this session
         live_sessions[session_id] = {
-            "registered_face": decoded_image,  # Corrected: Use decoded_image instead of frame
+            "registered_face": decoded_image,
             "proctoring_score": 100,
             "infractions": {},
-            "sid": None,
-            "manual_infractions": [],  # Initialize list for tab/window switch violations
         }
 
-        # Update the interview status in the database
+        # Mark interview as active in the database
         interviews_collection.update_one(
             {"session_id": session_id, "user_id": str(current_user["_id"])},
             {"$set": {"status": "active"}},
@@ -1431,35 +1450,97 @@ def register_face(current_user, session_id):
         return jsonify({"error": "Failed to process image"}), 500
 
 
-# Add this entire block for WebSocket event handling
 @socketio.on("connect")
 def handle_connect():
-    from flask import request
-
     pass
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    from flask import request
-
-    # Clean up any sessions associated with this client
-    # Note: In SocketIO, we don't have direct access to sid in these handlers
-    # We'll need to handle cleanup differently
     pass
 
 
-# Socket handlers for proctoring have been moved to proctoring_server.py
+@socketio.on("start_proctoring")
+def handle_start_proctoring(data):
+    """Desktop client signals it is ready to send proctoring frames."""
+    session_id = data.get("session_id")
+    if not session_id:
+        return
+    join_room(session_id)
+    print(f"Proctoring started for session {session_id}")
+
+
+@socketio.on("proctoring_frame")
+def handle_proctoring_frame(data):
+    """
+    Receives a JPEG frame (base64) from the desktop client once per second,
+    runs MediaPipe head-pose + DeepFace identity check, and emits a
+    proctoring_alert back to the room if a violation is detected.
+    """
+    if not _proctoring_available:
+        return
+
+    session_id = data.get("session_id")
+    image_data = data.get("image", "")
+    if not session_id or not image_data:
+        return
+
+    session = live_sessions.get(session_id)
+    if not session:
+        return  # Face not registered yet — ignore frame
+
+    try:
+        # Decode base64 frame to numpy array
+        encoded = image_data.split(",", 1)[1] if "," in image_data else image_data
+        img_bytes = base64.b64decode(encoded)
+        img_array = np.frombuffer(img_bytes, dtype=np.uint8)
+        import cv2
+        frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if frame is None:
+            return
+
+        result = analyze_frame_for_proctoring(
+            current_frame=frame,
+            registered_face_img=session["registered_face"],
+            current_score=session["proctoring_score"],
+            infractions=session["infractions"],
+        )
+
+        session["proctoring_score"] = result["score"]
+        session["infractions"] = result["infractions"]
+
+        if result["status"] != "Status: OK":
+            socketio.emit(
+                "proctoring_alert",
+                {
+                    "status": result["status"],
+                    "score": result["score"],
+                    "infractions": result["infractions"],
+                },
+                room=session_id,
+            )
+    except Exception as e:
+        print(f"proctoring_frame error for {session_id}: {e}")
+
+
+@socketio.on("proctoring_violation")
+def handle_proctoring_violation(data):
+    """Records a manual violation (tab switch, window blur) in the session store."""
+    session_id = data.get("session_id")
+    violation_type = data.get("type", "unknown")
+    if not session_id:
+        return
+    session = live_sessions.get(session_id)
+    if session:
+        key = f"manual_{violation_type}"
+        session["infractions"][key] = session["infractions"].get(key, 0) + 1
+    print(f"Manual violation [{violation_type}] for session {session_id}")
 
 
 @socketio.on("join_mobile_session")
 def handle_mobile_join(data):
     session_id = data.get("session_id")
-    # Join the specific room for this interview session
-    from flask_socketio import join_room
-
     join_room(session_id)
-    # Notify the desktop client that mobile is connected
     socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
 
 

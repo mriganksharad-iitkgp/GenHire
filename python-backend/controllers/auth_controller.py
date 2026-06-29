@@ -10,6 +10,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from services.email_service import EmailService
 from payment_module.services.wallet_service import WalletService
+from middleware.input_validator import validate_email, validate_password, validate_name
 
 class AuthController:
     def __init__(self, db_collections):
@@ -159,10 +160,20 @@ class AuthController:
         # Validation
         if not all([name, normalized_email, password, confirm_password]):
             return {'error': 'All fields are required'}, 400
-        
+
+        err = validate_name(name)
+        if err:
+            return {'error': err}, 400
+        err = validate_email(normalized_email)
+        if err:
+            return {'error': err}, 400
+        err = validate_password(password)
+        if err:
+            return {'error': err}, 400
+
         if password != confirm_password:
             return {'error': 'Passwords do not match'}, 400
-        
+
         # Only allow candidate and recruiter registration (admins created manually)
         if user_type not in ['candidate', 'recruiter']:
             return {'error': 'Invalid user type'}, 400
@@ -521,13 +532,13 @@ class AuthController:
         """Reset user password using reset token"""
         if not new_password or not confirm_password:
             return {'error': 'Password and confirmation are required'}, 400
-        
+
         if new_password != confirm_password:
             return {'error': 'Passwords do not match'}, 400
-        
-        # Validate password strength (basic validation)
-        if len(new_password) < 6:
-            return {'error': 'Password must be at least 6 characters long'}, 400
+
+        err = validate_password(new_password, field_name='New password')
+        if err:
+            return {'error': err}, 400
         
         user = self.users_collection.find_one({
             'reset_token': token

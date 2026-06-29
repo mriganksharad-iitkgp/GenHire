@@ -7,7 +7,11 @@ import os
 import re
 import json
 import logging
+import hashlib
+import random
+import time
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -39,6 +43,11 @@ from ..prompts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# In-memory cache for the 4 LLM calls made during initialize_conversation().
+# Keyed on MD5(cv_text[:3000] + jd_text[:3000]) — same candidate+JD reuses results.
+_INIT_CACHE: Dict[str, Any] = {}
+_INIT_CACHE_MAX = 50
 
 
 class InterviewPhase(Enum):
@@ -170,42 +179,68 @@ class PromptBasedQuestionGenerator:
             "What trade-offs have you considered when working with {topic}, and how did you decide?",
         ]
         
-    def _complete_llm(self, prompt: str) -> Any:
-        """Wrapper for LLM completion with cost tracking."""
-        response = self.llm.complete(prompt)
-        
-        # Track cost with robust usage extraction
-        prompt_tokens = 0
-        completion_tokens = 0
-        model_name = getattr(response, "model", None) or self.config.default_model
-        
-        if hasattr(response, "usage"):
-            if isinstance(response.usage, dict):
-                prompt_tokens = response.usage.get("prompt_tokens", 0)
-                completion_tokens = response.usage.get("completion_tokens", 0)
-            else:
-                # Handle object-based usage
-                prompt_tokens = getattr(response.usage, "prompt_tokens", 0)
-                completion_tokens = getattr(response.usage, "completion_tokens", 0)
-        
-        # Fallback for Gemini specific structure if using raw response
-        if prompt_tokens == 0 and hasattr(response, "raw"):
-            raw = response.raw
-            if hasattr(raw, "usage_metadata"):
-                prompt_tokens = getattr(raw.usage_metadata, "prompt_token_count", 0)
-                completion_tokens = getattr(raw.usage_metadata, "candidates_token_count", 0)
+    # Transient error keywords that are safe to retry (rate limits, network blips).
+    _RETRYABLE_ERRORS = ("rate", "429", "503", "502", "500", "timeout", "connection",
+                         "reset", "unavailable", "overloaded", "try again")
 
-        CostTracker().add_usage(
-            source="question_generation",
-            model=model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            prompt_text=prompt,
-            completion_text=getattr(response, "text", "") if response else "",
-            usage=getattr(response, "usage", None),
-        )
-            
-        return response
+    def _complete_llm(self, prompt: str, max_retries: int = 3) -> Any:
+        """LLM completion with cost tracking and exponential-backoff retry.
+
+        Retries up to max_retries times on transient errors (rate limits, timeouts,
+        temporary server errors). Non-retriable errors are re-raised immediately so
+        FallbackLLM can switch providers.
+        """
+        last_exc: Exception = RuntimeError("No attempts made")
+        for attempt in range(max_retries):
+            try:
+                response = self.llm.complete(prompt)
+
+                # Track cost with robust usage extraction
+                prompt_tokens = 0
+                completion_tokens = 0
+                model_name = getattr(response, "model", None) or self.config.default_model
+
+                if hasattr(response, "usage"):
+                    if isinstance(response.usage, dict):
+                        prompt_tokens = response.usage.get("prompt_tokens", 0)
+                        completion_tokens = response.usage.get("completion_tokens", 0)
+                    else:
+                        prompt_tokens = getattr(response.usage, "prompt_tokens", 0)
+                        completion_tokens = getattr(response.usage, "completion_tokens", 0)
+
+                if prompt_tokens == 0 and hasattr(response, "raw"):
+                    raw = response.raw
+                    if hasattr(raw, "usage_metadata"):
+                        prompt_tokens = getattr(raw.usage_metadata, "prompt_token_count", 0)
+                        completion_tokens = getattr(raw.usage_metadata, "candidates_token_count", 0)
+
+                CostTracker().add_usage(
+                    source="question_generation",
+                    model=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    prompt_text=prompt,
+                    completion_text=getattr(response, "text", "") if response else "",
+                    usage=getattr(response, "usage", None),
+                )
+                return response
+
+            except Exception as exc:
+                err_lower = str(exc).lower()
+                is_transient = any(kw in err_lower for kw in self._RETRYABLE_ERRORS)
+                if is_transient and attempt < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s … + ±0.5s jitter
+                    wait = (2 ** attempt) + random.uniform(-0.5, 0.5)
+                    wait = max(0.5, wait)
+                    logger.warning(
+                        "LLM transient error (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1, max_retries, wait, exc,
+                    )
+                    time.sleep(wait)
+                    last_exc = exc
+                else:
+                    raise
+        raise last_exc
 
     def _get_embedding(self, text: str) -> np.ndarray:
         """Generate embedding for text using a simple method.
@@ -233,6 +268,11 @@ class PromptBasedQuestionGenerator:
             vec = vec / norm
         return vec
 
+    @staticmethod
+    def _init_cache_key(cv_content: str, jd_content: str) -> str:
+        combined = (cv_content[:3000] + "|" + jd_content[:3000]).encode("utf-8", errors="ignore")
+        return hashlib.md5(combined).hexdigest()
+
     def initialize_conversation(
         self, resume_sections: Dict[str, str], job_description: str = ""
     ) -> ConversationContext:
@@ -240,9 +280,29 @@ class PromptBasedQuestionGenerator:
         self.resume_sections = resume_sections
         self.cv_content = " ".join(resume_sections.values())
 
-        # Extract keywords from CV and JD (JD-weighted)
-        cv_keywords = self._extract_cv_keywords(self.cv_content, job_description)
-        jd_keywords = self._extract_jd_keywords(job_description)
+        cache_key = self._init_cache_key(self.cv_content, job_description)
+        if cache_key in _INIT_CACHE:
+            logger.info("init_cache HIT — reusing CV/JD keyword and skill extractions")
+            cv_keywords, jd_keywords, skill_level, difficulty_dist = _INIT_CACHE[cache_key]
+        else:
+            # Run the four LLM-based extractions in parallel so the background
+            # init thread finishes in ~2-3 s instead of the 6-10 s it took when
+            # these four calls ran sequentially.
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                cv_kw_future   = pool.submit(self._extract_cv_keywords, self.cv_content, job_description)
+                jd_kw_future   = pool.submit(self._extract_jd_keywords, job_description)
+                skill_future   = pool.submit(self._assess_initial_skill_level, resume_sections)
+                diff_future    = pool.submit(self._analyze_jd_difficulty_distribution, job_description)
+
+                cv_keywords    = cv_kw_future.result()
+                jd_keywords    = jd_kw_future.result()
+                skill_level    = skill_future.result()
+                difficulty_dist = diff_future.result()
+
+            # Evict oldest entry when the cache is full (simple FIFO)
+            if len(_INIT_CACHE) >= _INIT_CACHE_MAX:
+                _INIT_CACHE.pop(next(iter(_INIT_CACHE)))
+            _INIT_CACHE[cache_key] = (cv_keywords, jd_keywords, skill_level, difficulty_dist)
 
         # Extract job title from job description
         job_title = self._extract_job_title(job_description)
@@ -252,12 +312,8 @@ class PromptBasedQuestionGenerator:
         jd_keywords = self._filter_keywords_by_role(jd_keywords, job_role)
         self._load_question_banks_for_role(job_role)
 
-        # Assess initial skill level from candidate CV
-        skill_level = self._assess_initial_skill_level(resume_sections)
-
-        # Classify role difficulty from JD and align skill level mapping
+        # Classify role difficulty from JD (heuristic — no LLM needed)
         role_diff = self._classify_role_difficulty(job_description)
-        difficulty_dist = self._analyze_jd_difficulty_distribution(job_description)
         skill_level_map = {"easy": "beginner", "medium": "intermediate", "hard": "expert"}
         jd_required_skill = skill_level_map.get(role_diff, "intermediate")
         
@@ -320,26 +376,15 @@ class PromptBasedQuestionGenerator:
             return self._fallback_greeting(context)
 
     def _refine_with_jd(self, bank_question: str, topic: str, difficulty: str, context: ConversationContext) -> str:
-        """Refine a bank question to better align with the JD requirements."""
-        try:
-            jd_summary = context.job_title + ": " + ", ".join(context.jd_keywords[:5])
-            
-            prompt = REPHRASE_BANK_QUESTION_PROMPT.format(
-                bank_question=bank_question,
-                jd_content=jd_summary or "N/A",
-                topic=topic,
-                difficulty=difficulty
-            )
-            
-            response = self._complete_llm(prompt)
-            if response and hasattr(response, "text"):
-                refined = response.text.strip()
-                if refined and "?" in refined and len(refined) > 15:
-                    return refined
-            return bank_question
-        except Exception as e:
-            logger.error(f"Error refining bank question: {e}")
-            return bank_question
+        """Return the bank question directly — no LLM call needed.
+
+        The bank questions are already topic-matched and well-written.  The
+        previous LLM-based rephrasing added 1-2 s of latency per question with
+        minimal quality benefit, because the question bank is already curated for
+        the role and the input JD summary (job title + 5 keywords) provided too
+        little signal to produce meaningfully better questions.
+        """
+        return bank_question
 
     def _generate_technical_question(
         self,

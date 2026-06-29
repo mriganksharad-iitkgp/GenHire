@@ -2,6 +2,33 @@ import React, { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
 
+const STRENGTH_LEVELS = [
+  { label: "Too short", color: "#e53e3e" },
+  { label: "Weak",      color: "#dd6b20" },
+  { label: "Fair",      color: "#d69e2e" },
+  { label: "Strong",    color: "#38a169" },
+];
+
+function getPasswordStrength(pwd) {
+  if (pwd.length < 8) return 0;
+  let score = 0;
+  if (/[a-z]/.test(pwd)) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[^a-zA-Z0-9]/.test(pwd)) score++;
+  if (score <= 1) return 1;
+  if (score === 2) return 2;
+  return 3;
+}
+
+function getStrengthHint(pwd) {
+  if (pwd.length < 8) return "Add more characters";
+  if (!/[A-Z]/.test(pwd)) return "Add uppercase letters";
+  if (!/[0-9]/.test(pwd)) return "Add numbers";
+  if (!/[^a-zA-Z0-9]/.test(pwd)) return "Add symbols for extra strength";
+  return "";
+}
+
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -21,8 +48,8 @@ const ResetPassword = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long");
       return;
     }
 
@@ -120,11 +147,30 @@ const ResetPassword = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter new password"
               required
-              minLength={6}
+              minLength={8}
             />
-            <small style={{ color: "#666", fontSize: "0.85rem" }}>
-              Minimum 6 characters
-            </small>
+            {password && (() => {
+              const level = getPasswordStrength(password);
+              const { label, color } = STRENGTH_LEVELS[level];
+              const hint = getStrengthHint(password);
+              return (
+                <div className={styles.strengthMeter} role="status" aria-live="polite">
+                  <div className={styles.strengthBar}>
+                    {STRENGTH_LEVELS.map((_, i) => (
+                      <div
+                        key={i}
+                        className={styles.strengthSegment}
+                        style={{ background: i <= level ? color : undefined }}
+                      />
+                    ))}
+                  </div>
+                  <div className={styles.strengthRow}>
+                    {hint && <span className={styles.strengthHint}>{hint}</span>}
+                    <span className={styles.strengthLabel} style={{ color }}>{label}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className={styles.inputGroup}>
@@ -136,7 +182,7 @@ const ResetPassword = () => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
               required
-              minLength={6}
+              minLength={8}
             />
           </div>
 
@@ -154,4 +200,3 @@ const ResetPassword = () => {
 };
 
 export default ResetPassword;
-

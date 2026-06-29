@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 from controllers.auth_controller import AuthController
 from middleware.auth_middleware import token_required
+from middleware.rate_limiter import rate_limit
 from config.database import db_config
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
@@ -12,6 +13,7 @@ auth_controller = AuthController(collections)
 
 @auth_bp.route('/register', methods=['POST'])
 @cross_origin()
+@rate_limit(max_calls=5, window_seconds=60)
 def register():
     """User registration endpoint"""
     data = request.get_json()
@@ -31,6 +33,7 @@ def check_email_account_type():
 
 @auth_bp.route('/login', methods=['POST'])
 @cross_origin()
+@rate_limit(max_calls=10, window_seconds=60)
 def login():
     """User login endpoint. Accepts either an email or a username under
     `identifier` (preferred) or the legacy `email` field for backward compat."""
@@ -78,6 +81,7 @@ def resend_verification():
 
 @auth_bp.route('/forgot-password', methods=['POST'])
 @cross_origin()
+@rate_limit(max_calls=3, window_seconds=60)
 def forgot_password():
     """Request password reset email"""
     data = request.get_json()

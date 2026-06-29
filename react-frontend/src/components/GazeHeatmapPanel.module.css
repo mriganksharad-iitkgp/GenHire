@@ -1,15 +1,102 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
+/* ── Plain-English Interpretation ─────────────────────────────────── */
+.interpretation {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.interpretationLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.interpretationText {
+  margin: 0;
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+/* ── Risk Score Meter ─────────────────────────────────────────────── */
+.riskMeter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.riskMeterTrack {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: visible;
+  display: flex;
+}
+
+.riskMeterGreen,
+.riskMeterAmber,
+.riskMeterRed {
+  flex: 1;
+  height: 100%;
+}
+
+.riskMeterGreen {
+  background: linear-gradient(to right, #16a34a, #4ade80);
+  border-radius: 999px 0 0 999px;
+}
+
+.riskMeterAmber {
+  background: linear-gradient(to right, #ca8a04, #fbbf24);
+}
+
+.riskMeterRed {
+  background: linear-gradient(to right, #dc2626, #f87171);
+  border-radius: 0 999px 999px 0;
+}
+
+.riskMeterMarker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: 2px solid #1e293b;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+  transition: left 0.4s ease;
+  z-index: 1;
+}
+
+.riskMeterLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+  padding: 0 2px;
+}
+
+/* ── Stats Row ────────────────────────────────────────────────────── */
 .stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 18px;
+  gap: 10px 18px;
   font-size: 12px;
   color: #94a3b8;
+  background: rgba(30, 41, 59, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 
 .stats strong {
@@ -18,21 +105,39 @@
   margin-right: 4px;
 }
 
+/* ── Heatmap Canvas ───────────────────────────────────────────────── */
 .canvasWrap {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(12, 18, 34, 1);
+  position: relative;
 }
 
 .canvas {
   display: block;
   width: 100%;
-  height: 220px;
+  height: 320px;
   vertical-align: middle;
 }
 
+.canvasLabel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(12, 18, 34, 0.75);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #64748b;
+  font-size: 10px;
+  text-align: center;
+  padding: 5px 0;
+  letter-spacing: 0.03em;
+}
+
+/* ── Legend ──────────────────────────────────────────────────────── */
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -61,6 +166,7 @@
   color: #78716c;
 }
 
+/* ── Misc ─────────────────────────────────────────────────────────── */
 .hint {
   margin: 0;
   font-size: 12px;
@@ -73,6 +179,7 @@
   color: #94a3b8;
 }
 
+/* ── Suspicious Region List ──────────────────────────────────────── */
 .regionList {
   list-style: none;
   margin: 0;
@@ -88,7 +195,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 7px 12px;
   background: rgba(30, 41, 59, 0.45);
   border-radius: 6px;
   border-left: 3px solid rgba(148, 163, 184, 0.35);

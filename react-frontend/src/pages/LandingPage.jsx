@@ -151,6 +151,20 @@ const LandingPage = () => {
     }
   ];
 
+  const creditUsage = {
+    candidate: [
+      { action: "Practice Interview", cost: "30 credits" },
+      { action: "Practice Interview + Proctoring", cost: "50 credits" },
+      { action: "Signup Welcome Bonus", cost: "+100 free", highlight: true },
+    ],
+    recruiter: [
+      { action: "Real Candidate Interview", cost: "30 credits" },
+      { action: "Interview + Proctoring", cost: "50 credits" },
+      { action: "AI Job Description Generation", cost: "10 credits" },
+      { action: "Signup Welcome Bonus", cost: "+100 free", highlight: true },
+    ],
+  };
+
   const faqs = [
     {
       question: "What is GenHire?",
@@ -166,6 +180,21 @@ const LandingPage = () => {
       question: "Can GenHire automate interviews?",
       answer:
         "Yes. GenHire supports AI-powered interviews with answer evaluation, reports, transcripts, proctoring signals, and analytics for hiring decisions."
+    },
+    {
+      question: "How do wallet credits work?",
+      answer:
+        "Credits are a fixed-cost currency — no subscriptions, no surprises. Candidates spend 30 credits per practice interview (50 with proctoring). Recruiters spend 30 credits per real interview (50 with proctoring) and 10 credits for AI job description generation. Credits never expire and are only deducted when a session completes successfully."
+    },
+    {
+      question: "What is interview proctoring?",
+      answer:
+        "Proctoring uses AI-powered gaze tracking and behaviour analysis to monitor candidates during the session. It detects off-screen looks and suspicious gaze patterns, then generates a risk score and plain-English summary so recruiters can assess interview integrity without guesswork."
+    },
+    {
+      question: "Can I try GenHire before paying?",
+      answer:
+        "Yes. Every new account — both candidate and recruiter — receives 100 free credits on signup with no payment required. That covers 3 full practice interviews before you decide to top up."
     }
   ];
 
@@ -190,6 +219,7 @@ const LandingPage = () => {
             <a href="#features">Features</a>
             <a href="#how-it-works">How It Works</a>
             <a href="#pricing">Pricing</a>
+            <a href="#credits">Credits</a>
             <a href="#testimonials">Testimonials</a>
           </div>
 
@@ -723,6 +753,57 @@ const LandingPage = () => {
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Credit Usage Section */}
+      <section id="credits" className={styles.creditSection}>
+        <div className={styles.container}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionTag}>How Credits Work</span>
+            <h2 className={styles.sectionTitle}>
+              Know Exactly <span className={styles.gradientText}>What You Pay</span>
+            </h2>
+            <p className={styles.sectionSubtitle}>
+              Fixed deductions per action. Credits never expire and are only spent when a session completes.
+            </p>
+          </div>
+
+          <div className={styles.creditGrid}>
+            <div className={styles.creditCard}>
+              <div className={styles.creditCardHeader}>
+                <span className={styles.creditCardEmoji}>👤</span>
+                <h3>Candidates</h3>
+              </div>
+              <div className={styles.creditRows}>
+                {creditUsage.candidate.map((row, i) => (
+                  <div key={i} className={`${styles.creditRow} ${row.highlight ? styles.creditRowBonus : ""}`}>
+                    <span className={styles.creditAction}>{row.action}</span>
+                    <span className={row.highlight ? styles.creditCostFree : styles.creditCost}>{row.cost}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.creditCard}>
+              <div className={styles.creditCardHeader}>
+                <span className={styles.creditCardEmoji}>💼</span>
+                <h3>Recruiters</h3>
+              </div>
+              <div className={styles.creditRows}>
+                {creditUsage.recruiter.map((row, i) => (
+                  <div key={i} className={`${styles.creditRow} ${row.highlight ? styles.creditRowBonus : ""}`}>
+                    <span className={styles.creditAction}>{row.action}</span>
+                    <span className={row.highlight ? styles.creditCostFree : styles.creditCost}>{row.cost}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <p className={styles.creditNote}>
+            Credits are deducted only when a session completes successfully — cancelled or failed sessions are not charged.
+          </p>
         </div>
       </section>
 

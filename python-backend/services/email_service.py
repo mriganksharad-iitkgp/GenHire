@@ -187,54 +187,298 @@ class EmailService:
         """Send confirmation email after successful password change."""
         subject = "Your Genhire password has been changed"
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #10B981; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
-                .content {{ background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }}
-                .footer {{ margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }}
-                .warning {{ background-color: #FEE2E2; padding: 10px; border-left: 4px solid #EF4444; margin: 15px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Password Changed Successfully</h1>
-                </div>
-                <div class="content">
-                    <p>Hi {user_name},</p>
-                    <p>This is a confirmation that your Genhire account password has been changed successfully.</p>
-                    <p>If you made this change, no further action is required.</p>
-                    <div class="warning">
-                        <strong>Didn't change your password?</strong><br>
-                        If you didn't make this change, please contact our support team immediately and secure your account.
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>&copy; {datetime.now().year} Genhire. All rights reserved.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        html_content = self._render_auth_email(
+            title="Password changed successfully",
+            eyebrow="Account security",
+            greeting_name=user_name,
+            intro="This is a confirmation that your Genhire account password was changed successfully. If you made this change, no further action is required.",
+            cta_label="Log in to Your Account",
+            action_url=f"{self.frontend_url}/login",
+            expiry_text="This notification was sent because your password was recently changed.",
+            notice_title="Didn't change your password?",
+            notice_body="If you did not make this change, please reset your password immediately and contact our support team to secure your account.",
+        )
 
-        text_content = f"""
+        text_content = dedent(f"""
         Hi {user_name},
 
-        This is a confirmation that your Genhire account password has been changed successfully.
+        This is a confirmation that your Genhire account password was changed successfully.
 
         If you made this change, no further action is required.
 
-        If you didn't make this change, please contact our support team immediately and secure your account.
+        If you did not make this change, please reset your password immediately:
+        {self.frontend_url}/forgot-password
 
         (c) {datetime.now().year} Genhire. All rights reserved.
-        """
+        """).strip()
 
         return self.send_email(to_email, subject, html_content, text_content)
+
+    def send_interview_complete_notification(
+        self,
+        to_email: str,
+        recruiter_name: str,
+        candidate_name: str,
+        job_title: str,
+        interview_score: Optional[int],
+        application_id: str,
+    ) -> bool:
+        """Notify recruiter when a candidate finishes a real interview."""
+        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        safe_recruiter = escape(recruiter_name or "there")
+        safe_candidate = escape(candidate_name or "A candidate")
+        safe_job = escape(job_title or "the position")
+        safe_dashboard = escape(dashboard_url, quote=True)
+        year = datetime.now().year
+
+        if interview_score is not None:
+            score_html = (
+                f'<div style="text-align:center; margin:24px 0;">'
+                f'<div style="display:inline-block; background:#f0fdf4; border:2px solid #86efac; '
+                f'border-radius:14px; padding:16px 32px;">'
+                f'<div style="font-size:13px; font-weight:700; color:#166534; '
+                f'text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Interview Score</div>'
+                f'<div style="font-size:42px; font-weight:800; color:#15803d; line-height:1;">{interview_score}%</div>'
+                f'</div></div>'
+            )
+            score_text = f"Interview score: {interview_score}%"
+        else:
+            score_html = ""
+            score_text = "Interview score: not yet computed"
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview completed — {safe_candidate}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7fb;margin:0;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf5;border-radius:14px;overflow:hidden;box-shadow:0 16px 36px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="padding:22px 40px;background:#ffffff;border-bottom:1px solid #edf1f7;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+              <td style="width:38px;height:38px;background:#5b46f6;border-radius:10px;color:#ffffff;font-size:22px;line-height:38px;font-weight:700;text-align:center;">G</td>
+              <td style="padding-left:12px;color:#111827;font-size:24px;line-height:30px;font-weight:700;">Genhire</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#091831;padding:42px 40px;">
+            <div style="color:#9fb3d9;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px 0;">Interview completed</div>
+            <h1 style="color:#ffffff;font-size:28px;line-height:36px;font-weight:800;margin:0;">
+              {safe_candidate} finished their interview
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:34px 40px 38px 40px;">
+            <p style="font-size:15px;line-height:24px;margin:0 0 8px 0;color:#2d3748;">Hi {safe_recruiter},</p>
+            <p style="font-size:15px;line-height:24px;margin:0 0 20px 0;color:#2d3748;">
+              <strong>{safe_candidate}</strong> has completed their AI interview for <strong>{safe_job}</strong>.
+              Their report, transcript, and gaze analysis are ready for your review.
+            </p>
+            {score_html}
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="border-collapse:separate;margin:0 auto 28px auto;">
+              <tr>
+                <td align="center" bgcolor="#5b46f6" style="background:#5b46f6;border-radius:8px;">
+                  <a href="{safe_dashboard}" target="_blank" rel="noopener noreferrer"
+                     style="background:#5b46f6;border:1px solid #5b46f6;border-radius:8px;color:#ffffff;cursor:pointer;display:block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;padding:14px 34px;text-align:center;text-decoration:none;white-space:nowrap;">
+                    View Interview Report
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <div style="height:1px;background:#e8edf6;margin:0 0 22px 0;"></div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f0ff;border-radius:10px;border-left:4px solid #5b46f6;">
+              <tr><td style="padding:16px 18px;">
+                <p style="font-size:14px;line-height:22px;margin:0;color:#342b7a;">
+                  <strong>Next step:</strong> Log in to your recruiter dashboard to review the full report, read the transcript, and check gaze analysis before making a hiring decision.
+                </p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 40px;background:#f8fafc;color:#7a8699;font-size:12px;line-height:18px;">
+            &copy; {year} Genhire. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+        text_content = dedent(f"""
+        Hi {recruiter_name},
+
+        {candidate_name} has completed their AI interview for {job_title}.
+        {score_text}
+
+        Log in to your recruiter dashboard to review the full report, transcript, and gaze analysis:
+        {dashboard_url}
+
+        (c) {year} Genhire. All rights reserved.
+        """).strip()
+
+        subject = f"Interview complete: {candidate_name} — {job_title}"
+        return self.send_email(to_email, subject, html_content, text_content)
+
+    def send_application_status_notification(
+        self,
+        to_email: str,
+        candidate_name: str,
+        job_title: str,
+        company_name: str,
+        new_status: str,
+    ) -> bool:
+        """Notify candidate when a recruiter changes their application status."""
+        dashboard_url = f"{self.frontend_url}/dashboard"
+        year = datetime.now().year
+
+        _STATUS_CONFIG = {
+            "selected": {
+                "subject": f"Congratulations! You've been selected — {job_title}",
+                "eyebrow": "Application update",
+                "title": "You've been selected!",
+                "intro": (
+                    f"Congratulations! {escape(company_name or 'The recruiter')} has reviewed your application "
+                    f"for <strong>{escape(job_title)}</strong> and selected you to move forward. "
+                    f"Log in to your dashboard to see next steps."
+                ),
+                "cta_label": "View My Dashboard",
+                "expiry_text": "Log in to your Genhire dashboard to see the full update and any further instructions from the recruiter.",
+                "notice_title": "What's next?",
+                "notice_body": "Check your dashboard and respond promptly to any messages from the recruiter.",
+            },
+            "shortlisted": {
+                "subject": f"You've been shortlisted — {job_title}",
+                "eyebrow": "Application update",
+                "title": "You've been shortlisted",
+                "intro": (
+                    f"Good news! {escape(company_name or 'The recruiter')} has shortlisted your application "
+                    f"for <strong>{escape(job_title)}</strong>. You may be contacted soon for the next stage."
+                ),
+                "cta_label": "View My Dashboard",
+                "expiry_text": "Log in to your Genhire dashboard to see the full update.",
+                "notice_title": "Stay prepared:",
+                "notice_body": "Keep your profile and CV up to date. The recruiter may reach out with next steps soon.",
+            },
+            "rejected": {
+                "subject": f"Application update — {job_title}",
+                "eyebrow": "Application update",
+                "title": "Application not progressed",
+                "intro": (
+                    f"Thank you for applying to <strong>{escape(job_title)}</strong> "
+                    f"at {escape(company_name or 'the company')}. After careful review, the recruiter has decided "
+                    f"not to move forward with your application at this time."
+                ),
+                "cta_label": "Browse More Jobs",
+                "expiry_text": "Don't be discouraged — there are many more opportunities on Genhire.",
+                "notice_title": "Keep practising:",
+                "notice_body": "Use Genhire's Practice Mode to sharpen your interview skills and improve your chances for your next application.",
+            },
+        }
+
+        config = _STATUS_CONFIG.get(new_status)
+        if not config:
+            return False
+
+        # Build intro with raw HTML (already escaped above) by using a small wrapper
+        safe_name = escape(candidate_name or "there")
+        safe_dashboard = escape(dashboard_url, quote=True)
+
+        # Replace the generic _render_auth_email intro (which escapes again) with
+        # a manually assembled body to support the <strong> tags in intro.
+        safe_eyebrow = escape(config["eyebrow"])
+        safe_title = escape(config["title"])
+        safe_cta = escape(config["cta_label"])
+        safe_expiry = escape(config["expiry_text"])
+        safe_notice_title = escape(config["notice_title"])
+        safe_notice_body = escape(config["notice_body"])
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{safe_title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7fb;margin:0;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf5;border-radius:14px;overflow:hidden;box-shadow:0 16px 36px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="padding:22px 40px;background:#ffffff;border-bottom:1px solid #edf1f7;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+              <td style="width:38px;height:38px;background:#5b46f6;border-radius:10px;color:#ffffff;font-size:22px;line-height:38px;font-weight:700;text-align:center;">G</td>
+              <td style="padding-left:12px;color:#111827;font-size:24px;line-height:30px;font-weight:700;">Genhire</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#091831;padding:42px 40px;">
+            <div style="color:#9fb3d9;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px 0;">{safe_eyebrow}</div>
+            <h1 style="color:#ffffff;font-size:28px;line-height:36px;font-weight:800;margin:0;">{safe_title}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:34px 40px 38px 40px;">
+            <p style="font-size:15px;line-height:24px;margin:0 0 16px 0;color:#2d3748;">Hi {safe_name},</p>
+            <p style="font-size:15px;line-height:24px;margin:0 0 24px 0;color:#2d3748;">{config["intro"]}</p>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="border-collapse:separate;margin:0 auto 28px auto;">
+              <tr>
+                <td align="center" bgcolor="#5b46f6" style="background:#5b46f6;border-radius:8px;">
+                  <a href="{safe_dashboard}" target="_blank" rel="noopener noreferrer"
+                     style="background:#5b46f6;border:1px solid #5b46f6;border-radius:8px;color:#ffffff;cursor:pointer;display:block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;padding:14px 34px;text-align:center;text-decoration:none;white-space:nowrap;">
+                    {safe_cta}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <div style="height:1px;background:#e8edf6;margin:0 0 22px 0;"></div>
+            <p style="font-size:14px;line-height:22px;margin:0 0 22px 0;color:#475569;">{safe_expiry}</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f0ff;border-radius:10px;border-left:4px solid #5b46f6;">
+              <tr><td style="padding:16px 18px;">
+                <p style="font-size:14px;line-height:22px;margin:0;color:#342b7a;">
+                  <strong>{safe_notice_title}</strong> {safe_notice_body}
+                </p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 40px;background:#f8fafc;color:#7a8699;font-size:12px;line-height:18px;">
+            &copy; {year} Genhire. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+        plain_intros = {
+            "selected": f"Congratulations! {company_name or 'The recruiter'} has selected your application for {job_title}.",
+            "shortlisted": f"{company_name or 'The recruiter'} has shortlisted your application for {job_title}. You may be contacted soon.",
+            "rejected": f"Thank you for applying to {job_title}. The recruiter has decided not to move forward with your application at this time.",
+        }
+
+        text_content = dedent(f"""
+        Hi {candidate_name},
+
+        {plain_intros.get(new_status, '')}
+
+        Log in to your Genhire dashboard to see the full update:
+        {dashboard_url}
+
+        (c) {year} Genhire. All rights reserved.
+        """).strip()
+
+        return self.send_email(to_email, config["subject"], html_content, text_content)
 
     # --- Invite system emails ----------------------------------------------
 

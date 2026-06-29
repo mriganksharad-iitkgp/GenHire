@@ -1,7 +1,12 @@
 // Centralized API layer for dashboard (recruiter & candidate)
 // Keeps endpoints and headers in one place, enabling easy swap later
 
-import { getToken } from "../utils/sessionManager";
+import { getToken, clearSession } from "../utils/sessionManager";
+
+function signalExpiredSession() {
+  clearSession();
+  window.dispatchEvent(new CustomEvent("auth:session-expired"));
+}
 
 const API_BASE =
   process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
@@ -23,16 +28,27 @@ async function request(path, options = {}) {
   ) {
     headers["Content-Type"] = headers["Content-Type"] || "application/json";
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (_) {
+    const error = new Error("Unable to reach the server. Please check your internet connection.");
+    error.status = 0;
+    throw error;
+  }
   if (!res.ok) {
+    if (res.status === 401) {
+      signalExpiredSession();
+      const error = new Error("Your session has expired. Please log in again.");
+      error.status = 401;
+      throw error;
+    }
     let errMsg = "Request failed";
     let errorData = null;
     try {
       errorData = await res.json();
       errMsg = errorData.error || errorData.message || errMsg;
-    } catch (_) {
-      // ignore json parse error
-    }
+    } catch (_) {}
     const error = new Error(errMsg);
     error.status = res.status;
     error.data = errorData;
@@ -45,8 +61,21 @@ async function request(path, options = {}) {
 
 async function requestBlob(path, options = {}) {
   const headers = { ...authHeaders(), ...(options.headers || {}) };
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (_) {
+    const error = new Error("Unable to reach the server. Please check your internet connection.");
+    error.status = 0;
+    throw error;
+  }
   if (!res.ok) {
+    if (res.status === 401) {
+      signalExpiredSession();
+      const error = new Error("Your session has expired. Please log in again.");
+      error.status = 401;
+      throw error;
+    }
     const error = new Error(`Request failed: ${res.status}`);
     error.status = res.status;
     throw error;

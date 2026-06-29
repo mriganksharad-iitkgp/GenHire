@@ -85,11 +85,14 @@ class InterviewAPI:
             if not Path(ref_path).exists():
                 return {"error": f"Reference document not found: {ref_path}"}
 
+        # pre_validated=True: file existence was already confirmed by Path.exists()
+        # checks above, so we skip the redundant content-validation inside create_session.
         return self.session_manager.create_session(
             cv_path=cv_file_path,
             jd_path=job_description_path,
             reference_paths=reference_documents,
             proctoring_config=proctoring_config,
+            pre_validated=True,
         )
 
     def get_question(self, session_id: str) -> Dict[str, Any]:

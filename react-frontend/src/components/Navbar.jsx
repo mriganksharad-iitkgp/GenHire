@@ -174,7 +174,7 @@ const Navbar = ({ userType = "candidate" }) => {
                   alt="User"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = "https://via.placeholder.com/40?text=User";
+                    e.target.src = "/android-chrome-192x192.png";
                   }}
                 />
               </div>

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
+import SkeletonCard from "../components/SkeletonCard";
 import Pagination from "../components/Pagination";
 import CVSelectionModal from "../components/CVSelectionModal";
 import { useCandidateData } from "../contexts/CandidateDataContext";
 import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "../constants/jobTaxonomy";
 import styles from "./Dashboard.module.css";
 import { getToken, getUser, isLoggedIn } from "../utils/sessionManager";
+import { authedFetch } from "../utils/authedFetch";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
@@ -88,7 +90,7 @@ const Dashboard = () => {
 
 			// Use cached data if available
 			const jobs = await loadJobsCached(force, async () => {
-				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
+				const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
 					headers: {
 						'Authorization': `Bearer ${token}`,
 						'Content-Type': 'application/json'
@@ -129,7 +131,7 @@ const Dashboard = () => {
 
 			// Use cached data if available
 			const apps = await loadApplicationsCached(force, async () => {
-				const response = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+				const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
 					headers: {
 						'Authorization': `Bearer ${token}`,
 						'Content-Type': 'application/json'
@@ -183,7 +185,7 @@ const Dashboard = () => {
 		
 		try {
 			const token = getToken();
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
+			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -200,7 +202,6 @@ const Dashboard = () => {
 
 			if (response.ok) {
 				// Application successful - backend is processing CV score
-				console.log('Application submitted:', data);
 				showToast('Application submitted! CV scoring is being processed...', 'success');
 				// Optimistically add to local applications so button changes instantly
 				setApplications(prev => [...prev, {
@@ -379,7 +380,7 @@ const Dashboard = () => {
 			// This is the confirmation step (second click)
 			setWithdrawingJobId(jobId);
 			
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
+			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 				method: 'DELETE',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -871,8 +872,10 @@ const Dashboard = () => {
 					<h3>Current Openings ({filteredJobs.length})</h3>
 
 					{loading ? (
-						<div className={styles.loading}>
-							<p>Loading jobs...</p>
+						<div>
+							{Array.from({ length: 5 }).map((_, i) => (
+								<SkeletonCard key={i} variant="job" />
+							))}
 						</div>
 					) : error ? (
 						<div className={styles.error}>

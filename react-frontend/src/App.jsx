@@ -1,10 +1,11 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import "./App.css";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
+  useNavigate,
 } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { CandidateDataProvider } from "./contexts/CandidateDataContext";
@@ -53,12 +54,23 @@ const RecruiterTeam = React.lazy(() => import("./pages/recruiter/RecruiterTeam")
 // Landing Page
 const LandingPage = React.lazy(() => import("./pages/LandingPage"));
 
+function SessionExpiredHandler() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handle = () => navigate("/login?expired=1", { replace: true });
+    window.addEventListener("auth:session-expired", handle);
+    return () => window.removeEventListener("auth:session-expired", handle);
+  }, [navigate]);
+  return null;
+}
+
 function App() {
   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <CandidateDataProvider>
         <ErrorBoundary>
           <Router>
+            <SessionExpiredHandler />
             <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw' }}>Loading application...</div>}>
               <Routes>
                 <Route path="/login" element={<Login />} />

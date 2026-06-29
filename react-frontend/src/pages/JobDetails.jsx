@@ -6,6 +6,7 @@ import CVSelectionModal from "../components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
 import InterviewReportModal from '../components/InterviewReportModal';
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
+import { authedFetch } from "../utils/authedFetch";
 import { useCandidateData } from "../contexts/CandidateDataContext";
 
 const JobDetails = () => {
@@ -95,7 +96,7 @@ const JobDetails = () => {
 	useEffect(() => {
 		const init = async () => {
 			const token = getToken();
-			const user = JSON.parse(getUser() || "null");
+			const user = getUser();
 			const currentUserType = user?.user_type || user?.userType || "candidate";
 			setUserType(currentUserType);
 			if (!token) {
@@ -104,7 +105,7 @@ const JobDetails = () => {
 			}
 			setIsLoading(true);
 			try {
-				const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
+				const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 					},
@@ -148,7 +149,7 @@ const JobDetails = () => {
 				// (no cv_snapshot, processing_status='awaiting_candidate'); we treat
 				// those as "not yet applied" so the Apply button stays available.
 				try {
-					const res = await fetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+					const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
 						headers: { Authorization: `Bearer ${token}` }
 					});
 					const appsRes = res;
@@ -270,7 +271,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		setIsApplying(false);
 		
 		try {
-			const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
+			const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -292,7 +293,6 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				return;
 			}
 			// Application successful - backend is processing CV score
-			console.log('Application submitted:', data);
 			invalidateApplications();
 		} catch (e) {
 			// Revert optimistic update on error
@@ -314,7 +314,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		// If this is the confirmation step
 		if (pendingWithdrawal) {
 			try {
-				const res = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
+				const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
 					method: 'DELETE',
 					headers: {
 						'Authorization': `Bearer ${token}`,
@@ -358,7 +358,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				return;
 			}
 
-			const response = await fetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
+			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
 				method: 'PUT',
 				headers: {
 					'Authorization': `Bearer ${token}`,

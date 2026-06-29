@@ -1,4 +1,5 @@
 import datetime
+import threading
 from bson import ObjectId
 import sys
 import os
@@ -21,6 +22,7 @@ def _coerce_objectids(value):
     return value
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from services.email_service import EmailService
 from services.cv_scoring_service import CVScoringService
 from controllers.cv_controller import CVController
 from services.background_processor import get_background_processor
@@ -611,6 +613,27 @@ class ApplicationController:
             self.jobs_collection.update_one(
                 {"_id": ObjectId(application["job_id"])}, {"$inc": job_update}
             )
+
+        # Notify candidate by email for actionable status changes (fire-and-forget)
+        if new_status in ("selected", "shortlisted", "rejected"):
+            try:
+                candidate_doc = self.users_collection.find_one(
+                    {"_id": ObjectId(application.get("student_id", ""))},
+                    {"email": 1, "name": 1},
+                )
+                if candidate_doc and candidate_doc.get("email"):
+                    _email_svc = EmailService()
+                    _cand_name = candidate_doc.get("name") or "Candidate"
+                    _cand_email = candidate_doc["email"]
+                    _job_title = job.get("title") or "the position"
+                    _company = job.get("company") or job.get("company_name") or "the company"
+                    threading.Thread(
+                        target=_email_svc.send_application_status_notification,
+                        args=(_cand_email, _cand_name, _job_title, _company, new_status),
+                        daemon=True,
+                    ).start()
+            except Exception as _notify_exc:
+                logger.warning("Application status notification failed: %s", _notify_exc)
 
         return {"message": "Application status updated successfully"}, 200
 

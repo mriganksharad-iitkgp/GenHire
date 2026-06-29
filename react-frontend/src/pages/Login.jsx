@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
 import { useCandidateData } from "../contexts/CandidateDataContext";
@@ -13,6 +13,8 @@ const Login = () => {
 	const [error, setError] = useState("");
 	const [userType, setUserType] = useState("candidate"); // 'candidate', 'recruiter', or 'admin'
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const sessionExpired = searchParams.get("expired") === "1";
 	const { clearAllCaches } = useCandidateData();
 
 	const storeSession = (data, fallbackType) => {
@@ -46,8 +48,6 @@ const Login = () => {
 
 			const data = await response.json();
 
-			console.log('Login response:', data); // Debug log
-
 			if (!response.ok) {
 				// Check if email verification is required
 				if (data.email_verification_required) {
@@ -61,18 +61,12 @@ const Login = () => {
 			// Store token and user data with user type, verification status, and permissions
 			storeSession(data, userType);
 
-			console.log('Token stored:', data.token); // Debug log
-			console.log('User data stored:', data.user); // Debug log
-
 			// Navigate based on user type
 			if (data.user.user_type === "admin" || userType === "admin") {
-				console.log('Navigating to admin dashboard'); // Debug log
 				navigate("/admin");
 			} else if (data.user.user_type === "recruiter" || userType === "recruiter") {
-				console.log('Navigating to recruiter dashboard'); // Debug log
 				navigate("/recruiter-dashboard");
 			} else {
-				console.log('Navigating to candidate dashboard'); // Debug log
 				navigate("/dashboard");
 			}
 		} catch (error) {
@@ -162,6 +156,20 @@ const Login = () => {
 						Welcome! Please select your role and log in to access your dashboard.
 					</p>
 				</div>
+
+				{sessionExpired && (
+					<div style={{
+						backgroundColor: "#fef3c7",
+						color: "#92400e",
+						padding: "0.75rem 1rem",
+						borderRadius: "8px",
+						marginBottom: "1rem",
+						border: "1px solid #f59e0b",
+						fontSize: "0.9rem",
+					}}>
+						Your session has expired. Please log in again.
+					</div>
+				)}
 
 				{/* User Type Selection Tabs */}
 				<div className={styles.userTypeTabs}>
