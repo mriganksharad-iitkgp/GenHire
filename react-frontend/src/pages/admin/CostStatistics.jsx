@@ -630,7 +630,7 @@ const CostStatistics = () => {
                   <tbody>
                     {(category.lines || []).map((line) => (
                       <tr key={`${category.key}-${line.id}-${line.timestamp || 'na'}`}>
-                        <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN') : '-'}</td>
+                        <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                         <td>{line.source?.label || line.source?.type || '-'}</td>
                         <td>{line.model || '-'}</td>
                         <td>{line.prompt_tokens || 0}</td>
@@ -680,7 +680,7 @@ const CostStatistics = () => {
             <tbody>
               {rows.map((line) => (
                 <tr key={`credit-${line.id}-${line.timestamp || 'na'}`}>
-                  <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN') : '-'}</td>
+                  <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                   <td>{line.type}</td>
                   <td>{formatCredits(line.amount_inr)}</td>
                   <td>{formatCredits(line.balance_after)}</td>
@@ -735,7 +735,7 @@ const CostStatistics = () => {
           </div>
           {costData?.timeline && (
             <div className={styles.timelineMeta}>
-              <span>Applied Range: {new Date(costData.timeline.start_date).toLocaleDateString('en-IN')} - {new Date(costData.timeline.end_date).toLocaleDateString('en-IN')}</span>
+              <span>Applied Range: {new Date(costData.timeline.start_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })} - {new Date(costData.timeline.end_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
               <span>Days: {costData.timeline.days}</span>
             </div>
           )}

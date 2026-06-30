@@ -818,8 +818,8 @@ body.dark .viewDetailsButton:hover,
 
 .applicationsList {
 	display: grid;
-	gap: 24px;
-	grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+	gap: 20px;
+	grid-template-columns: 1fr;
 }
 
 .applicationCard {

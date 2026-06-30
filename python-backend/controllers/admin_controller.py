@@ -6,6 +6,7 @@ from bson import ObjectId
 from collections import defaultdict
 from models.user import AVAILABLE_PERMISSIONS
 from payment_module.services.wallet_service import WalletService
+from services.email_service import EmailService
 
 
 class AdminController:
@@ -19,6 +20,7 @@ class AdminController:
         )  # For practice history
         # Store reference to db for accessing other collections like subscriptions
         self.db_collections = db_collections
+        self.email_service = EmailService()
 
     def get_dashboard_stats(self, current_user):
         """Get platform statistics for admin dashboard"""
@@ -371,10 +373,20 @@ class AdminController:
                         "verified_by": str(current_user["_id"]),
                         "verified_at": datetime.datetime.utcnow(),
                         "updated_at": datetime.datetime.utcnow(),
-                        "rejection_reason": None,  # Clear any previous rejection reason
+                        "rejection_reason": None,
                     }
                 },
             )
+
+            # Send approval email (non-blocking — failure doesn't fail the request)
+            try:
+                self.email_service.send_recruiter_approved_email(
+                    to_email=recruiter.get("email", ""),
+                    recruiter_name=recruiter.get("name", ""),
+                    company_name=recruiter.get("company_name", ""),
+                )
+            except Exception as email_err:
+                print(f"[admin] approval email failed for {recruiter_id}: {email_err}")
 
             return {
                 "message": f'Recruiter {recruiter.get("name")} has been verified successfully',
@@ -395,18 +407,30 @@ class AdminController:
             if recruiter.get("user_type") != "recruiter":
                 return {"error": "User is not a recruiter"}, 400
 
+            stored_reason = reason or "Account verification rejected by admin"
+
             # Update to unverified status with rejection reason
             self.users_collection.update_one(
                 {"_id": ObjectId(recruiter_id)},
                 {
                     "$set": {
                         "is_verified": False,
-                        "rejection_reason": reason
-                        or "Account verification rejected by admin",
+                        "rejection_reason": stored_reason,
                         "updated_at": datetime.datetime.utcnow(),
                     }
                 },
             )
+
+            # Send rejection email (non-blocking — failure doesn't fail the request)
+            try:
+                self.email_service.send_recruiter_rejected_email(
+                    to_email=recruiter.get("email", ""),
+                    recruiter_name=recruiter.get("name", ""),
+                    company_name=recruiter.get("company_name", ""),
+                    rejection_reason=stored_reason,
+                )
+            except Exception as email_err:
+                print(f"[admin] rejection email failed for {recruiter_id}: {email_err}")
 
             return {
                 "message": f'Recruiter {recruiter.get("name")} has been rejected',

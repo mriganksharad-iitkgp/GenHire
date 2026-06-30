@@ -12,7 +12,7 @@ const Verification = () => {
   
   // Action states
   const [actionLoading, setActionLoading] = useState(null); // Stores id of user being processed
-  const [rejectModal, setRejectModal] = useState({ show: false, user: null });
+  const [rejectModal, setRejectModal] = useState({ show: false, user: null, rejectReason: "" });
   const [rejectLoading, setRejectLoading] = useState(false);
   
   // Notifications
@@ -51,6 +51,7 @@ const Verification = () => {
       await adminApi.verifyRecruiter(recruiterId);
       showNotification("Recruiter verified successfully");
       fetchPendingRecruiters();
+      window.dispatchEvent(new CustomEvent("recruiterVerificationChanged"));
     } catch (error) {
       showNotification(error.message || "Failed to verify recruiter", "error");
     } finally {
@@ -60,13 +61,14 @@ const Verification = () => {
 
   const handleReject = async () => {
     if (!rejectModal.user) return;
-    
+
     setRejectLoading(true);
     try {
-      await adminApi.rejectRecruiter(rejectModal.user.id);
+      await adminApi.rejectRecruiter(rejectModal.user.id, rejectModal.rejectReason || "");
       showNotification("Recruiter rejected and removed");
-      setRejectModal({ show: false, user: null });
+      setRejectModal({ show: false, user: null, rejectReason: "" });
       fetchPendingRecruiters();
+      window.dispatchEvent(new CustomEvent("recruiterVerificationChanged"));
     } catch (error) {
       showNotification(error.message || "Failed to reject recruiter", "error");
     } finally {
@@ -207,7 +209,7 @@ const Verification = () => {
                   </button>
                   <button
                     className={`${styles.verificationButton} ${styles.reject}`}
-                    onClick={() => setRejectModal({ show: true, user: recruiter })}
+                    onClick={() => setRejectModal({ show: true, user: recruiter, rejectReason: "" })}
                     disabled={actionLoading === recruiter.id}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -235,13 +237,37 @@ const Verification = () => {
         {/* Reject Modal */}
         <ConfirmModal
           isOpen={rejectModal.show}
-          onClose={() => setRejectModal({ show: false, user: null })}
+          onClose={() => setRejectModal({ show: false, user: null, rejectReason: "" })}
           onConfirm={handleReject}
-          title="Reject Recruiter"
-          message={`Are you sure you want to reject ${rejectModal.user?.name}'s registration? This will remove them from the system.`}
-          confirmText="Reject"
+          title="Reject Recruiter Application"
+          message={`You are about to reject ${rejectModal.user?.name}'s registration from ${rejectModal.user?.company_name || "their company"}. The recruiter will be notified by email.`}
+          confirmText="Reject Application"
           isLoading={rejectLoading}
-        />
+        >
+          <div style={{ marginTop: "16px" }}>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: "600", color: "var(--admin-text-secondary)" }}>
+              Reason for rejection <span style={{ fontWeight: "400", color: "#9ca3af" }}>(shown to the recruiter)</span>
+            </label>
+            <textarea
+              value={rejectModal.rejectReason || ""}
+              onChange={(e) =>
+                setRejectModal((prev) => ({ ...prev, rejectReason: e.target.value }))
+              }
+              placeholder="e.g. Incomplete company information, unverifiable credentials, duplicate account…"
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "14px",
+                resize: "vertical",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
+        </ConfirmModal>
       </div>
     </AdminLayout>
   );

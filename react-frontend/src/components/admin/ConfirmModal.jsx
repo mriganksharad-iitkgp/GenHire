@@ -11,6 +11,7 @@ const ConfirmModal = ({
   cancelText = "Cancel",
   confirmVariant = "danger",
   isLoading = false,
+  children,
 }) => {
   if (!isOpen) return null;
 
@@ -31,6 +32,7 @@ const ConfirmModal = ({
 
         <div className={styles.modalBody}>
           <p style={{ margin: 0, color: "var(--admin-text-secondary)" }}>{message}</p>
+          {children}
         </div>
 
         <div className={styles.modalFooter}>

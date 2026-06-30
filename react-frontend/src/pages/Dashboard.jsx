@@ -26,7 +26,7 @@ const Dashboard = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [applications, setApplications] = useState([]);
-	const [applyingJobId, setApplyingJobId] = useState(null); // Track which job is being applied to
+	const [applyingJobIds, setApplyingJobIds] = useState(new Set()); // Track all jobs currently being applied to
 	const [withdrawingJobId, setWithdrawingJobId] = useState(null); // Track which job is being withdrawn
 	const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 	const [showCVModal, setShowCVModal] = useState(false);
@@ -177,8 +177,8 @@ const Dashboard = () => {
 		const jobId = selectedJobForApplication?.id;
 		if (!jobId) return;
 
-		setApplyingJobId(jobId);
-		
+		setApplyingJobIds(prev => new Set([...prev, jobId]));
+
 		// Close modal immediately for better UX
 		setShowCVModal(false);
 		setSelectedJobForApplication(null);
@@ -224,7 +224,11 @@ const Dashboard = () => {
 			console.error('Error applying for job:', error);
 			showToast('Failed to submit application', 'error');
 		} finally {
-			setApplyingJobId(null);
+			setApplyingJobIds(prev => {
+				const next = new Set(prev);
+				next.delete(jobId);
+				return next;
+			});
 		}
 	};
 
@@ -270,7 +274,7 @@ const Dashboard = () => {
 		const hasAppliedToJob = hasApplied(jobId);
 		const canWithdraw = canWithdrawApplication(jobId);
 		const isPendingWithdrawal = pendingWithdrawal === jobId;
-		const isApplying = applyingJobId === jobId;
+		const isApplying = applyingJobIds.has(jobId);
 		const allowedToApply = isAllowedToApply(jobId);
 
 		// Invite-only candidate viewing a job they weren't invited to.

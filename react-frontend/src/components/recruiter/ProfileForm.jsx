@@ -3,6 +3,18 @@ import styles from '../../pages/RecruiterDashboard.module.css';
 
 const ProfileForm = ({ companyProfile, isEditing, onChange, onSave, onCancel, onDeleteAccount }) => (
   <div className={styles.profileForm}>
+    <div className={styles.formGroup}>
+      <label>Account Email</label>
+      <input
+        type="email"
+        value={companyProfile.email}
+        disabled
+        className={styles.disabledField}
+        title="Email cannot be changed"
+      />
+      <small style={{ color: '#888', fontSize: '12px' }}>This is the email used to sign in. It cannot be changed.</small>
+    </div>
+
     <div className={styles.formRow}>
       <div className={styles.formGroup}>
         <label>Company Name</label>

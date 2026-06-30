@@ -21,6 +21,9 @@ const Profile = () => {
 	// Filter states for applications
 	const [companyFilter, setCompanyFilter] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
+	const [jobTypeFilter, setJobTypeFilter] = useState("");
+	const [locationFilter, setLocationFilter] = useState("");
+	const [dateRangeFilter, setDateRangeFilter] = useState("");
 
 	// Interview report modal state
 	const [isReportOpen, setIsReportOpen] = useState(false);
@@ -279,18 +282,12 @@ const Profile = () => {
 		);
 	};
 
-	// Sort applications by applied date (newest first)
-	// Filter and sort applications
-	const filteredApplications = applications.filter((app) => {
-		const matchesCompany = companyFilter === "" || app.company.toLowerCase().includes(companyFilter.toLowerCase());
-		const matchesStatus = statusFilter === "" || app.status.toLowerCase() === statusFilter.toLowerCase();
-		return matchesCompany && matchesStatus;
-	});
-
-	const sortedApplications = [...filteredApplications].sort((a, b) => new Date(b.appliedDate) - new Date(a.appliedDate));
-
-	// Get unique companies for filter dropdown
+	// Get unique companies and locations for filter dropdowns
 	const uniqueCompanies = useMemo(() => companies, [companies]);
+	const uniqueLocations = useMemo(() => {
+		const locs = [...new Set(applications.filter(a => a.location).map(a => a.location))];
+		return locs.sort();
+	}, [applications]);
 
 	const openInterviewReport = async (app) => {
 		const report = await openReport(app);
@@ -491,11 +488,24 @@ const Profile = () => {
 							<ApplicationsList
 								applications={applications}
 								companies={uniqueCompanies}
+								locations={uniqueLocations}
 								companyFilter={companyFilter}
 								statusFilter={statusFilter}
+								jobTypeFilter={jobTypeFilter}
+								locationFilter={locationFilter}
+								dateRangeFilter={dateRangeFilter}
 								setCompanyFilter={setCompanyFilter}
 								setStatusFilter={setStatusFilter}
-								onClearFilters={() => { setCompanyFilter(""); setStatusFilter(""); }}
+								setJobTypeFilter={setJobTypeFilter}
+								setLocationFilter={setLocationFilter}
+								setDateRangeFilter={setDateRangeFilter}
+								onClearFilters={() => {
+									setCompanyFilter("");
+									setStatusFilter("");
+									setJobTypeFilter("");
+									setLocationFilter("");
+									setDateRangeFilter("");
+								}}
 								onViewCV={handleViewCV}
 								onOpenReport={openInterviewReport}
 								onGiveInterview={handleGiveInterview}

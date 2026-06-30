@@ -480,6 +480,161 @@ class EmailService:
 
         return self.send_email(to_email, config["subject"], html_content, text_content)
 
+    def send_recruiter_approved_email(self, to_email: str, recruiter_name: str, company_name: str) -> bool:
+        """Notify recruiter that their account has been approved by admin."""
+        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        safe_company = escape(company_name or "your company")
+
+        html_content = self._render_auth_email(
+            title="Your recruiter account is approved!",
+            eyebrow="Account verified",
+            greeting_name=recruiter_name,
+            intro=(
+                f"Great news! Your GenHire recruiter account for <strong>{safe_company}</strong> has been "
+                f"reviewed and approved by our admin team. You now have full access to post jobs, "
+                f"invite candidates, and manage your hiring pipeline."
+            ),
+            cta_label="Go to My Dashboard",
+            action_url=dashboard_url,
+            expiry_text="You can log in at any time using your registered email and password.",
+            notice_title="What's next?",
+            notice_body=(
+                "Head to your dashboard to create your first job posting and start finding the right candidates."
+            ),
+        )
+
+        text_content = dedent(f"""
+        Hi {recruiter_name},
+
+        Great news! Your GenHire recruiter account for {company_name or 'your company'} has been approved.
+
+        You now have full access to post jobs, invite candidates, and manage your hiring pipeline.
+
+        Log in to your dashboard to get started:
+        {dashboard_url}
+
+        (c) {datetime.now().year} Genhire. All rights reserved.
+        """).strip()
+
+        return self.send_email(
+            to_email,
+            "Your GenHire recruiter account has been approved",
+            html_content,
+            text_content,
+        )
+
+    def send_recruiter_rejected_email(
+        self, to_email: str, recruiter_name: str, company_name: str, rejection_reason: str
+    ) -> bool:
+        """Notify recruiter that their account application was rejected."""
+        year = datetime.now().year
+        safe_name = escape(recruiter_name or "there")
+        safe_company = escape(company_name or "your company")
+        safe_reason = escape(rejection_reason or "Your application did not meet our current requirements.")
+        register_url = f"{self.frontend_url}/register"
+        safe_register_url = escape(register_url, quote=True)
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your GenHire recruiter application was not approved</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7fb;margin:0;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf5;border-radius:14px;overflow:hidden;box-shadow:0 16px 36px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="padding:22px 40px;background:#ffffff;border-bottom:1px solid #edf1f7;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+              <td style="width:38px;height:38px;background:#5b46f6;border-radius:10px;color:#ffffff;font-size:22px;line-height:38px;font-weight:700;text-align:center;">G</td>
+              <td style="padding-left:12px;color:#111827;font-size:24px;line-height:30px;font-weight:700;">Genhire</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#7f1d1d;padding:42px 40px;">
+            <div style="color:#fca5a5;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px 0;">Account verification</div>
+            <h1 style="color:#ffffff;font-size:28px;line-height:36px;font-weight:800;margin:0;">
+              Your recruiter application was not approved
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:34px 40px 38px 40px;">
+            <p style="font-size:15px;line-height:24px;margin:0 0 8px 0;color:#2d3748;">Hi {safe_name},</p>
+            <p style="font-size:15px;line-height:24px;margin:0 0 20px 0;color:#2d3748;">
+              Thank you for registering as a recruiter on GenHire for <strong>{safe_company}</strong>.
+              After reviewing your application, our admin team was unable to approve it at this time.
+            </p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff3f3;border-radius:10px;border-left:4px solid #dc2626;margin:0 0 24px 0;">
+              <tr><td style="padding:16px 18px;">
+                <p style="font-size:14px;line-height:22px;margin:0 0 4px 0;color:#7f1d1d;font-weight:700;">Reason for rejection:</p>
+                <p style="font-size:14px;line-height:22px;margin:0;color:#991b1b;">{safe_reason}</p>
+              </td></tr>
+            </table>
+            <p style="font-size:15px;line-height:24px;margin:0 0 20px 0;color:#2d3748;">
+              If you believe this decision was made in error, or if you would like to reapply with updated
+              information, please delete your current account and register again making sure all details —
+              company name, credentials, and contact information — are accurate and complete.
+            </p>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="border-collapse:separate;margin:0 auto 28px auto;">
+              <tr>
+                <td align="center" bgcolor="#5b46f6" style="background:#5b46f6;border-radius:8px;">
+                  <a href="{safe_register_url}" target="_blank" rel="noopener noreferrer"
+                     style="background:#5b46f6;border:1px solid #5b46f6;border-radius:8px;color:#ffffff;cursor:pointer;display:block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;padding:14px 34px;text-align:center;text-decoration:none;white-space:nowrap;">
+                    Register Again
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <div style="height:1px;background:#e8edf6;margin:0 0 22px 0;"></div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f0ff;border-radius:10px;border-left:4px solid #5b46f6;">
+              <tr><td style="padding:16px 18px;">
+                <p style="font-size:14px;line-height:22px;margin:0;color:#342b7a;">
+                  <strong>Need help?</strong> Reply to this email or contact our support team and we'll be happy to assist you through the process.
+                </p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 40px;background:#f8fafc;color:#7a8699;font-size:12px;line-height:18px;">
+            &copy; {year} Genhire. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+        text_content = dedent(f"""
+        Hi {recruiter_name},
+
+        Thank you for registering as a recruiter on GenHire for {company_name or 'your company'}.
+        After reviewing your application, our admin team was unable to approve it at this time.
+
+        Reason for rejection:
+        {rejection_reason or 'Your application did not meet our current requirements.'}
+
+        If you would like to reapply, please delete your current account and register again with
+        accurate and complete information:
+        {register_url}
+
+        If you need help or believe this was an error, reply to this email and we'll assist you.
+
+        (c) {year} Genhire. All rights reserved.
+        """).strip()
+
+        return self.send_email(
+            to_email,
+            "Your GenHire recruiter application was not approved",
+            html_content,
+            text_content,
+        )
+
     # --- Invite system emails ----------------------------------------------
 
     def _invite_redeem_link(self, raw_token: str) -> str:

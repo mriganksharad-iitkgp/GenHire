@@ -35,7 +35,9 @@ class ProfileController:
                 'company_website': user.get('company_website', ''),
                 'company_size': user.get('company_size', ''),
                 'company_industry': user.get('company_industry', ''),
-                'company_location': user.get('company_location', '') or user.get('location', '')
+                'company_location': user.get('company_location', '') or user.get('location', ''),
+                'is_verified': user.get('is_verified', False),
+                'rejection_reason': user.get('rejection_reason', None),
             })
         
         return profile_data, 200

@@ -28,8 +28,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
   useEffect(() => {
     const user = adminApi.getCurrentAdmin();
     setAdminUser(user);
-    
-    // Fetch pending recruiters count
+
     const fetchPendingCount = async () => {
       try {
         const data = await adminApi.getPendingRecruiters();
@@ -38,8 +37,14 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
         console.error("Error fetching pending count:", error);
       }
     };
-    
+
     fetchPendingCount();
+
+    // Refresh badge instantly when Verification page approves or rejects a recruiter
+    window.addEventListener("recruiterVerificationChanged", fetchPendingCount);
+    return () => {
+      window.removeEventListener("recruiterVerificationChanged", fetchPendingCount);
+    };
   }, []);
 
   const handleLogout = useCallback(() => {

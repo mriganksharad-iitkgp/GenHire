@@ -616,6 +616,19 @@ def start_interview(current_user):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
+    # --- CV check (before charging credits) ---
+    # For PDF CV applications, text is in cv_snapshot.text.
+    # For manual-entry applications, build from structured cv_details.
+    cv_snapshot = app_doc.get("cv_snapshot") or {}
+    cv_text_prefetched = cv_snapshot.get("text", "").strip() if cv_snapshot else ""
+    cv_details = (
+        cv_snapshot.get("details")          # manual-entry snapshot stores details here
+        or app_doc.get("cv_details")        # legacy / direct field
+        or student.get("cv_details")        # profile fallback
+    )
+    if not cv_text_prefetched and not cv_details:
+        return jsonify({"error": "CV not found for this application. Please re-apply with your CV before starting the interview."}), 400
+
     proctoring_config = job.get("proctoring_config", {
         "voice_detection": True,
         "object_detection": True,
@@ -707,16 +720,17 @@ def start_interview(current_user):
                 idempotency_key=f"real-interview-candidate-audit:{application_id}",
             )
 
-    cv_details = student.get("cv_details")
-    if not cv_details:
-        return jsonify({"error": "CV details not found for this candidate"}), 400
-
-    # Build plain-text CV and JD from stored structured data
-    cv_text = (
-        cv_service.format_cv_details(cv_details)
-        if cv_service
-        else _format_cv_from_details(cv_details)
-    )
+    # Build plain-text CV — prefer snapshot text (PDF CVs), fall back to structured details
+    if cv_text_prefetched:
+        cv_text = cv_text_prefetched
+    elif cv_details:
+        cv_text = (
+            cv_service.format_cv_details(cv_details)
+            if cv_service
+            else _format_cv_from_details(cv_details)
+        )
+    else:
+        return jsonify({"error": "CV content is empty. Please re-apply with a valid CV."}), 400
     jd_text = (
         cv_service.format_job_description(job)
         if cv_service

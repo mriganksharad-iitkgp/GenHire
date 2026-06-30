@@ -28,32 +28,54 @@ import {
   getProfile,
   updateCompanyProfile as apiUpdateCompanyProfile,
 } from "../services/api";
-import { getUser } from "../utils/sessionManager";
+import { getUser, setUser } from "../utils/sessionManager";
 
 const RecruiterDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
-  const { user, rejectionReason } = useAuth("recruiter");
+  const { user, rejectionReason, refreshUser } = useAuth("recruiter");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  // Check verification status from sessionStorage
+  // Check verification status — reads session storage on mount then polls backend every 30s
   const [isVerified, setIsVerified] = useState(true);
 
   useEffect(() => {
+    // Fast initial read from session storage
     const parsed = getUser();
     if (parsed) {
-      try {
-        // Check both isVerified (frontend) and is_verified (backend)
-        setIsVerified(
-          parsed.isVerified !== false && parsed.is_verified !== false
-        );
-      } catch (e) {
-        console.error("Error parsing user data:", e);
-      }
+      setIsVerified(parsed.isVerified !== false && parsed.is_verified !== false);
     }
-  }, []);
+
+    // Poll backend so admin approval/rejection reflects immediately without manual refresh
+    const checkVerificationStatus = async () => {
+      try {
+        const profile = await getProfile();
+        if (profile && profile.user_type === "recruiter") {
+          const verified = profile.is_verified !== false;
+          setIsVerified(verified);
+          // Sync session storage so useAuth hook state stays consistent
+          const currentUser = getUser();
+          if (currentUser) {
+            setUser({
+              ...currentUser,
+              is_verified: profile.is_verified,
+              isVerified: profile.is_verified,
+              rejection_reason: profile.rejection_reason || null,
+            });
+            refreshUser();
+          }
+        }
+      } catch {
+        // Silent fail — stale session storage value stays active
+      }
+    };
+
+    checkVerificationStatus();
+    const interval = setInterval(checkVerificationStatus, 30000);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toast helper (declared early so hooks can use it)
   const showToast = useCallback((message, type = "info") => {
@@ -79,6 +101,7 @@ const RecruiterDashboard = () => {
   const [selectedPosition, setSelectedPosition] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [companyProfile, setCompanyProfile] = useState({
+    email: "",
     companyName: "",
     industry: "",
     location: "",
@@ -112,6 +135,7 @@ const RecruiterDashboard = () => {
       const profileData = await getProfile();
       if (profileData?.user_type === "recruiter") {
         setCompanyProfile({
+          email: profileData.email || "",
           companyName: profileData.company_name || "",
           industry: profileData.company_industry || "",
           location: profileData.company_location || profileData.location || "",
@@ -528,13 +552,16 @@ const RecruiterDashboard = () => {
 
       {/* Rejection Banner */}
       {rejectionReason && (
-        <div className={styles.verificationBanner} style={{ backgroundColor: '#fff3f3', borderLeft: '4px solid #dc3545' }}>
+        <div
+          className={styles.verificationBanner}
+          style={{ backgroundColor: "#fff3f3", borderLeft: "4px solid #dc3545" }}
+        >
           <div className={styles.bannerContent}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="#dc3545"
-              style={{ width: "24px", height: "24px", flexShrink: 0 }}
+              style={{ width: "28px", height: "28px", flexShrink: 0, marginTop: "2px" }}
             >
               <path
                 fillRule="evenodd"
@@ -542,19 +569,53 @@ const RecruiterDashboard = () => {
                 clipRule="evenodd"
               />
             </svg>
-            <div>
-              <strong style={{ color: '#dc3545' }}>Account Application Rejected</strong>
-              <p style={{ color: '#842029' }}>
-                Your recruiter application has been rejected: {rejectionReason}
-                <br/>
-                Please delete your account and reapply with correct details to continue using our services.
+            <div style={{ flex: 1 }}>
+              <strong style={{ color: "#dc3545", fontSize: "15px" }}>
+                Your Recruiter Application Was Not Approved
+              </strong>
+              <p style={{ color: "#842029", margin: "6px 0 4px" }}>
+                <strong>Reason:</strong> {rejectionReason}
               </p>
-              <button 
-                onClick={() => setIsDeleteModalOpen(true)}
-                style={{ marginTop: '10px', padding: '8px 16px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '500' }}
-              >
-                Delete Account
-              </button>
+              <p style={{ color: "#6b7280", margin: "0 0 12px", fontSize: "13px" }}>
+                To continue using GenHire as a recruiter, please delete this account and
+                register again with the correct details. Make sure your company information,
+                credentials, and contact details are accurate before reapplying.
+              </p>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  style={{
+                    padding: "8px 18px",
+                    background: "#dc3545",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
+                  Delete Account & Reapply
+                </button>
+                <a
+                  href="mailto:support@genhire.com"
+                  style={{
+                    padding: "8px 18px",
+                    background: "transparent",
+                    color: "#dc3545",
+                    border: "1px solid #dc3545",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  Contact Support
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -567,8 +628,8 @@ const RecruiterDashboard = () => {
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
-              fill="currentColor"
-              style={{ width: "24px", height: "24px", flexShrink: 0 }}
+              fill="#f59e0b"
+              style={{ width: "28px", height: "28px", flexShrink: 0, marginTop: "2px" }}
             >
               <path
                 fillRule="evenodd"
@@ -577,11 +638,11 @@ const RecruiterDashboard = () => {
               />
             </svg>
             <div>
-              <strong>Account Pending Verification</strong>
-              <p>
-                Your recruiter account is being reviewed by an administrator.
-                You can view your profile and existing data, but job posting
-                features are disabled until verification is complete.
+              <strong style={{ fontSize: "15px" }}>Account Pending Verification</strong>
+              <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "13px" }}>
+                Your recruiter account is under review by our admin team — this usually takes
+                less than 24 hours. You can explore your dashboard and profile in the meantime,
+                but job posting and candidate features will be unlocked once approved.
               </p>
             </div>
           </div>

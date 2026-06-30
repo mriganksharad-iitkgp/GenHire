@@ -3,8 +3,10 @@ from flask_cors import cross_origin
 from controllers.profile_controller import ProfileController
 from middleware.auth_middleware import token_required, recruiter_required
 from config.database import db_config
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from payment_module.services.wallet_service import WalletService
+
+_IST = timezone(timedelta(hours=5, minutes=30))
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/api")
 
@@ -13,18 +15,26 @@ collections = db_config.get_collections()
 profile_controller = ProfileController(collections)
 
 
+def _to_ist(dt: datetime) -> datetime:
+    """Convert a naive-UTC or tz-aware datetime to IST."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_IST)
+
+
 def _format_tx_timestamp(value):
+    """Return a human-readable IST timestamp string from any datetime value."""
     if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d %H:%M")
+        return _to_ist(value).strftime("%Y-%m-%d %H:%M IST")
     if isinstance(value, (int, float)):
         try:
-            return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M")
+            return _to_ist(datetime.fromtimestamp(value, tz=timezone.utc)).strftime("%Y-%m-%d %H:%M IST")
         except Exception:
             pass
     text = str(value or "")
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        return parsed.strftime("%Y-%m-%d %H:%M")
+        return _to_ist(parsed).strftime("%Y-%m-%d %H:%M IST")
     except Exception:
         return text
 
