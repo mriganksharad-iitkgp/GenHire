@@ -146,5 +146,37 @@ desktop.ini
 # python-backend/hr-tech-2026-d1c05c0b9aa6.json
 # *.json
 
-# Explicitly allow the Google Cloud credentials file so it gets pushed
-!hr-tech-2026-d1c05c0b9aa6.json
+# Python compiled files (these are already in python-backend/.gitignore but not root)
+__pycache__/
+*.pyc
+*.pyo
+
+# ML model weights (should be downloaded at deploy time)
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Windows crash dumps
+*.stackdump
+
+# Debug artifacts
+debug_*.txt
+pip_list.txt
+
+# Google Cloud service account credentials (ALL of them)
+*-credentials.json
+*-service-account.json
+aptidude-*.json
+hr-tech-*.json
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+
+# Electron build outputs
+secure-browser-kiosk/dist/
+*.exe
+*.dmg
+*.AppImage
