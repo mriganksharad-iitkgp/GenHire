@@ -1,4 +1,4 @@
 export const proctoringConfig = {
-    enabled: true, // User can toggle this to false to disable proctoring features
-    serverUrl: "http://localhost:5001"
+    enabled: true,
+    serverUrl: process.env.REACT_APP_API_URL || "http://localhost:5000"
 };
