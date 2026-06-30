@@ -299,6 +299,30 @@ const Profile = () => {
 		setIsReportOpen(true);
 	};
 
+	// States for interview launch flow
+	const [isLaunchingInterview, setIsLaunchingInterview] = useState(false);
+	const [showDownloadModal, setShowDownloadModal] = useState(false);
+	const [pendingDeepLink, setPendingDeepLink] = useState(null);
+
+	const triggerDownload = () => {
+		const link = document.createElement('a');
+		link.href = '/apps/Genhire.exe';
+		link.download = 'Genhire.exe';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	const retryLaunchInterview = () => {
+		if (!pendingDeepLink) return;
+		setShowDownloadModal(false);
+		const iframe = document.createElement("iframe");
+		iframe.style.display = "none";
+		iframe.src = pendingDeepLink;
+		document.body.appendChild(iframe);
+		setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
+	};
+
 	// Handle Give Interview action for shortlisted candidates
 	const handleGiveInterview = async (application) => {
 		try {
@@ -311,49 +335,66 @@ const Profile = () => {
 				return;
 			}
 
-			showToast(`Launching Secure Browser for ${application.position}...`, 'info');
+			setIsLaunchingInterview(true);
+			showToast(`Preparing your interview for ${application.position}...`, 'info');
 
-			// Generate the initialization payload identical to the manual copy-paste one
+			// Pre-create session on the platform side so Electron starts instantly (no LLM wait in kiosk)
+			const apiUrl = process.env.REACT_APP_API_URL || window.location.origin;
+			const sessionRes = await fetch(`${apiUrl}/api/interviews/start`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${getToken()}`
+				},
+				body: JSON.stringify({ application_id: application.id })
+			});
+
+			if (!sessionRes.ok) {
+				const errData = await sessionRes.json();
+				throw new Error(errData.error || errData.message || "Failed to prepare interview session");
+			}
+
+			const sessionData = await sessionRes.json();
+
 			const payload = {
+				sessionId: sessionData.session_id,
+				initialQuestion: sessionData.initial_questions[0],
 				applicationId: application.id,
 				token: getToken(),
-				apiUrl: process.env.REACT_APP_API_URL || window.location.origin
+				apiUrl,
+				proctoringConfig: sessionData.proctoring_config || {}
 			};
 			const encodedPayload = btoa(JSON.stringify(payload));
 			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
 
-			// Deep Link Attempt via hidden iframe to prevent canceling the prompt
+			// Store for retry after install
+			setPendingDeepLink(customUri);
+
+			// Fire deep link via hidden iframe
 			const iframe = document.createElement("iframe");
 			iframe.style.display = "none";
 			iframe.src = customUri;
 			document.body.appendChild(iframe);
+			setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
 
-			setTimeout(() => {
-				if (document.body.contains(iframe)) {
-					document.body.removeChild(iframe);
-				}
-			}, 10000); // Wait 10 seconds before removing iframe so prompt doesn't break
-
-			// Fallback if app isn't installed (giving user enough time to click 'Open')
-			const timeoutId = setTimeout(() => {
+			// If window still has focus after 4s → GenHire not installed
+			const detectTimer = setTimeout(() => {
 				if (document.hasFocus()) {
-					showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
-					const link = document.createElement('a');
-					link.href = '/apps/Genhire.exe';
-					link.download = 'Genhire.exe';
-					document.body.appendChild(link);
-					link.click();
-					document.body.removeChild(link);
+					triggerDownload();
+					setShowDownloadModal(true);
 				}
-			}, 10000); // 10 seconds instead of 2.5s
+				setIsLaunchingInterview(false);
+			}, 4000);
 
 			window.addEventListener('blur', () => {
-				clearTimeout(timeoutId);
+				clearTimeout(detectTimer);
+				setIsLaunchingInterview(false);
 			}, { once: true });
 
 		} catch (error) {
+			setIsLaunchingInterview(false);
 			console.error('Error launching secure browser:', error);
-			showToast('Failed to launch the secure browser session. Please try again.', 'error');
+			showToast(error.message || 'Failed to prepare the interview session. Please try again.', 'error');
 		}
 	};
 
@@ -534,6 +575,50 @@ const Profile = () => {
 					type={toast.type}
 					onClose={() => setToast(null)}
 				/>
+			)}
+
+			{/* GenHire not installed — download modal */}
+			{showDownloadModal && (
+				<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
+					<div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:'16px',padding:'36px 40px',maxWidth:'480px',width:'90%',color:'#f1f5f9',fontFamily:'inherit'}}>
+						<div style={{fontSize:'2.5rem',marginBottom:'12px'}}>📥</div>
+						<h2 style={{margin:'0 0 8px',fontSize:'1.4rem',color:'#f1f5f9'}}>Install GenHire Secure Browser</h2>
+						<p style={{margin:'0 0 20px',color:'#94a3b8',fontSize:'0.95rem'}}>
+							GenHire was not detected on this device. Your installer download has started automatically.
+						</p>
+						<div style={{background:'#0f172a',borderRadius:'10px',padding:'16px 20px',marginBottom:'24px'}}>
+							<p style={{margin:'0 0 10px',color:'#7dd3fc',fontWeight:600,fontSize:'0.9rem'}}>Follow these steps:</p>
+							<ol style={{margin:0,paddingLeft:'20px',color:'#cbd5e1',fontSize:'0.9rem',lineHeight:'1.9'}}>
+								<li>Open <strong>Genhire.exe</strong> from your Downloads folder</li>
+								<li>Click <strong>Install</strong> — the app will launch automatically</li>
+								<li>Return here and click <strong>Retry</strong> below</li>
+							</ol>
+						</div>
+						<div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+							<button onClick={triggerDownload} style={{flex:1,padding:'10px 16px',background:'transparent',border:'1px solid #475569',borderRadius:'8px',color:'#94a3b8',cursor:'pointer',fontSize:'0.9rem'}}>
+								Download Again
+							</button>
+							<button onClick={retryLaunchInterview} style={{flex:2,padding:'10px 16px',background:'#3b82f6',border:'none',borderRadius:'8px',color:'#fff',cursor:'pointer',fontWeight:600,fontSize:'0.95rem'}}>
+								Retry — Launch Interview
+							</button>
+						</div>
+						<button onClick={() => setShowDownloadModal(false)} style={{marginTop:'16px',width:'100%',padding:'8px',background:'transparent',border:'none',color:'#64748b',cursor:'pointer',fontSize:'0.85rem'}}>
+							Cancel
+						</button>
+					</div>
+				</div>
+			)}
+
+			{/* Launching overlay */}
+			{isLaunchingInterview && (
+				<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center'}}>
+					<div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:'16px',padding:'36px 40px',maxWidth:'360px',width:'90%',color:'#f1f5f9',textAlign:'center',fontFamily:'inherit'}}>
+						<div style={{width:'40px',height:'40px',border:'3px solid #334155',borderTop:'3px solid #3b82f6',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 20px'}}></div>
+						<h3 style={{margin:'0 0 8px',fontSize:'1.1rem'}}>Preparing Your Interview</h3>
+						<p style={{margin:0,color:'#94a3b8',fontSize:'0.9rem'}}>Setting up your session — this takes just a moment...</p>
+						<style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+					</div>
+				</div>
 			)}
 		</div>
 	);

@@ -19,6 +19,7 @@ from .prompt_based_question_generator import (
     PromptBasedQuestionGenerator as QuestionGenerator,
     ConversationContext,
     QuestionMetadata,
+    InterviewPhase,
 )
 from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
@@ -196,6 +197,10 @@ class InterviewSessionManager:
             conversation_context = self.question_generator.initialize_conversation(
                 resume_sections, job_description
             )
+            # The hardcoded first question already serves as the greeting, so skip
+            # the GREETING phase in the question generator to prevent a second greeting.
+            conversation_context.has_been_greeted = True
+            conversation_context.interview_phase = InterviewPhase.EXPERIENTIAL_QUESTIONS
             session.conversation_context = conversation_context
         except Exception as e:
             print(f"Background context init failed: {e}")
@@ -492,50 +497,8 @@ class InterviewSessionManager:
         return {"session_ended": True, "final_evaluation": final_evaluation}
 
     def _should_continue_interview(self, session: InterviewSession) -> bool:
-        """Determine if the interview should continue based on various factors."""
-
-        # Basic length constraints
-        if session.questions_asked >= self.config.max_questions:
-            return False
-
-        # Always continue if we haven't reached max_questions (enforcing fixed length)
-        if session.questions_asked < self.config.max_questions:
-            return True
-
-        # Check quality of conversation (if average answer score is very low)
-        if session.questions_asked >= self.config.max_questions:
-            avg_answer = sum(
-                item["evaluation"].get("answer_score", 0.0) for item in session.interview_data
-            ) / len(session.interview_data) if session.interview_data else 0
-            if avg_answer < 0.2:
-                return False
-
-        # Check recent conversation quality
-        if len(session.interview_data) >= 2:
-            recent_scores = [
-                item["evaluation"].get("answer_score", 0.0)
-                for item in session.interview_data[-2:]
-            ]
-            avg_recent_score = sum(recent_scores) / len(recent_scores)
-
-            # If conversation is excellent and we've covered enough topics, can end
-            # But require at least 10 questions and 5 topics
-            if (
-                avg_recent_score > 0.8
-                and session.conversation_context
-                and len(session.conversation_context.topics_covered) >= 5
-                and session.questions_asked >= 10
-            ):
-                return False
-
-        # Check topic coverage - require more topics before ending
-        if (
-            session.conversation_context
-            and len(session.conversation_context.topics_covered) >= 8
-        ):
-            return False
-
-        return True
+        """Return True if the interview should continue, False when it should end."""
+        return session.questions_asked < self.config.max_questions
 
     def _generate_conversation_summary(
         self, session: InterviewSession
@@ -620,23 +583,31 @@ class InterviewSessionManager:
 
         # Generate qualitative assessment
         prompt = f"""
-        Provide a comprehensive interview evaluation based on the following data:
-        
-        Number of questions: {session.questions_asked}
-        Average scores:
-        - Answer Content: {avg_scores['answer_score']:.2f}
-        - Language Proficiency: {avg_scores['language_score']:.2f}
-        
+        You are a professional hiring manager writing a structured interview evaluation report.
+
+        Interview Data:
+        - Questions asked: {session.questions_asked}
+        - Average Answer Score: {avg_scores['answer_score']:.2f} / 1.00
+        - Average Language Score: {avg_scores['language_score']:.2f} / 1.00
+
         Interview transcript:
         {session.interview_history}
-        
-        Provide a structured evaluation covering:
-        1. Overall assessment
-        2. Key strengths observed
-        3. Areas for improvement
-        4. Recommendation (hire/no hire/further assessment)
-        
-        CRITICAL INSTRUCTION: Do NOT sugarcoat your feedback. Be extremely critical, objective, and blunt. Explicitly call out flaws such as verbosity, lack of technical depth, poor communication, or grammatical errors. If the candidate blabbers or gives irrelevant answers, state it clearly.
+
+        Write a professional, structured evaluation with the following sections using markdown headers:
+
+        ### 1. Overall Assessment
+        Summarise the candidate's overall performance objectively. Note if answers were incomplete, evasive, or strong.
+
+        ### 2. Key Strengths
+        List any genuine strengths observed. If none were evident, state that briefly without embellishment.
+
+        ### 3. Areas for Improvement
+        Provide specific, actionable feedback on technical depth, communication clarity, or preparation gaps.
+
+        ### 4. Hiring Recommendation
+        Give one of: **Recommend Hire**, **Further Assessment Needed**, or **Do Not Recommend** — with a one-sentence justification.
+
+        Guidelines: Be honest and objective. Avoid unnecessary harshness but do not inflate scores. If the candidate failed to engage meaningfully, say so clearly and professionally. Keep the total response under 400 words.
         """
 
         try:

@@ -49,6 +49,9 @@ const Practice = () => {
   const [difficulty, setDifficulty] = useState("medium");
   const [uploadedJD, setUploadedJD] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [sessionLaunched, setSessionLaunched] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [pendingDeepLink, setPendingDeepLink] = useState(null);
   const [practiceHistory, setPracticeHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -75,6 +78,22 @@ const Practice = () => {
   useEffect(() => {
     fetchPracticeHistory();
   }, []);
+
+  // When user returns from GenHire secure browser, reset loading state and refresh history
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setIsStarting(false);
+        if (sessionLaunched) {
+          setSessionLaunched(false);
+          showToast("Welcome back! Your practice report will appear in history once the session is processed.", "info");
+          fetchPracticeHistory();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [sessionLaunched]);
 
   // Fetch practice interview history
   const fetchPracticeHistory = async () => {
@@ -222,6 +241,7 @@ const Practice = () => {
       }
 
       showToast(`Launching Secure Browser for practice session...`, 'info');
+      setSessionLaunched(true);
 
       // Generate the initialization payload for practice mode
       const payload = {
@@ -242,31 +262,29 @@ const Practice = () => {
       const encodedPayload = btoa(JSON.stringify(payload));
       const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
 
-      // Deep Link Attempt via hidden iframe to prevent canceling the prompt
+      // Store for retry after install
+      setPendingDeepLink(customUri);
+
+      // Fire deep link via hidden iframe
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
       iframe.src = customUri;
       document.body.appendChild(iframe);
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
 
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 10000); // Wait 10 seconds before removing iframe so prompt doesn't break
-
-      // Fallback if app isn't installed (giving user enough time to click 'Open')
+      // If window still has focus after 4s → GenHire not installed
       const timeoutId = setTimeout(() => {
         if (document.hasFocus()) {
-          showToast('Secure Browser not detected. Downloading the application. Please install it to proceed.', 'info');
           const link = document.createElement('a');
           link.href = '/apps/Genhire.exe';
           link.download = 'Genhire.exe';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          setShowDownloadModal(true);
         }
         setIsStarting(false);
-      }, 10000); // 10 seconds instead of 2.5s
+      }, 4000);
 
       window.addEventListener('blur', () => {
         clearTimeout(timeoutId);
@@ -807,6 +825,53 @@ const Practice = () => {
         getRoleName={getRoleName}
         getRoleIcon={getRoleIcon}
       />
+
+      {/* GenHire not installed — download modal */}
+      {showDownloadModal && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:'16px',padding:'36px 40px',maxWidth:'480px',width:'90%',color:'#f1f5f9',fontFamily:'inherit'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>📥</div>
+            <h2 style={{margin:'0 0 8px',fontSize:'1.4rem',color:'#f1f5f9'}}>Install GenHire Secure Browser</h2>
+            <p style={{margin:'0 0 20px',color:'#94a3b8',fontSize:'0.95rem'}}>
+              GenHire was not detected on this device. Your installer download has started automatically.
+            </p>
+            <div style={{background:'#0f172a',borderRadius:'10px',padding:'16px 20px',marginBottom:'24px'}}>
+              <p style={{margin:'0 0 10px',color:'#7dd3fc',fontWeight:600,fontSize:'0.9rem'}}>Follow these steps:</p>
+              <ol style={{margin:0,paddingLeft:'20px',color:'#cbd5e1',fontSize:'0.9rem',lineHeight:'1.9'}}>
+                <li>Open <strong>Genhire.exe</strong> from your Downloads folder</li>
+                <li>Click <strong>Install</strong> — the app will launch automatically</li>
+                <li>Return here and click <strong>Retry</strong> below</li>
+              </ol>
+            </div>
+            <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+              <button onClick={() => {
+                const link = document.createElement('a');
+                link.href = '/apps/Genhire.exe';
+                link.download = 'Genhire.exe';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }} style={{flex:1,padding:'10px 16px',background:'transparent',border:'1px solid #475569',borderRadius:'8px',color:'#94a3b8',cursor:'pointer',fontSize:'0.9rem'}}>
+                Download Again
+              </button>
+              <button onClick={() => {
+                if (!pendingDeepLink) return;
+                setShowDownloadModal(false);
+                const iframe = document.createElement("iframe");
+                iframe.style.display = "none";
+                iframe.src = pendingDeepLink;
+                document.body.appendChild(iframe);
+                setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
+              }} style={{flex:2,padding:'10px 16px',background:'#3b82f6',border:'none',borderRadius:'8px',color:'#fff',cursor:'pointer',fontWeight:600,fontSize:'0.95rem'}}>
+                Retry — Launch Interview
+              </button>
+            </div>
+            <button onClick={() => setShowDownloadModal(false)} style={{marginTop:'16px',width:'100%',padding:'8px',background:'transparent',border:'none',color:'#64748b',cursor:'pointer',fontSize:'0.85rem'}}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

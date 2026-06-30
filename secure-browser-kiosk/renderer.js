@@ -36,6 +36,7 @@ let currentSessionId = null;
 let socket = null;
 
 let isInterviewActive = false;
+let isAISpeaking = false; // true while TTS audio is playing — blocks send button
 let clockInterval = null;
 
 // API Data
@@ -135,29 +136,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnEndInterview.addEventListener('click', endInterview);
     btnDownload.addEventListener('click', saveResultsAsPhoto);
 
-    // Return to GenHire Dashboard button
+    // Return to GenHire button — updated dynamically after endInterview() based on isPracticeMode
     const btnReturnDashboard = document.getElementById('btn-return-dashboard');
     if (btnReturnDashboard) {
         btnReturnDashboard.addEventListener('click', () => {
-            // Build dashboard URL from API URL (strip /api suffix)
-            let dashboardUrl = 'http://localhost:3000/profile#applications';
+            const targetPath = isPracticeMode ? '/practice' : '/profile#applications';
+            let dashboardUrl = `http://localhost:3000${targetPath}`;
             if (apiUrl) {
-                // apiUrl is like "http://127.0.0.1:5000/api" — derive the frontend URL
-                // The frontend typically runs on port 3000
                 try {
                     const urlObj = new URL(apiUrl);
-                    dashboardUrl = `${urlObj.protocol}//${urlObj.hostname}:3000/profile#applications`;
+                    dashboardUrl = `${urlObj.protocol}//${urlObj.hostname}:3000${targetPath}`;
                 } catch (e) {
                     console.warn('Could not parse apiUrl, using default:', e);
                 }
             }
 
-            // Open in default browser
             if (window.electronAPI && window.electronAPI.openExternal) {
                 window.electronAPI.openExternal(dashboardUrl);
             }
 
-            // Close the Electron app after a short delay
             setTimeout(() => {
                 if (window.electronAPI && window.electronAPI.quitApp) {
                     window.electronAPI.quitApp();
@@ -217,6 +214,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Send Answer Button Wire-up
     document.getElementById('send-btn').addEventListener('click', submitAnswer);
 
+    // App-switch proctoring: main process notifies when window loses focus during kiosk
+    if (window.electronAPI && window.electronAPI.onAppSwitched) {
+        window.electronAPI.onAppSwitched(() => {
+            if (isInterviewActive) {
+                showProctoringWarning('You switched to another application. This has been recorded.');
+                if (socket && socket.connected) {
+                    socket.emit('proctoring_violation', {
+                        session_id: currentSessionId,
+                        type: 'app_switch'
+                    });
+                }
+            }
+        });
+    }
+
     try {
         await setupCamera();
         video.play();
@@ -252,6 +264,16 @@ function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+/** Sync the send button's disabled state with current flags. */
+function updateSendButtonState() {
+    const sendBtn = document.getElementById('send-btn');
+    if (!sendBtn) return;
+    const shouldDisable = isAISpeaking || isSubmittingAnswer || !isInterviewActive;
+    sendBtn.disabled = shouldDisable;
+    sendBtn.style.opacity = shouldDisable ? '0.5' : '1';
+    sendBtn.style.cursor = shouldDisable ? 'not-allowed' : 'pointer';
 }
 
 /**
@@ -514,7 +536,16 @@ async function startInterview() {
             if (payload.proctoringConfig) {
                 proctoringConfig = payload.proctoringConfig;
             }
+        } else if (payload.sessionId && payload.initialQuestion) {
+            // Fast path: session was pre-created by the platform — start instantly, no API call needed
+            currentSessionId = payload.sessionId;
+            currentQuestion = payload.initialQuestion;
+            questionCount = 1;
+            if (payload.proctoringConfig) {
+                proctoringConfig = payload.proctoringConfig;
+            }
         } else {
+            // Fallback: create session here (slower — legacy path)
             const response = await fetch(`${apiUrl}/api/interviews/start`, {
                 method: "POST",
                 headers: {
@@ -534,7 +565,6 @@ async function startInterview() {
             currentQuestion = data.initial_questions[0];
             questionCount = 1;
 
-            // Extract proctoring config from server response
             if (data.proctoring_config) {
                 proctoringConfig = data.proctoring_config;
             }
@@ -585,31 +615,26 @@ function finalizeStartInterview() {
         });
     }
 
-    // Speak the very first question!
+    // Speak the very first question with word-by-word reveal
     const finishSetupAndSpeak = async () => {
-        try {
-            const base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
-            const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
-            if (currentAudioObj) {
-                currentAudioObj.pause();
-                currentAudioObj.currentTime = 0;
-            }
-            currentAudioObj = new Audio(audioDataUrl);
+        if (currentAudioObj) { currentAudioObj.pause(); currentAudioObj.currentTime = 0; }
+        isAISpeaking = true;
+        updateSendButtonState();
 
-            currentAudioObj.onended = () => {
-                // start recording when TTS is done speaking FIRST question
-                if (isInterviewActive && !isRecording && !speechNetworkFailed) {
-                    if (proctoringConfig.voice_detection) startRecording();
-                }
-            };
-            currentAudioObj.play();
+        let base64Audio = null;
+        try {
+            base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
         } catch (err) {
-            console.error("Failed to speak first question", err);
-            // Fallback: Start immediately if speech fails
-            if (proctoringConfig.voice_detection && !speechNetworkFailed) {
-                startRecording();
-            }
+            console.error("TTS failed for first question:", err);
         }
+
+        currentAudioObj = playQuestionWithReveal(currentQuestion, base64Audio, () => {
+            isAISpeaking = false;
+            updateSendButtonState();
+            if (isInterviewActive && !isRecording && !speechNetworkFailed) {
+                if (proctoringConfig.voice_detection) startRecording();
+            }
+        });
     };
     finishSetupAndSpeak();
 
@@ -744,20 +769,39 @@ async function endInterview() {
     if (sessionStartTime) totalElapsed = (Date.now() - sessionStartTime) / 1000;
     document.getElementById('val-time').textContent = formatTime(totalElapsed);
 
+    // Update completion message and return button based on session type
+    const completionHeader = document.querySelector('.evaluation-header h2');
+    if (completionHeader) completionHeader.textContent = '✅ Interview Complete';
+
+    const completionSubtitle = document.querySelector('.evaluation-header p');
+    if (completionSubtitle) {
+        completionSubtitle.textContent = isPracticeMode
+            ? 'Your practice session has ended. Return to the Practice Page to view your report.'
+            : 'Your interview has ended. Return to My Applications to view your report.';
+    }
+
+    const btnReturn = document.getElementById('btn-return-dashboard');
+    if (btnReturn) {
+        btnReturn.textContent = isPracticeMode
+            ? '↩ Return to Practice Page'
+            : '↩ Return to My Applications';
+    }
+
     renderChart();
 }
 
 async function submitAnswer() {
-    if (isSubmittingAnswer || !isInterviewActive) return;
+    // Block if AI is speaking, already submitting, or interview not active
+    if (isAISpeaking || isSubmittingAnswer || !isInterviewActive) return;
 
     const sendBtn = document.getElementById('send-btn');
     isSubmittingAnswer = true;
-    sendBtn.innerHTML = "Wait...";
+    updateSendButtonState();
+    sendBtn.innerHTML = "Processing...";
 
     stopRecording();
 
     try {
-        // Use speech transcript
         const answerText = currentTranscript.trim() || "(No answer provided)";
 
         const payload = {
@@ -766,7 +810,7 @@ async function submitAnswer() {
             is_intro: false
         };
 
-        const endpoint = isPracticeMode 
+        const endpoint = isPracticeMode
             ? `${apiUrl}/api/practice/${currentSessionId}/answer`
             : `${apiUrl}/api/interviews/${currentSessionId}/answer`;
 
@@ -784,6 +828,7 @@ async function submitAnswer() {
         const data = await response.json();
 
         if (data.interview_complete || questionCount >= 10) {
+            isSubmittingAnswer = false;
             endInterview();
             return;
         }
@@ -796,37 +841,32 @@ async function submitAnswer() {
         // Reset speech variables
         currentTranscript = "";
         lastSpeechTime = Date.now();
-        transcriptText.innerHTML = `<strong>AI:</strong> ${currentQuestion}`;
-        transcriptText.style.fontStyle = "italic";
 
-        // Speak question via Google TTS, then listen again
+        // Speak next question with word-by-word reveal
+        if (currentAudioObj) { currentAudioObj.pause(); currentAudioObj.currentTime = 0; }
+        isAISpeaking = true;
+        updateSendButtonState();
+
+        let base64Audio = null;
         try {
-            const base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
-            const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
-            if (currentAudioObj) {
-                currentAudioObj.pause();
-                currentAudioObj.currentTime = 0;
-            }
-            currentAudioObj = new Audio(audioDataUrl);
-
-            currentAudioObj.onended = () => {
-                if (isInterviewActive && !isRecording && !speechNetworkFailed) {
-                    startRecording();
-                }
-            };
-            currentAudioObj.play();
+            base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
         } catch (ttsErr) {
             console.error("Google TTS failed:", ttsErr);
-            // Fallback immediately to recording if TTS fails
+        }
+
+        currentAudioObj = playQuestionWithReveal(currentQuestion, base64Audio, () => {
+            isAISpeaking = false;
+            updateSendButtonState();
             if (isInterviewActive && !isRecording && !speechNetworkFailed) {
                 startRecording();
             }
-        }
+        });
 
     } catch (err) {
-        alert("Failed to submit answer. " + err.message);
+        showError("Failed to submit answer: " + err.message);
     } finally {
         isSubmittingAnswer = false;
+        updateSendButtonState();
         sendBtn.innerHTML = `
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -947,10 +987,123 @@ async function setupCamera() {
 }
 
 // ═══════════════════════════════════════
+//  ERROR OVERLAY (replaces alert() during kiosk)
+// ═══════════════════════════════════════
+function showError(msg) {
+    const existing = document.getElementById('genhire-error-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'genhire-error-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:inherit';
+    overlay.innerHTML = `
+      <div style="background:#1e293b;border:2px solid #ef4444;border-radius:16px;padding:32px 36px;max-width:500px;width:90%;text-align:center;color:#f1f5f9;">
+        <div style="font-size:2rem;margin-bottom:10px;">⚠️</div>
+        <h3 style="color:#ef4444;margin:0 0 12px;font-size:1.1rem;">Something went wrong</h3>
+        <p style="margin:0 0 24px;color:#94a3b8;font-size:0.9rem;line-height:1.5">${msg}</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <button id="err-dismiss" style="padding:10px 20px;background:#334155;border:none;border-radius:8px;color:#f1f5f9;cursor:pointer;font-size:0.9rem">Dismiss</button>
+          <button id="err-quit" style="padding:10px 20px;background:#ef4444;border:none;border-radius:8px;color:#fff;cursor:pointer;font-weight:bold;font-size:0.9rem">Exit GenHire (Ctrl+Q)</button>
+        </div>
+        <p style="margin:16px 0 0;color:#475569;font-size:0.78rem">You can also press <strong>Ctrl+Q</strong> at any time to exit safely.</p>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('err-dismiss').onclick = () => overlay.remove();
+    document.getElementById('err-quit').onclick = () => { if (window.electronAPI) window.electronAPI.quitApp(); };
+}
+
+// ═══════════════════════════════════════
+//  TTS + WORD-BY-WORD REVEAL
+// ═══════════════════════════════════════
+function playQuestionWithReveal(questionText, base64Audio, onEnded) {
+    const words = questionText.split(/\s+/).filter(Boolean);
+
+    // Set transcript to a live-reveal container
+    transcriptText.style.fontStyle = 'italic';
+    transcriptText.innerHTML = `<strong style="color:#7dd3fc;font-style:normal">AI:</strong> <span id="tts-word-reveal"></span>`;
+    const revealEl = document.getElementById('tts-word-reveal');
+
+    let wordInterval = null;
+    let wordIndex = 0;
+
+    function startReveal(durationSec) {
+        if (wordInterval) clearInterval(wordInterval);
+        wordIndex = 0;
+        const msPerWord = (durationSec > 0 && isFinite(durationSec))
+            ? Math.max(60, (durationSec * 1000) / words.length)
+            : 400; // fallback ~2.5 words/sec
+        const shownWords = [];
+        wordInterval = setInterval(() => {
+            if (wordIndex < words.length) {
+                shownWords.push(words[wordIndex++]);
+                if (revealEl) revealEl.textContent = shownWords.join(' ');
+            } else {
+                clearInterval(wordInterval);
+            }
+        }, msPerWord);
+        // Show first word immediately
+        if (words.length > 0 && revealEl) revealEl.textContent = words[0];
+        wordIndex = 1;
+    }
+
+    function cleanup() {
+        if (wordInterval) clearInterval(wordInterval);
+        // Guarantee full text is visible
+        if (revealEl) revealEl.textContent = questionText;
+    }
+
+    if (!base64Audio) {
+        // No audio — just do timed word reveal
+        startReveal(words.length / 2.5);
+        const fallbackMs = Math.max(2000, (words.length / 2.5) * 1000);
+        setTimeout(() => { cleanup(); onEnded(); }, fallbackMs);
+        return null;
+    }
+
+    const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+    let revealStarted = false;
+
+    function tryStartReveal() {
+        if (revealStarted) return;
+        revealStarted = true;
+        startReveal(audio.duration || words.length / 2.5);
+    }
+
+    audio.onloadedmetadata = () => tryStartReveal();
+    audio.onplay = () => tryStartReveal();
+
+    audio.onended = () => { cleanup(); onEnded(); };
+    audio.onerror = (e) => {
+        console.error("Audio playback error:", e);
+        cleanup();
+        onEnded();
+    };
+
+    audio.play().catch(e => {
+        console.error("Audio play() rejected:", e);
+        if (!revealStarted) startReveal(words.length / 2.5);
+        setTimeout(() => { cleanup(); onEnded(); }, Math.max(2000, (words.length / 2.5) * 1000));
+    });
+
+    return audio;
+}
+
+// ═══════════════════════════════════════
 //  GOOGLE CLOUD RECORDING HELPERS
 // ═══════════════════════════════════════
 function startRecording() {
     if (isRecording || !audioStream || !window.electronAPI) return;
+
+    // If the audio track has ended (e.g. after a previous MediaRecorder stop), re-acquire it
+    const existingTrack = audioStream.getAudioTracks()[0];
+    if (!existingTrack || existingTrack.readyState === 'ended') {
+        navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+            .then(newStream => {
+                audioStream = newStream;
+                startRecording();
+            })
+            .catch(err => console.error("Failed to re-acquire audio stream:", err));
+        return;
+    }
 
     isRecording = true;
     currentTranscript = "";
@@ -958,17 +1111,27 @@ function startRecording() {
 
     window.electronAPI.startSTTStream();
 
-    // Create a new MediaRecorder to send audio chunks. 
-    // We must extract ONLY the audio track, otherwise MediaRecorder fails when given a video track with an audio mimeType.
-    const audioTrack = audioStream.getAudioTracks()[0];
-    const recordStream = new MediaStream([audioTrack]);
+    // Extract only the audio track to avoid codec mismatch errors
+    const recordStream = new MediaStream([existingTrack]);
 
     let mimeType = 'audio/webm;codecs=opus';
     if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = '';
+        }
     }
 
-    mediaRecorder = new MediaRecorder(recordStream, { mimeType });
+    try {
+        mediaRecorder = mimeType
+            ? new MediaRecorder(recordStream, { mimeType })
+            : new MediaRecorder(recordStream);
+    } catch (err) {
+        console.error("MediaRecorder creation failed:", err);
+        isRecording = false;
+        speechNetworkFailed = true;
+        return;
+    }
     mediaRecorder.ondataavailable = async (e) => {
         if (e.data.size > 0 && isRecording) {
             const arrayBuffer = await e.data.arrayBuffer();

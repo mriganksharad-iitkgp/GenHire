@@ -27,4 +27,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Open URL in default browser
     openExternal: (url) => ipcRenderer.send('open-external', url),
+
+    // App-switch detection (fired by main process when window loses focus during kiosk)
+    onAppSwitched: (callback) => {
+        ipcRenderer.removeAllListeners('app-switched');
+        ipcRenderer.on('app-switched', callback);
+    },
 });

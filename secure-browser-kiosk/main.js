@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -7,8 +7,12 @@ const fs = require('fs');
 const textToSpeech = require('@google-cloud/text-to-speech');
 const speech = require('@google-cloud/speech');
 
-// Initialize Google Cloud Clients using local credentials.json
-const credentialsPath = path.join(__dirname, 'credentials.json');
+// Initialize Google Cloud Clients using credentials.json
+// In production (installed), electron-builder places extraResources at process.resourcesPath
+// In development (npm start), it lives next to main.js
+const credentialsPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'credentials.json')
+    : path.join(__dirname, 'credentials.json');
 let ttsClient = null;
 let sttClient = null;
 
@@ -108,20 +112,26 @@ ipcMain.on('open-external', (event, url) => {
 ipcMain.handle('synthesize-speech', async (event, text) => {
     if (!ttsClient) throw new Error("Google Cloud TTS client not initialized.");
 
-    const request = {
-        input: { text: text },
-        voice: { languageCode: 'en-US', name: 'en-US-Journey-F' }, // Using a more natural voice, fallback to standard if not available in project
-        audioConfig: { audioEncoding: 'MP3' },
-    };
+    // Voice fallback chain: Journey (most natural) -> Neural2 -> Standard
+    const voices = [
+        { languageCode: 'en-US', name: 'en-US-Journey-F' },
+        { languageCode: 'en-US', name: 'en-US-Neural2-C' },
+        { languageCode: 'en-US', name: 'en-US-Standard-C' },
+    ];
 
-    try {
-        const [response] = await ttsClient.synthesizeSpeech(request);
-        // We return the binary audio content encoded as base64 so renderer can play it via Data URI
-        return response.audioContent.toString('base64');
-    } catch (err) {
-        console.error("TTS Error:", err);
-        throw err;
+    for (const voice of voices) {
+        try {
+            const [response] = await ttsClient.synthesizeSpeech({
+                input: { text },
+                voice,
+                audioConfig: { audioEncoding: 'MP3' },
+            });
+            return response.audioContent.toString('base64');
+        } catch (err) {
+            console.warn(`TTS voice ${voice.name} failed: ${err.message}`);
+        }
     }
+    throw new Error("All TTS voices failed — check Google Cloud credentials and quota.");
 });
 
 // ==========================================
@@ -191,6 +201,8 @@ ipcMain.on('enable-kiosk', () => {
     mainWindow.setAlwaysOnTop(true);
     mainWindow.setClosable(false);
     mainWindow.setMinimizable(false);
+    // Force window to foreground — prevents tab-switch right after calibration dot 5
+    mainWindow.focus();
 
     // Block keyboard shortcuts
     mainWindow.webContents.on('before-input-event', blockInputHandler);
@@ -201,6 +213,29 @@ ipcMain.on('enable-kiosk', () => {
         globalShortcut.register('Alt+Tab', () => { });
         globalShortcut.register('Escape', () => { });
         globalShortcut.register('Super+D', () => { });
+        globalShortcut.register('Super+Tab', () => { });
+
+        // Emergency exit: Ctrl+Q shows a confirmation dialog (works even during kiosk)
+        globalShortcut.register('Control+Q', () => {
+            if (!mainWindow || mainWindow.isDestroyed()) return;
+            const choice = dialog.showMessageBoxSync(mainWindow, {
+                type: 'warning',
+                title: 'Exit GenHire',
+                message: 'Exit GenHire Secure Browser?',
+                detail: 'This will end your current interview session.',
+                buttons: ['Cancel', 'Exit GenHire'],
+                defaultId: 0,
+                cancelId: 0,
+            });
+            if (choice === 1) {
+                isKioskActive = false;
+                mainWindow.setKiosk(false);
+                mainWindow.setAlwaysOnTop(false);
+                mainWindow.setClosable(true);
+                globalShortcut.unregisterAll();
+                app.quit();
+            }
+        });
 
         const localShortcut = require('electron-localshortcut');
         localShortcut.register(mainWindow, 'Super+Tab', () => { });
@@ -285,10 +320,12 @@ function createWindow() {
     // Remove the default menu entirely
     Menu.setApplicationMenu(null);
 
-    // Aggressive re-focusing ONLY when kiosk is active
+    // Aggressive re-focusing + proctoring notification ONLY when kiosk is active
     mainWindow.on('blur', () => {
         if (isKioskActive && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.focus();
+            // Notify renderer so it can log the proctoring violation
+            mainWindow.webContents.send('app-switched', {});
         }
     });
 

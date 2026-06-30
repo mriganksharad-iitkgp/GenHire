@@ -1334,10 +1334,9 @@ class PromptBasedQuestionGenerator:
                 context.interview_phase = InterviewPhase.TECHNICAL_QUESTIONS
 
         elif context.interview_phase == InterviewPhase.TECHNICAL_QUESTIONS:
-            # Continue asking technical questions until total count reaches the limit
-            if (
-                context.question_count >= 12
-            ):  # Increased limit to 12 for better topic coverage
+            # Switch to HR/behavioural questions for the last 2 slots of a 10-question interview.
+            # context.question_count == 7 at start of Q9 generation (0-indexed from first dynamic Q).
+            if context.question_count >= 7:
                 context.interview_phase = InterviewPhase.HR_QUESTIONS
                 question = self._generate_hr_question(
                     context, last_answer, answer_evaluation
@@ -1348,13 +1347,13 @@ class PromptBasedQuestionGenerator:
                 )
 
         elif context.interview_phase == InterviewPhase.HR_QUESTIONS:
-            # Ask HR questions at the end, then move to closing
             question = self._generate_hr_question(
                 context, last_answer, answer_evaluation
             )
             context.hr_questions_asked += 1
-            # Limit to 3 HR questions for now
-            if context.hr_questions_asked >= 3:
+            # In a 10-question interview only 2 HR slots are available; keep limit high
+            # so the session manager (max_questions) terminates naturally.
+            if context.hr_questions_asked >= 5:
                 context.interview_phase = InterviewPhase.CLOSING
 
         elif context.interview_phase == InterviewPhase.CLOSING:

@@ -46,7 +46,7 @@ export default function Chat({ interviewId }) {
   const [warningCount, setWarningCount] = useState(0);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [questionCount, setQuestionCount] = useState(0);
+  const [questionCount, setQuestionCount] = useState(1);
   const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
   const silenceTimerRef = useRef(null);
   const audioContextRef = useRef(null);
