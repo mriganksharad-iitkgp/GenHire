@@ -306,7 +306,7 @@ const Profile = () => {
 
 	const triggerDownload = () => {
 		const link = document.createElement('a');
-		link.href = 'https://github.com/mriganksharad-iitkgp/GenHire/releases/latest/download/Genhire.exe';
+		link.href = 'https://storage.googleapis.com/genhire-downloads/Genhire.exe';
 		link.download = 'Genhire.exe';
 		document.body.appendChild(link);
 		link.click();
