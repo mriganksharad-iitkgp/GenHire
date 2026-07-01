@@ -53,7 +53,7 @@ react-frontend/build/
 
 # Local environment files
 react-frontend/.env
-react-frontend/.env.production
+.env.production
 .env.local
 .env.development.local
 .env.test.local
