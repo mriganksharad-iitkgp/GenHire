@@ -8,6 +8,7 @@ import secrets
 from pymongo.errors import DuplicateKeyError
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import requests as http_requests
 from services.email_service import EmailService
 from payment_module.services.wallet_service import WalletService
 from middleware.input_validator import validate_email, validate_password, validate_name
@@ -588,13 +589,24 @@ class AuthController:
             return {'error': 'Invalid user type'}, 400
         
         try:
-            # Verify the token with Google (allow 10s clock skew for "Token used too early")
-            idinfo = id_token.verify_oauth2_token(
-                token,
-                google_requests.Request(),
-                self.google_client_id,
-                clock_skew_in_seconds=10
-            )
+            # Detect token type: ID tokens are JWTs (contain two dots), access tokens are opaque
+            if token.count('.') == 2:
+                idinfo = id_token.verify_oauth2_token(
+                    token,
+                    google_requests.Request(),
+                    self.google_client_id,
+                    clock_skew_in_seconds=10
+                )
+            else:
+                # Access token — verify via Google's userinfo endpoint
+                resp = http_requests.get(
+                    'https://www.googleapis.com/oauth2/v3/userinfo',
+                    headers={'Authorization': f'Bearer {token}'},
+                    timeout=10
+                )
+                if not resp.ok:
+                    return {'error': 'Invalid Google access token'}, 401
+                idinfo = resp.json()
 
             # Get user info from token
             email = self._normalize_email(idinfo.get('email'))
