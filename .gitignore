@@ -1,43 +1,97 @@
-python-backend/uploads/
-aptidude-485412-a8ed71c96e9e.json
-
-# secure-browser-kiosk ignored files
-secure-browser-kiosk/node_modules/
-secure-browser-kiosk/dist/
-secure-browser-kiosk/credentials.json
-
-
-# Python compiled files (these are already in python-backend/.gitignore but not root)
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.py[cod]
+*.egg
+*.egg-info/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+instance/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+*.pot
+*.db
+*.sqlite3
+*.manifest
+*.spec
+develop-eggs/
+sdist/
+var/
 
-# ML model weights (should be downloaded at deploy time)
+# ── Node / React / Electron ──────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Build outputs ────────────────────────────────────────────────────────────
+react-frontend/build/
+react-frontend/dist/
+secure-browser-kiosk/dist/
+
+# ── Environment files ────────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+react-frontend/.env
+react-frontend/.env.production
+python-backend/.env
+python-backend/.env.production
+
+# ── Google Cloud / service account credentials ───────────────────────────────
+*-credentials.json
+*-service-account.json
+aptidude-*.json
+hr-tech-*.json
+genhire-*.json
+python-backend/credentials.json
+secure-browser-kiosk/credentials.json
+
+# ── ML model weights ─────────────────────────────────────────────────────────
 *.pt
 *.pth
 *.ckpt
 *.h5
 
-# Windows crash dumps
-*.stackdump
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
 
-# Debug artifacts
-debug_*.txt
-pip_list.txt
+# ── Uploaded user files ──────────────────────────────────────────────────────
+python-backend/uploads/
+python-backend/media/
+python-backend/staticfiles/
 
-# Google Cloud service account credentials (ALL of them)
-*-credentials.json
-*-service-account.json
-aptidude-*.json
-hr-tech-*.json
-credentials.json
-
-# IDE
-.vscode/
-.idea/
-
-# Electron build outputs
-secure-browser-kiosk/dist/
+# ── Electron binaries ────────────────────────────────────────────────────────
 *.exe
 *.dmg
 *.AppImage
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.stackdump
+
+# ── Debug / temp artifacts ───────────────────────────────────────────────────
+debug_*.txt
+pip_list.txt

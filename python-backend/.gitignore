@@ -1,182 +1,67 @@
-# === Python backend ===
+# Python compiled
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.db
-*.sqlite3
-*.log
-*.pot
 *.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Environment files
+.env
+.env.production
+
+# Dependencies / build
 *.egg
 *.egg-info/
 .eggs/
-instance/
-.env
-.venv/
-venv/
-ENV/
-env/
 pip-wheel-metadata/
-*.pytest_cache/
-*.mypy_cache/
-*.coverage
+dist/
+build/
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
 .coverage.*
 htmlcov/
 .tox/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.manifest
-*.spec
 
-# Uploaded files (user data - should not go in repo)
-python-backend/uploads/
-python-backend/media/
-python-backend/staticfiles/
-
-# === Node/React frontend ===
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-package-lock.json
-
-# Build output
-react-frontend/dist/
-react-frontend/build/
-
-# Local environment files
-react-frontend/.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production
-.env.production.local
-
-# === IDE / Editors ===
-.vscode/
-.idea/
-*.swp
-*.swo
-# === Python backend ===
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.db
-*.sqlite3
+# Logs
 *.log
-*.pot
-*.py[cod]
-*.egg
-*.egg-info/
-.eggs/
-instance/
-.env
-.venv/
-venv/
-ENV/
-env/
-pip-wheel-metadata/
-*.pytest_cache/
-*.mypy_cache/
-*.coverage
-.coverage.*
-htmlcov/
-.tox/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.manifest
-*.spec
 
-# Uploaded files (user data - should not go in repo)
-python-backend/uploads/
-python-backend/media/
-python-backend/staticfiles/
+# Uploaded user files
+uploads/
+media/
+staticfiles/
 
-# === Node/React frontend ===
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-package-lock.json
+# Credentials
+credentials.json
+*-credentials.json
+*-service-account.json
+aptidude-*.json
+hr-tech-*.json
+genhire-*.json
 
-# Build output
-react-frontend/dist/
-react-frontend/build/
-
-# Local environment files
-react-frontend/.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production
-.env.production.local
-
-# === IDE / Editors ===
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# === OS Files ===
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# python-backend/aptidude-485412-a8ed71c96e9e.json
-# python-backend/hr-tech-2026-d1c05c0b9aa6.json
-# *.json
-
-# Python compiled files (these are already in python-backend/.gitignore but not root)
-__pycache__/
-*.pyc
-*.pyo
-
-# ML model weights (should be downloaded at deploy time)
+# ML model weights
 *.pt
 *.pth
-*.ckpt
 *.h5
-
-# Windows crash dumps
-*.stackdump
 
 # Debug artifacts
 debug_*.txt
 pip_list.txt
 
-# Google Cloud service account credentials (ALL of them)
-*-credentials.json
-*-service-account.json
-aptidude-*.json
-hr-tech-*.json
-credentials.json
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.stackdump
 
 # IDE
 .vscode/
 .idea/
-
-# Electron build outputs
-secure-browser-kiosk/dist/
-*.exe
-*.dmg
-*.AppImage

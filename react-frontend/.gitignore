@@ -1,107 +1,28 @@
-# === Python backend ===
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.db
-*.sqlite3
-*.log
-*.pot
-*.py[cod]
-*.egg
-*.egg-info/
-.eggs/
-instance/
-.env
-.venv/
-venv/
-ENV/
-env/
-pip-wheel-metadata/
-*.pytest_cache/
-*.mypy_cache/
-*.coverage
-.coverage.*
-htmlcov/
-.tox/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.manifest
-*.spec
-/public/apps/
-
-
-# === Node/React frontend ===
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-package-lock.json
-react-frontend/public/apps/*
-# Build output
-react-frontend/dist/
-react-frontend/build/
+build/
+dist/
 
-# Local environment files
-react-frontend/.env
+# env files
+.env
 .env.production
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# === IDE / Editors ===
-.vscode/
-.idea/
-*.swp
-*.swo
+# served installer (built separately, not tracked)
+/public/apps/
 
-# === OS Files ===
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-
-# Python compiled files (these are already in python-backend/.gitignore but not root)
-__pycache__/
-*.pyc
-*.pyo
-
-# ML model weights (should be downloaded at deploy time)
-*.pt
-*.pth
-*.ckpt
-*.h5
-
-# Windows crash dumps
-*.stackdump
-
-# Debug artifacts
-debug_*.txt
-pip_list.txt
-
-# Google Cloud service account credentials (ALL of them)
-*-credentials.json
-*-service-account.json
-aptidude-*.json
-hr-tech-*.json
-credentials.json
-
 # IDE
 .vscode/
 .idea/
-
-# Electron build outputs
-secure-browser-kiosk/dist/
-*.exe
-*.dmg
-*.AppImage
