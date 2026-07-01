@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+*.md
+!requirements.txt
+.vscode/
+.idea/
+gpu_intensive_task/yolov8n.pt
+deployment docs/
+debug_*.txt
+pip_list.txt
+test_*.py
+*.log
+.git/
