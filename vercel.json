@@ -2,6 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "installCommand": "npm install",
-  "framework": "create-react-app",
-  "rootDirectory": "react-frontend"
+  "framework": "create-react-app"
 }
