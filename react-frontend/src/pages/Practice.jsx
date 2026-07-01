@@ -276,7 +276,7 @@ const Practice = () => {
       const timeoutId = setTimeout(() => {
         if (document.hasFocus()) {
           const link = document.createElement('a');
-          link.href = '/apps/Genhire.exe';
+          link.href = 'https://github.com/mriganksharad-iitkgp/GenHire/releases/latest/download/Genhire.exe';
           link.download = 'Genhire.exe';
           document.body.appendChild(link);
           link.click();
@@ -846,7 +846,7 @@ const Practice = () => {
             <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
               <button onClick={() => {
                 const link = document.createElement('a');
-                link.href = '/apps/Genhire.exe';
+                link.href = 'https://github.com/mriganksharad-iitkgp/GenHire/releases/latest/download/Genhire.exe';
                 link.download = 'Genhire.exe';
                 document.body.appendChild(link);
                 link.click();
