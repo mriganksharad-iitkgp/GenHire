@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { INDIA_LOCATION_OPTIONS } from '../constants/jobTaxonomy';
+import ConfirmDialog from './common/ConfirmDialog';
 import styles from './JobEditModal.module.css';
 import proctoringStyles from './JobCreationModal.module.css';
 
@@ -48,7 +49,7 @@ const JOB_STATUSES = [
   { value: 'closed', label: 'Closed', description: 'Job is closed, no longer accepting applications', color: '#ef4444' }
 ];
 
-const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData }) => {
+const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, showToast }) => {
   // Helper function to convert list fields to array
   const toArray = (val) => {
     if (!val) return [];
@@ -101,6 +102,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   
   const dropdownRefs = {
     department: useRef(null),
@@ -220,7 +222,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
     e.preventDefault();
     
     if (!jobData.title.trim()) {
-      alert('Please enter a job title');
+      showToast ? showToast('Please enter a job title', 'error') : alert('Please enter a job title');
       return;
     }
 
@@ -241,7 +243,9 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
       onClose();
     } catch (error) {
       console.error('Error updating job:', error);
-      alert('Failed to update job. Please try again.');
+      showToast
+        ? showToast('Failed to update job. Please try again.', 'error')
+        : alert('Failed to update job. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -258,9 +262,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
 
   // Handle cancel
   const handleCancel = () => {
-    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-      onClose();
-    }
+    setShowCancelConfirm(true);
   };
 
   // Get dropdown suggestions
@@ -297,7 +299,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
           <h2>✏️ Edit Job Details</h2>
-          <button onClick={handleCancel} className={styles.closeButton}>
+          <button onClick={handleCancel} className={styles.closeButton} aria-label="Close">
             ×
           </button>
         </div>
@@ -747,6 +749,19 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData })
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          onClose();
+        }}
+        title="Discard changes?"
+        message="Are you sure you want to cancel? All unsaved changes will be lost."
+        confirmText="Discard"
+        confirmVariant="danger"
+      />
     </div>
   );
 };

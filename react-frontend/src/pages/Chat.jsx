@@ -12,6 +12,8 @@ import LoadingScreen, { LOADING_STEPS } from "../components/interview/LoadingScr
 import InterviewHeader from "../components/interview/InterviewHeader";
 import PhaseIndicator from "../components/interview/PhaseIndicator";
 import PreInterviewChecklist from "../components/interview/PreInterviewChecklist";
+import Toast from "../components/Toast";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 export default function Chat({ interviewId }) {
   const MAX_QUESTIONS = 10;
@@ -30,6 +32,12 @@ export default function Chat({ interviewId }) {
   const [interviewStatus, setInterviewStatus] = useState("starting");
   const [startErrorMessage, setStartErrorMessage] = useState("");
   const [evaluation, setEvaluation] = useState(null);
+  // Real proctoring score from the /end response (data.proctoring_score) —
+  // null until /end resolves; "incomplete" status means neither the live
+  // frame-analysis nor the GazeRecorder signal was available, so there's
+  // deliberately no fabricated fallback number to show.
+  const [proctoringScore, setProctoringScore] = useState(null);
+  const [proctoringStatus, setProctoringStatus] = useState(null);
   const [usageDeduction, setUsageDeduction] = useState(null);
   const [similarityScore, setSimilarityScore] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
@@ -44,9 +52,20 @@ export default function Chat({ interviewId }) {
     message: "",
   });
   const [warningCount, setWarningCount] = useState(0);
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((message, type = "error") => {
+    setToast({ message, type, id: Date.now() });
+  }, []);
+  const [showEndInterviewConfirm, setShowEndInterviewConfirm] = useState(false);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [questionCount, setQuestionCount] = useState(1);
+  // Epoch-seconds deadline (from the backend's question_timeout_seconds) after
+  // which we auto-submit an empty answer so a stalled candidate doesn't hang
+  // the interview forever. Absent/undefined => no server-provided deadline
+  // (e.g. practice mode) => no auto-advance timer runs.
+  const [questionDeadline, setQuestionDeadline] = useState(null);
+  const [timeoutWarning, setTimeoutWarning] = useState(false);
   const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
   const silenceTimerRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -495,7 +514,7 @@ export default function Chat({ interviewId }) {
       }
     } catch (err) {
       console.warn(`Fullscreen request failed: ${err.message}`);
-      alert("Please enable fullscreen mode to continue the interview.");
+      showToast("Please enable fullscreen mode to continue the interview.");
       return;
     }
 
@@ -505,11 +524,11 @@ export default function Chat({ interviewId }) {
       !currentSessionId ||
       videoRef.current.readyState < 3
     ) {
-      alert("Webcam not ready or session not started.");
+      showToast("Webcam not ready or session not started.");
       return;
     }
     if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
-      alert("Webcam is still initializing. Please wait a moment and try again.");
+      showToast("Webcam is still initializing. Please wait a moment and try again.");
       return;
     }
     const canvas = document.createElement("canvas");
@@ -546,9 +565,9 @@ export default function Chat({ interviewId }) {
 
     } catch (error) {
       console.error("Face registration error:", error);
-      alert(`Could not register face: ${error.message}.`);
+      showToast(`Could not register face: ${error.message}.`);
     }
-  }, [startInlineGazeRecorder, startLiveProctoring]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
+  }, [startInlineGazeRecorder, startLiveProctoring, showToast]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
   const uploadRecording = useCallback(
     async (blob) => {
@@ -757,6 +776,7 @@ export default function Chat({ interviewId }) {
           sessionIdRef.current = data.session_id;
           setSimilarityScore(data.similarity_score);
           setCurrentQuestion(data.initial_questions[0]);
+          if (data.question_deadline) setQuestionDeadline(data.question_deadline);
           setInterviewStatus("registering");
         })
         .catch((err) => {
@@ -822,10 +842,13 @@ export default function Chat({ interviewId }) {
         cameraStreamRef.current = stream;
       } catch (err) {
         console.error("Webcam access error:", err);
-        alert(
+        // Toast is non-blocking, unlike the native alert() this replaces, so
+        // the redirect is deliberately delayed to give the candidate time to
+        // actually read the message before being navigated away.
+        showToast(
           "Could not access the camera. Please check your browser permissions and ensure your camera is not in use by another application. Redirecting to the dashboard.",
         );
-        navigate("/profile#applications");
+        setTimeout(() => navigate("/profile#applications"), 3000);
       }
     };
 
@@ -861,6 +884,7 @@ export default function Chat({ interviewId }) {
     similarityScore,
     currentQuestion,
     navigate,
+    showToast,
   ]);
 
   const endInterview = useCallback(async () => {
@@ -928,6 +952,10 @@ export default function Chat({ interviewId }) {
 
       setInterviewStatus("completed");
       setEvaluation(data.evaluation);
+      setProctoringScore(
+        typeof data.proctoring_score === "number" ? data.proctoring_score : null,
+      );
+      setProctoringStatus(data.proctoring_status || null);
       setUsageDeduction(data?.usage_deduction || null);
       console.log("✅ Interview ended successfully:", data.evaluation);
 
@@ -1012,9 +1040,6 @@ export default function Chat({ interviewId }) {
           response: "Interview ended. Finalizing your report...",
         },
       }));
-
-      // Store interview completion flag for Profile page to detect
-      sessionStorage.setItem("interview-just-completed", "true");
     } catch (error) {
       console.error("Failed to end interview:", error);
       setInterviewStatus("active"); // Revert status on failure
@@ -1076,8 +1101,22 @@ export default function Chat({ interviewId }) {
           isSubmittingAnswerRef.current = false;
           await endInterview();
         } else {
-          // Increment question count for the NEXT question
-          setQuestionCount((prev) => prev + 1);
+          // Mirror the backend's own count instead of blindly incrementing —
+          // on a repeated question (data.repeated_question) the backend
+          // deliberately leaves progress.questions_asked unchanged, so the
+          // visible progress here correctly stays put too. +1 because the
+          // backend counter only tracks dynamically-generated questions
+          // (starts at 0), while this display counter also counts the
+          // hardcoded greeting as "question 1". Falls back to the old
+          // increment-by-1 for responses without a progress field (e.g.
+          // practice mode, which isn't wired to this yet).
+          setQuestionCount((prev) =>
+            data.progress?.questions_asked != null
+              ? data.progress.questions_asked + 1
+              : prev + 1,
+          );
+          if (data.question_deadline) setQuestionDeadline(data.question_deadline);
+          setTimeoutWarning(false);
           setCurrentQuestion(data.next_question);
           speakResponse(data.next_question);
         }
@@ -1097,6 +1136,33 @@ export default function Chat({ interviewId }) {
       location.state,
     ],
   );
+
+  // No-response timeout: if the candidate never answers at all (distinct from
+  // the in-speech silence timer below, which only fires once they've started
+  // talking), auto-submit an empty answer once the backend-provided deadline
+  // passes so the interview can't hang indefinitely. No-op when the backend
+  // hasn't supplied a deadline (e.g. practice mode).
+  useEffect(() => {
+    if (interviewStatus !== "active" || !questionDeadline) {
+      setTimeoutWarning(false);
+      return;
+    }
+
+    const checkDeadline = () => {
+      const remaining = questionDeadline - Date.now() / 1000;
+      if (remaining <= 0) {
+        if (!isSubmittingAnswerRef.current) {
+          onSend("");
+        }
+        return;
+      }
+      setTimeoutWarning(remaining <= 30);
+    };
+
+    checkDeadline();
+    const id = setInterval(checkDeadline, 1000);
+    return () => clearInterval(id);
+  }, [questionDeadline, interviewStatus, onSend]);
 
   // --- FIXED --- Only silence detection, no 30-second timer
   useEffect(() => {
@@ -1772,6 +1838,13 @@ export default function Chat({ interviewId }) {
         </div>
           </>
         )}
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
     );
   }
@@ -1914,6 +1987,19 @@ export default function Chat({ interviewId }) {
           isTimerRunning={isTimerRunning}
           transcriptLength={transcriptRef.current.trim().length}
         />
+      )}
+      {interviewStatus === "active" && timeoutWarning && (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "6px 12px",
+            background: "#fff3cd",
+            color: "#856404",
+            fontSize: 14,
+          }}
+        >
+          Still there? This question will be skipped soon if there's no response.
+        </div>
       )}
       {proctoringAlert.active && (
         <div className={Styles.modalOverlay}>
@@ -2060,11 +2146,7 @@ export default function Chat({ interviewId }) {
         {/* End Interview Early Button */}
         <button
           className={Styles["end-interview-btn"]}
-          onClick={() => {
-            if (window.confirm("Are you sure you want to end the interview early? Your answers so far will be submitted for evaluation.")) {
-              endInterview();
-            }
-          }}
+          onClick={() => setShowEndInterviewConfirm(true)}
         >
           End Interview Early
         </button>
@@ -2210,8 +2292,11 @@ export default function Chat({ interviewId }) {
                   Proctoring Score
                 </div>
                 <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {/* TODO: Replace with actual proctoring score when model is developed */}
-                  90%
+                  {proctoringStatus === "incomplete"
+                    ? "N/A"
+                    : typeof proctoringScore === "number"
+                      ? `${Math.round(proctoringScore)}%`
+                      : "Calculating..."}
                 </div>
               </div>
               {evaluation.quantitative &&
@@ -2323,6 +2408,25 @@ export default function Chat({ interviewId }) {
           </div>{" "}
         </div>
       )}{" "}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <ConfirmDialog
+        isOpen={showEndInterviewConfirm}
+        onClose={() => setShowEndInterviewConfirm(false)}
+        onConfirm={() => {
+          setShowEndInterviewConfirm(false);
+          endInterview();
+        }}
+        title="End interview early?"
+        message="Are you sure you want to end the interview early? Your answers so far will be submitted for evaluation."
+        confirmText="End Interview"
+        confirmVariant="danger"
+      />
     </div>
   );
 }

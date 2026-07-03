@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { viewPhoto } from '../services/api';
 import { getToken } from '../utils/sessionManager';
+import useRealtimeApplications from '../hooks/useRealtimeApplications';
+import { connectAppSocket, disconnectAppSocket } from '../services/socket';
 
 /**
  * Global data cache for candidate pages to prevent unnecessary reloads.
@@ -89,6 +91,15 @@ export const CandidateDataProvider = ({ children }) => {
     if (token !== lastTokenRef.current) {
       console.log("🔑 Token changed, clearing all context caches.");
       lastTokenRef.current = token;
+      // Reconnect the shared realtime socket with the new tab's token (login),
+      // or drop it entirely (logout) — the socket persists across route
+      // changes since this provider sits above the router, so it won't
+      // otherwise notice a token change without a full page reload.
+      if (token) {
+        connectAppSocket();
+      } else {
+        disconnectAppSocket();
+      }
       _setJobs([]);
       _setJobsLoaded(false);
       _setJobsLoading(false);
@@ -292,6 +303,34 @@ export const CandidateDataProvider = ({ children }) => {
     applicationsLoadTimeRef.current = 0;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Merge a live `application_update` push (see useRealtimeApplications)
+   * into the cached list in place — inserts if new (type "created"), merges
+   * fields if it already exists (status/score updates) — so the UI reflects
+   * the change immediately instead of waiting for the next full refetch.
+   */
+  const upsertApplication = useCallback((rawApp) => {
+    if (!rawApp || !rawApp._id) return;
+    const current = applicationsRef.current || [];
+    const idx = current.findIndex((a) => String(a._id) === String(rawApp._id));
+    const next =
+      idx === -1
+        ? [rawApp, ...current]
+        : current.map((a, i) => (i === idx ? { ...a, ...rawApp } : a));
+    _setApplications(next);
+    _setApplicationsLoaded(true);
+    applicationsLoadTimeRef.current = Date.now();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mounted once at app root (see App.jsx), so any application created /
+  // status-changed / interview-scored push updates this cache immediately
+  // regardless of which candidate page is currently open. No-ops (socket
+  // never connects) when there's no auth token in this tab, e.g. recruiter
+  // sessions or logged-out visitors.
+  useRealtimeApplications((_type, application) => {
+    upsertApplication(application);
+  });
+
   const invalidateCvs = useCallback(() => {
     _setCvsLoaded(false);
     cvsLoadTimeRef.current = 0;
@@ -341,6 +380,7 @@ export const CandidateDataProvider = ({ children }) => {
     applicationsLoading,
     loadApplicationsCached,
     invalidateApplications,
+    upsertApplication,
 
     // CVs
     cvs,

@@ -33,4 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('app-switched');
         ipcRenderer.on('app-switched', callback);
     },
+
+    // Multi-monitor detection — returns { count: <number of connected displays> }
+    getDisplayInfo: () => ipcRenderer.invoke('get-display-info'),
 });

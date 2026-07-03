@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell, dialog, screen } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -104,6 +104,14 @@ ipcMain.on('open-external', (event, url) => {
             console.error('Failed to open external URL:', err);
         });
     }
+});
+
+// Multi-monitor detection — used at interview start to flag (not block) a
+// second connected display, a common way to keep notes/answers off-screen
+// from the interview camera.
+ipcMain.handle('get-display-info', () => {
+    const displays = screen.getAllDisplays();
+    return { count: displays.length };
 });
 
 // ==========================================

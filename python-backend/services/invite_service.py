@@ -309,6 +309,29 @@ class InviteService:
             }
         )
 
+    def _find_burner_account_invited_to_job(
+        self, normalized_email: str, job_id_str: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Return an existing burner (invite-only) account for this email that
+        was already invited to this exact job, or None.
+
+        Without this check, re-uploading the same candidate list for the same
+        job (an accidental double-submit, or a deliberate re-send) would mint
+        an entirely new burner account + invite_id + temp password + "you're
+        invited" email every single time, since burner accounts are otherwise
+        allowed to multiply per email by design (see _find_real_account_for_email).
+        This scopes that dedup to (email, job) so an email can still receive
+        separate burner invites across *different* jobs.
+        """
+        return self.users.find_one(
+            {
+                "$or": [{"email_lower": normalized_email}, {"email": normalized_email}],
+                "is_invite_only": True,
+                "invited_job_ids": job_id_str,
+            }
+        )
+
     def create_or_refresh_invite(
         self,
         *,
@@ -380,8 +403,29 @@ class InviteService:
             )
             return result
 
-        # No real account exists — mint a fresh burner account with its own
-        # invite_id. Each invite gets its own ID, so an email may have many.
+        # An email may already have been invited to this exact job before via
+        # a burner account (re-uploaded list, accidental double-submit, or a
+        # deliberate re-send) — reuse that account/application instead of
+        # minting a duplicate one with a brand new password.
+        existing_burner = self._find_burner_account_invited_to_job(normalized, job_id_str)
+        if existing_burner is not None:
+            user_id = existing_burner["_id"]
+            app_id, _ = self._ensure_existing_application(
+                user_id=user_id,
+                user_doc=existing_burner,
+                job=job,
+                invite_type=invite_type,
+                batch_id=batch_id,
+            )
+            result.update(
+                action="attached_to_existing_account",
+                application_id=str(app_id),
+            )
+            return result
+
+        # No real or previously-invited-to-this-job account exists — mint a
+        # fresh burner account with its own invite_id. Each invite gets its
+        # own ID, so an email may have many across *different* jobs.
         invite_id = self._generate_unique_invite_id()
         temp_password = generate_temp_password()
         now = self._now()
@@ -477,6 +521,7 @@ class InviteService:
             "skipped_count": 0,
             "failed_count": 0,
             "failures": [],
+            "status": "processing",
             "created_at": now,
         }
         batch_id = self.invite_batches.insert_one(batch_doc).inserted_id
@@ -515,18 +560,26 @@ class InviteService:
         skipped_count: int,
         failed_count: int,
         failures: List[Dict[str, str]],
+        skipped: Optional[List[Dict[str, str]]] = None,
+        status: str = "completed",
     ) -> None:
-        self.invite_batches.update_one(
-            {"_id": batch_id},
-            {
-                "$set": {
-                    "sent_count": sent_count,
-                    "skipped_count": skipped_count,
-                    "failed_count": failed_count,
-                    "failures": failures,
-                }
-            },
-        )
+        """
+        Updates the batch's running counts/detail rows. Despite the name,
+        this is called repeatedly during background dispatch
+        (status="processing") as well as once at the very end
+        (status="completed") — it's a plain counter write, safe to call as
+        often as needed for progress polling.
+        """
+        update = {
+            "sent_count": sent_count,
+            "skipped_count": skipped_count,
+            "failed_count": failed_count,
+            "failures": failures,
+            "status": status,
+        }
+        if skipped is not None:
+            update["skipped"] = skipped
+        self.invite_batches.update_one({"_id": batch_id}, {"$set": update})
 
     # ----- redemption -----------------------------------------------------
 

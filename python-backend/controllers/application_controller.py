@@ -26,6 +26,7 @@ from services.email_service import EmailService
 from services.cv_scoring_service import CVScoringService
 from controllers.cv_controller import CVController
 from services.background_processor import get_background_processor
+from extensions import socketio
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,47 @@ class ApplicationController:
 
         # Get background processor instance
         self.background_processor = get_background_processor()
+
+    def _emit_application_update(self, update_type, application_doc, job=None, rooms=()):
+        """
+        Push a real-time `application_update` event to every room (user id)
+        that should see this change live, instead of requiring the candidate
+        or recruiter to refresh to notice it. Payload is intentionally slim
+        (mirrors what the frontend's mapApplication() reads) — never include
+        cv_snapshot/jd_snapshot, which can be large.
+
+        Best-effort: a socket emit failure must never break the underlying
+        DB write it's reporting on.
+        """
+        try:
+            job = job or {}
+            applied_at = application_doc.get("applied_at")
+            payload = {
+                "_id": str(application_doc.get("_id", "")),
+                "job_id": str(application_doc.get("job_id", "")),
+                "status": application_doc.get("status"),
+                "job_title": application_doc.get("job_title") or job.get("title"),
+                "job_details": {
+                    "company": job.get("company"),
+                    "location": job.get("location"),
+                    "type": job.get("type"),
+                    "department": job.get("department"),
+                },
+                "applied_at": applied_at.isoformat() if isinstance(applied_at, datetime.datetime) else applied_at,
+                "cv_score": application_doc.get("cv_score"),
+                "interview_score": application_doc.get("interview_score"),
+                "proctoring_score": application_doc.get("proctoring_score"),
+                "processing_status": application_doc.get("processing_status"),
+                "auto_processed": application_doc.get("auto_processed", False),
+            }
+            for room in {r for r in rooms if r}:
+                socketio.emit(
+                    "application_update",
+                    {"type": update_type, "application": payload},
+                    room=room,
+                )
+        except Exception:
+            logger.warning("application_update emit failed", exc_info=True)
 
     def apply_for_job(
         self, job_id, user_id, application_data, user_profile, cv_id=None
@@ -307,6 +349,49 @@ class ApplicationController:
             cv_scoring_service=self.cv_scoring_service,
         )
 
+        # Push the new applicant to the recruiter's dashboard live, so they
+        # don't need to refresh to see it appear.
+        self._emit_application_update(
+            "created",
+            application_doc,
+            job=job,
+            rooms=(str(job.get("created_by", "")), str(user_id)),
+        )
+
+        # Confirmation emails (fire-and-forget) — candidate gets a receipt,
+        # recruiter gets notified a new applicant came in. Neither blocks the
+        # instant response below.
+        try:
+            _email_svc = EmailService()
+            _cand_email = application_doc.get("student_email")
+            _cand_name = application_doc.get("student_name") or "Candidate"
+            _job_title = job.get("title") or "the position"
+            _company = job.get("company") or job.get("company_name") or "the company"
+            if _cand_email:
+                threading.Thread(
+                    target=_email_svc.send_application_received_email,
+                    args=(_cand_email, _cand_name, _job_title, _company),
+                    daemon=True,
+                ).start()
+
+            recruiter_doc = self.users_collection.find_one(
+                {"_id": ObjectId(job.get("created_by", ""))},
+                {"email": 1, "name": 1},
+            ) if job.get("created_by") else None
+            if recruiter_doc and recruiter_doc.get("email"):
+                threading.Thread(
+                    target=_email_svc.send_new_applicant_notification,
+                    args=(
+                        recruiter_doc["email"],
+                        recruiter_doc.get("name") or "Recruiter",
+                        _cand_name,
+                        _job_title,
+                    ),
+                    daemon=True,
+                ).start()
+        except Exception:
+            logger.warning("Application confirmation emails failed to send", exc_info=True)
+
         # Return success IMMEDIATELY!
         return {
             "message": "Application submitted successfully! CV scoring is being processed.",
@@ -549,6 +634,21 @@ class ApplicationController:
                     float(actual_cost or 0.0) if actual_cost is not None else None
                 )
 
+                # Combined "overall fit" score for recruiter sorting/filtering —
+                # the average of whichever of cv_score/interview_score are
+                # numeric. Deliberately excludes proctoring_score: that's an
+                # interview-integrity signal, not a candidate-quality signal,
+                # so folding it into one blended number would be an opinionated
+                # scoring-philosophy call; it stays independently sortable/
+                # filterable instead.
+                _fit_scores = [
+                    s for s in (app.get("cv_score"), app.get("interview_score"))
+                    if isinstance(s, (int, float))
+                ]
+                app["combined_score"] = (
+                    round(sum(_fit_scores) / len(_fit_scores), 1) if _fit_scores else None
+                )
+
             return applications, 200
 
         else:
@@ -634,6 +734,16 @@ class ApplicationController:
                     ).start()
             except Exception as _notify_exc:
                 logger.warning("Application status notification failed: %s", _notify_exc)
+
+        # Push the status change to the candidate live, so their application
+        # card updates without needing a refresh.
+        application["status"] = new_status
+        self._emit_application_update(
+            "status_changed",
+            application,
+            job=job,
+            rooms=(str(application.get("student_id", "")),),
+        )
 
         return {"message": "Application status updated successfully"}, 200
 
@@ -728,6 +838,7 @@ class ApplicationController:
             "session_id": report.get("session_id"),
             "final_score": report.get("final_score"),
             "proctoring_score": report.get("proctoring_score"),
+            "proctoring_status": report.get("proctoring_status"),
             "evaluation": report.get("evaluation"),
             "transcript": report.get(
                 "transcript", []
@@ -1065,6 +1176,7 @@ class ApplicationController:
                 return {"error": "Application not found"}, 404
 
             # Authorization check
+            job = None
             if user_type in ["candidate", "student"]:
                 if app_doc.get("student_id") != user_id:
                     return {"error": "Unauthorized access"}, 403
@@ -1092,6 +1204,24 @@ class ApplicationController:
                 print(
                     f"✅ Interview score updated for application {application_id}: {interview_score}%"
                 )
+
+                # Push the finished interview's score live, primarily so the
+                # recruiter's dashboard reflects it without a refresh.
+                if job is None:
+                    job = self.jobs_collection.find_one(
+                        {"_id": ObjectId(app_doc["job_id"])}
+                    )
+                app_doc["interview_score"] = interview_score
+                self._emit_application_update(
+                    "score_updated",
+                    app_doc,
+                    job=job,
+                    rooms=(
+                        str((job or {}).get("created_by", "")),
+                        str(app_doc.get("student_id", "")),
+                    ),
+                )
+
                 return {
                     "message": "Interview score updated successfully",
                     "interview_score": interview_score,

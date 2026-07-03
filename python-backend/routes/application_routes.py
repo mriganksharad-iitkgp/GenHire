@@ -5,6 +5,7 @@ import datetime
 import uuid
 from controllers.application_controller import ApplicationController
 from middleware.auth_middleware import token_required
+from middleware.rate_limiter import rate_limit
 from config.database import db_config
 from bson import ObjectId
 
@@ -88,6 +89,7 @@ def _generate_profile_cv_pdf(cv_text, application_id):
 @application_bp.route('/jobs/<job_id>/apply', methods=['POST'])
 @cross_origin()
 @token_required
+@rate_limit(max_calls=10, window_seconds=3600)
 def apply_for_job(current_user, job_id):
     """
     Apply for a job (candidates only)

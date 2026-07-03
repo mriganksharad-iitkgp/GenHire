@@ -39,6 +39,78 @@ let isInterviewActive = false;
 let isAISpeaking = false; // true while TTS audio is playing — blocks send button
 let clockInterval = null;
 
+// ═══════════════════════════════════════
+//  VIOLATION LOGGING — persisted + ack-confirmed delivery
+// ═══════════════════════════════════════
+// Previously, every violation type EXCEPT app-switch only called
+// showProctoringWarning() locally and incremented an in-memory counter
+// (gazeAlerts/objectAlerts) that was shown solely on this app's own results
+// screen — nothing but app-switch was ever actually sent to the backend, so
+// a recruiter's proctoring report was silently missing gaze/head-turn/
+// multi-face/phone violations. logViolation() is now the single choke point
+// every violation site goes through. Entries are persisted to localStorage
+// BEFORE a send is attempted, so a renderer crash/reload doesn't silently
+// drop evidence, and are only cleared once the server acknowledges receipt
+// (Flask-SocketIO sends an ack automatically once its handler returns, no
+// backend changes needed) — a bare socket.emit() with no ack would have no
+// way to know whether a violation raised right as the connection dropped
+// actually made it through.
+const PENDING_VIOLATIONS_KEY = 'genhire_pending_violations';
+
+function loadPendingViolations() {
+    try {
+        const raw = localStorage.getItem(PENDING_VIOLATIONS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function savePendingViolations(list) {
+    try {
+        localStorage.setItem(PENDING_VIOLATIONS_KEY, JSON.stringify(list));
+    } catch (e) {
+        console.warn('Failed to persist pending violations:', e.message);
+    }
+}
+
+function sendViolationEntry(entry) {
+    if (!socket || !socket.connected) return;
+    socket.emit('proctoring_violation', {
+        session_id: entry.session_id,
+        type: entry.type,
+        ...entry.extra,
+    }, () => {
+        // Server acknowledged receipt — safe to drop from the pending queue.
+        savePendingViolations(loadPendingViolations().filter((e) => e.id !== entry.id));
+    });
+}
+
+function logViolation(type, extra = {}) {
+    const entry = {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        session_id: currentSessionId,
+        type,
+        extra,
+        loggedAt: Date.now(),
+    };
+    const pending = loadPendingViolations();
+    pending.push(entry);
+    savePendingViolations(pending);
+    sendViolationEntry(entry);
+}
+
+// Retries every not-yet-acknowledged violation — called on every socket
+// "connect" event, which Socket.IO also re-fires after automatic
+// reconnection, so this covers both the first connect and any recovery from
+// a dropped connection without needing separate reconnect-specific logic.
+// Entries may belong to an earlier session if the whole app restarted after
+// a crash before they were flushed; session_id travels with each entry so
+// they're still attributed correctly.
+function flushPendingViolations() {
+    loadPendingViolations().forEach(sendViolationEntry);
+}
+
 // API Data
 let apiToken = null;
 let apiUrl = null;
@@ -219,12 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.onAppSwitched(() => {
             if (isInterviewActive) {
                 showProctoringWarning('You switched to another application. This has been recorded.');
-                if (socket && socket.connected) {
-                    socket.emit('proctoring_violation', {
-                        session_id: currentSessionId,
-                        type: 'app_switch'
-                    });
-                }
+                logViolation('app_switch');
             }
         });
     }
@@ -601,12 +668,31 @@ function finalizeStartInterview() {
         window.electronAPI.enableKiosk();
     }
 
+    // Multi-monitor detection — flagged for recruiter review, not blocking:
+    // docked laptops and legitimate multi-monitor setups are common enough
+    // that hard-blocking risks false positives, so this is recorded through
+    // the same violation pipeline as everything else and left for a human
+    // to judge, consistent with how every other check in this file works.
+    if (window.electronAPI && window.electronAPI.getDisplayInfo) {
+        window.electronAPI.getDisplayInfo()
+            .then((info) => {
+                if (info && info.count > 1) {
+                    logViolation('multi_monitor_detected', { display_count: info.count });
+                }
+            })
+            .catch((err) => console.warn('Display info check failed:', err.message));
+    }
+
     // Start Socket connection
     if (!socket) {
         socket = io(apiUrl);
         socket.on("connect", () => {
             socket.emit("start_proctoring", { session_id: currentSessionId });
             socket.emit("control_mobile_recording", { session_id: currentSessionId, action: "start" });
+            // Socket.IO re-fires "connect" after every automatic reconnection
+            // too, so this single hook covers both the initial connect and
+            // recovering from a dropped connection mid-interview.
+            flushPendingViolations();
         });
         socket.on("gaze_data", (data) => {
             if (data.is_cheating_alert) {
@@ -1285,6 +1371,7 @@ async function objectLoop() {
             lastObjectWarningTime = now;
             consecutivePhoneFrames = 0;
             showProctoringWarning("📱 Cell Phone Detected in Frame. Please remove it.");
+            logViolation('cell_phone_detected');
         }
     } catch (e) { console.error("Object detection error:", e); }
     setTimeout(objectLoop, OBJECT_DETECT_INTERVAL);
@@ -1470,6 +1557,7 @@ async function faceLoop() {
                 if (shouldAlert && attentionState) {
                     gazeAlerts++;
                     showProctoringWarning(attentionState.message);
+                    logViolation(attentionState.code, { message: attentionState.message });
                 }
 
                 if (sessionStartTime) {

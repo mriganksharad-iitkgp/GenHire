@@ -96,7 +96,9 @@ class AnswerEvaluator:
         """Evaluate the complete answer in one model request for live interviews."""
         prompt = f"""
 Evaluate this interview answer for factual correctness, completeness, relevance,
-and technical depth. Return JSON only:
+and technical depth. If the answer is off-topic, nonsensical, or does not
+actually attempt to address the question, score it in the 0-10 range
+regardless of how long or fluent it reads. Return JSON only:
 {{"score": number from 0 to 100, "reasoning": "one concise sentence"}}
 
 Question: {question}
@@ -110,6 +112,13 @@ Answer: {student_answer}
             score = max(0.0, min(100.0, float(parsed.get("score", 0))))
             return score, [{"rubric": "overall technical quality", "score": score, "reasoning": parsed.get("reasoning", "")}]
         except Exception as e:
+            # Deliberately re-raise rather than returning a hard 0 — the caller
+            # (session_manager.evaluate_answer) already falls back to the
+            # holistic length/classifier-based provisional evaluation on any
+            # exception here. Returning 0.0 instead would unfairly zero out a
+            # perfectly good answer just because the LLM call had a transient
+            # failure, since this score otherwise feeds answer_score/overall_score
+            # directly.
             print(f"Fast answer evaluation failed: {e}")
             raise
 

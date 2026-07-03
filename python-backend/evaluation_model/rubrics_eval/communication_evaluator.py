@@ -54,7 +54,11 @@ class CommunicationEvaluator:
         - 0-49: Poor communication - very difficult to understand or severely lacking
         
         Consider the length and depth appropriate for the question asked.
-        
+
+        If the response is off-topic, nonsensical, or does not actually
+        attempt to address the question, score it in the 0-10 range
+        regardless of how long or fluent it reads.
+
         Respond with only the integer score (0-100) and nothing else.
         """
 

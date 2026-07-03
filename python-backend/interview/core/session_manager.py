@@ -6,12 +6,19 @@ import re
 import uuid
 import sys
 import os
+import time
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict, field
 import threading
 
 from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
+from evaluation_model.rubrics_eval.answer_classifier import (
+    classify_answer,
+    is_junk,
+    non_answer_score_and_reason,
+)
 from ..config.settings import InterviewConfig, LLMConfig
 from ..llm.factory import LLMFactory
 from ..document.loader import DocumentLoader
@@ -23,6 +30,8 @@ from .prompt_based_question_generator import (
 )
 from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,6 +51,12 @@ class InterviewSession:
     current_question_metadata: Optional[QuestionMetadata] = None
     proctoring_config: Optional[dict] = None
     init_event: Optional[threading.Event] = None
+    # Epoch-seconds timestamp of when `current_question` was last (re)served —
+    # drives the client-side no-response timeout (see get_next_question/submit_answer).
+    question_served_at: Optional[float] = None
+    # Set when the interview is force-ended after exhausting LLM retries, so the
+    # recruiter's report can distinguish "candidate disengaged" from "we broke".
+    ended_early_reason: Optional[str] = None
 
 
 class InterviewSessionManager:
@@ -151,7 +166,8 @@ class InterviewSessionManager:
                 current_question=first_question,
                 current_question_metadata=first_metadata,
                 proctoring_config=proctoring_config or {},
-                init_event=threading.Event()
+                init_event=threading.Event(),
+                question_served_at=time.time(),
             )
 
             self.sessions[session_id] = session
@@ -174,9 +190,12 @@ class InterviewSessionManager:
                     "current_topic": "Introduction",
                     "interview_phase": "INTRODUCTION",
                 },
+                "question_timeout_seconds": self.config.question_timeout_seconds,
+                "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
             }
 
         except Exception as e:
+            logger.error(f"Failed to create session [session={session_id}]: {e}", exc_info=True)
             return {"error": f"Failed to create session: {str(e)}"}
         finally:
             cost_tracker.clear_session_context(token)
@@ -203,7 +222,7 @@ class InterviewSessionManager:
             conversation_context.interview_phase = InterviewPhase.EXPERIENTIAL_QUESTIONS
             session.conversation_context = conversation_context
         except Exception as e:
-            print(f"Background context init failed: {e}")
+            logger.error(f"Background context init failed [session={session_id}]: {e}", exc_info=True)
         finally:
             if session.init_event:
                 session.init_event.set()
@@ -219,10 +238,70 @@ class InterviewSessionManager:
         if session.is_complete:
             return {"error": "Interview is already complete"}
 
+        # Repeat-intent must be caught BEFORE the message is treated as a scored
+        # answer: otherwise "can you repeat that?" gets evaluated as a low-quality
+        # answer to the previous question, and both question counters still
+        # advance even though nothing new was actually asked.
+        if (
+            session.conversation_context is not None
+            and session.current_question
+            and self.question_generator.user_requested_repeat(answer)
+        ):
+            session.question_served_at = time.time()
+            return {
+                "interview_complete": False,
+                "current_evaluation": None,
+                "repeated_question": True,
+                "next_question": session.current_question,
+                "question_metadata": (
+                    asdict(session.current_question_metadata)
+                    if hasattr(session.current_question_metadata, "__dataclass_fields__")
+                    else session.current_question_metadata
+                ) if session.current_question_metadata else None,
+                "conversation_context": {
+                    "current_topic": session.conversation_context.current_topic,
+                    "depth_level": session.conversation_context.depth_level.value,
+                    "topics_covered": session.conversation_context.topics_covered,
+                    "candidate_skill_level": session.conversation_context.candidate_skill_level,
+                    "conversation_energy": session.conversation_context.conversation_energy,
+                    "interview_phase": session.conversation_context.interview_phase.value,
+                },
+                "progress": {
+                    "questions_asked": session.questions_asked,
+                    "estimated_remaining": max(
+                        0, self.config.min_questions - session.questions_asked
+                    ),
+                },
+                "question_timeout_seconds": self.config.question_timeout_seconds,
+                "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
+            }
+
         try:
             cost_tracker = CostTracker()
             token = cost_tracker.set_session_context(session_id)
-            provisional_evaluation = self._fallback_evaluation(question, answer)
+
+            # Classify before ever spending an LLM call: empty/canned-non-answer/
+            # gibberish/confidently-non-English answers get a fast, deterministic,
+            # correctly-low score instead of the old length-only fallback (which
+            # would score a long "I don't know, I don't know, ..." as "adequate").
+            # This value also feeds get_next_question()'s difficulty adaptation
+            # below, so a junk answer correctly reads as a struggle, not a success.
+            classification = classify_answer(answer)
+            answer_is_junk = is_junk(classification)
+            if answer_is_junk:
+                junk_score, junk_reason = non_answer_score_and_reason(classification)
+                provisional_evaluation = {
+                    "answer_score": junk_score,
+                    "language_score": junk_score,
+                    "relevance_score": junk_score,
+                    "technical_accuracy_score": junk_score,
+                    "communication_score": junk_score,
+                    "overall_score": junk_score,
+                    "reasoning": junk_reason,
+                    "evaluation_method": "pre_classified",
+                }
+            else:
+                provisional_evaluation = self._fallback_evaluation(question, answer)
 
             def evaluate_answer():
                 if not self.evaluation_system:
@@ -248,7 +327,7 @@ class InterviewSessionManager:
                         answer=answer,
                     )
                 except Exception as e:
-                    print(f"Evaluation failed: {e}")
+                    logger.error(f"Evaluation failed [session={session_id}]: {e}", exc_info=True)
                     return provisional_evaluation
 
             # Wait for background initialization if it's still running
@@ -267,55 +346,89 @@ class InterviewSessionManager:
                 try:
                     eval_result = evaluate_answer()
                     evaluation.update(eval_result)
-                    
+
                     if session.proctoring_config and session.proctoring_config.get("ai_detection", False):
                         ai_result = check_ai_content(answer)
-                        if ai_result:
-                            evaluation["ai_probability"] = ai_result.get("score")
-                            evaluation["ai_detection_raw"] = ai_result.get("raw_response")
+                        # Always set the key so the response schema is consistent
+                        # regardless of whether detection ran successfully — a
+                        # missing key previously meant "unknown," indistinguishable
+                        # from "not enabled."
+                        evaluation["ai_probability"] = ai_result.get("score") if ai_result else None
+                        evaluation["ai_detection_raw"] = ai_result.get("raw_response") if ai_result else None
                 except Exception as e:
-                    print(f"Background evaluation failed: {e}")
+                    logger.error(f"Background evaluation failed [session={session_id}]: {e}", exc_info=True)
 
-            # Run heavy evaluation in background so the UI doesn't lag
-            threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
+            # Skip the (two-LLM-call) background evaluation entirely for
+            # pre-classified junk — there's nothing useful for the LLM to score,
+            # and the deterministic provisional_evaluation above is already final.
+            if not answer_is_junk:
+                threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
 
-            # Generate next question using natural conversation flow
-            try:
-                next_question, next_metadata = self.question_generator.get_next_question(
-                    session.conversation_context,
-                    answer,
-                    provisional_evaluation,
-                )
-            except Exception as e:
-                # If we hit quota or all providers fail, gracefully end the interview
-                error_str = str(e).lower()
-                if "quota" in error_str or "limit" in error_str or "exhaust" in error_str or "failed" in error_str:
-                    session.is_complete = True
-                    # Record the current answer before ending
-                    session.interview_history += f"Q: {question}\nA: {answer}\n\n"
-                    session.questions_asked += 1
-                    session.interview_data.append(
-                        {
-                            "question": question,
-                            "answer": answer,
-                            "evaluation": evaluation,
-                            "question_metadata": None,
-                            "timestamp": self._get_timestamp(),
-                        }
+            # Generate next question using natural conversation flow. Retry the
+            # whole provider set a couple of times before giving up — a single
+            # failure here previously ended the interview immediately even
+            # though it may have been a transient blip across all providers.
+            next_question, next_metadata, generation_error = None, None, None
+            MAX_QUESTION_GEN_RETRIES = 3
+            for attempt in range(MAX_QUESTION_GEN_RETRIES):
+                try:
+                    next_question, next_metadata = self.question_generator.get_next_question(
+                        session.conversation_context,
+                        answer,
+                        provisional_evaluation,
                     )
-                    final_evaluation = self._generate_final_evaluation(session)
-                    return {
-                        "interview_complete": True,
-                        "current_evaluation": evaluation,
-                        "final_evaluation": final_evaluation,
-                        "conversation_summary": self._generate_conversation_summary(session),
-                        "quota_exhausted": True,
-                        "message": "The interview has ended early due to system capacity limits. Your progress has been saved."
+                    generation_error = None
+                    break
+                except Exception as e:
+                    generation_error = e
+                    logger.warning(
+                        f"get_next_question attempt {attempt + 1}/{MAX_QUESTION_GEN_RETRIES} failed "
+                        f"[session={session_id}]: {e}"
+                    )
+                    if attempt < MAX_QUESTION_GEN_RETRIES - 1:
+                        time.sleep(min(2 ** attempt, 4))
+
+            if generation_error is not None:
+                # All retries exhausted — end the interview, but make it clear
+                # (to the candidate now and the recruiter later) that this was
+                # a system failure, not a normal completion.
+                logger.error(
+                    f"Question generation permanently failed after {MAX_QUESTION_GEN_RETRIES} attempts "
+                    f"[session={session_id}]: {generation_error}",
+                    exc_info=generation_error,
+                )
+                session.is_complete = True
+                session.ended_early_reason = "technical_difficulty"
+                # Record the current answer before ending
+                session.interview_history += f"Q: {question}\nA: {answer}\n\n"
+                session.questions_asked += 1
+                session.interview_data.append(
+                    {
+                        "question": question,
+                        "answer": answer,
+                        "evaluation": evaluation,
+                        "question_metadata": None,
+                        "timestamp": self._get_timestamp(),
                     }
-                raise e
+                )
+                final_evaluation = self._generate_final_evaluation(session)
+                return {
+                    "interview_complete": True,
+                    "current_evaluation": evaluation,
+                    "final_evaluation": final_evaluation,
+                    "conversation_summary": self._generate_conversation_summary(session),
+                    "quota_exhausted": True,
+                    "ended_early_reason": "technical_difficulty",
+                    "message": "The interview has ended early due to a technical difficulty. Your progress has been saved.",
+                }
 
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
-            session.questions_asked += 1
+            # Mirror the question generator's own counter instead of maintaining
+            # a second independent increment — the generator's phase-transition
+            # logic (technical -> HR -> closing) and this termination check must
+            # never be able to drift apart.
+            session.questions_asked = session.conversation_context.question_count
+            session.question_served_at = time.time()
             session.interview_data.append(
                 {
                     "question": question,
@@ -393,9 +506,12 @@ class InterviewSessionManager:
                             0, self.config.min_questions - session.questions_asked
                         ),
                     },
+                    "question_timeout_seconds": self.config.question_timeout_seconds,
+                    "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
                 }
 
         except Exception as e:
+            logger.error(f"Failed to process answer [session={session_id}]: {e}", exc_info=True)
             return {"error": f"Failed to process answer: {str(e)}"}
         finally:
             if "cost_tracker" in locals() and "token" in locals():
@@ -614,6 +730,10 @@ class InterviewSessionManager:
             response = self.llm.complete(prompt)
             qualitative_assessment = response.text
         except Exception as e:
+            logger.error(
+                f"Failed to generate qualitative assessment [session={session.session_id}]: {e}",
+                exc_info=True,
+            )
             qualitative_assessment = f"Error generating assessment: {e}"
 
         return {
@@ -623,8 +743,11 @@ class InterviewSessionManager:
                 "questions_asked": session.questions_asked,
                 "session_duration": "N/A",  # Could track actual duration
                 "completion_status": (
-                    "complete" if session.is_complete else "incomplete"
+                    "ended_early_technical_failure"
+                    if session.ended_early_reason
+                    else ("complete" if session.is_complete else "incomplete")
                 ),
+                "ended_early_reason": session.ended_early_reason,
             },
         }
 

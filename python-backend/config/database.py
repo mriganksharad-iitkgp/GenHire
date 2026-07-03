@@ -112,6 +112,22 @@ class DatabaseConfig:
             invite_batches.create_index('created_at', name='idx_invite_batches_created_at')
         except Exception as e:
             print(f"Warning: failed to ensure invite_batches indexes: {e}")
+
+        try:
+            applications = self.db['applications']
+            # Matches the recruiter dashboard's applications query exactly
+            # (job_id $in [...] + is_visible) — was previously unindexed.
+            applications.create_index(
+                [('job_id', 1), ('is_visible', 1)], name='idx_applications_job_visible'
+            )
+            # Matches the very common "does this candidate already have an
+            # application for this job" lookup used throughout
+            # application_controller.py / invite_service.py.
+            applications.create_index(
+                [('job_id', 1), ('student_id', 1)], name='idx_applications_job_student'
+            )
+        except Exception as e:
+            print(f"Warning: failed to ensure applications indexes: {e}")
     
     def get_db(self):
         """Get database instance, connecting if needed"""

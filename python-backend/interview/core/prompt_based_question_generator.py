@@ -894,8 +894,10 @@ class PromptBasedQuestionGenerator:
         for term in banned.get((job_role or "software_engineer").lower(), []):
             if term in q:
                 return False
-        # Default: if neither positive nor banned hit, lean conservative (off-role)
-        return False
+        # Default: no positive signal and no banned-term hit — accept rather than
+        # reject, since rejecting here silently discards a perfectly valid LLM
+        # question in favor of a canned fallback (see _generate_technical_question).
+        return True
 
     def _fallback_technical_question_with_context(
         self, context: ConversationContext, last_answer: str = "", score: float = 0.5
@@ -975,6 +977,11 @@ class PromptBasedQuestionGenerator:
             return primary[0][1].get("question")
             
         return None
+
+    def user_requested_repeat(self, last_answer: Optional[str]) -> bool:
+        """Public entry point for session_manager to check repeat-intent
+        *before* treating the candidate's message as a scored answer."""
+        return self._user_indicates_repetition(last_answer)
 
     def _user_indicates_repetition(self, last_answer: Optional[str]) -> bool:
         if not last_answer:

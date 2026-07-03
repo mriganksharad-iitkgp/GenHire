@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Toast from "../components/Toast";
+import SkeletonCard from "../components/SkeletonCard";
 import JobCreationModal from "../components/JobCreationModal";
 import JobDetailsModal from "../components/JobDetailsModal";
 import JobEditModal from "../components/JobEditModal";
@@ -100,6 +101,10 @@ const RecruiterDashboard = () => {
   });
   const [selectedPosition, setSelectedPosition] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [minCvScore, setMinCvScore] = useState("");
+  const [minInterviewScore, setMinInterviewScore] = useState("");
+  const [minProctoringScore, setMinProctoringScore] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [companyProfile, setCompanyProfile] = useState({
     email: "",
     companyName: "",
@@ -113,6 +118,7 @@ const RecruiterDashboard = () => {
   // Jobs and applications via hooks
   const {
     jobs: jobPostings,
+    loading: jobsLoading,
     load: loadJobs,
     create: saveJobPosting,
     update: updateJobPosting,
@@ -120,6 +126,7 @@ const RecruiterDashboard = () => {
   } = useJobs(showToast);
   const {
     applications,
+    loading: applicationsLoading,
     load: loadApplications,
     updateStatus: updateApplicationStatus,
     fetchInterviewReport,
@@ -302,7 +309,10 @@ const RecruiterDashboard = () => {
     return applications.filter((app) => String(app.job_id) === jId);
   };
 
-  // Filter applications based on selected position and status
+  // Filter + sort applications for the shortlist view. Everything here runs
+  // client-side over the already-fully-fetched `applications` array (no new
+  // network calls) — see Step 7 plan for why full server-side pagination was
+  // deliberately left out of this pass.
   const getFilteredCandidates = () => {
     let filtered = applications;
 
@@ -321,7 +331,58 @@ const RecruiterDashboard = () => {
       });
     }
 
-    return filtered;
+    if (minCvScore) {
+      const threshold = Number(minCvScore);
+      filtered = filtered.filter(
+        (app) => typeof app.cv_score === "number" && app.cv_score >= threshold
+      );
+    }
+
+    if (minInterviewScore) {
+      const threshold = Number(minInterviewScore);
+      filtered = filtered.filter(
+        (app) => typeof app.interview_score === "number" && app.interview_score >= threshold
+      );
+    }
+
+    if (minProctoringScore) {
+      const threshold = Number(minProctoringScore);
+      filtered = filtered.filter(
+        (app) => typeof app.proctoring_score === "number" && app.proctoring_score >= threshold
+      );
+    }
+
+    const byDateDesc = (a, b) => new Date(b.applied_at || 0) - new Date(a.applied_at || 0);
+    const byScoreDesc = (field) => (a, b) => {
+      const av = typeof a[field] === "number" ? a[field] : -Infinity;
+      const bv = typeof b[field] === "number" ? b[field] : -Infinity;
+      return bv - av;
+    };
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case "oldest":
+        sorted.sort((a, b) => -byDateDesc(a, b));
+        break;
+      case "cv_score":
+        sorted.sort(byScoreDesc("cv_score"));
+        break;
+      case "interview_score":
+        sorted.sort(byScoreDesc("interview_score"));
+        break;
+      case "proctoring_score":
+        sorted.sort(byScoreDesc("proctoring_score"));
+        break;
+      case "combined_score":
+        sorted.sort(byScoreDesc("combined_score"));
+        break;
+      case "newest":
+      default:
+        sorted.sort(byDateDesc);
+        break;
+    }
+
+    return sorted;
   };
 
   const viewInterviewReport = async (applicationId) => {
@@ -362,6 +423,9 @@ const RecruiterDashboard = () => {
   const handleClearFilters = () => {
     setSelectedPosition("");
     setSelectedStatus("");
+    setMinCvScore("");
+    setMinInterviewScore("");
+    setMinProctoringScore("");
     showToast("Filters cleared", "info");
   };
 
@@ -664,6 +728,7 @@ const RecruiterDashboard = () => {
         isOpen={isJobModalOpen}
         onClose={handleJobModalClose}
         onJobCreate={handleJobCreate}
+        showToast={showToast}
       />
 
       {/* Job Details Modal */}
@@ -680,6 +745,7 @@ const RecruiterDashboard = () => {
         onClose={handleCloseJobEdit}
         jobData={selectedJob}
         onJobUpdate={handleJobUpdate}
+        showToast={showToast}
       />
 
       {/* Invite Candidates Modal */}
@@ -776,35 +842,43 @@ const RecruiterDashboard = () => {
                 </p>
               </div>
             )}
-            <JobsGrid
-              jobs={jobPostings}
-              getStatusColor={getStatusColor}
-              displayStatus={displayStatus}
-              getCandidatesForJob={getCandidatesForJob}
-              onViewDetails={handleViewJobDetails}
-              onViewCandidates={handleViewJobCandidates}
-              onEdit={
-                isVerified
-                  ? handleEditJob
-                  : () =>
-                      showToast(
-                        "Your account must be verified to edit job postings",
-                        "warning"
-                      )
-              }
-              onInviteCandidates={
-                isVerified
-                  ? (job) => {
-                      setSelectedJobForInvite(job);
-                      setIsInviteModalOpen(true);
-                    }
-                  : () =>
-                      showToast(
-                        "Your account must be verified to invite candidates",
-                        "warning"
-                      )
-              }
-            />
+            {jobsLoading && jobPostings.length === 0 ? (
+              <div className={styles.jobsGrid}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonCard key={i} variant="job" />
+                ))}
+              </div>
+            ) : (
+              <JobsGrid
+                jobs={jobPostings}
+                getStatusColor={getStatusColor}
+                displayStatus={displayStatus}
+                getCandidatesForJob={getCandidatesForJob}
+                onViewDetails={handleViewJobDetails}
+                onViewCandidates={handleViewJobCandidates}
+                onEdit={
+                  isVerified
+                    ? handleEditJob
+                    : () =>
+                        showToast(
+                          "Your account must be verified to edit job postings",
+                          "warning"
+                        )
+                }
+                onInviteCandidates={
+                  isVerified
+                    ? (job) => {
+                        setSelectedJobForInvite(job);
+                        setIsInviteModalOpen(true);
+                      }
+                    : () =>
+                        showToast(
+                          "Your account must be verified to invite candidates",
+                          "warning"
+                        )
+                }
+              />
+            )}
           </div>
         )}
 
@@ -818,18 +892,34 @@ const RecruiterDashboard = () => {
               onPositionChange={(v) => setSelectedPosition(v)}
               onStatusChange={(v) => setSelectedStatus(v)}
               onClear={handleClearFilters}
+              minCvScore={minCvScore}
+              onMinCvScoreChange={setMinCvScore}
+              minInterviewScore={minInterviewScore}
+              onMinInterviewScoreChange={setMinInterviewScore}
+              minProctoringScore={minProctoringScore}
+              onMinProctoringScoreChange={setMinProctoringScore}
+              sortBy={sortBy}
+              onSortByChange={setSortBy}
             />
-            <CandidatesList
-              applications={getFilteredCandidates()}
-              totalCount={applications.length}
-              selectedPosition={selectedPosition}
-              selectedStatus={selectedStatus}
-              onClear={handleClearFilters}
-              displayStatus={displayStatus}
-              updateApplicationStatus={handleUpdateApplicationStatus}
-              viewInterviewReport={viewInterviewReport}
-              viewProctoringReport={viewProctoringReport}
-            />
+            {applicationsLoading && applications.length === 0 ? (
+              <div className={styles.candidatesTable}>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <SkeletonCard key={i} variant="job" />
+                ))}
+              </div>
+            ) : (
+              <CandidatesList
+                applications={getFilteredCandidates()}
+                totalCount={applications.length}
+                selectedPosition={selectedPosition}
+                selectedStatus={selectedStatus}
+                onClear={handleClearFilters}
+                displayStatus={displayStatus}
+                updateApplicationStatus={handleUpdateApplicationStatus}
+                viewInterviewReport={viewInterviewReport}
+                viewProctoringReport={viewProctoringReport}
+              />
+            )}
           </div>
         )}
 

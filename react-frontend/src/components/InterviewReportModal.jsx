@@ -228,6 +228,44 @@ export default function InterviewReportModal({
               scoreChip("Proctoring Score", proctoringPct, "#8e44ad")}
           </div>
 
+          {evaluationObj?.interview_metadata?.ended_early_reason === "technical_difficulty" && (
+            <div
+              style={{
+                background: "#fff3cd",
+                color: "#856404",
+                border: "1px solid #ffe69c",
+                borderRadius: 6,
+                padding: "8px 12px",
+                marginBottom: 10,
+                fontSize: 14,
+              }}
+            >
+              ⚠️ This interview ended early due to a technical difficulty on our
+              end (not the candidate's performance) after question{" "}
+              {evaluationObj.interview_metadata.questions_asked ?? "?"}. Consider
+              this when reviewing the score below.
+            </div>
+          )}
+
+          {report?.proctoring_status === "incomplete" && (
+            <div
+              style={{
+                background: "#fff3cd",
+                color: "#856404",
+                border: "1px solid #ffe69c",
+                borderRadius: 6,
+                padding: "8px 12px",
+                marginBottom: 10,
+                fontSize: 14,
+              }}
+            >
+              ⚠️ Proctoring data could not be collected for this interview (camera
+              access denied, or the eye-tracking script failed to load) — there is
+              no proctoring score to show. This is not evidence of cheating; it
+              means the check couldn't run at all.
+            </div>
+          )}
+
           {/* Tabs */}
           <div
             style={{

@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./InviteCandidatesModal.module.css";
-import { previewInvites, sendInvites } from "../../services/inviteApi";
+import { previewInvites, sendInvites, getInviteBatchStatus } from "../../services/inviteApi";
+
+const BATCH_POLL_INTERVAL_MS = 1500;
 
 const TABS = {
   FILE: "file",
@@ -19,9 +21,18 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const pollRef = useRef(null);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
+      stopPolling();
       setFile(null);
       setBulkText("");
       setPreview(null);
@@ -31,6 +42,9 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
       setInviteType("apply");
     }
   }, [isOpen]);
+
+  // Stop polling if the component unmounts mid-send.
+  useEffect(() => () => stopPolling(), []);
 
   const jobTitle = job?.title || "this role";
   const sourceForCurrentTab = useMemo(() => {
@@ -73,17 +87,36 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
     }
     setError("");
     setIsSending(true);
+    const jobId = job._id || job.id;
     try {
-      const data = await sendInvites(job._id || job.id, {
+      // Sending now returns immediately (the batch dispatches emails in the
+      // background) rather than blocking until every email is sent — poll
+      // the batch status endpoint for live progress instead.
+      const started = await sendInvites(jobId, {
         emails: preview.valid,
         invite_type: inviteType,
         source: sourceForCurrentTab,
       });
-      setResult(data);
+      setResult({ ...started, totals: { sent: 0, skipped: 0, failed: 0 } });
+
+      const batchId = started.batch_id;
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await getInviteBatchStatus(jobId, batchId);
+          setResult(status);
+          if (status.status === "completed") {
+            stopPolling();
+            setIsSending(false);
+          }
+        } catch (e) {
+          stopPolling();
+          setIsSending(false);
+          setError(e.message || "Failed to check invite progress");
+        }
+      }, BATCH_POLL_INTERVAL_MS);
     } catch (e) {
-      setError(e.message || "Failed to send invites");
-    } finally {
       setIsSending(false);
+      setError(e.message || "Failed to send invites");
     }
   };
 
@@ -108,7 +141,10 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
           {error && <div className={styles.errorBanner}>{error}</div>}
           {result && (
             <div className={styles.successBanner}>
-              Invite batch processed.&nbsp;
+              {result.status === "completed"
+                ? "Invite batch complete."
+                : `Sending invites… (${(result.totals?.sent || 0) + (result.totals?.skipped || 0) + (result.totals?.failed || 0)}/${result.total || "?"})`}
+              &nbsp;
               {result.totals?.sent || 0} sent &middot; {result.totals?.skipped || 0} skipped &middot; {result.totals?.failed || 0} failed.
             </div>
           )}

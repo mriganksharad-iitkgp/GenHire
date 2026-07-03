@@ -7,11 +7,47 @@ import queue
 import time
 import logging
 from datetime import datetime
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Optional
 from bson import ObjectId
 from services.usage_telemetry_service import record_usage_event
+from services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
+
+
+def _notify_candidate_of_status(applications_collection, application_id: str, application_status: str, job: Optional[Dict[str, Any]]):
+    """
+    Fire-and-forget candidate email when automatic CV scoring shortlists or
+    rejects an application — this is the platform's highest-volume status
+    change (every applicant goes through it), and previously nothing emailed
+    the candidate at all here; only a recruiter manually changing status via
+    the dashboard did. Reuses the existing status-notification email/template
+    (application_controller.py already uses it for that manual path) rather
+    than adding a new one. Runs on a daemon thread so a slow send never blocks
+    the single serial CV-scoring worker behind it.
+    """
+    if application_status not in ("shortlisted", "rejected"):
+        return
+    try:
+        app_doc = applications_collection.find_one(
+            {"_id": ObjectId(application_id)},
+            {"student_email": 1, "student_name": 1},
+        )
+        candidate_email = app_doc.get("student_email") if app_doc else None
+        if not candidate_email:
+            return
+        candidate_name = (app_doc or {}).get("student_name") or "Candidate"
+        job_title = (job or {}).get("title") or "the position"
+        company = (job or {}).get("company") or (job or {}).get("company_name") or "the company"
+
+        email_svc = EmailService()
+        threading.Thread(
+            target=email_svc.send_application_status_notification,
+            args=(candidate_email, candidate_name, job_title, company, application_status),
+            daemon=True,
+        ).start()
+    except Exception:
+        logger.warning("Candidate status-notification email failed to send", exc_info=True)
 
 
 class BackgroundProcessor:
@@ -230,7 +266,7 @@ class BackgroundProcessor:
                     
                     fallback_score = 75.0
                     application_status = 'shortlisted' if fallback_score >= minimum_cv_score else 'rejected'
-                    
+
                     applications_collection.update_one(
                         {'_id': ObjectId(application_id)},
                         {
@@ -252,6 +288,9 @@ class BackgroundProcessor:
                         }
                     )
                     self.failed_count += 1
+                    _notify_candidate_of_status(
+                        applications_collection, application_id, application_status, job,
+                    )
                     return
 
             # ──────────────────────────────────────────────────────────────
@@ -330,6 +369,10 @@ class BackgroundProcessor:
                             {'_id': ObjectId(job_id)},
                             {'$inc': job_update}
                         )
+
+                _notify_candidate_of_status(
+                    applications_collection, application_id, application_status, job,
+                )
 
                 logger.info(
                     f"Application {application_id} scored successfully: "

@@ -480,6 +480,189 @@ class EmailService:
 
         return self.send_email(to_email, config["subject"], html_content, text_content)
 
+    def send_application_received_email(
+        self, to_email: str, candidate_name: str, job_title: str, company_name: str
+    ) -> bool:
+        """Confirm to a candidate that their application was received."""
+        dashboard_url = f"{self.frontend_url}/profile#applications"
+        safe_job = escape(job_title or "the position")
+        safe_company = escape(company_name or "the company")
+
+        html_content = self._render_auth_email(
+            title="Application received",
+            eyebrow="Application update",
+            greeting_name=candidate_name,
+            intro=(
+                f"Thanks for applying to <strong>{safe_job}</strong> at {safe_company}. "
+                f"We've received your application and your CV is now being reviewed. "
+                f"You'll be notified as soon as there's an update."
+            ),
+            cta_label="View My Applications",
+            action_url=dashboard_url,
+            expiry_text="CV review is usually completed within a minute or two.",
+            notice_title="What's next?",
+            notice_body="Keep an eye on your inbox — you'll hear from us once your CV has been reviewed.",
+        )
+
+        text_content = dedent(f"""
+        Hi {candidate_name},
+
+        Thanks for applying to {job_title or 'the position'} at {company_name or 'the company'}.
+
+        We've received your application and your CV is now being reviewed. You'll be notified as soon as there's an update.
+
+        View your applications: {dashboard_url}
+
+        (c) {datetime.now().year} Genhire. All rights reserved.
+        """).strip()
+
+        return self.send_email(to_email, f"Application received — {job_title or 'your application'}", html_content, text_content)
+
+    def send_new_applicant_notification(
+        self, to_email: str, recruiter_name: str, candidate_name: str, job_title: str
+    ) -> bool:
+        """Notify a recruiter that a new candidate applied to their job."""
+        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        safe_candidate = escape(candidate_name or "A candidate")
+        safe_job = escape(job_title or "your job posting")
+
+        html_content = self._render_auth_email(
+            title="New applicant",
+            eyebrow="Application update",
+            greeting_name=recruiter_name,
+            intro=(
+                f"<strong>{safe_candidate}</strong> just applied to <strong>{safe_job}</strong>. "
+                f"Their CV is being scored automatically and will appear in your dashboard shortly."
+            ),
+            cta_label="View Applicants",
+            action_url=dashboard_url,
+            expiry_text="CV scoring usually completes within a minute or two.",
+            notice_title="Heads up:",
+            notice_body="You don't need to do anything yet — we'll let you know once the candidate's status is finalized.",
+        )
+
+        text_content = dedent(f"""
+        Hi {recruiter_name},
+
+        {candidate_name or 'A candidate'} just applied to {job_title or 'your job posting'}.
+
+        Their CV is being scored automatically and will appear in your dashboard shortly.
+
+        View applicants: {dashboard_url}
+
+        (c) {datetime.now().year} Genhire. All rights reserved.
+        """).strip()
+
+        return self.send_email(to_email, f"New applicant: {candidate_name} — {job_title}", html_content, text_content)
+
+    def send_interview_complete_candidate_email(
+        self,
+        to_email: str,
+        candidate_name: str,
+        job_title: str,
+        interview_score: Optional[int],
+    ) -> bool:
+        """Notify the candidate that their own interview has finished and been scored."""
+        dashboard_url = f"{self.frontend_url}/profile#applications"
+        safe_candidate = escape(candidate_name or "there")
+        safe_job = escape(job_title or "the position")
+        safe_dashboard = escape(dashboard_url, quote=True)
+        year = datetime.now().year
+
+        if interview_score is not None:
+            score_html = (
+                f'<div style="text-align:center; margin:24px 0;">'
+                f'<div style="display:inline-block; background:#f0fdf4; border:2px solid #86efac; '
+                f'border-radius:14px; padding:16px 32px;">'
+                f'<div style="font-size:13px; font-weight:700; color:#166534; '
+                f'text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Your Interview Score</div>'
+                f'<div style="font-size:42px; font-weight:800; color:#15803d; line-height:1;">{interview_score}%</div>'
+                f'</div></div>'
+            )
+            score_text = f"Your interview score: {interview_score}%"
+        else:
+            score_html = ""
+            score_text = "Your interview score is still being calculated."
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview completed — {safe_job}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7fb;margin:0;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf5;border-radius:14px;overflow:hidden;box-shadow:0 16px 36px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="padding:22px 40px;background:#ffffff;border-bottom:1px solid #edf1f7;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+              <td style="width:38px;height:38px;background:#5b46f6;border-radius:10px;color:#ffffff;font-size:22px;line-height:38px;font-weight:700;text-align:center;">G</td>
+              <td style="padding-left:12px;color:#111827;font-size:24px;line-height:30px;font-weight:700;">Genhire</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#091831;padding:42px 40px;">
+            <div style="color:#9fb3d9;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px 0;">Interview completed</div>
+            <h1 style="color:#ffffff;font-size:28px;line-height:36px;font-weight:800;margin:0;">
+              Your interview for {safe_job} is complete
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:34px 40px 38px 40px;">
+            <p style="font-size:15px;line-height:24px;margin:0 0 8px 0;color:#2d3748;">Hi {safe_candidate},</p>
+            <p style="font-size:15px;line-height:24px;margin:0 0 20px 0;color:#2d3748;">
+              Thanks for completing your AI interview for <strong>{safe_job}</strong>. Your results are ready to view.
+            </p>
+            {score_html}
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="border-collapse:separate;margin:0 auto 28px auto;">
+              <tr>
+                <td align="center" bgcolor="#5b46f6" style="background:#5b46f6;border-radius:8px;">
+                  <a href="{safe_dashboard}" target="_blank" rel="noopener noreferrer"
+                     style="background:#5b46f6;border:1px solid #5b46f6;border-radius:8px;color:#ffffff;cursor:pointer;display:block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;padding:14px 34px;text-align:center;text-decoration:none;white-space:nowrap;">
+                    View My Report
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <div style="height:1px;background:#e8edf6;margin:0 0 22px 0;"></div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f0ff;border-radius:10px;border-left:4px solid #5b46f6;">
+              <tr><td style="padding:16px 18px;">
+                <p style="font-size:14px;line-height:22px;margin:0;color:#342b7a;">
+                  <strong>What's next?</strong> The recruiter will review your report and be in touch with next steps. You can check your application status any time from your dashboard.
+                </p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 40px;background:#f8fafc;color:#7a8699;font-size:12px;line-height:18px;">
+            &copy; {year} Genhire. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+        text_content = dedent(f"""
+        Hi {candidate_name},
+
+        Thanks for completing your AI interview for {job_title}.
+        {score_text}
+
+        View your report: {dashboard_url}
+
+        (c) {year} Genhire. All rights reserved.
+        """).strip()
+
+        subject = f"Your interview is complete — {job_title}"
+        return self.send_email(to_email, subject, html_content, text_content)
+
     def send_recruiter_approved_email(self, to_email: str, recruiter_name: str, company_name: str) -> bool:
         """Notify recruiter that their account has been approved by admin."""
         dashboard_url = f"{self.frontend_url}/recruiter-dashboard"

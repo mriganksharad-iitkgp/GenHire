@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useCandidateData } from '../../contexts/CandidateDataContext';
+import ConfirmDialog from '../common/ConfirmDialog';
 import styles from './CVList.module.css';
 import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
 
@@ -8,6 +9,8 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
   const [cvList, setCvList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [settingPrimary, setSettingPrimary] = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchCVs = useCallback(async (force = false) => {
     setLoading(true);
@@ -84,13 +87,15 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
     }
   };
 
-  const handleDeleteCV = async (cvId, e) => {
+  const handleDeleteCV = (cvId, e) => {
     e.stopPropagation();
-    
-    if (!window.confirm("Are you sure you want to delete this CV?")) {
-      return;
-    }
+    setPendingDeleteId(cvId);
+  };
 
+  const confirmDeleteCV = async () => {
+    const cvId = pendingDeleteId;
+    if (!cvId) return;
+    setIsDeleting(true);
     try {
       const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}`, {
@@ -112,6 +117,9 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
     } catch (err) {
       console.error('Error deleting CV:', err);
       showToast?.('Failed to delete CV', 'error');
+    } finally {
+      setIsDeleting(false);
+      setPendingDeleteId(null);
     }
   };
 
@@ -213,6 +221,17 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
         <i className="fa fa-info-circle"></i>
         <small>Primary CV is auto-selected when applying for jobs or starting practice interviews</small>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!pendingDeleteId}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={confirmDeleteCV}
+        title="Delete CV"
+        message="Are you sure you want to delete this CV?"
+        confirmText="Delete"
+        confirmVariant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

@@ -19,6 +19,7 @@ from middleware.auth_middleware import (
     token_required,
     verified_required,
 )
+from middleware.rate_limiter import rate_limit
 
 
 invite_bp = Blueprint("invites", __name__, url_prefix="/api")
@@ -78,8 +79,25 @@ def send_invites(current_user, job_id):
     return jsonify(response), status_code
 
 
+@invite_bp.route("/recruiter/jobs/<job_id>/invites/batches/<batch_id>", methods=["GET"])
+@cross_origin()
+@token_required
+@recruiter_required
+@verified_required
+def get_invite_batch_status(current_user, job_id, batch_id):
+    """Poll-friendly progress endpoint for a bulk invite batch started via
+    send_invites — that route now returns immediately once emails start
+    sending in the background instead of waiting for all of them."""
+    response, status_code = _invite_controller.get_batch_status(
+        recruiter=current_user,
+        batch_id=batch_id,
+    )
+    return jsonify(response), status_code
+
+
 @invite_bp.route("/invite/redeem", methods=["GET"])
 @cross_origin()
+@rate_limit(max_calls=20, window_seconds=3600)
 def lookup_invite_route():
     raw_token = request.args.get("token", "")
     response, status_code = _invite_controller.lookup_invite(raw_token)
@@ -88,6 +106,7 @@ def lookup_invite_route():
 
 @invite_bp.route("/invite/redeem", methods=["POST"])
 @cross_origin()
+@rate_limit(max_calls=20, window_seconds=3600)
 def redeem_invite_route():
     body = request.get_json(silent=True) or {}
     raw_token = body.get("token", "")

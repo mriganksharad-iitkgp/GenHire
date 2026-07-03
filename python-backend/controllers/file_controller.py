@@ -2,39 +2,96 @@ import os
 import tempfile
 from werkzeug.utils import secure_filename
 import uuid
+import filetype
 from flask import send_file, jsonify, redirect
 from bson import ObjectId
 import gridfs
 from services import gcs_service
+
+# Per-file size ceilings — defense in depth beyond the blanket 16MB request
+# body cap (app.config["MAX_CONTENT_LENGTH"]), which doesn't distinguish
+# between a CV and a much smaller profile photo.
+_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024  # CVs / JDs
+_MAX_PHOTO_BYTES = 5 * 1024 * 1024  # profile photos
+
+_MIME_BY_EXTENSION = {
+    "pdf": "application/pdf",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+}
 
 class FileController:
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
         self.db = self.users_collection.database
         self.fs = gridfs.GridFS(self.db)
-        
+
         self.upload_folder = os.path.join(tempfile.gettempdir(), 'hrtech_uploads')
         self.allowed_extensions = {'pdf', 'jpg', 'jpeg', 'png', 'gif'}
-        
+
         # Ensure folders exist
         self.jd_folder = os.path.join(self.upload_folder, "jd")
         self.cv_folder = os.path.join(self.upload_folder, "cv")
         self.photos_folder = os.path.join(self.upload_folder, "photos")
         self.proctoring_folder = os.path.join(self.upload_folder, "proctoring")
-        
+
         for folder in [self.jd_folder, self.cv_folder, self.photos_folder, self.proctoring_folder]:
             os.makedirs(folder, exist_ok=True)
-        
+
     def allowed_file(self, filename):
         """Check if file extension is allowed"""
         return "." in filename and filename.rsplit(".", 1)[1].lower() in self.allowed_extensions
-        
+
+    def _validate_upload(self, file_storage, allowed_extensions, max_bytes):
+        """
+        Extension + actual file-content (magic byte) + size validation.
+        Extension-only checks let a renamed file (e.g. malicious.exe ->
+        cv.pdf) straight through; this verifies the real content type using
+        the already-installed `filetype` library instead of trusting the
+        claimed name. Returns an error message string, or None if valid.
+        """
+        if not file_storage or not file_storage.filename:
+            return "No file selected"
+
+        if not (
+            "." in file_storage.filename
+            and file_storage.filename.rsplit(".", 1)[1].lower() in allowed_extensions
+        ):
+            return "Invalid file format"
+
+        stream = file_storage.stream
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(0)
+        if size == 0:
+            return "File is empty"
+        if size > max_bytes:
+            return f"File too large (max {max_bytes // (1024 * 1024)}MB)"
+
+        # filetype needs at most the first 261 bytes to identify a format.
+        header = stream.read(261)
+        stream.seek(0)
+        kind = filetype.guess(header)
+        expected_mimes = {
+            _MIME_BY_EXTENSION[ext]
+            for ext in allowed_extensions
+            if ext in _MIME_BY_EXTENSION
+        }
+        if kind is None or kind.mime not in expected_mimes:
+            return "File content does not match an allowed file type"
+
+        return None
+
     def upload_files(self, jd_file, cv_file):
         """Upload JD and CV files"""
-        if not jd_file or not self.allowed_file(jd_file.filename):
-            return {'error': 'Invalid JD file format'}, 400
-        if not cv_file or not self.allowed_file(cv_file.filename):
-            return {'error': 'Invalid CV file format'}, 400
+        jd_error = self._validate_upload(jd_file, self.allowed_extensions, _MAX_DOCUMENT_BYTES)
+        if jd_error:
+            return {'error': f'Invalid JD file: {jd_error}'}, 400
+        cv_error = self._validate_upload(cv_file, self.allowed_extensions, _MAX_DOCUMENT_BYTES)
+        if cv_error:
+            return {'error': f'Invalid CV file: {cv_error}'}, 400
 
         # Generate random filenames while preserving original file extensions
         jd_ext = os.path.splitext(jd_file.filename)[1]
@@ -59,8 +116,9 @@ class FileController:
         
     def upload_cv(self, user_id, cv_file):
         """Upload CV for a specific user"""
-        if not cv_file or not self.allowed_file(cv_file.filename):
-            return {'error': 'Invalid CV file format. Only PDF files are allowed.'}, 400
+        cv_error = self._validate_upload(cv_file, self.allowed_extensions, _MAX_DOCUMENT_BYTES)
+        if cv_error:
+            return {'error': f'Invalid CV file: {cv_error}'}, 400
         
         # Generate unique filename
         cv_ext = os.path.splitext(cv_file.filename)[1]
@@ -104,14 +162,10 @@ class FileController:
         
     def upload_photo(self, user_id, photo_file):
         """Upload profile photo for a user"""
-        if not photo_file:
-            return {'error': 'No photo file selected'}, 400
-        
-        # Check file extension
         allowed_photo_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-        if not ('.' in photo_file.filename and 
-                photo_file.filename.rsplit('.', 1)[1].lower() in allowed_photo_extensions):
-            return {'error': 'Invalid photo format. Only PNG, JPG, JPEG, GIF allowed.'}, 400
+        photo_error = self._validate_upload(photo_file, allowed_photo_extensions, _MAX_PHOTO_BYTES)
+        if photo_error:
+            return {'error': f'Invalid photo: {photo_error}'}, 400
         
         # Generate unique filename
         photo_ext = os.path.splitext(photo_file.filename)[1]

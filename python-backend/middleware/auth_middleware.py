@@ -5,6 +5,70 @@ import os
 from bson import ObjectId
 from config.database import db_config
 
+_flask_env = os.getenv("FLASK_ENV", "").strip().lower()
+_JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not _JWT_SECRET_KEY:
+    if _flask_env == "production":
+        raise RuntimeError(
+            "JWT_SECRET_KEY is not set. Refusing to start in production with a "
+            "guessable default secret — set this env var before starting the app."
+        )
+    print("[WARN] JWT_SECRET_KEY is not set — using an insecure development-only default. "
+          "This MUST be set before deploying to production.")
+    _JWT_SECRET_KEY = "your-secret-key-here"
+
+# Fetch only the fields needed for auth — loading the full user document
+# (which includes large cv_details, raw_cv_text, etc.) on every authenticated
+# request/socket-connect adds unnecessary latency and BSON transfer overhead.
+_AUTH_PROJECTION = {
+    "_id": 1,
+    "name": 1,
+    "email": 1,
+    "email_lower": 1,
+    "user_type": 1,
+    "is_verified": 1,
+    "is_invite_only": 1,
+    "invite_id_lower": 1,
+    "permissions": 1,
+    "cv_details": 1,   # needed by interview start route
+    "is_active": 1,
+}
+
+
+def decode_user_from_token(token):
+    """
+    Shared JWT decode + user lookup used by both the REST `token_required`
+    decorator and the Socket.IO connect handler, so there is exactly one
+    place that implements auth-token verification.
+
+    Returns (current_user_dict, error_message_or_None).
+    """
+    if not token:
+        return None, 'Token is missing!'
+
+    if isinstance(token, str) and token.startswith('Bearer '):
+        token = token[7:]
+
+    try:
+        data = pyjwt.decode(token, _JWT_SECRET_KEY, algorithms=['HS256'])
+
+        collections = db_config.get_collections()
+        current_user = collections['users'].find_one(
+            {'_id': ObjectId(data['user_id'])},
+            _AUTH_PROJECTION,
+        )
+
+        if not current_user:
+            return None, 'User not found!'
+
+        return current_user, None
+    except pyjwt.ExpiredSignatureError:
+        return None, 'Token has expired!'
+    except pyjwt.InvalidTokenError:
+        return None, 'Token is invalid!'
+    except Exception:
+        return None, 'Token is invalid!'
+
 
 def token_required(f):
     """Decorator to require valid JWT token for a route"""
@@ -13,48 +77,10 @@ def token_required(f):
         # Support Authorization header or token passed via query parameter (for new-tab file views)
         token = request.headers.get('Authorization') or request.args.get('token')
 
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
-
-        try:
-            # Check for the "Bearer " prefix and remove it if it exists.
-            if isinstance(token, str) and token.startswith('Bearer '):
-                token = token[7:]
-
-            secret_key = os.getenv('JWT_SECRET_KEY', 'your-secret-key-here')
-            data = pyjwt.decode(token, secret_key, algorithms=['HS256'])
-            
-            # Get database collections
-            collections = db_config.get_collections()
-            # Fetch only the fields needed for auth — loading the full user
-            # document (which includes large cv_details, raw_cv_text, etc.)
-            # on every authenticated request adds unnecessary latency and
-            # BSON transfer overhead (~20-50ms per request).
-            _AUTH_PROJECTION = {
-                "_id": 1,
-                "name": 1,
-                "email": 1,
-                "email_lower": 1,
-                "user_type": 1,
-                "is_verified": 1,
-                "is_invite_only": 1,
-                "invite_id_lower": 1,
-                "permissions": 1,
-                "cv_details": 1,   # needed by interview start route
-                "is_active": 1,
-            }
-            current_user = collections['users'].find_one(
-                {'_id': ObjectId(data['user_id'])},
-                _AUTH_PROJECTION,
-            )
-
-            if not current_user:
-                return jsonify({'message': 'User not found!'}), 401
-
-        except pyjwt.ExpiredSignatureError:
-            return jsonify({'message': 'Token has expired!'}), 401
-        except pyjwt.InvalidTokenError:
-            return jsonify({'message': 'Token is invalid!'}), 401
+        current_user, error = decode_user_from_token(token)
+        if error:
+            status = 401
+            return jsonify({'message': error}), status
 
         return f(current_user, *args, **kwargs)
     return decorated

@@ -8,7 +8,9 @@ Glues HTTP requests to:
 """
 
 import datetime
+import logging
 import os
+import threading
 from typing import Any, Dict, List, Optional
 
 import jwt as pyjwt
@@ -21,6 +23,8 @@ from services.invite_service import (
     parse_emails_from_file,
     parse_emails_from_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class InviteController:
@@ -95,6 +99,11 @@ class InviteController:
 
         ttl_minutes = self.invite_service._ttl_minutes()
 
+        # The DB-row half (bulk_invite) is plain Mongo writes — fast even at
+        # 2000 rows — so it stays synchronous. Only the email-sending half
+        # (one blocking provider call per row) moves to a background thread;
+        # otherwise a 2000-row batch would hold this request open for as long
+        # as it takes to send 2000 emails, well past any reasonable timeout.
         batch_id, rows = self.invite_service.bulk_invite(
             recruiter=recruiter,
             job=job,
@@ -103,21 +112,69 @@ class InviteController:
             source=source,
         )
 
-        sent: List[Dict[str, Any]] = []
-        skipped: List[Dict[str, Any]] = []
-        failed: List[Dict[str, Any]] = []
         recruiter_company = recruiter.get("company_name") or "GenHire"
         job_title = job.get("title", "")
 
+        # Rows already resolved during the DB phase (no email to send) —
+        # reflect them immediately so a poller sees an accurate total right away.
+        pre_skipped = [
+            {"email": r["email"], "reason": r["reason"]}
+            for r in rows
+            if r["action"] == "skipped"
+        ]
+        pre_failed = [
+            {"email": r["email"], "error": r["reason"]}
+            for r in rows
+            if r["action"] == "failed"
+        ]
+        rows_to_email = [r for r in rows if r["action"] not in ("skipped", "failed")]
+
+        self.invite_service.finalize_batch(
+            batch_id=batch_id,
+            sent_count=0,
+            skipped_count=len(pre_skipped),
+            failed_count=len(pre_failed),
+            failures=pre_failed,
+            skipped=pre_skipped,
+            status="processing",
+        )
+
+        threading.Thread(
+            target=self._dispatch_invite_emails,
+            args=(batch_id, rows_to_email, recruiter_company, job_title, ttl_minutes, pre_skipped, pre_failed),
+            daemon=True,
+        ).start()
+
+        return {
+            "batch_id": str(batch_id),
+            "status": "processing",
+            "total": len(rows),
+            "message": "Invites are being sent in the background — poll the batch status endpoint for progress.",
+        }, 202
+
+    def _dispatch_invite_emails(
+        self,
+        batch_id,
+        rows: List[Dict[str, Any]],
+        recruiter_company: str,
+        job_title: str,
+        ttl_minutes: int,
+        pre_skipped: List[Dict[str, Any]],
+        pre_failed: List[Dict[str, Any]],
+    ) -> None:
+        """
+        Runs on a background thread — sends one invite email per row and
+        updates the `invite_batches` document after every row so a recruiter
+        polling the batch status endpoint sees live progress, not just a
+        final result once everything is done.
+        """
+        sent: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = list(pre_skipped)
+        failed: List[Dict[str, Any]] = list(pre_failed)
+
         for row in rows:
             action = row["action"]
-            if action == "skipped":
-                skipped.append({"email": row["email"], "reason": row["reason"]})
-                continue
-            if action == "failed":
-                failed.append({"email": row["email"], "error": row["reason"]})
-                continue
-
+            invite_type = row["invite_type"]
             email_ok = False
             try:
                 if action == "created":
@@ -146,7 +203,7 @@ class InviteController:
                         to_email=row["email"],
                         recruiter_company=recruiter_company,
                         job_title=job_title,
-                        job_id=str(job["_id"]),
+                        job_id=row["job_id"],
                         invite_type=invite_type,
                     )
             except Exception as e:
@@ -166,25 +223,61 @@ class InviteController:
                     {"email": row["email"], "error": row.get("reason") or "email_send_failed"}
                 )
 
-        self.invite_service.finalize_batch(
-            batch_id=batch_id,
-            sent_count=len(sent),
-            skipped_count=len(skipped),
-            failed_count=len(failed),
-            failures=failed,
-        )
+            try:
+                self.invite_service.finalize_batch(
+                    batch_id=batch_id,
+                    sent_count=len(sent),
+                    skipped_count=len(skipped),
+                    failed_count=len(failed),
+                    failures=failed,
+                    skipped=skipped,
+                    status="processing",
+                )
+            except Exception:
+                logger.warning("Failed to update invite batch progress", exc_info=True)
+
+        try:
+            self.invite_service.finalize_batch(
+                batch_id=batch_id,
+                sent_count=len(sent),
+                skipped_count=len(skipped),
+                failed_count=len(failed),
+                failures=failed,
+                skipped=skipped,
+                status="completed",
+            )
+        except Exception:
+            logger.warning("Failed to finalize invite batch", exc_info=True)
+
+    def get_batch_status(self, *, recruiter: Dict[str, Any], batch_id: str):
+        """Poll-friendly status for a bulk invite batch (used by the frontend
+        progress UI instead of waiting for one long final response)."""
+        try:
+            batch = self.invite_service.invite_batches.find_one({"_id": ObjectId(batch_id)})
+        except Exception:
+            return {"error": "Invalid batch id"}, 400
+        if not batch:
+            return {"error": "Batch not found"}, 404
+
+        recruiter_id = str(recruiter.get("_id"))
+        if recruiter.get("user_type") == "recruiter" and str(batch.get("recruiter_id")) != recruiter_id:
+            return {"error": "Unauthorized"}, 403
 
         return {
-            "batch_id": str(batch_id),
-            "sent": sent,
-            "skipped": skipped,
-            "failed": failed,
+            "batch_id": str(batch["_id"]),
+            "status": batch.get("status", "processing"),
+            "total": batch.get("total", 0),
             "totals": {
-                "sent": len(sent),
-                "skipped": len(skipped),
-                "failed": len(failed),
+                "sent": batch.get("sent_count", 0),
+                "skipped": batch.get("skipped_count", 0),
+                "failed": batch.get("failed_count", 0),
             },
-        }, 201
+            # Kept as two separate lists (rather than one merged "failures")
+            # to match the shape the frontend's send-summary detail view
+            # already renders (skipped reasons vs. failed errors).
+            "skipped": batch.get("skipped", []),
+            "failed": batch.get("failures", []),
+        }, 200
 
     # ----- public redeem flow ---------------------------------------------
 

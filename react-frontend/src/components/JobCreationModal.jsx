@@ -163,7 +163,10 @@ const DEFAULT_PROCTORING_CONFIG = {
   ai_detection: false,
 };
 
-const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
+const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
+  const notify = (message, type = 'error') =>
+    showToast ? showToast(message, type) : alert(message);
+
   const [jobData, setJobData] = useState({
     title: '',
     department: '',
@@ -403,12 +406,12 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     const missingFields = requiredFields.filter(field => !jobData[field].trim());
     
     if (missingFields.length > 0) {
-      alert(`Please fill in the following required fields: ${missingFields.join(', ')}`);
+      notify(`Please fill in the following required fields: ${missingFields.join(', ')}`);
       return;
     }
-    
+
     if (jobData.skills.length === 0) {
-      alert('Please add at least one required skill');
+      notify('Please add at least one required skill');
       return;
     }
 
@@ -442,12 +445,12 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate }) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.type !== 'application/pdf') {
-        alert('Please upload a PDF file');
+        notify('Please upload a PDF file');
         e.target.value = null;
         return;
       }
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        alert('File size must be less than 10MB');
+        notify('File size must be less than 10MB');
         e.target.value = null;
         return;
       }

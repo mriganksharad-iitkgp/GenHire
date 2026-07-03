@@ -69,6 +69,15 @@ export async function sendInvites(jobId, { emails, invite_type, source = "manual
   });
 }
 
+// sendInvites now returns immediately (batch is dispatched in the
+// background) — poll this to drive a live progress UI instead of waiting
+// on one long-running request.
+export async function getInviteBatchStatus(jobId, batchId) {
+  return jsonRequest(`/recruiter/jobs/${jobId}/invites/batches/${batchId}`, {
+    method: "GET",
+  });
+}
+
 // ----- Public redeem endpoints --------------------------------------------
 
 export async function lookupInvite(token) {

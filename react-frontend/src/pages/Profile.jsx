@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import InterviewReportModal from "../components/InterviewReportModal";
 import DeleteAccountModal from "../components/common/DeleteAccountModal";
 import Toast from "../components/Toast";
+import SkeletonCard from "../components/SkeletonCard";
 import styles from "./Profile.module.css";
 import SidebarProfile from "../components/candidate/SidebarProfile";
 import BioForm from "../components/candidate/BioForm";
@@ -90,73 +91,16 @@ const Profile = () => {
 
 	// Hooks for profile and applications
 	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
-	const { applications, loading: loadingApps, openReport, companies, load: reloadApplications } = useCandidateApplications(showToast);
-
-	// Check for interview completion on mount and force immediate refresh
-	useEffect(() => {
-		const interviewCompleted = sessionStorage.getItem('interview-just-completed');
-		if (interviewCompleted === 'true') {
-			sessionStorage.removeItem('interview-just-completed');
-
-			// Force multiple refreshes with delays to ensure database sync
-			reloadApplications(true);
-			setTimeout(() => reloadApplications(true), 1000);
-			setTimeout(() => reloadApplications(true), 2000);
-			setTimeout(() => reloadApplications(true), 3000);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []); // Run only once on mount - reloadApplications is stable
-
-	// Reload applications ONLY when necessary (interview completion or manual refresh)
-	useEffect(() => {
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				// Check if interview was just completed
-				const interviewCompleted = sessionStorage.getItem('interview-just-completed');
-				if (interviewCompleted === 'true') {
-					sessionStorage.removeItem('interview-just-completed'); // Clear the flag
-
-					// Multiple refresh attempts with increasing delays to ensure update is caught
-					reloadApplications(true);
-
-					setTimeout(() => {
-						reloadApplications(true);
-					}, 1000);
-
-					setTimeout(() => {
-						reloadApplications(true);
-					}, 2000);
-
-					setTimeout(() => {
-						reloadApplications(true);
-					}, 3000);
-				}
-				// REMOVED: Don't reload on every visibility change
-			}
-		};
-
-		// REMOVED: Don't reload on hash change - just switch tabs without reloading
-
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		return () => {
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-		};
-	}, [reloadApplications]);
+	const { applications, loading: loadingApps, openReport, companies } = useCandidateApplications(showToast);
+	// Note: applications now update live via CandidateDataContext's realtime
+	// subscription (see contexts/CandidateDataContext.jsx) — an interview
+	// completing, a status change, etc. all patch the cache directly, so this
+	// page no longer needs to poll/refresh itself on interview completion.
 
 	// Handle tab change
 	const handleTabChange = (tab) => {
 		setActiveTab(tab);
 		window.location.hash = `#${tab}`;
-
-		// If switching to applications tab, check for interview completion and refresh
-		if (tab === 'applications') {
-			const interviewCompleted = sessionStorage.getItem('interview-just-completed');
-			if (interviewCompleted === 'true') {
-				sessionStorage.removeItem('interview-just-completed');
-				reloadApplications(true);
-			}
-		}
 	};
 
 	// Handle CV upload
@@ -526,31 +470,39 @@ const Profile = () => {
 
 						{/* Applications Tab */}
 						{activeTab === "applications" && (
-							<ApplicationsList
-								applications={applications}
-								companies={uniqueCompanies}
-								locations={uniqueLocations}
-								companyFilter={companyFilter}
-								statusFilter={statusFilter}
-								jobTypeFilter={jobTypeFilter}
-								locationFilter={locationFilter}
-								dateRangeFilter={dateRangeFilter}
-								setCompanyFilter={setCompanyFilter}
-								setStatusFilter={setStatusFilter}
-								setJobTypeFilter={setJobTypeFilter}
-								setLocationFilter={setLocationFilter}
-								setDateRangeFilter={setDateRangeFilter}
-								onClearFilters={() => {
-									setCompanyFilter("");
-									setStatusFilter("");
-									setJobTypeFilter("");
-									setLocationFilter("");
-									setDateRangeFilter("");
-								}}
-								onViewCV={handleViewCV}
-								onOpenReport={openInterviewReport}
-								onGiveInterview={handleGiveInterview}
-							/>
+							loadingApps && applications.length === 0 ? (
+								<div>
+									{Array.from({ length: 3 }).map((_, i) => (
+										<SkeletonCard key={i} variant="job" />
+									))}
+								</div>
+							) : (
+								<ApplicationsList
+									applications={applications}
+									companies={uniqueCompanies}
+									locations={uniqueLocations}
+									companyFilter={companyFilter}
+									statusFilter={statusFilter}
+									jobTypeFilter={jobTypeFilter}
+									locationFilter={locationFilter}
+									dateRangeFilter={dateRangeFilter}
+									setCompanyFilter={setCompanyFilter}
+									setStatusFilter={setStatusFilter}
+									setJobTypeFilter={setJobTypeFilter}
+									setLocationFilter={setLocationFilter}
+									setDateRangeFilter={setDateRangeFilter}
+									onClearFilters={() => {
+										setCompanyFilter("");
+										setStatusFilter("");
+										setJobTypeFilter("");
+										setLocationFilter("");
+										setDateRangeFilter("");
+									}}
+									onViewCV={handleViewCV}
+									onOpenReport={openInterviewReport}
+									onGiveInterview={handleGiveInterview}
+								/>
+							)
 						)}
 					</div>
 				</div>

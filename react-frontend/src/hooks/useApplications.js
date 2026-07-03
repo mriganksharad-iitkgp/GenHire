@@ -4,6 +4,7 @@ import {
   getInterviewReport,
   setApplicationStatus,
 } from "../services/api";
+import useRealtimeApplications from "./useRealtimeApplications";
 
 export default function useApplications(toast) {
   const [applications, setApplications] = useState([]);
@@ -24,6 +25,24 @@ export default function useApplications(toast) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live updates (new applicant, candidate-side status echo, interview score
+  // landing) patch this list directly — a recruiter no longer has to trigger
+  // a reload themselves to see something another actor (the candidate) did.
+  useRealtimeApplications(
+    useCallback((_type, application) => {
+      if (!application || !application._id) return;
+      setApplications((current) => {
+        const idx = current.findIndex(
+          (a) => String(a._id) === String(application._id),
+        );
+        if (idx === -1) return [application, ...current];
+        return current.map((a, i) =>
+          i === idx ? { ...a, ...application } : a,
+        );
+      });
+    }, []),
+  );
 
   const updateStatus = useCallback(
     async (applicationId, newStatus) => {

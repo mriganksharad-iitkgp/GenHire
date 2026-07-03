@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import cvService from '../../services/cvService';
+import ConfirmDialog from '../common/ConfirmDialog';
 import styles from './CVManagement.module.css';
 
 const CVManagement = () => {
@@ -11,6 +12,8 @@ const CVManagement = () => {
   const [previewCV, setPreviewCV] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [maxCVs, setMaxCVs] = useState(5);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadCVs();
@@ -66,11 +69,14 @@ const CVManagement = () => {
     }
   };
 
-  const handleDelete = async (cvId) => {
-    if (!window.confirm('Are you sure you want to delete this CV?')) {
-      return;
-    }
+  const handleDelete = (cvId) => {
+    setPendingDeleteId(cvId);
+  };
 
+  const confirmDelete = async () => {
+    const cvId = pendingDeleteId;
+    if (!cvId) return;
+    setIsDeleting(true);
     try {
       setError('');
       setSuccess('');
@@ -79,6 +85,9 @@ const CVManagement = () => {
       await loadCVs();
     } catch (err) {
       setError(err.message || 'Failed to delete CV');
+    } finally {
+      setIsDeleting(false);
+      setPendingDeleteId(null);
     }
   };
 
@@ -265,6 +274,17 @@ const CVManagement = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!pendingDeleteId}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="Delete CV"
+        message="Are you sure you want to delete this CV?"
+        confirmText="Delete"
+        confirmVariant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

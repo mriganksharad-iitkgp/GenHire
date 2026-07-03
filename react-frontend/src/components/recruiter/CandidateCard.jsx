@@ -100,17 +100,18 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
       </div>
 
       <div className={styles.candidateMeta}>
-        <p><i className="fa fa-calendar"></i> Applied: {new Date(application.applied_at).toLocaleDateString()}</p>
-        <p><i className="fa fa-briefcase"></i> {application.student_profile?.experience || 'No experience listed'}</p>
-        <p><i className="fa fa-map-marker"></i> {application.student_profile?.location || 'No location provided'}</p>
+        <p><i className="fa fa-calendar" aria-hidden="true"></i> Applied: {new Date(application.applied_at).toLocaleDateString()}</p>
+        <p><i className="fa fa-briefcase" aria-hidden="true"></i> {application.student_profile?.experience || 'No experience listed'}</p>
+        <p><i className="fa fa-map-marker" aria-hidden="true"></i> {application.student_profile?.location || 'No location provided'}</p>
       </div>
 
       <div className={styles.candidateActions}>
-        <select 
+        <select
           className={styles.statusSelect}
           value={application.status}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
           title={`Current: ${displayStatus(application.status)} - Can only progress forward`}
+          aria-label={`Update application status for ${application.student_name}`}
         >
           {availableStatuses.map(status => (
             <option key={status} value={status}>
@@ -126,10 +127,10 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
         {((typeof application.interview_score === 'number') || application.report_available) && (
           <>
             <button className={styles.secondaryButton} onClick={() => viewInterviewReport(application._id)}>
-              <i className="fa fa-file-text-o"></i> View Interview Report
+              <i className="fa fa-file-text-o" aria-hidden="true"></i> View Interview Report
             </button>
             <button className={styles.secondaryButton} onClick={() => viewProctoringReport(application._id)}>
-                <i className="fa fa-eye"></i> See Proctoring Result
+                <i className="fa fa-eye" aria-hidden="true"></i> See Proctoring Result
             </button>
           </>
         )}
@@ -141,8 +142,9 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
             const url = token ? `${base}?token=${encodeURIComponent(token)}` : base;
             window.open(url, '_blank', 'noopener');
           }}
+          aria-label={`View CV for ${application.student_name}`}
         >
-          <i className="fa fa-file-pdf-o"></i> View CV
+          <i className="fa fa-file-pdf-o" aria-hidden="true"></i> View CV
         </button>
       </div>
     </div>

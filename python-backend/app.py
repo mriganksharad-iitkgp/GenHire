@@ -46,9 +46,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorflow")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="tf_keras")
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, g
 from utils.gaze_recorder_service import GazeRecorderService
-from flask_socketio import SocketIO, join_room
+from flask_socketio import join_room, disconnect
+from extensions import socketio
 from werkzeug.utils import secure_filename
 import datetime
 import uuid
@@ -131,17 +132,78 @@ except ImportError as e:
 # Load environment variables
 load_environment()
 
+# Error tracking — sentry-sdk has been a listed dependency with no actual
+# init call anywhere in the codebase. Safe to call unconditionally: the SDK
+# is explicitly designed to no-op when dsn is empty/None, so this does
+# nothing until a real SENTRY_DSN is supplied.
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[FlaskIntegration()],
+        environment=os.getenv("FLASK_ENV", "development"),
+        traces_sample_rate=0.1,
+    )
+    if os.getenv("SENTRY_DSN"):
+        print("[OK] Sentry error tracking initialized")
+except Exception as e:
+    print(f"[WARN] Sentry initialization skipped: {e}")
+
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "your-flask-secret-key")
+
+_flask_env = os.getenv("FLASK_ENV", "").strip().lower()
+_is_production = _flask_env == "production"
+
+_flask_secret = os.getenv("FLASK_SECRET_KEY")
+if not _flask_secret:
+    if _is_production:
+        raise RuntimeError(
+            "FLASK_SECRET_KEY is not set. Refusing to start in production with a "
+            "guessable default secret — set this env var before starting the app."
+        )
+    print("[WARN] FLASK_SECRET_KEY is not set — using an insecure development-only default. "
+          "This MUST be set before deploying to production.")
+    _flask_secret = "your-flask-secret-key"
+app.config["SECRET_KEY"] = _flask_secret
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB — rejects oversized request bodies before they're read
+
+# Origins allowed to call this API / hold a Socket.IO connection to it. Reads
+# the CORS_ORIGINS env var (already documented in .env.example but never
+# actually wired up) instead of the previous hardcoded wildcard, which is
+# invalid to combine with supports_credentials=True in the first place.
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000").split(",")
+    if o.strip()
+]
 
 # Setup Security Headers (Helmet equivalent) — optional
 try:
     from flask_talisman import Talisman
-    Talisman(app, content_security_policy=None, force_https=False)
-    print("[OK] Flask-Talisman loaded")
+
+    # force_https defaults off so local HTTP dev keeps working; set
+    # FORCE_HTTPS=true in production to enable the HTTPS redirect + HSTS.
+    _force_https = os.getenv("FORCE_HTTPS", "false").strip().lower() == "true"
+    # Scoped to what this backend actually serves itself (a JSON API plus one
+    # small server-rendered page, /api/interviews/<id>/gaze-recorder-page,
+    # which loads three GazeCloudAPI/GazeRecorderAPI scripts from
+    # app.gazerecorder.com plus an inline <script> block) — NOT the React SPA,
+    # which this Flask app never serves and which is hosted separately.
+    _csp = {
+        "default-src": "'self'",
+        "script-src": ["'self'", "'unsafe-inline'", "https://app.gazerecorder.com"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "connect-src": ["'self'", "https://app.gazerecorder.com", "wss://app.gazerecorder.com"],
+        "img-src": ["'self'", "data:", "https://app.gazerecorder.com"],
+        "media-src": ["'self'", "https://app.gazerecorder.com"],
+        "frame-src": ["'self'", "https://app.gazerecorder.com"],
+    }
+    Talisman(app, content_security_policy=_csp, force_https=_force_https)
+    print(f"[OK] Flask-Talisman loaded (force_https={_force_https})")
 except ImportError:
     print("[WARN] flask-talisman not installed, skipping security headers. Install with: pip install Flask-Talisman")
 
@@ -149,16 +211,19 @@ except ImportError:
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
-    
+
     # In development, we use very high limits to avoid rate limiting developers
     is_development = os.getenv("FLASK_ENV") == "development"
     default_limits = ["100000 per day", "10000 per hour"] if is_development else ["200 per day", "50 per hour"]
-    
+
+    # Falls back to in-process memory storage (today's behavior, fine for a
+    # single worker) automatically when REDIS_URL isn't set — set it to make
+    # limits shared/accurate across multiple workers or containers.
     limiter = Limiter(
         get_remote_address,
         app=app,
         default_limits=default_limits,
-        storage_uri="memory://"
+        storage_uri=os.getenv("REDIS_URL", "memory://")
     )
     print(f"[OK] Flask-Limiter loaded with limits: {default_limits}")
 except ImportError:
@@ -185,15 +250,18 @@ class _ObjectIdSafeJSONProvider(_DefaultJSONProvider):
 
 app.json = _ObjectIdSafeJSONProvider(app)
 
-# Initialize extensions
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize extensions (socketio instance is shared via extensions.py so
+# controllers can emit without importing this module and causing a cycle)
+socketio.init_app(app, cors_allowed_origins=ALLOWED_ORIGINS)
 
-# Configure CORS to allow all origins
+# Restrict CORS to known origins (see ALLOWED_ORIGINS above) — a wildcard
+# origin combined with supports_credentials=True is invalid per the CORS spec
+# and was allowing any site to make credentialed requests to this API.
 CORS(
     app,
     resources={
         r"/*": {
-            "origins": "*",
+            "origins": ALLOWED_ORIGINS,
             "allow_headers": [
                 "Content-Type",
                 "Authorization",
@@ -214,11 +282,25 @@ def handle_exception(e):
     # Pass through HTTP errors
     if isinstance(e, HTTPException):
         return jsonify(error=e.description, code=e.code), e.code
-    
+
     # Log and return standard JSON for unhandled errors
-    logger.error(f"Unhandled Exception: {str(e)}")
+    logger.error(f"Unhandled Exception [request_id={g.get('request_id', '-')}]: {str(e)}")
     logger.error(traceback.format_exc())
     return jsonify(error="Internal Server Error", message="An unexpected error occurred.", code=500), 500
+
+
+# Request correlation id — reuses an inbound X-Request-ID (e.g. from a reverse
+# proxy that already generates one) or mints a fresh one, so a single
+# request's logs/Sentry events/response can all be tied together.
+@app.before_request
+def assign_request_id():
+    g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+
+@app.after_request
+def add_request_id_header(response):
+    response.headers["X-Request-ID"] = g.get("request_id", "-")
+    return response
 
 
 # Handle preflight OPTIONS requests
@@ -488,10 +570,19 @@ else:
 
 
 
-# health check route
+# Readiness check — previously an unconditional 200 regardless of whether
+# anything downstream (Mongo) was actually reachable, which is exactly the
+# case a load balancer/orchestrator needs this endpoint to catch. Pings the
+# database with a short timeout; a slow/unreachable DB now reports 503
+# instead of a false "healthy".
 @app.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "healthy"}), 200
+    try:
+        db.command("ping", maxTimeMS=2000)
+        return jsonify({"status": "healthy", "database": "connected"}), 200
+    except Exception as e:
+        logger.warning(f"Health check failed: {e}")
+        return jsonify({"status": "unhealthy", "database": "unreachable"}), 503
 
 
 # Direct tracked chat endpoint (actual cost from response.usage only)
@@ -778,6 +869,10 @@ def start_interview(current_user):
         "status": "active",
         "similarity_score": sim_score,
         "proctoring_config": proctoring_config,
+        # Initialized here (not just at /end) so a crashed/abandoned interview
+        # still has an auditable record instead of no proctoring data at all.
+        "proctoring_score": None,
+        "proctoring_status": "pending",
         "usage_deduction": recruiter_deduction,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow(),
@@ -793,6 +888,8 @@ def start_interview(current_user):
             "initial_questions": [session_details["first_question"]],
             "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
+            "question_timeout_seconds": session_details.get("question_timeout_seconds"),
+            "question_deadline": session_details.get("question_deadline"),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
             "usage_deduction": recruiter_deduction,
@@ -818,7 +915,10 @@ def submit_answer(current_user, session_id):
     question = data.get("question")
     answer = data.get("answer")
 
-    if not question or not answer:
+    # `answer` may legitimately be an empty string — a client-side no-response
+    # timeout auto-submits "" to advance the interview rather than leaving it
+    # stuck. Only a missing question or a genuinely absent (None) answer is invalid.
+    if not question or answer is None:
         return jsonify({"error": "Question and answer are required"}), 400
 
     try:
@@ -951,55 +1051,45 @@ def end_interview(current_user, session_id):
     else:
         interview_score = 0
 
-    proctoring_score = (session_doc or {}).get("proctoring_score")
-    if proctoring_score is None:
-        proctoring_score = (session_doc or {}).get("gaze_recorder_score")
+    # DB-stored score from GazeRecorder (third-party CDN eye-tracking, submitted
+    # via /gaze-recorder-results while the interview was running — see
+    # finalizeInlineGazeRecorder in Chat.jsx). Real, but depends on that CDN
+    # script loading successfully in the candidate's browser.
+    db_score = (session_doc or {}).get("proctoring_score")
+    if db_score is None:
+        db_score = (session_doc or {}).get("gaze_recorder_score")
 
     manual_infractions = list((session_doc or {}).get("manual_infractions") or [])
     gaze_times = (session_doc or {}).get("gaze_metrics")
     gaze_plot_path = (session_doc or {}).get("gaze_plot_path")
 
-    # Get proctoring data from external service
-    proctoring_service_url = os.getenv(
-        "PROCTORING_SERVICE_URL", "http://localhost:5001"
-    )
-    try:
-        import requests
+    # Live MediaPipe/DeepFace-based score computed in-process, in real time,
+    # while frames streamed in over this same app's own Socket.IO connection
+    # (see register_face / handle_proctoring_frame below) — an independent
+    # signal from db_score, not a duplicate of it. Previously this was never
+    # read at all; /end instead called a separate microservice
+    # (gpu_intensive_task/proctoring_server.py, port 5001) that nothing in the
+    # current frontend ever actually streams frames to, so it was always
+    # either unreachable (wasted latency, fell through to a hardcoded 90) or
+    # reachable-but-empty (silently overwrote a real score with its default of
+    # 100 for a session_id it had never seen).
+    live_session = live_sessions.get(session_id)
+    live_score = live_session.get("proctoring_score") if live_session else None
 
-        resp = requests.get(
-            f"{proctoring_service_url}/api/session/{session_id}/stats", timeout=2
-        )
-        if resp.status_code == 200:
-            stats = resp.json()
-            if stats.get("proctoring_score") is not None:
-                proctoring_score = stats.get("proctoring_score")
-            if stats.get("manual_infractions") is not None:
-                manual_infractions = stats.get("manual_infractions", [])
-            if stats.get("gaze_times") is not None:
-                gaze_times = stats.get("gaze_times")
-            gaze_plot_filename = stats.get("gaze_plot_filename")
-
-            if gaze_plot_filename:
-                gaze_plot_path = os.path.join(
-                    app.config["PROCTORING_FOLDER"], gaze_plot_filename
-                )
-        else:
-            if proctoring_score is None and not manual_infractions and not gaze_times:
-                print(f"⚠️ Proctoring service returned {resp.status_code}")
-            else:
-                print(
-                    f"ℹ️ Proctoring service returned {resp.status_code}; keeping stored kiosk proctoring data."
-                )
-    except Exception as e:
-        if proctoring_score is None and not manual_infractions and not gaze_times:
-            print(f"⚠️ Could not contact proctoring service: {e}")
-        else:
-            print(
-                f"ℹ️ Could not contact proctoring service, using stored kiosk proctoring data instead: {e}"
-            )
-
-    if proctoring_score is None:
-        proctoring_score = 90
+    # Combine conservatively — either detection method catching a problem
+    # should count, since they're independent signals (gaze/cheating-score vs.
+    # head-pose/identity), not two measurements of the same thing.
+    scores_available = [s for s in (db_score, live_score) if s is not None]
+    if scores_available:
+        proctoring_score = min(scores_available)
+        proctoring_status = "complete"
+    else:
+        # Neither signal is available (camera/mic denied, GazeRecorder CDN
+        # blocked, etc.) — be honest about it instead of awarding a fabricated
+        # default score that would let a candidate whose proctoring pipeline
+        # failed score as if nothing was wrong.
+        proctoring_score = None
+        proctoring_status = "incomplete"
 
     suspicious_activity_time = 0  # Not tracking this explicitly anymore in app.py
 
@@ -1083,6 +1173,7 @@ def end_interview(current_user, session_id):
                 "evaluation": final_evaluation,
                 "final_score": interview_score,  # Store calculated interview score
                 "proctoring_score": proctoring_score,  # Store calculated proctoring score
+                "proctoring_status": proctoring_status,  # "complete" or "incomplete" — never a fabricated fallback
                 "transcript": interview_transcript,  # Store conversation transcript
                 "manual_infractions": manual_infractions,
                 "gaze_metrics": gaze_times,
@@ -1114,6 +1205,7 @@ def end_interview(current_user, session_id):
                         "evaluation": final_evaluation,
                         "interview_score": interview_score,
                         "proctoring_score": proctoring_score,
+                        "proctoring_status": proctoring_status,
                         "transcript": interview_transcript,
                         "usage_summary": usage_summary,
                         "usage_deduction": usage_deduction,
@@ -1129,6 +1221,7 @@ def end_interview(current_user, session_id):
                     "$set": {
                         "interview_score": interview_score,  # Store interview performance score
                         "proctoring_score": proctoring_score,  # Store proctoring behavior score
+                        "proctoring_status": proctoring_status,
                         "stt_seconds": stt_seconds,
                         "tts_characters": int(tts_characters or 0),
                         "usage_source": "actual",
@@ -1137,6 +1230,34 @@ def end_interview(current_user, session_id):
                     }
                 },
             )
+
+            # Push the finished interview's scores live — this write path is
+            # raw pymongo directly in this route (not routed through
+            # ApplicationController), so Step 1's real-time sync never covered
+            # it; reuses the exact same application_update event shape.
+            # (recruiter_actor_id isn't assigned until further down this
+            # function, so read the recruiter id straight from existing_app.)
+            try:
+                _score_update_payload = {
+                    "_id": str(application_id),
+                    "job_id": str(existing_app.get("job_id", "")),
+                    "status": "interviewed",
+                    "interview_score": interview_score,
+                    "proctoring_score": proctoring_score,
+                    "proctoring_status": proctoring_status,
+                }
+                for _room in {
+                    str(existing_app.get("student_id", "")),
+                    str(existing_app.get("recruiter_id", "")),
+                }:
+                    if _room:
+                        socketio.emit(
+                            "application_update",
+                            {"type": "score_updated", "application": _score_update_payload},
+                            room=_room,
+                        )
+            except Exception:
+                logger.warning("application_update emit failed at interview end", exc_info=True)
 
             # Keep recruiter job-card counters in sync with the application status transition
             status_counters = ["pending", "interviewed", "selected", "rejected"]
@@ -1155,23 +1276,33 @@ def end_interview(current_user, session_id):
                     {"$inc": job_counter_update},
                 )
 
-            # Fire-and-forget: notify the recruiter that the interview is done
+            # Fire-and-forget: notify the recruiter that the interview is done,
+            # and separately notify the candidate their own results are ready
+            # (previously only the recruiter side existed here).
             try:
                 recruiter_doc = users_collection.find_one(
                     {"_id": ObjectId(recruiter_actor_id)},
                     {"email": 1, "name": 1},
                 ) if recruiter_actor_id else None
+                _cand_name = current_user.get("name") or "A candidate"
+                _job_title = existing_app.get("job_title") or "the position"
+                _score = int(interview_score) if interview_score is not None else None
+                _app_id = str(application_id)
+                _email_svc = EmailService()
+
                 if recruiter_doc and recruiter_doc.get("email"):
-                    _email_svc = EmailService()
-                    _cand_name = current_user.get("name") or "A candidate"
-                    _job_title = existing_app.get("job_title") or "the position"
-                    _score = int(interview_score) if interview_score is not None else None
                     _rec_name = recruiter_doc.get("name") or "Recruiter"
                     _rec_email = recruiter_doc["email"]
-                    _app_id = str(application_id)
                     threading.Thread(
                         target=_email_svc.send_interview_complete_notification,
                         args=(_rec_email, _rec_name, _cand_name, _job_title, _score, _app_id),
+                        daemon=True,
+                    ).start()
+
+                if current_user.get("email"):
+                    threading.Thread(
+                        target=_email_svc.send_interview_complete_candidate_email,
+                        args=(current_user["email"], _cand_name, _job_title, _score),
                         daemon=True,
                     ).start()
             except Exception as _notify_exc:
@@ -1240,6 +1371,7 @@ def end_interview(current_user, session_id):
             "evaluation": final_evaluation,
             "interview_score": interview_score,
             "proctoring_score": proctoring_score,
+            "proctoring_status": proctoring_status,
             "transcript": interview_transcript,
             "usage_summary": usage_summary,
             "usage_deduction": usage_deduction,
@@ -1483,8 +1615,24 @@ def register_face(current_user, session_id):
 
 
 @socketio.on("connect")
-def handle_connect():
-    pass
+def handle_connect(auth):
+    """
+    Authenticate the socket connection and join a room keyed by the user's
+    own id, so application/status/score updates can be pushed to exactly
+    the candidate or recruiter they belong to (see application_controller.py
+    emits). Proctoring/mobile handlers below are unaffected — they join
+    session-id rooms separately and don't require this room.
+    """
+    from middleware.auth_middleware import decode_user_from_token
+
+    token = (auth or {}).get("token")
+    current_user, error = decode_user_from_token(token)
+    if error:
+        # Reject the handshake outright; client falls back to REST polling.
+        disconnect()
+        return False
+
+    join_room(str(current_user["_id"]))
 
 
 @socketio.on("disconnect")
