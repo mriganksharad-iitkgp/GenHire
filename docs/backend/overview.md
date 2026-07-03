@@ -57,7 +57,7 @@ python-backend/
 ```bash
 cd python-backend
 pip install -r requirements.txt      # Python 3.11
-cp env.example .env                  # fill in MongoDB, JWT secret, API keys
+cp .env.example .env                 # fill in MongoDB, JWT secret, API keys
 python app.py                        # dev server on http://localhost:5000
 ```
 

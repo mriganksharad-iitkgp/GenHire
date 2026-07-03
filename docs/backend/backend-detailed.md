@@ -126,7 +126,7 @@ circular imports). Handlers registered in `app.py`:
 
 ## Environment variables
 
-Defined in `python-backend/env.example`. The important ones:
+Defined in `python-backend/.env.example`. The important ones:
 
 | Variable | Used for |
 |---|---|

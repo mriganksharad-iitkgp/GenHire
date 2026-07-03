@@ -42,7 +42,7 @@ Full instructions live in **[docs/onboarding.md](docs/onboarding.md)**. The
 short version:
 
 ```bash
-# Backend (Python 3.11, needs MongoDB + a .env — see python-backend/env.example)
+# Backend (Python 3.11, needs MongoDB + a .env — see python-backend/.env.example)
 cd python-backend
 pip install -r requirements.txt
 python app.py                         # http://localhost:5000

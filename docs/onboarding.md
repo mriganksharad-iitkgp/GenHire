@@ -30,7 +30,7 @@ cd python-backend
 python -m venv venv
 venv\Scripts\activate          # Windows   (source venv/bin/activate on mac/linux)
 pip install -r requirements.txt
-cp env.example .env
+cp .env.example .env
 ```
 
 Edit `.env` — the minimum to boot:
