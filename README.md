@@ -1,4 +1,4 @@
-# GenHire
+# GenHire : AI Powered Interview Platform
 
 **AI-powered hiring platform** — recruiters post jobs and get automatically
 CV-scored applicants; candidates take adaptive, voice-based AI interviews
