@@ -24,6 +24,11 @@ class WalletService:
         self.db = db
         self.wallet_collection = db[CreditWalletSchema.COLLECTION_NAME]
         self.transaction_collection = db[CreditTransactionSchema.COLLECTION_NAME]
+        # Permanent record of every email that has ever received a signup
+        # bonus, independent of the user row/wallet — survives account
+        # deletion so a deleted-then-recreated account with the same email
+        # can't re-claim the bonus.
+        self.email_signup_registry = db["email_signup_registry"]
         self._ensure_indexes()
 
     # Class-level flag: only create indexes once per process lifetime.
@@ -38,6 +43,7 @@ class WalletService:
         try:
             CreditWalletSchema.create_indexes(self.db)
             CreditTransactionSchema.create_indexes(self.db)
+            self.email_signup_registry.create_index("email_lower", unique=True)
             WalletService._indexes_created = True
         except Exception as exc:
             logger.error(f"Failed creating wallet indexes: {exc}")
@@ -119,9 +125,23 @@ class WalletService:
         )
         return CreditWallet.from_dict(doc)
 
-    def grant_signup_bonus_once(self, owner_id: str, audience: str) -> Dict[str, Any]:
+    def grant_signup_bonus_once(self, owner_id: str, audience: str, email: Optional[str] = None) -> Dict[str, Any]:
         wallet = self.get_or_create_wallet(owner_id, audience)
-        if wallet.signup_bonus_granted:
+        normalized_email = str(email or "").strip().lower()
+        email_already_used = bool(
+            normalized_email
+            and self.email_signup_registry.find_one({"email_lower": normalized_email})
+        )
+
+        if wallet.signup_bonus_granted or email_already_used:
+            if email_already_used and not wallet.signup_bonus_granted:
+                # This owner_id is new (recreated account) but the email has
+                # already claimed a bonus before — mark the wallet so it
+                # doesn't re-check the registry on every future call.
+                self.wallet_collection.update_one(
+                    {"owner_id": wallet.owner_id, "audience": wallet.audience},
+                    {"$set": {"signup_bonus_granted": True, "updated_at": datetime.utcnow()}},
+                )
             return {
                 "success": True,
                 "granted": False,
@@ -150,6 +170,20 @@ class WalletService:
                     }
                 },
             )
+            if normalized_email:
+                try:
+                    self.email_signup_registry.insert_one(
+                        {
+                            "email_lower": normalized_email,
+                            "audience": wallet.audience,
+                            "owner_id": wallet.owner_id,
+                            "granted_at": datetime.utcnow(),
+                        }
+                    )
+                except DuplicateKeyError:
+                    # Race with a concurrent signup for the same email — the
+                    # registry entry is already there, which is all that matters.
+                    pass
 
         return {
             "success": bool(result.get("success")),
@@ -429,11 +463,12 @@ class WalletService:
     def bootstrap_signup_bonus_for_all_users(self, users_collection) -> Tuple[int, int]:
         granted = 0
         skipped = 0
-        for user in users_collection.find({}, {"_id": 1, "user_type": 1}):
+        for user in users_collection.find({}, {"_id": 1, "user_type": 1, "email": 1, "email_lower": 1}):
             owner_id = str(user.get("_id"))
             raw_user_type = str(user.get("user_type") or "candidate").strip().lower()
             audience = "candidate" if raw_user_type in {"candidate", "student"} else "recruiter"
-            result = self.grant_signup_bonus_once(owner_id, audience)
+            email = user.get("email_lower") or user.get("email")
+            result = self.grant_signup_bonus_once(owner_id, audience, email=email)
             if result.get("granted"):
                 granted += 1
             else:

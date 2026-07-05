@@ -231,13 +231,14 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle AI generation
+  // Handle AI generation — from a text prompt, an uploaded JD file (parsed
+  // and structured by AI), or both.
   const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim() && !jdFile) return;
     setIsAiGenerating(true);
     setAiError('');
     try {
-      const response = await generateJobWithAI(aiPrompt.trim());
+      const response = await generateJobWithAI(aiPrompt.trim(), jdFile);
       const ai = response.job_data;
       setJobData({
         title: ai.title || '',
@@ -416,36 +417,24 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     }
 
     setIsSubmitting(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      const newJob = {
-        id: Date.now(),
-        ...jobData,
-        status: jobData.status, // Use the selected status
-        postedDate: new Date().toISOString().split('T')[0],
-        applicants: 0,
-        interviewed: 0,
-        screening_cleared: 0,
-        rejected: 0,
-        pending: 0,
-        skills: jobData.skills // Already an array
-      };
-
-      onJobCreate(newJob);
+    try {
+      const success = await onJobCreate(jobData, jdFile);
+      if (success) {
+        resetForm();
+        onClose();
+      }
+    } finally {
       setIsSubmitting(false);
-      
-      // Reset form
-      resetForm();
-      onClose();
-    }, 1000);
+    }
   };
 
   const handleJdFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== 'application/pdf') {
-        notify('Please upload a PDF file');
+      const isPdf = file.type === 'application/pdf';
+      const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+      if (!isPdf && !isTxt) {
+        notify('Please upload a PDF or TXT file');
         e.target.value = null;
         return;
       }
@@ -455,12 +444,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
         return;
       }
       setJdFile(file);
+      setAiError('');
     }
   };
 
   const removeJdFile = () => {
     setJdFile(null);
-    const fileInput = document.querySelector('input[type="file"][accept=".pdf"]');
+    const fileInput = document.getElementById('jd-file-input');
     if (fileInput) fileInput.value = '';
   };
 
@@ -581,7 +571,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <span className={styles.aiBadge}>Powered by AI</span>
             </div>
             <p className={styles.aiSubtext}>
-              Describe the role in a few words and AI will fill the entire form for you instantly.
+              Describe the role in a few words, or upload an existing JD file — AI will parse it and fill the entire form for you instantly. You can also give both: the file supplies the content, your note adds instructions.
             </p>
             <div className={styles.aiInputRow}>
               <input
@@ -597,7 +587,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 type="button"
                 className={styles.aiGenerateButton}
                 onClick={handleAiGenerate}
-                disabled={isAiGenerating || !aiPrompt.trim()}
+                disabled={isAiGenerating || (!aiPrompt.trim() && !jdFile)}
               >
                 {isAiGenerating ? (
                   <><i className="fa fa-spinner fa-spin"></i> Generating...</>
@@ -606,6 +596,53 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 )}
               </button>
             </div>
+
+            {/* JD file upload — parsed by AI to auto-fill the form, and
+                stored in cloud storage so candidates can download the exact
+                document once the job is created. */}
+            <div className={styles.fileUploadSection} style={{ marginTop: '14px' }}>
+              {!jdFile ? (
+                <div className={styles.fileUploadBox}>
+                  <input
+                    type="file"
+                    accept=".pdf,.txt"
+                    onChange={handleJdFileChange}
+                    className={styles.fileInput}
+                    id="jd-file-input"
+                    disabled={isAiGenerating}
+                  />
+                  <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
+                    <i className="fa fa-cloud-upload"></i>
+                    <span>Or upload a JD file (PDF/TXT) to auto-fill from</span>
+                    <small>Click to browse or drag & drop (Max 10MB)</small>
+                  </label>
+                </div>
+              ) : (
+                <div className={styles.uploadedFile}>
+                  <div className={styles.fileInfo}>
+                    <i className="fa fa-file-pdf-o"></i>
+                    <div className={styles.fileDetails}>
+                      <span className={styles.fileName}>{jdFile.name}</span>
+                      <span className={styles.fileSize}>
+                        {(jdFile.size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.removeFileButton}
+                    onClick={removeJdFile}
+                    disabled={isAiGenerating}
+                  >
+                    <i className="fa fa-times"></i>
+                  </button>
+                </div>
+              )}
+              <div className={styles.helpText}>
+                This file is stored with the job posting so candidates can download the original document, in addition to being parsed by AI to fill the form.
+              </div>
+            </div>
+
             {aiError && <p className={styles.aiError}><i className="fa fa-exclamation-circle"></i> {aiError}</p>}
           </div>
 
@@ -972,54 +1009,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               />
               <div className={styles.helpText}>
                 Tip: Include company mission, role impact, and growth opportunities
-              </div>
-            </div>
-
-            {/* JD PDF Upload */}
-            <div className={styles.formGroup}>
-              <label>
-                Job Description PDF 
-                <span className={styles.optional}>(Optional)</span>
-              </label>
-              <div className={styles.fileUploadSection}>
-                {!jdFile ? (
-                  <div className={styles.fileUploadBox}>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={handleJdFileChange}
-                      className={styles.fileInput}
-                      id="jd-file-input"
-                    />
-                    <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
-                      <i className="fa fa-cloud-upload"></i>
-                      <span>Upload JD PDF</span>
-                      <small>Click to browse or drag & drop (Max 10MB)</small>
-                    </label>
-                  </div>
-                ) : (
-                  <div className={styles.uploadedFile}>
-                    <div className={styles.fileInfo}>
-                      <i className="fa fa-file-pdf-o"></i>
-                      <div className={styles.fileDetails}>
-                        <span className={styles.fileName}>{jdFile.name}</span>
-                        <span className={styles.fileSize}>
-                          {(jdFile.size / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.removeFileButton}
-                      onClick={removeJdFile}
-                    >
-                      <i className="fa fa-times"></i>
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className={styles.helpText}>
-                Pro Tip: Upload a JD PDF for candidates to download and reference. Standard companies like LinkedIn and Indeed provide this option.
               </div>
             </div>
 

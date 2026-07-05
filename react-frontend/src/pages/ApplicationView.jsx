@@ -83,10 +83,19 @@ const ApplicationView = () => {
 							pushEvent(4, "Interview Completed", "Your interview has been completed.", "fa-video-camera");
 						if (status === "screening_cleared")
 							pushEvent(5, "Screening Cleared", "Congratulations! You cleared the AI screening round. The recruiter will contact you about their next interview rounds.", "fa-trophy");
-						if (status === "rejected")
-							pushEvent(6, "Screening Not Cleared", "The recruiter decided not to move your application forward.", "fa-times-circle");
+						if (status === "rejected") {
+							// "rejected" covers two different moments: a CV score below
+							// the job's threshold (no interview ever happened) vs. the
+							// recruiter's post-interview "not cleared" call.
+							if (app.interview_score != null) {
+								pushEvent(6, "Screening Not Cleared", "The recruiter decided not to move your application forward after your interview.", "fa-times-circle");
+							} else {
+								pushEvent(6, "Not Shortlisted", "Your CV score did not meet the minimum requirement for this role.", "fa-times-circle");
+							}
+						}
 					}
 
+					const rejectedLabel = app.interview_score != null ? "Screening Not Cleared" : "Not Shortlisted";
 					setApplication({
 						id: app._id,
 						position: app.job_details?.title || app.job_title || "Applied Position",
@@ -96,7 +105,7 @@ const ApplicationView = () => {
 							status === "screening_cleared"
 								? "Screening Cleared"
 								: status === "rejected"
-									? "Screening Not Cleared"
+									? rejectedLabel
 									: status.charAt(0).toUpperCase() + status.slice(1),
 						appliedDate: appliedDateISO,
 						timeline,

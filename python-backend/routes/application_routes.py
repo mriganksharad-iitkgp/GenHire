@@ -118,6 +118,33 @@ def apply_for_job(current_user, job_id):
     )
     return jsonify(result), status_code
 
+@application_bp.route('/jobs/<job_id>/check-cv-score', methods=['POST'])
+@cross_origin()
+@token_required
+@rate_limit(max_calls=20, window_seconds=3600)
+def check_cv_match_score(current_user, job_id):
+    """
+    Check a candidate's real CV-vs-JD match score before applying
+    (candidates only). Does not create an application.
+
+    Request Body:
+        cv_id: str - Optional CV ID to score (if not provided, uses primary CV or manual entry)
+        use_manual_cv: bool - Score using profile CV details instead of an uploaded PDF
+    """
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    if user_type not in ['candidate', 'student']:
+        return jsonify({'error': 'Unauthorized. Only candidates can check CV match scores.'}), 403
+
+    data = request.get_json() or {}
+    user_id = str(current_user['_id'])
+    cv_id = data.get('cv_id')
+    use_manual_cv = bool(data.get('use_manual_cv'))
+
+    result, status_code = application_controller.check_cv_match_score(
+        job_id, user_id, current_user, cv_id=cv_id, use_manual_cv=use_manual_cv
+    )
+    return jsonify(result), status_code
+
 @application_bp.route('/jobs/<job_id>/withdraw', methods=['DELETE'])
 @cross_origin()
 @token_required

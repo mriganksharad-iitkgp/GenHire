@@ -37,8 +37,9 @@ new browser tab).
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/jobs` | 🔑 | List jobs (candidates see open jobs; recruiters see their own). |
-| POST | `/api/jobs` | 🧑‍💼 (verified) | Create a job, including per-job `proctoring_config`. |
-| POST | `/api/jobs/generate-ai` | 🧑‍💼 | AI-generate a job description from a prompt (deducts recruiter credits). |
+| POST | `/api/jobs` | 🧑‍💼 (verified) | Create a job. Accepts JSON or `multipart/form-data` with an optional `jd_file` (PDF/TXT) — stored in Google Cloud Storage and served back to candidates via `/jd-download`; per-job `proctoring_config` included. |
+| POST | `/api/jobs/generate-ai` | 🧑‍💼 | AI-generate a job description from a text prompt, an uploaded JD file (parsed and structured), or both (deducts recruiter credits). Accepts JSON `{"prompt"}` or multipart with `prompt` + `jd_file`. |
+| GET | `/api/jobs/<job_id>/jd-download` | 🔑 | Signed, time-limited download URL for the job's uploaded JD file (404 if none was uploaded). |
 | GET / PUT / DELETE | `/api/jobs/<job_id>` | 🔑 / 🧑‍💼 / 🧑‍💼 | Read / update / delete a job. |
 | GET | `/api/jobs/<job_id>/applications` | 🧑‍💼 | Applications for one job. |
 | DELETE | `/api/remove-sample-jobs` | — | Dev/maintenance helper. |
@@ -49,6 +50,7 @@ new browser tab).
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | POST | `/api/jobs/<job_id>/apply` | 🎓 | Apply with a CV (uploaded file or saved CV / manual details). Kicks off async CV scoring; emits real-time `application_update`. |
+| POST | `/api/jobs/<job_id>/check-cv-score` | 🎓 | Check a real CV-vs-JD match score **before** applying — no application is created. Body: `{cv_id, use_manual_cv}` (same CV picker as apply). Runs the same scoring engine as apply-time scoring. |
 | DELETE | `/api/jobs/<job_id>/withdraw` | 🎓 | Withdraw own application. |
 | GET | `/api/applications` | 🔑 | Own applications (candidate) or applications to own jobs (recruiter). |
 | PUT | `/api/applications/<id>/status` | 🧑‍💼 | Change status (`pending`/`reviewed`/`shortlisted`/`interviewed`/`screening_cleared`/`rejected`; legacy `selected` is accepted and normalized to `screening_cleared`); emails candidate; updates job counters; emits socket event. |

@@ -3,15 +3,18 @@ import { getApplications, getInterviewReport } from "../../services/api";
 import { useCandidateData } from "../../contexts/CandidateDataContext";
 import {
   normalizeStatus,
-  candidateStatusLabel,
+  applicationStatusLabel,
 } from "../../utils/applicationStatus";
 
 // Helper function to map application data
 const mapApplication = (a) => {
   // statusKey: canonical machine value ("screening_cleared", never legacy
-  // "selected"); status: candidate-facing display label.
+  // "selected"); status: candidate-facing display label. "rejected" reads
+  // differently depending on whether an interview ever happened (CV-stage
+  // rejection vs. post-interview "not cleared") — applicationStatusLabel
+  // disambiguates using interview_score.
   const statusKey = normalizeStatus(a.status || "pending");
-  const mappedStatus = candidateStatusLabel(a.status || "pending");
+  const mappedStatus = applicationStatusLabel(a, { candidateFacing: true });
 
   const processingStatus = a.processing_status || "completed";
   const isScoringFailed = processingStatus === "scoring_failed";

@@ -136,9 +136,12 @@ Electron kiosk's own `renderer.js`). Responsibilities:
 
 - **Root-level shared** — `Layout` (navbar + outlet shell), `Navbar`, `Avatar`,
   `Toast`, `Pagination`, `SkeletonCard`, `ErrorBoundary`, modals
-  (`JobCreationModal` with AI-generate, `JobEditModal`, `JobDetailsModal`,
+  (`JobCreationModal` — AI generation from a prompt, an uploaded JD file, or
+  both, with no separate manual-upload step; `JobEditModal`, `JobDetailsModal`,
   `JDDetailsModal`, `InterviewReportModal`, `ProctoringResultModal`,
-  `PracticeDetailsModal`, `CVSelectionModal`, `CVViewer`, `GazeHeatmapPanel`).
+  `PracticeDetailsModal`, `CVSelectionModal` — CV picker reused for applying,
+  practice, and the "Check CV Match Score" flow via `mode`, `CVViewer`,
+  `GazeHeatmapPanel`).
 - **`candidate/`** — CV management (`CVManagement`, `CVList`, `CVSelector`,
   `CVDetailsForm/Modal`), `ApplicationsList`, `BioForm`, `SidebarProfile`,
   `subscription/`.

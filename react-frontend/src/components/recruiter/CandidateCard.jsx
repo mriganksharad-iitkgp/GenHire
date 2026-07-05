@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
-import { normalizeStatus, statusLabel } from "../../utils/applicationStatus";
+import { normalizeStatus, statusLabel, applicationStatusLabel } from "../../utils/applicationStatus";
 
 const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const cvScorePct = (typeof application.cv_score === 'number')
@@ -84,7 +84,7 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
         <div className={styles.scoreItem}>
           <span className={styles.scoreLabel}>Status</span>
           <span className={`${styles.statusBadge} ${styles[application.status]}`}>
-            {displayStatus(application.status)}
+            {applicationStatusLabel(application)}
           </span>
         </div>
         <div className={styles.scoreItem}>
@@ -153,7 +153,7 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           className={styles.statusSelect}
           value={normalizeStatus(application.status)}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
-          title={`Current: ${displayStatus(application.status)} - Can only progress forward`}
+          title={`Current: ${applicationStatusLabel(application)} - Can only progress forward`}
           aria-label={`Update application status for ${application.student_name}`}
         >
           {availableStatuses.map(status => (

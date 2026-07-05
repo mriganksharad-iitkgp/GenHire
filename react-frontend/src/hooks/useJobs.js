@@ -55,10 +55,10 @@ export default function useJobs(toast) {
   }, [load]);
 
   const create = useCallback(
-    async (jobData) => {
+    async (jobData, jdFile) => {
       try {
         const payload = normalizeJobPayload(jobData);
-        const res = await createJob(payload);
+        const res = await createJob(payload, jdFile);
         setJobs((prev) => [...prev, res.job ?? res]);
         toast?.("Job created successfully!", "success");
         return true;

@@ -8,6 +8,7 @@ import InterviewReportModal from '../components/InterviewReportModal';
 import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
 import { authedFetch } from "../utils/authedFetch";
 import { useCandidateData } from "../contexts/CandidateDataContext";
+import { checkCvMatchScore, getJdDownloadUrl } from "../services/api";
 
 const JobDetails = () => {
 	const { jobId } = useParams();
@@ -16,8 +17,12 @@ const JobDetails = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isApplying, setIsApplying] = useState(false);
 	const [showCVModal, setShowCVModal] = useState(false);
+	const [showScoreCheckCVModal, setShowScoreCheckCVModal] = useState(false);
 	const [matchScoreModalOpen, setMatchScoreModalOpen] = useState(false);
 	const [matchScore, setMatchScore] = useState(null);
+	const [matchScoreBreakdown, setMatchScoreBreakdown] = useState(null);
+	const [isCheckingScore, setIsCheckingScore] = useState(false);
+	const [isDownloadingJd, setIsDownloadingJd] = useState(false);
 	const [userType, setUserType] = useState("candidate");
 	const [hasApplied, setHasApplied] = useState(false);
 	const [appliedAt, setAppliedAt] = useState(null);
@@ -195,12 +200,26 @@ const JobDetails = () => {
 		init();
 	}, [jobId, navigate]);
 
-	// Function to handle PDF download
-	const handleDownloadPDF = () => {
-		// In a real app, you would generate a PDF on the server or use a library like jsPDF
-		// Here we'll simulate a download by creating a simple text blob
-
+	// Downloads the actual recruiter-uploaded JD file when one exists
+	// (fetches a short-lived signed GCS URL); falls back to a generated
+	// plain-text summary of the structured fields when no JD file was
+	// uploaded for this job.
+	const handleDownloadPDF = async () => {
 		if (!job) return;
+
+		if (job.jd_pdf_path || job.jd_gcs_path) {
+			setIsDownloadingJd(true);
+			try {
+				const result = await getJdDownloadUrl(jobId);
+				window.open(result.download_url, "_blank", "noopener");
+				return;
+			} catch (e) {
+				showToast(e.message || "Failed to download the job description file.", "error");
+				return;
+			} finally {
+				setIsDownloadingJd(false);
+			}
+		}
 
 		const jobTitle = job.title;
 		const jobContent = `
@@ -236,19 +255,35 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		URL.revokeObjectURL(url);
 	};
 
-	// Function to check CV match score
+	// Opens the CV picker so the candidate can choose which CV to score
+	// against this job's actual requirements.
 	const handleCheckMatchScore = () => {
-		// In a real app, this would call an API to analyze the user's CV against the job
-		// Here we'll simulate a backend response with just a percentage
-		setIsLoading(true);
+		setShowScoreCheckCVModal(true);
+	};
 
-		setTimeout(() => {
-			// Generate a random score between 60 and 95 to simulate backend response
-			const score = Math.floor(Math.random() * 36) + 60;
-			setMatchScore(score);
+	// Real CV-vs-JD scoring — calls the backend, which runs the same scoring
+	// engine used at apply time, against whichever CV the candidate picked.
+	const handleCheckScoreSubmit = async (cvSelection) => {
+		const token = getToken();
+		if (!token) {
+			navigate("/login");
+			return;
+		}
+		setShowScoreCheckCVModal(false);
+		setIsCheckingScore(true);
+		try {
+			const result = await checkCvMatchScore(jobId, {
+				cv_id: cvSelection.cv_id,
+				use_manual_cv: cvSelection.use_manual_cv,
+			});
+			setMatchScore(Math.round(result.score));
+			setMatchScoreBreakdown(result.score_breakdown || null);
 			setMatchScoreModalOpen(true);
-			setIsLoading(false);
-		}, 1000);
+		} catch (e) {
+			showToast(e.message || "Failed to check CV match score. Please try again.", "error");
+		} finally {
+			setIsCheckingScore(false);
+		}
 	};
 	// Apply for job from details page
 	const handleCVSelectionSubmit = async (cvSelection) => {
@@ -456,7 +491,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 								</button>
 								<button
 									className={styles.saveButton}
-									onClick={handleDownloadPDF}
+									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
 									<i className="fa fa-file-pdf-o"></i> Download JD
 								</button>
@@ -489,7 +524,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 								)}
 								<button
 									className={styles.saveButton}
-									onClick={handleDownloadPDF}
+									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
 									<i className="fa fa-file-pdf-o"></i> Download JD
 								</button>
@@ -781,7 +816,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									</button>
 									<button
 										className={styles.downloadJdBtn}
-										onClick={handleDownloadPDF}
+										onClick={handleDownloadPDF} disabled={isDownloadingJd}
 									>
 										<i className="fa fa-file-pdf-o"></i> Download
 										Job Description
@@ -816,7 +851,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									)}
 									<button
 										className={styles.downloadJdBtn}
-										onClick={handleDownloadPDF}
+										onClick={handleDownloadPDF} disabled={isDownloadingJd}
 									>
 										<i className="fa fa-file-pdf-o"></i> Download
 										Job Description
@@ -824,9 +859,10 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									<button
 										className={styles.matchScoreBtn}
 										onClick={handleCheckMatchScore}
+										disabled={isCheckingScore}
 									>
-										<i className="fa fa-check-circle"></i> Check CV
-										Match Score
+										<i className={`fa ${isCheckingScore ? 'fa-spinner fa-spin' : 'fa-check-circle'}`}></i>{' '}
+										{isCheckingScore ? 'Checking...' : 'Check CV Match Score'}
 									</button>
 									{hasApplied && appliedAt && (
 										<p style={{ color: '#2f4ca3', fontWeight: 600, margin: '6px 0 0' }}>
@@ -856,7 +892,16 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				mode="apply"
 			/>
 
-			{/* Match Score Modal - Simplified to just show percentage */}
+			{/* CV Selection Modal — for checking match score before applying */}
+			<CVSelectionModal
+				isOpen={showScoreCheckCVModal}
+				onClose={() => setShowScoreCheckCVModal(false)}
+				onSubmit={handleCheckScoreSubmit}
+				jobTitle={job?.title}
+				mode="check_score"
+			/>
+
+			{/* Match Score Modal — real score from the backend CV-vs-JD scorer */}
 			{matchScoreModalOpen && (
 				<div className={styles.modalOverlay}>
 					<div className={styles.modal}>

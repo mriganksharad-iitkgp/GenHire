@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 import datetime
+import json
 from controllers.job_controller import JobController
 from middleware.auth_middleware import token_required, verified_required
 from config.database import db_config
@@ -45,53 +46,68 @@ def create_job(current_user):
         return jsonify({'error': 'Unauthorized. Only recruiters can create jobs.'}), 403
     
     recruiter_id = str(current_user['_id'])
-    
+
     # Check if request has files (multipart/form-data)
     jd_file = request.files.get('jd_file')
-    
-    try:
-        # Get job data from either JSON or form data
-        if request.is_json:
-            data = request.get_json()
-        else:
-            # Convert form data to dictionary
-            data = request.form.to_dict()
-            
-            # Handle array fields that come as comma-separated strings
-            for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
-                if field in data and isinstance(data[field], str):
-                    data[field] = [item.strip() for item in data[field].split(',') if item.strip()]
-        
-        with open('debug_payload.txt', 'a', encoding='utf-8') as f:
-            f.write(f"Payload: {data}\n")
-            
-        result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
-        return jsonify(result), status_code
-    except Exception as e:
-        import traceback
-        with open('debug_error.txt', 'a', encoding='utf-8') as f:
-            f.write(f"Exception: {e}\n{traceback.format_exc()}\n")
-        raise
+
+    # Get job data from either JSON or form data
+    if request.is_json:
+        data = request.get_json()
+    else:
+        # Convert form data to dictionary. Array fields are sent as a JSON
+        # array string (e.g. '["React","Node.js"]') so multi-line values
+        # (responsibilities/requirements/benefits) survive intact; fall back
+        # to comma-splitting for older/plain-string clients.
+        data = request.form.to_dict()
+        for field in ['skills', 'responsibilities', 'requirements', 'benefits']:
+            raw = data.get(field)
+            if isinstance(raw, str):
+                try:
+                    parsed = json.loads(raw)
+                    data[field] = parsed if isinstance(parsed, list) else [str(parsed)]
+                except (ValueError, TypeError):
+                    data[field] = [item.strip() for item in raw.split(',') if item.strip()]
+
+    result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
+    return jsonify(result), status_code
 
 @job_bp.route('/jobs/generate-ai', methods=['POST'])
 @cross_origin()
 @token_required
 def generate_jd_with_ai(current_user):
-    """Generate a complete job description using AI from a simple text prompt"""
+    """Generate a complete job description using AI — from a text prompt, an
+    uploaded JD file (parsed and structured), or both. Accepts JSON
+    ({"prompt": "..."}) or multipart/form-data (prompt field + jd_file)."""
     if current_user.get('user_type') not in ['recruiter', 'admin']:
         return jsonify({'error': 'Unauthorized. Only recruiters can generate job descriptions.'}), 403
-    
-    data = request.get_json()
-    if not data or not data.get('prompt'):
-        return jsonify({'error': 'Please provide a prompt describing the job role'}), 400
-    
-    prompt_text = data['prompt'].strip()
-    if len(prompt_text) < 3:
+
+    jd_file = request.files.get('jd_file')
+    if request.is_json:
+        data = request.get_json() or {}
+        prompt_text = str(data.get('prompt') or '').strip()
+    else:
+        prompt_text = str(request.form.get('prompt') or '').strip()
+
+    if not prompt_text and not jd_file:
+        return jsonify({'error': 'Please provide a prompt describing the job role, or upload a JD file'}), 400
+    if prompt_text and len(prompt_text) < 3:
         return jsonify({'error': 'Prompt too short. Please describe the role you want to hire for.'}), 400
     if len(prompt_text) > 2000:
         return jsonify({'error': 'Prompt too long. Please keep it under 2000 characters.'}), 400
-    
-    result, status_code = job_controller.generate_jd_with_ai(prompt_text, str(current_user.get('_id')))
+
+    result, status_code = job_controller.generate_jd_with_ai(
+        prompt_text, str(current_user.get('_id')), jd_file=jd_file
+    )
+    return jsonify(result), status_code
+
+@job_bp.route('/jobs/<job_id>/jd-download', methods=['GET'])
+@cross_origin()
+@token_required
+def get_jd_download_url(current_user, job_id):
+    """Get a signed download URL for the recruiter-uploaded JD PDF."""
+    user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
+    user_id = str(current_user['_id'])
+    result, status_code = job_controller.get_jd_download_url(job_id, user_id, user_type)
     return jsonify(result), status_code
 
 @job_bp.route('/jobs/<job_id>', methods=['GET'])

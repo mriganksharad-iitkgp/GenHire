@@ -1050,6 +1050,78 @@ class ApplicationController:
 
         return "\n".join(parts).strip()
 
+    def check_cv_match_score(self, job_id, user_id, user_profile, cv_id=None, use_manual_cv=False):
+        """Score a candidate's CV against a job WITHOUT creating an
+        application — lets a candidate check compatibility before applying.
+        Mirrors apply_for_job's CV resolution (selected CV -> primary CV ->
+        manual profile details) and background_processor's scoring method
+        selection (structured cv_details when available, else raw cv_text)."""
+        try:
+            job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
+        except Exception:
+            return {"error": "Invalid job id"}, 400
+        if not job:
+            return {"error": "Job not found"}, 404
+
+        cv_text = None
+        cv_source = None
+        selected_cv = None
+
+        if not use_manual_cv and cv_id:
+            if self.cv_controller:
+                selected_cv = self.cv_controller.get_cv_by_id(user_id, cv_id)
+                if selected_cv:
+                    cv_text = selected_cv.get("extracted_text", "")
+                    cv_source = "cv_pdf_selected"
+                else:
+                    return {"error": f"CV with ID {cv_id} not found"}, 404
+            else:
+                return {"error": "CV management system not available"}, 500
+        elif not use_manual_cv and user_profile.get("cv_uploads"):
+            if self.cv_controller:
+                primary_cv = self.cv_controller.get_primary_cv(user_id)
+                if primary_cv:
+                    selected_cv = primary_cv
+                    cv_text = primary_cv.get("extracted_text", "")
+                    cv_source = "cv_pdf_primary"
+
+        cv_details = (selected_cv or {}).get("parsed_details") or user_profile.get("cv_details")
+        if not cv_text:
+            if not cv_details:
+                return {
+                    "error": "CV is required to check your match score. Please upload a CV PDF or complete your CV details.",
+                    "redirect": "/profile/cv-details",
+                }, 400
+            validation_errors = self._validate_cv_completion(cv_details)
+            if validation_errors:
+                return {
+                    "error": "Please complete the following required CV sections first:\n"
+                    + "\n".join(validation_errors),
+                    "redirect": "/profile/cv-details",
+                }, 400
+            cv_source = "cv_manual_entry"
+            cv_text = self._format_manual_cv_details(cv_details)
+
+        try:
+            # Same method-selection logic as background_processor._process_cv_scoring:
+            # structured cv_details score when available, otherwise raw-text scoring.
+            if cv_details:
+                scoring_result = self.cv_scoring_service.calculate_cv_score(cv_details, job)
+            else:
+                jd_text = job.get("jd_extracted_text") or job.get("description", "")
+                scoring_result = self.cv_scoring_service.calculate_cv_score_from_text(cv_text, jd_text)
+        except Exception as e:
+            logger.error(f"CV match score check failed for job {job_id}: {e}")
+            return {"error": "Failed to calculate match score. Please try again."}, 500
+
+        score = scoring_result.get("total_score", 75.0)
+        return {
+            "score": round(float(score), 1),
+            "score_breakdown": scoring_result.get("score_breakdown"),
+            "cv_source": cv_source,
+            "minimum_cv_score": job.get("minimum_cv_score", 50.0),
+        }, 200
+
     def recalculate_cv_score(self, application_id, user_id, user_type):
         """Recalculate CV score for an existing application"""
         try:

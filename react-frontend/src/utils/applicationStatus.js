@@ -35,3 +35,20 @@ export const statusLabel = (status) =>
 
 export const candidateStatusLabel = (status) =>
   CANDIDATE_STATUS_LABELS[normalizeStatus(status)] || statusLabel(status);
+
+// "rejected" is reused for two different moments in the pipeline: a CV score
+// below the job's threshold (candidate never interviewed) and a recruiter's
+// post-interview "not cleared" call. Showing "Screening Not Cleared" for the
+// former is misleading — no screening ever happened — so callers that have
+// the application record on hand should use this instead of the plain label.
+// `app` needs only interview_score and/or interviewed_at to disambiguate.
+export const applicationStatusLabel = (app, { candidateFacing = false } = {}) => {
+  const status = normalizeStatus(app?.status);
+  if (status === "rejected") {
+    const reachedInterview =
+      app?.interview_score != null || app?.interviewScore != null || !!app?.interviewed_at;
+    return reachedInterview ? "Screening Not Cleared" : "Not Shortlisted";
+  }
+  const labelMap = candidateFacing ? CANDIDATE_STATUS_LABELS : STATUS_LABELS;
+  return labelMap[status] || statusLabel(status);
+};

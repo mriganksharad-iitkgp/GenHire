@@ -125,16 +125,48 @@ export const viewPhoto = async () =>
 
 // Jobs
 export const getJobs = () => request("/jobs");
-export const createJob = (payload) =>
-  request("/jobs", {
-    method: "POST",
-    body: JSON.stringify(payload),
+export const createJob = (payload, jdFile) => {
+  if (!jdFile) {
+    return request("/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+  // Array fields go over as JSON strings so newline-separated values
+  // (responsibilities/requirements/benefits) survive multipart form-data
+  // intact instead of being mangled by a naive comma-split on the backend.
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+    } else if (typeof value === "object") {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      formData.append(key, value);
+    }
   });
-export const generateJobWithAI = (prompt) =>
-  request("/jobs/generate-ai", {
+  formData.append("jd_file", jdFile);
+  return request("/jobs", {
     method: "POST",
-    body: JSON.stringify({ prompt }),
+    body: formData,
   });
+};
+export const generateJobWithAI = (prompt, jdFile) => {
+  if (!jdFile) {
+    return request("/jobs/generate-ai", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    });
+  }
+  const formData = new FormData();
+  if (prompt) formData.append("prompt", prompt);
+  formData.append("jd_file", jdFile);
+  return request("/jobs/generate-ai", {
+    method: "POST",
+    body: formData,
+  });
+};
 export const updateJob = (jobId, payload) =>
   request(`/jobs/${jobId}`, {
     method: "PUT",
@@ -142,6 +174,12 @@ export const updateJob = (jobId, payload) =>
   });
 export const deleteJob = (jobId) =>
   request(`/jobs/${jobId}`, { method: "DELETE" });
+export const getJdDownloadUrl = (jobId) => request(`/jobs/${jobId}/jd-download`);
+export const checkCvMatchScore = (jobId, payload) =>
+  request(`/jobs/${jobId}/check-cv-score`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 
 // Applications
 export const getApplications = () => request("/applications");

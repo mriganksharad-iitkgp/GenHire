@@ -31,9 +31,11 @@ fullscreen kiosk.
   Google streaming speech-to-text (both run inside the app with its own
   Google credentials).
 - **Runs the interview against the backend** — the same Flask API the
-  website uses: start session, submit answers, end session, plus a
-  Socket.IO stream sending one webcam frame per second for live proctoring
-  and relaying violations.
+  website uses: start session, submit answers, end session. Unlike the
+  website (which streams webcam frames to the backend for server-side
+  analysis), the kiosk detects gaze/head-turn/multi-face and phone-in-frame
+  locally (MediaPipe + a small object-detection model) and only relays the
+  resulting violations to the backend over Socket.IO.
 - **Returns you to the site** — when the interview ends, lockdown lifts and
   the app opens the GenHire dashboard in the default browser.
 

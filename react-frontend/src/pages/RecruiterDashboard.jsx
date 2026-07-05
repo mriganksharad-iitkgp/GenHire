@@ -467,9 +467,9 @@ const RecruiterDashboard = () => {
     setIsJobModalOpen(false);
   };
 
-  const handleJobCreate = async (newJob) => {
+  const handleJobCreate = async (newJob, jdFile) => {
     // Save to backend
-    const success = await saveJobPosting(newJob);
+    return saveJobPosting(newJob, jdFile);
   };
 
   // Function to handle candidate actions

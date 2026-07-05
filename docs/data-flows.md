@@ -5,6 +5,12 @@ socket events, and background jobs fire at each step.
 
 ## 1. Candidate applies for a job
 
+Before applying, a candidate can check a **real** match score for any CV
+against the job without creating an application: `POST
+/api/jobs/<id>/check-cv-score {cv_id, use_manual_cv}` opens the same CV
+picker used for applying (`CVSelectionModal`, `mode="check_score"`) and runs
+the identical scoring engine used below — no more client-side random number.
+
 ```
 Candidate (browser)                Backend                          Background worker
 ────────────────────               ────────                         ─────────────────
@@ -23,12 +29,30 @@ Job page:  POST /api/jobs/<id>/apply
                                                               BackgroundProcessor (1 worker thread)
                                                               • parse CV (pdf_parser / structured parser)
                                                               • AI score CV vs JD (cv_scoring_service)
-                                                              • update application: cv_score,
-                                                                status → shortlisted / rejected
+                                                              • status → shortlisted (cv_score >=
+                                                                job.minimum_cv_score) / rejected (below
+                                                                threshold) / pending (score below
+                                                                threshold but CV-parsing confidence
+                                                                wasn't "high" — held for manual review
+                                                                instead of auto-rejecting a possibly
+                                                                mis-parsed CV)
                                                               • email the candidate the outcome
                                                               • socket emit application_update
 Recruiter dashboard updates live via useRealtimeApplications (no refresh needed)
 ```
+
+Full status lifecycle: `pending` (scoring in progress, or held for manual
+review) → `shortlisted` / `rejected` (CV-score threshold) → `interviewed`
+(after the AI interview) → `screening_cleared` / `rejected` (the recruiter's
+own post-interview call). **`rejected` is reused at two different points** —
+a CV-score rejection (never interviewed) and a post-interview "not cleared"
+call both persist as `status: "rejected"`. The frontend disambiguates the two
+for display using `applicationStatusLabel()`
+(`react-frontend/src/utils/applicationStatus.js`): no `interview_score` on
+the application → "Not Shortlisted"; an `interview_score` present → "Screening
+Not Cleared". Both recruiter and candidate views use this helper so a
+CV-stage rejection is never mislabeled as a screening outcome that never
+happened.
 
 ## 2. Real AI interview (the core product flow)
 
@@ -197,3 +221,52 @@ Practice page → deep link into the kiosk (same as flow #2) but:
   `auth:session-expired` → redirect to `/login?expired=1`.
 - **Socket auth** — the JWT is passed in the Socket.IO handshake; invalid
   tokens are disconnected immediately and the UI falls back to REST polling.
+
+## 8. Recruiter creates a job posting (AI generation + JD file, merged)
+
+```
+Recruiter (JobCreationModal)                          Backend
+─────────────────────────────                         ────────
+"Create with AI" section:
+  type a prompt, and/or upload a JD file (PDF/TXT)
+        │
+        ▼
+POST /api/jobs/generate-ai
+  (JSON {prompt}, or multipart {prompt, jd_file})  →   job_controller.generate_jd_with_ai
+                                                          • jd_file given → pdf_parser extracts text
+                                                            (temp file, deleted after — NOT the final
+                                                            upload; see below)
+                                                          • LLM prompt = "extract & structure this
+                                                            document" (+ prompt as extra instructions)
+                                                            when a file was given, else the classic
+                                                            free-text prompt
+                                                          • deducts RECRUITER_AI_JD_CREDITS,
+                                                            refunds on any failure
+  ← job_data (title, department, skills, description,
+     responsibilities, requirements, benefits, ...)
+        │
+        ▼
+Form is auto-filled; recruiter reviews/edits, sets
+minimum_cv_score + proctoring_config, clicks "Create Job"
+        │
+        ▼
+POST /api/jobs
+  multipart {..job fields.., jd_file}              →   job_controller.create_job
+    (jd_file re-sent here — the SAME file the AI          • array fields (skills/responsibilities/
+     parsed a moment ago; only sent once for real,          requirements/benefits) arrive as JSON-
+     avoiding an orphaned GCS upload if the recruiter        stringified arrays, not comma-split, so
+     abandons the form after generating but before           multi-line values survive intact
+     creating)                                            • jd_file → uploaded to Cloud Storage at
+                                                              jds/<recruiter_id>/jd_<uuid>.<ext>;
+                                                              text re-extracted for jd_extracted_text
+                                                            • GCS failure/not-configured is NON-FATAL —
+                                                              the job is still created, just without a
+                                                              downloadable JD file
+  ← job created (201)
+```
+
+Candidates then see the job as usual (`GET /api/jobs`, `GET /api/jobs/<id>`)
+— `jd_pdf_path`/`jd_gcs_path` ride along on the job document, and the job
+details page's "Download JD" button calls `GET /api/jobs/<id>/jd-download`
+for a signed URL when they're set, falling back to a generated plain-text
+summary of the structured fields when no JD file was ever uploaded.

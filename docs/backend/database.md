@@ -30,12 +30,24 @@ against it).
 Recruiter job postings. Key fields: `title`, `company`, `department`,
 `location`, `type`, `experience`, `salary`, `description`, `skills`,
 `responsibilities`, `requirements`, `benefits`, `created_by` (recruiter id),
+`minimum_cv_score` (auto-shortlist/reject threshold, default 50),
 `proctoring_config` (per-job toggles: `voice_detection`, `object_detection`,
 `eyeball_tracking`, `gaze_heatmap`), and denormalized status counters
 (`pending`, `interviewed`, `screening_cleared`, `rejected`) that are
 `$inc`-synced whenever an application changes status. (`selected` is the
 legacy name for the `screening_cleared` counter — folded in by
 `scripts/migrate_screening_cleared.py`.)
+
+JD file fields (populated when a recruiter uploads a JD file — either
+directly on the create-job form, or via AI JD generation's "upload to parse"
+option): `jd_pdf_path` (`gs://` URI, the file's location in Cloud Storage),
+`jd_gcs_path` (bare bucket-relative object path, used to generate signed
+download URLs and to delete), `jd_original_filename` (for the download's
+filename), `jd_extracted_text` (parsed text, also fed to AI JD generation
+when a file is uploaded there), `jd_upload_date`. All are `None` if the
+recruiter never uploaded a JD file (prompt-only AI generation or a fully
+manually-typed job) — the candidate-facing "Download JD" button falls back to
+a generated plain-text summary in that case.
 
 ### `applications`
 One per candidate-job application. Key fields: `job_id`, `student_id`,
@@ -45,6 +57,9 @@ One per candidate-job application. Key fields: `job_id`, `student_id`,
 for `screening_cleared`, still accepted on read),
 `cv_snapshot` (frozen copy of the CV used to apply: `text`, `details`,
 metadata), `cv_score` (AI CV-vs-JD match, 0–100),
+`minimum_cv_score_required` (the job's threshold at the time this
+application was scored — a snapshot, so later job-threshold edits don't
+retroactively change past decisions),
 `processing_status` (`processing` while the background CV scorer runs;
 `awaiting_candidate` for invite skeletons that still need a CV),
 `interview_score`, `proctoring_score`, `proctoring_status`

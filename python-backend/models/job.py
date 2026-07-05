@@ -28,7 +28,9 @@ class Job:
     created_at: datetime.datetime = None
     updated_at: datetime.datetime = None
     # NEW: JD PDF support
-    jd_pdf_path: Optional[str] = None  # Path to JD PDF file
+    jd_pdf_path: Optional[str] = None  # gs:// URI of the JD PDF in Cloud Storage
+    jd_gcs_path: Optional[str] = None  # Bare GCS object path (for signed URLs / delete)
+    jd_original_filename: Optional[str] = None  # Original uploaded filename, for downloads
     jd_extracted_text: Optional[str] = None  # Extracted text from JD PDF
     jd_upload_date: Optional[datetime.datetime] = None  # When JD was uploaded
     gaze_proctoring: bool = False  # Enable gaze heat map proctoring
@@ -77,6 +79,8 @@ class Job:
             'created_at': self.created_at,
             'updated_at': self.updated_at,
             'jd_pdf_path': self.jd_pdf_path,
+            'jd_gcs_path': self.jd_gcs_path,
+            'jd_original_filename': self.jd_original_filename,
             'jd_extracted_text': self.jd_extracted_text,
             'jd_upload_date': self.jd_upload_date,
             'gaze_proctoring': self.gaze_proctoring,
@@ -112,6 +116,8 @@ class Job:
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
             jd_pdf_path=data.get('jd_pdf_path'),
+            jd_gcs_path=data.get('jd_gcs_path'),
+            jd_original_filename=data.get('jd_original_filename'),
             jd_extracted_text=data.get('jd_extracted_text'),
             jd_upload_date=data.get('jd_upload_date'),
             gaze_proctoring=data.get('gaze_proctoring', False),

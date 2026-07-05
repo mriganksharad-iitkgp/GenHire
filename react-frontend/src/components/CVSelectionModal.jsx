@@ -10,7 +10,7 @@ const CVSelectionModal = ({
   onClose, 
   onSubmit,
   jobTitle,
-  mode = 'apply' // 'apply' or 'practice'
+  mode = 'apply' // 'apply', 'practice', or 'check_score'
 }) => {
   const { cvs: cachedCvs, cvsLoaded, loadCvsCached, loadProfileCached } = useCandidateData();
   const [cvList, setCvList] = useState([]);
@@ -150,7 +150,11 @@ const CVSelectionModal = ({
         <div className={styles.header}>
           <h2>Choose Your CV/Resume</h2>
           <p className={styles.subtitle}>
-            {mode === 'practice' ? 'Practice Interview for: ' : 'Applying for: '}
+            {mode === 'practice'
+              ? 'Practice Interview for: '
+              : mode === 'check_score'
+                ? 'Checking match score for: '
+                : 'Applying for: '}
             <strong>{jobTitle}</strong>
           </p>
           <button className={styles.closeButton} onClick={onClose}>
@@ -305,11 +309,16 @@ const CVSelectionModal = ({
           >
             {isSubmitting ? (
               <>
-                <i className="fa fa-spinner fa-spin"></i> {mode === 'practice' ? 'Starting...' : 'Submitting...'}
+                <i className="fa fa-spinner fa-spin"></i>{' '}
+                {mode === 'practice' ? 'Starting...' : mode === 'check_score' ? 'Checking...' : 'Submitting...'}
               </>
             ) : mode === 'practice' ? (
               <>
                 <i className="fa fa-play-circle"></i> Start Practice Interview Now
+              </>
+            ) : mode === 'check_score' ? (
+              <>
+                <i className="fa fa-check-circle"></i> Check My Match Score
               </>
             ) : (
               <>

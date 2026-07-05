@@ -250,8 +250,8 @@ class AuthController:
                 self.users_collection.delete_one({'_id': user_id})
                 return {'error': 'Could not send verification email. Please try again later.'}, 502
 
-        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
-        
+        self.wallet_service.grant_signup_bonus_once(str(user_id), user_type, email=normalized_email)
+
         # Generate token (but user may need to verify email before full access)
         token = self.generate_token(user_id)
         
@@ -753,11 +753,11 @@ class AuthController:
                         }, 409
                     return {'error': 'Email already exists'}, 409
 
-                self.wallet_service.grant_signup_bonus_once(str(user_id), user_type)
-                
+                self.wallet_service.grant_signup_bonus_once(str(user_id), user_type, email=email)
+
                 # Generate token
                 jwt_token = self.generate_token(user_id)
-                
+
                 message = 'Account created and logged in successfully with Google'
                 if user_type == 'recruiter':
                     message += '. Your recruiter account is pending admin verification.'

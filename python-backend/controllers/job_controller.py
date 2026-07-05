@@ -7,6 +7,7 @@ import logging
 from bson import ObjectId
 from werkzeug.utils import secure_filename
 from services.pdf_parser_service import get_pdf_parser
+from services import gcs_service
 from dotenv import load_dotenv
 from utils.job_standards import canonicalize_job_role
 from services.usage_telemetry_service import record_usage_event
@@ -242,41 +243,58 @@ class JobController:
         company_name = recruiter_profile.get('company_name') or job_data.get('company') or 'TechCorp Solutions'
         company_logo = recruiter_profile.get('company_logo') or job_data.get('logo') or None
         
-        # Handle JD PDF upload (Phase 4)
+        # Handle JD PDF upload — stored in Google Cloud Storage so candidates
+        # can download the exact document the recruiter uploaded. The file is
+        # optional and non-fatal: if GCS isn't configured or the upload fails,
+        # the job is still created (just without a downloadable JD PDF).
         jd_pdf_path = None
+        jd_gcs_path = None
+        jd_original_filename = None
         jd_extracted_text = None
         jd_upload_date = None
-        
+
         if jd_file and jd_file.filename:
-            try:
-                # Generate unique filename
-                job_id = str(uuid.uuid4())
-                file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
-                
-                # Validate file type
-                if file_extension not in ['pdf', 'txt']:
-                    logger.warning(f"Invalid JD file type: {file_extension}")
-                else:
-                    jd_filename = f"jd_{job_id}.{file_extension}"
-                    jd_pdf_path = os.path.join(self.upload_folder, jd_filename)
-                    
-                    # Save file
-                    jd_file.save(jd_pdf_path)
-                    jd_upload_date = datetime.datetime.utcnow()
-                    
-                    # Extract text from JD PDF/TXT
+            file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
+            if file_extension not in ['pdf', 'txt']:
+                logger.warning(f"Invalid JD file type: {file_extension}")
+            else:
+                job_uid = str(uuid.uuid4())
+                jd_filename = f"jd_{job_uid}.{file_extension}"
+                local_path = os.path.join(self.upload_folder, jd_filename)
+                try:
+                    jd_file.save(local_path)
+
+                    # Extract text before upload (pdf_parser needs a local path).
                     if self.pdf_parser:
                         try:
-                            jd_extracted_text = self.pdf_parser.extract_text(jd_pdf_path)
+                            jd_extracted_text = self.pdf_parser.extract_text(local_path)
                             logger.info(f"Extracted {len(jd_extracted_text)} characters from JD: {jd_filename}")
                         except Exception as e:
                             logger.error(f"Failed to extract text from JD: {e}")
-                            # Continue with job creation without extracted text
                     else:
                         logger.warning("PDF parser not available, JD text not extracted")
-            except Exception as e:
-                logger.error(f"Error processing JD file: {e}")
-                # Continue with job creation without JD file
+
+                    if gcs_service.is_gcs_configured():
+                        try:
+                            jd_gcs_path = f"jds/{recruiter_id}/{jd_filename}"
+                            gcs_service.upload_from_path(local_path, jd_gcs_path)
+                            jd_pdf_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{jd_gcs_path}"
+                            jd_original_filename = secure_filename(jd_file.filename)
+                            jd_upload_date = datetime.datetime.utcnow()
+                            logger.info(f"JD uploaded to GCS: {jd_gcs_path}")
+                        except Exception as e:
+                            logger.error(f"GCS upload failed for JD, continuing without it: {e}")
+                            jd_gcs_path = None
+                            jd_pdf_path = None
+                    else:
+                        logger.warning("GCS not configured — JD PDF will not be available for candidate download")
+                except Exception as e:
+                    logger.error(f"Error processing JD file: {e}")
+                finally:
+                    try:
+                        os.remove(local_path)
+                    except OSError:
+                        pass
 
         job_document = {
             'title': job_title,
@@ -307,8 +325,10 @@ class JobController:
             'screening_cleared': 0,
             'rejected': 0,
             'pending': 0,
-            # JD PDF fields (Phase 4)
+            # JD PDF fields (stored in GCS)
             'jd_pdf_path': jd_pdf_path,
+            'jd_gcs_path': jd_gcs_path,
+            'jd_original_filename': jd_original_filename,
             'jd_extracted_text': jd_extracted_text,
             'jd_upload_date': jd_upload_date
         }
@@ -436,8 +456,43 @@ class JobController:
         result = self.jobs_collection.delete_one({'_id': ObjectId(job_id), 'created_by': recruiter_id})
         if result.deleted_count == 0:
             return {'error': 'Job not found'}, 404
-        
+
         return {'message': 'Job deleted successfully'}, 200
+
+    def get_jd_download_url(self, job_id, user_id, user_type):
+        """Get a signed download URL for the recruiter-uploaded JD PDF.
+
+        Available to the job's own recruiter and to any candidate (job
+        listings are already visible platform-wide to candidates; this just
+        lets them download the original document instead of only reading the
+        parsed fields)."""
+        try:
+            job = self.jobs_collection.find_one({'_id': ObjectId(job_id)})
+        except Exception:
+            return {'error': 'Invalid job id'}, 400
+        if not job:
+            return {'error': 'Job not found'}, 404
+
+        if user_type == 'recruiter' and job.get('created_by') != user_id:
+            return {'error': 'Unauthorized'}, 403
+
+        jd_gcs_path = job.get('jd_gcs_path')
+        if not jd_gcs_path:
+            return {'error': 'No JD file has been uploaded for this job'}, 404
+
+        if not gcs_service.is_gcs_configured():
+            return {'error': 'Cloud storage is not configured'}, 500
+
+        try:
+            signed_url = gcs_service.generate_signed_url(jd_gcs_path, expiration_minutes=60)
+        except Exception as e:
+            logger.error(f"Failed to generate JD signed URL: {e}")
+            return {'error': 'Failed to generate download link'}, 500
+
+        return {
+            'download_url': signed_url,
+            'filename': job.get('jd_original_filename') or f"{job.get('title', 'job-description')}.pdf",
+        }, 200
         
     def get_job_details(self, job_id, user_type, user_id=None):
         """Get single job details with permission checks"""
@@ -484,10 +539,47 @@ class JobController:
             'applications': applications
         }, 200
 
-    def generate_jd_with_ai(self, prompt_text, recruiter_id=None):
-        """Generate a complete job description using Groq AI"""
+    def _extract_jd_file_text(self, jd_file):
+        """Extract text from an uploaded JD file for AI parsing. Uses a
+        throwaway temp path — the file itself is not persisted here; it gets
+        re-uploaded (and stored in GCS) when the recruiter actually submits
+        the job via create_job()."""
+        if not jd_file or not jd_file.filename:
+            return None
+        file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
+        if file_extension not in ['pdf', 'txt']:
+            return None
+        temp_name = f"jd_parse_{uuid.uuid4()}.{file_extension}"
+        temp_path = os.path.join(self.upload_folder, temp_name)
+        try:
+            jd_file.save(temp_path)
+            if self.pdf_parser:
+                return self.pdf_parser.extract_text(temp_path)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to extract text from uploaded JD for AI parsing: {e}")
+            return None
+        finally:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+    def generate_jd_with_ai(self, prompt_text, recruiter_id=None, jd_file=None):
+        """Generate a complete job description using Groq AI, from a text
+        prompt, an uploaded JD file (parsed and structured), or both."""
         generation_id = str(uuid.uuid4())
         deduction = None
+
+        jd_file_text = self._extract_jd_file_text(jd_file) if jd_file else None
+        if jd_file and jd_file.filename and jd_file_text is None:
+            return {
+                'error': 'Could not read the uploaded JD file. Please upload a PDF or TXT file, or describe the role in the prompt instead.',
+            }, 400
+        if not (prompt_text or "").strip() and not jd_file_text:
+            return {
+                'error': 'Please provide a prompt describing the job role, or upload a JD file to parse.',
+            }, 400
 
         def refund_ai_jd(reason):
             if not recruiter_id or not deduction or not deduction.get("success"):
@@ -561,7 +653,18 @@ Rules:
 - If the user mentions specific details (salary, location, etc.), use those
 - Return ONLY the JSON object, nothing else"""
 
-            full_prompt = f"{system_prompt}\n\nUser request: Generate a complete job posting for: {prompt_text}"
+            if jd_file_text:
+                user_request = (
+                    "Extract and structure the following job description document into the "
+                    "required JSON fields. Fill in any details it doesn't explicitly state with "
+                    f"sensible, professional defaults.\n\n--- JD DOCUMENT ---\n{jd_file_text[:12000]}"
+                )
+                if (prompt_text or "").strip():
+                    user_request += f"\n\n--- ADDITIONAL INSTRUCTIONS FROM RECRUITER ---\n{prompt_text.strip()}"
+            else:
+                user_request = f"Generate a complete job posting for: {prompt_text}"
+
+            full_prompt = f"{system_prompt}\n\nUser request: {user_request}"
 
             try:
                 result = fallback_service.invoke(full_prompt, json_mode=True)
@@ -621,12 +724,13 @@ Rules:
                     source={
                         'type': 'jd_prompt',
                         'id': '',
-                        'label': (prompt_text or '')[:120],
+                        'label': (prompt_text or '')[:120] or '[JD file upload]',
                     },
                     occurred_at=datetime.datetime.utcnow(),
                     metadata={
                         'prompt_text_length': len(prompt_text or ''),
                         'prompt_text': (prompt_text or '')[:12000],
+                        'jd_file_uploaded': bool(jd_file_text),
                         'generated_jd_text': (response_text or '')[:20000],
                     }
                 )

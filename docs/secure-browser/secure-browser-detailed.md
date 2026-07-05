@@ -10,7 +10,7 @@ secure-browser-kiosk/
 ├── main.js       # Electron main process (405 lines) — window, kiosk lockdown,
 │                 #   deep links, Google Cloud TTS/STT, local HTTP server
 ├── preload.js    # contextBridge — the ONLY bridge between UI and main process
-├── renderer.js   # The interview UI logic (~1,600 lines) — talks to the backend
+├── renderer.js   # The interview UI logic (~1,900 lines) — talks to the backend
 ├── index.html    # UI markup loaded into the window
 ├── credentials.json  # Google Cloud service-account key (packaged as extraResource)
 └── package.json  # electron-builder config (NSIS installer / dmg, protocol registration)
