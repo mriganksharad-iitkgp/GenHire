@@ -22,7 +22,7 @@ class Job:
     deadline: Optional[datetime.datetime] = None
     applicants: int = 0
     interviewed: int = 0
-    selected: int = 0
+    screening_cleared: int = 0
     rejected: int = 0
     pending: int = 0
     created_at: datetime.datetime = None
@@ -71,7 +71,7 @@ class Job:
             'deadline': self.deadline,
             'applicants': self.applicants,
             'interviewed': self.interviewed,
-            'selected': self.selected,
+            'screening_cleared': self.screening_cleared,
             'rejected': self.rejected,
             'pending': self.pending,
             'created_at': self.created_at,
@@ -105,7 +105,8 @@ class Job:
             deadline=data.get('deadline'),
             applicants=data.get('applicants', 0),
             interviewed=data.get('interviewed', 0),
-            selected=data.get('selected', 0),
+            # Legacy job docs stored this counter as 'selected'.
+            screening_cleared=data.get('screening_cleared', data.get('selected', 0)),
             rejected=data.get('rejected', 0),
             pending=data.get('pending', 0),
             created_at=data.get('created_at'),

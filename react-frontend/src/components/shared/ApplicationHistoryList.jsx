@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Pagination from '../Pagination';
 import styles from './ApplicationHistoryList.module.css';
+import { normalizeStatus, statusLabel } from '../../utils/applicationStatus';
 
 /**
  * Reusable Application History List Component
@@ -37,7 +38,7 @@ const ApplicationHistoryList = ({
           return false;
         }
       }
-      if (filters.status && app.status?.toLowerCase() !== filters.status.toLowerCase()) {
+      if (filters.status && normalizeStatus(app.status) !== normalizeStatus(filters.status)) {
         return false;
       }
       return true;
@@ -71,8 +72,7 @@ const ApplicationHistoryList = ({
   };
 
   const getStatusClass = (status) => {
-    const statusLower = status?.toLowerCase() || '';
-    return styles[statusLower] || '';
+    return styles[normalizeStatus(status)] || '';
   };
 
   const formatUsd = (value) => {
@@ -141,8 +141,8 @@ const ApplicationHistoryList = ({
             <option value="reviewed">Reviewed</option>
             <option value="shortlisted">Shortlisted</option>
             <option value="interviewed">Interviewed</option>
-            <option value="selected">Selected</option>
-            <option value="rejected">Rejected</option>
+            <option value="screening_cleared">Screening Cleared</option>
+            <option value="rejected">Screening Not Cleared</option>
           </select>
           <select
             value={`${filters.sortBy}-${filters.sortOrder}`}
@@ -185,7 +185,7 @@ const ApplicationHistoryList = ({
             <div 
               key={app.id} 
               className={styles.applicationCard} 
-              data-status={app.status?.toLowerCase()}
+              data-status={normalizeStatus(app.status)}
             >
               {/* Card Header */}
               <div className={styles.applicationHeader}>
@@ -205,7 +205,7 @@ const ApplicationHistoryList = ({
                 <div className={styles.headerBadges}>
                   {editingStatus?.appId === app.id ? (
                     <select
-                      value={editingStatus.newStatus || app.status}
+                      value={editingStatus.newStatus || normalizeStatus(app.status)}
                       onChange={(e) => setEditingStatus({ appId: app.id, newStatus: e.target.value })}
                       className={styles.statusSelect}
                       autoFocus
@@ -214,8 +214,8 @@ const ApplicationHistoryList = ({
                       <option value="reviewed">Reviewed</option>
                       <option value="shortlisted">Shortlisted</option>
                       <option value="interviewed">Interviewed</option>
-                      <option value="selected">Selected</option>
-                      <option value="rejected">Rejected</option>
+                      <option value="screening_cleared">Screening Cleared</option>
+                      <option value="rejected">Screening Not Cleared</option>
                     </select>
                   ) : (
                     <span 
@@ -224,7 +224,7 @@ const ApplicationHistoryList = ({
                       style={isAdmin && onStatusChange ? { cursor: 'pointer' } : {}}
                       title={isAdmin ? 'Click to edit status' : ''}
                     >
-                      {app.status?.toUpperCase()}
+                      {statusLabel(app.status).toUpperCase()}
                     </span>
                   )}
                   {editingStatus?.appId === app.id && (

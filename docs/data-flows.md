@@ -42,25 +42,55 @@ Recruiter dashboard updates live via useRealtimeApplications (no refresh needed)
      (invite skeletons that never uploaded a CV are bounced back to apply)
    • reads the job's proctoring_config → cost = 30 or 50 (proctored) credits
    • checks + debits the RECRUITER's wallet
-     (idempotency_key "real-interview:<application_id>" — no double charge)
+     (idempotency_key "real-interview:<application_id>", or ":r<n>" after a
+     refund — retries never double-charge, and refunded attempts re-charge)
    • writes CV + JD text to uploads/tmp/*.txt
    • InterviewSessionManager.create_session() → session_id +
      hardcoded first question (context builds in a background thread)
-   • inserts the `interviews` document (status: active)
-4. Kiosk enables kiosk lockdown, registers the candidate's face
-   (POST .../register-face), connects Socket.IO, emits start_proctoring.
-5. Interview loop (repeats):
-   • question is spoken via TTS (kiosk's own Google client)
+   • inserts the `interviews` document (status: active,
+     questions_answered_count: 0, debit_idempotency_key persisted)
+   • if anything fails AFTER the debit, the charge is refunded immediately
+4. FACE IDENTITY GATE — the candidate takes a selfie
+   (POST .../register-face):
+   • FIRST real interview ever → the face is enrolled permanently on the
+     account (users.face_profile, image in GridFS)
+   • every LATER real interview (any company) → the captured face is
+     compared (DeepFace VGG-Face) against the registered one:
+       match    → identity_verification.status "verified", interview proceeds
+       mismatch → up to FACE_VERIFY_MAX_ATTEMPTS (3) retries, then the
+                  interview is BLOCKED (status identity_blocked) and the
+                  attempt is recorded for the recruiter; credits are
+                  refunded by the sweeper
+   • the captured photo is stored and shown to the recruiter in the report
+   • FACE_VERIFICATION_MODE: enforce (default) | monitor (log, never block)
+     | off; if the DeepFace stack is missing, checks degrade to photo
+     capture ("unverified_system_unavailable") — candidates are never
+     locked out by a missing server dependency
+5. Kiosk/browser enables lockdown, connects Socket.IO, emits
+   start_proctoring. Live frames are compared against the account's
+   REGISTERED face (not just the session selfie).
+6. Interview loop (repeats, up to max_questions):
+   • the question appears on screen as the AI speaks it (TTS)
    • candidate answers by voice → streaming STT → text
+   • pacing (same for real and practice):
+       - candidate never spoke → 30 s countdown → auto-advance ("no answer")
+       - candidate spoke, then 10 s of silence → answer auto-submits
+       - substantive answers get a short spoken acknowledgement before the
+         next question; empty ones get "No problem, let's move on."
    • POST .../answer {question, answer} → evaluation + next question
-     (empty answer auto-submitted if the per-question deadline passes)
+     (each non-empty answer $inc's questions_answered_count)
    • meanwhile: 1 frame/sec → proctoring_frame → MediaPipe + DeepFace;
      GazeRecorder collects gaze points; blur/app-switch → proctoring_violation
-6. Wrap-up:
+7. Wrap-up:
    • gaze results   → POST .../gaze-recorder-results
    • webcam video   → POST .../upload-recording
    • phone video    → POST .../upload-mobile-recording (if paired)
    • POST .../end →
+       - ZERO answers recorded? → the interview is DISCARDED instead of
+         scored: recruiter's credits refunded, interview → "abandoned",
+         application left untouched (candidate can retake), response
+         {status: "interview_discarded", refund: {...}}
+       - otherwise:
        - final evaluation generated (rubrics + AI-detection per answer)
        - interview_score = 70% answer quality + 30% language quality (×100)
        - proctoring_score = min(gaze-based score, live-frame score);
@@ -69,8 +99,15 @@ Recruiter dashboard updates live via useRealtimeApplications (no refresh needed)
        - job counters synced, socket event pushed to both parties
        - emails sent to recruiter and candidate (fire-and-forget threads)
        - usage telemetry recorded (LLM tokens, STT seconds, TTS characters)
-7. Kiosk exits lockdown and offers to return to the website
+8. Kiosk exits lockdown and offers to return to the website
    (opens the default browser via open-external).
+
+Abandoned sessions (tab closed, crash): the InterviewRefundSweeper checks
+every INTERVIEW_REFUND_SWEEP_INTERVAL_MINUTES (15) for sessions stuck
+"active" past INTERVIEW_ABANDON_TTL_MINUTES (120). Sessions WITH answers are
+auto-finalized into a normal scored report (the recruiter paid for a
+screening signal and gets one); sessions WITHOUT answers are refunded and
+marked "abandoned".
 ```
 
 ## 3. Recruiter reviews results
@@ -79,8 +116,14 @@ Recruiter dashboard updates live via useRealtimeApplications (no refresh needed)
 RecruiterDashboard: GET /api/applications      (or per-job .../applications)
 InterviewReportModal: GET /api/applications/<id>/interview-report
   → evaluation, transcript (with per-answer ai_probability),
-    proctoring score/status, gaze heatmap data
-Decision: PUT /api/applications/<id>/status {status: "selected"|"rejected"}
+    proctoring score/status, gaze heatmap data,
+    identity_verification block + captured/reference face images
+    (GET /api/interviews/<sid>/face-image/{captured|reference})
+Decision: PUT /api/applications/<id>/status
+          {status: "screening_cleared"|"rejected"}
+  (legacy value "selected" still accepted and normalized; the platform only
+   SCREENS — "screening_cleared" candidates go into the recruiter's own
+   further hiring rounds; "rejected" displays as "Screening Not Cleared")
   → candidate emailed + socket event + job counters updated
 ```
 
@@ -125,11 +168,19 @@ SubscriptionPlans page: GET /api/payment/recharge/packs
 
 ```
 Practice page → deep link into the kiosk (same as flow #2) but:
-  • POST /api/practice/start          (debits the CANDIDATE's wallet 30/50)
-  • POST /api/practice/<sid>/answer   (same engine, same evaluators)
-  • POST /api/practice/<sid>/end
+  • POST /api/practice/start          (debits the CANDIDATE's wallet 30/50;
+                                       refunded if starting fails after the
+                                       debit)
+  • POST /api/practice/<sid>/answer   (same engine, evaluators, and 30s/10s
+                                       pacing rules as real interviews)
+  • POST /api/practice/<sid>/end      (zero answers → session discarded +
+                                       candidate credits refunded)
+  • face check is soft — the selfie is captured but a mismatch never blocks
+    a practice session
   • results in `practice_sessions`; history via GET /api/practice/history,
     reports via GET /api/practice/<sid>/report
+  • abandoned practice sessions: sweeper refunds if unanswered, otherwise
+    closes them without a refund
 ```
 
 ## 7. Auth flows

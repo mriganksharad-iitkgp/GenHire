@@ -306,7 +306,10 @@ const Profile = () => {
 				applicationId: application.id,
 				token: getToken(),
 				apiUrl,
-				proctoringConfig: sessionData.proctoring_config || {}
+				proctoringConfig: sessionData.proctoring_config || {},
+				questionDeadline: sessionData.question_deadline || null,
+				questionTimeoutSeconds: sessionData.question_timeout_seconds || null,
+				maxQuestions: sessionData.max_questions || null
 			};
 			const encodedPayload = btoa(JSON.stringify(payload));
 			const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
@@ -379,12 +382,12 @@ const Profile = () => {
 									{
 										applications.filter(
 											(app) =>
-												app.status === "Pending"
+												app.statusKey === "pending"
 										).length
 									}
 								</span>
 								<span className={styles.statLabel}>
-									Pending
+									Awaiting Review
 								</span>
 							</div>
 							<div className={styles.statItem}>
@@ -392,7 +395,7 @@ const Profile = () => {
 									{
 										applications.filter(
 											(app) =>
-												app.status === "Shortlisted"
+												app.statusKey === "shortlisted"
 										).length
 									}
 								</span>
@@ -404,7 +407,7 @@ const Profile = () => {
 								<span className={styles.statNumber}>
 									{
 										applications.filter(
-											(app) => app.status === "Interviewed"
+											(app) => app.statusKey === "interviewed"
 										).length
 									}
 								</span>
@@ -416,24 +419,24 @@ const Profile = () => {
 								<span className={styles.statNumber}>
 									{
 										applications.filter(
-											(app) => app.status === "Selected"
+											(app) => app.statusKey === "screening_cleared"
 										).length
 									}
 								</span>
 								<span className={styles.statLabel}>
-									Selected
+									Screening Cleared
 								</span>
 							</div>
 							<div className={styles.statItem}>
 								<span className={styles.statNumber}>
 									{
 										applications.filter(
-											(app) => app.status === "Rejected"
+											(app) => app.statusKey === "rejected"
 										).length
 									}
 								</span>
 								<span className={styles.statLabel}>
-									Rejected
+									Not Cleared
 								</span>
 							</div>
 						</div>

@@ -138,7 +138,7 @@ def _legacy_monthly_usage_total(db, recruiter_id, month_start):
             {
                 "job_id": {"$in": recruiter_job_ids},
                 "is_visible": True,
-                "status": {"$in": ["interviewed", "selected", "rejected"]},
+                "status": {"$in": ["interviewed", "selected", "screening_cleared", "rejected"]},
                 "updated_at": {"$gte": month_start},
             }
         )

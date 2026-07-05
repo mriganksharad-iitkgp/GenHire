@@ -894,7 +894,8 @@
   color: #4338ca;
 }
 
-.tableBadge.selected {
+.tableBadge.selected,
+.tableBadge.screening_cleared {
   background: #d1fae5;
   color: #047857;
 }

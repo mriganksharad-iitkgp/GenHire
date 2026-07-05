@@ -359,9 +359,11 @@ class BackgroundProcessor:
                 job_id = jd_data.get('job_id')
                 if job_id:
                     job_update = {}
-                    if application_status == 'shortlisted':
-                        job_update['selected'] = 1
-                    elif application_status == 'rejected':
+                    # NOTE: 'shortlisted' used to (incorrectly) bump the
+                    # selected counter; shortlisted applications belong in the
+                    # pending bucket, which recruiter job listings recompute
+                    # from application statuses anyway.
+                    if application_status == 'rejected':
                         job_update['rejected'] = 1
 
                     if job_update:

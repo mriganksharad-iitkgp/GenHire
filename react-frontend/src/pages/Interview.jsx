@@ -4,12 +4,12 @@ import Chat from "./Chat";
 import io from "socket.io-client";
 import { proctoringConfig } from "../config/proctoring";
 
+// Thin wrapper around Chat. NOTE: the previous version also created an
+// unmanaged `io(...)` socket on every render (never cleaned up) — Chat owns
+// the proctoring socket, so only the optional gaze-warning listener remains.
 const Interview = () => {
 	const { interviewId } = useParams();
 	const [showWarning, setShowWarning] = useState(false);
-	const [isInterviewEnding, setIsInterviewEnding] = useState(false);
-	const socket = io(process.env.REACT_APP_API_URL); // Standard app socket for other things? Or was this ONLY for proctoring?
-	// It seems this socket was ONLY for gaze_data.
 
 	useEffect(() => {
 		if (!proctoringConfig.enabled) return;
@@ -30,27 +30,6 @@ const Interview = () => {
 		};
 	}, [interviewId]);
 
-	const handleEndInterview = () => {
-		setIsInterviewEnding(true);
-		// You can also add any cleanup logic here, like stopping the camera, etc.
-	};
-
-	if (isInterviewEnding) {
-		return (
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "center",
-					alignItems: "center",
-					height: "100vh",
-					fontSize: "2rem",
-				}}
-			>
-				<p>We are ending the interview...</p>
-			</div>
-		);
-	}
-
 	return (
 		<div>
 			{showWarning && (
@@ -69,7 +48,7 @@ const Interview = () => {
 					Please look at the center of the screen
 				</div>
 			)}
-			<Chat interviewId={interviewId} onEndInterview={handleEndInterview} />
+			<Chat interviewId={interviewId} />
 		</div>
 	);
 };

@@ -689,8 +689,10 @@ class AdminController:
                 "interviewed": sum(
                     1 for app in applications if app["status"] == "interviewed"
                 ),
-                "selected": sum(
-                    1 for app in applications if app["status"] == "selected"
+                "screening_cleared": sum(
+                    1
+                    for app in applications
+                    if app["status"] in ("screening_cleared", "selected")
                 ),
                 "rejected": sum(
                     1 for app in applications if app["status"] == "rejected"
@@ -794,7 +796,9 @@ class AdminController:
                 total_applications += app_count
 
                 selected_count = sum(
-                    1 for app in job_applications if app.get("status") == "selected"
+                    1
+                    for app in job_applications
+                    if app.get("status") in ("screening_cleared", "selected")
                 )
                 rejected_count = sum(
                     1 for app in job_applications if app.get("status") == "rejected"
@@ -818,7 +822,7 @@ class AdminController:
                         "deadline": safe_isoformat(job.get("deadline")),
                         "applicants": app_count,
                         "interviewed": interviewed_count,
-                        "selected": selected_count,
+                        "screening_cleared": selected_count,
                         "rejected": rejected_count,
                         "salary": job.get("salary"),
                         "experience": job.get("experience"),
@@ -832,7 +836,7 @@ class AdminController:
                     1 for job in jobs if job["status"] in ["active", "open"]
                 ),
                 "total_applications": total_applications,
-                "total_selected": total_selected,
+                "total_screening_cleared": total_selected,
                 "total_rejected": total_rejected,
                 "conversion_rate": (
                     round((total_selected / total_applications * 100), 2)
@@ -1081,12 +1085,14 @@ class AdminController:
             if not application:
                 return {"error": "Application not found"}, 404
 
+            if status == "selected":  # legacy name for screening_cleared
+                status = "screening_cleared"
             valid_statuses = [
                 "pending",
                 "reviewed",
                 "shortlisted",
                 "interviewed",
-                "selected",
+                "screening_cleared",
                 "rejected",
             ]
             if status not in valid_statuses:
@@ -1341,12 +1347,14 @@ class AdminController:
                 "reviewed",
                 "shortlisted",
                 "interviewed",
-                "selected",
+                "screening_cleared",
                 "rejected",
             ]
 
             for field in allowed_fields:
                 if field in data:
+                    if field == "status" and data[field] == "selected":
+                        data[field] = "screening_cleared"  # legacy name
                     if field == "status" and data[field] not in valid_statuses:
                         return {
                             "error": f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
@@ -1556,7 +1564,7 @@ class AdminController:
                 {"status": "interviewed"}
             )
             selected_applications = self.applications_collection.count_documents(
-                {"status": "selected"}
+                {"status": {"$in": ["screening_cleared", "selected"]}}
             )
             rejected_applications = self.applications_collection.count_documents(
                 {"status": "rejected"}
@@ -1600,7 +1608,7 @@ class AdminController:
                     "pending": pending_applications,
                     "shortlisted": shortlisted_applications,
                     "interviewed": interviewed_applications,
-                    "selected": selected_applications,
+                    "screening_cleared": selected_applications,
                     "rejected": rejected_applications,
                     "new_this_week": new_applications_week,
                     "success_rate": (
@@ -2152,7 +2160,7 @@ class AdminController:
                     )
 
             interview_query = _build_date_range_query(
-                {'is_visible': True, 'status': {'$in': ['interviewed', 'selected', 'rejected']}},
+                {'is_visible': True, 'status': {'$in': ['interviewed', 'selected', 'screening_cleared', 'rejected']}},
                 ['completed_at', 'updated_at', 'created_at'],
                 period_start,
                 period_end,
@@ -3114,7 +3122,7 @@ class AdminController:
             return True
 
         status = str(doc.get('status') or '').strip().lower()
-        if status in {'interviewed', 'selected', 'rejected', 'completed'}:
+        if status in {'interviewed', 'selected', 'screening_cleared', 'rejected', 'completed'}:
             return True
 
         interview_stats = self._interview_token_breakdown(doc)
@@ -3977,7 +3985,7 @@ class AdminController:
                 {
                     **base_app_query,
                     'is_visible': True,
-                    'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                    'status': {'$in': ['interviewed', 'selected', 'screening_cleared', 'rejected']},
                 },
                 ['completed_at', 'updated_at', 'created_at'],
                 period_start,
@@ -4206,7 +4214,7 @@ class AdminController:
                 {
                     **base_app_query,
                     'is_visible': True,
-                    'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                    'status': {'$in': ['interviewed', 'selected', 'screening_cleared', 'rejected']},
                 },
                 ['completed_at', 'updated_at', 'created_at'],
                 period_start,

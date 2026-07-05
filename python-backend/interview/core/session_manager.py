@@ -192,6 +192,9 @@ class InterviewSessionManager:
                 },
                 "question_timeout_seconds": self.config.question_timeout_seconds,
                 "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
+                # Single source of truth for the client's question counter —
+                # the frontend previously hardcoded its own copy of this.
+                "max_questions": self.config.max_questions,
             }
 
         except Exception as e:

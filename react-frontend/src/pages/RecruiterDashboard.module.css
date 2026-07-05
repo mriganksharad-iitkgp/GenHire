@@ -3420,7 +3420,8 @@ body.dark .candidateMeta i,
 	color: white;
 }
 
-.statusBadge.selected {
+.statusBadge.selected,
+.statusBadge.screening_cleared {
 	background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
 	color: white;
 }

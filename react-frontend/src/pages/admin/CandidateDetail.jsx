@@ -555,8 +555,8 @@ const CandidateDetail = () => {
               <span className={styles.miniStatLabel}>Interviewed</span>
             </div>
             <div className={styles.miniStatCard}>
-              <span className={styles.miniStatValue}>{stats.selected}</span>
-              <span className={styles.miniStatLabel}>Selected</span>
+              <span className={styles.miniStatValue}>{stats.screening_cleared ?? stats.selected ?? 0}</span>
+              <span className={styles.miniStatLabel}>Screening Cleared</span>
             </div>
             <div className={styles.miniStatCard}>
               <span className={styles.miniStatValue}>{stats.avg_cv_score || 0}</span>

@@ -656,12 +656,16 @@ class ApplicationController:
 
     def update_application_status(self, application_id, recruiter_id, new_status):
         """Update application status (recruiters only)"""
+        # Legacy clients may still send "selected"; the canonical value is
+        # "screening_cleared" (the platform screens candidates, it doesn't hire).
+        if new_status == "selected":
+            new_status = "screening_cleared"
         if new_status not in [
             "pending",
             "reviewed",
             "shortlisted",
             "interviewed",
-            "selected",
+            "screening_cleared",
             "rejected",
         ]:
             return {"error": "Invalid status"}, 400
@@ -700,7 +704,8 @@ class ApplicationController:
         status_counters = [
             "pending",
             "interviewed",
-            "selected",
+            "screening_cleared",
+            "selected",  # legacy counter field on unmigrated job docs
             "rejected",
         ]  # keep only fields that exist on jobs
 
@@ -715,7 +720,7 @@ class ApplicationController:
             )
 
         # Notify candidate by email for actionable status changes (fire-and-forget)
-        if new_status in ("selected", "shortlisted", "rejected"):
+        if new_status in ("screening_cleared", "shortlisted", "rejected"):
             try:
                 candidate_doc = self.users_collection.find_one(
                     {"_id": ObjectId(application.get("student_id", ""))},
@@ -859,6 +864,23 @@ class ApplicationController:
             "gaze_recorder_analysis_path": report.get("gaze_recorder_analysis_path"),
             "gaze_recorder_points_path": report.get("gaze_recorder_points_path"),
         }
+
+        # Identity verification verdict + photo availability. The images
+        # themselves are served by the authorized endpoint
+        # /api/interviews/<session_id>/face-image/<captured|reference>.
+        identity = report.get("identity_verification") or {}
+        if identity:
+            payload["identity_verification"] = {
+                "status": identity.get("status"),
+                "verified": identity.get("verified"),
+                "distance": identity.get("distance"),
+                "threshold": identity.get("threshold"),
+                "attempts": identity.get("attempts"),
+                "checked_at": identity.get("checked_at"),
+                "has_captured_image": bool(identity.get("captured_image_file_id")),
+                "has_reference_image": bool(identity.get("reference_image_file_id")),
+            }
+
         return payload, 200
 
     def _has_value(self, value):
@@ -1120,7 +1142,13 @@ class ApplicationController:
 
                     # Update job statistics if status changed
                     job_update = {}
-                    status_counters = ["pending", "interviewed", "selected", "rejected"]
+                    status_counters = [
+                        "pending",
+                        "interviewed",
+                        "screening_cleared",
+                        "selected",  # legacy counter field on unmigrated job docs
+                        "rejected",
+                    ]
 
                     if old_status in status_counters:
                         job_update[old_status] = -1

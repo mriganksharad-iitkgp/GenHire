@@ -20,7 +20,11 @@ Key fields: `name`, `email`, `email_lower`, `password` (hashed), `user_type`
 and/or email verification), `is_active`, `permissions` (admin permission list,
 `*` = super admin), `cv_details` (structured CV on the profile),
 `is_invite_only` + `invite_id_lower` (burner accounts created by recruiter
-invites — these log in with an Invite ID, not an email).
+invites — these log in with an Invite ID, not an email), and `face_profile`
+(`{image_file_id (GridFS), registered_at, source_session_id,
+source_application_id}` — the permanent face identity enrolled at the
+candidate's **first** real interview; every later real interview is verified
+against it).
 
 ### `jobs`
 Recruiter job postings. Key fields: `title`, `company`, `department`,
@@ -28,35 +32,52 @@ Recruiter job postings. Key fields: `title`, `company`, `department`,
 `responsibilities`, `requirements`, `benefits`, `created_by` (recruiter id),
 `proctoring_config` (per-job toggles: `voice_detection`, `object_detection`,
 `eyeball_tracking`, `gaze_heatmap`), and denormalized status counters
-(`pending`, `interviewed`, `selected`, `rejected`) that are `$inc`-synced
-whenever an application changes status.
+(`pending`, `interviewed`, `screening_cleared`, `rejected`) that are
+`$inc`-synced whenever an application changes status. (`selected` is the
+legacy name for the `screening_cleared` counter — folded in by
+`scripts/migrate_screening_cleared.py`.)
 
 ### `applications`
 One per candidate-job application. Key fields: `job_id`, `student_id`,
 `student_name`, `student_email`, `job_title`, `status`
-(`pending` → `shortlisted`/`rejected` → `interviewed` → `selected`/`rejected`),
+(`pending` → `shortlisted`/`rejected` → `interviewed` →
+`screening_cleared`/`rejected`; `selected` is the pre-migration legacy value
+for `screening_cleared`, still accepted on read),
 `cv_snapshot` (frozen copy of the CV used to apply: `text`, `details`,
 metadata), `cv_score` (AI CV-vs-JD match, 0–100),
 `processing_status` (`processing` while the background CV scorer runs;
 `awaiting_candidate` for invite skeletons that still need a CV),
 `interview_score`, `proctoring_score`, `proctoring_status`
 (`complete` | `incomplete`), `is_visible`, `stt_seconds`, `tts_characters`,
-`usage_source`.
+`usage_source`, `identity_verification` (copied from the interview: status,
+distance, attempts — surfaces on the recruiter's candidate card), and
+`interview_refund_count` (how many times a start-of-interview debit was
+refunded; each refund makes the next attempt use a fresh idempotency key).
 
 ### `interviews`
 One per real AI interview session. Key fields: `user_id`, `session_id` (UUID
 from the interview engine), `application_id`, `recruiter_id`, `status`
-(`active` → `completed`), `cv_path`/`jd_path` (temp .txt files),
+(`active` → `completed` | `abandoned` (discarded/refunded) |
+`identity_blocked` (face verification failed repeatedly)),
+`cv_path`/`jd_path` (temp .txt files),
 `similarity_score`, `proctoring_config`, `proctoring_score`,
 `proctoring_status`, `evaluation` (full AI evaluation object), `final_score`,
 `transcript` (`[{role, text, ai_probability}]`), `manual_infractions`,
 `gaze_metrics`, `gaze_plot_path`, `gaze_recorder_*` (recording/analysis/points
 paths + analysis + score), `recording_path`, `mobile_recording_path`,
-`usage_summary`, `usage_deduction`, `start_time`.
+`usage_summary`, `usage_deduction`, `start_time`,
+`identity_verification` (`{status, verified, distance, threshold, attempts,
+checked_at, captured_image_file_id, reference_image_file_id}`),
+`debit_idempotency_key` (the exact key used for the recruiter debit, so
+refunds can reverse it precisely), `questions_answered_count` (incremented
+per substantive answer — the zero-answer refund decision survives a server
+restart), and on auto-finalized docs `auto_finalized` +
+`auto_finalized_reason` / `abandoned_reason` + `credits_refund`.
 
 ### `practice_sessions`
 Candidate practice interviews — analogous to `interviews` but candidate-paid
-and not linked to an application.
+and not linked to an application. Status `active` → `completed` |
+`abandoned` (with `abandoned_reason` and, when refunded, `credits_refund`).
 
 ### `invite_tokens`
 One per invite email. Fields include `token_hash` (SHA hash — raw tokens are
@@ -79,7 +100,7 @@ sent/valid/invalid/redeemed, `created_at`.
 - **payments** — Razorpay order/payment records and their verification status.
 - **subscriptions** — purchased packs per user.
 - **credit wallets** — one wallet per (user, audience) with the current balance.
-- **credit transactions** — append-only ledger; every debit/credit has a `transaction_type`, `reference_type`/`reference_id`, optional `idempotency_key` (prevents double-charging, e.g. `real-interview:<application_id>`), and `balance_after`.
+- **credit transactions** — append-only ledger; every debit/credit has a `transaction_type`, `reference_type`/`reference_id`, optional `idempotency_key` (prevents double-charging, e.g. `real-interview:<application_id>`, or `:r<n>`-suffixed after refunds; refunds use `refund:<debit-key>` with types `real_interview_refund` / `practice_interview_refund`), and `balance_after`.
 
 ## Indexes (ensured on every startup by `_ensure_indexes()`)
 

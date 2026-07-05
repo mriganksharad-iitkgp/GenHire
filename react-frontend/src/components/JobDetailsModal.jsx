@@ -206,8 +206,8 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 									<i className="fa fa-check-circle"></i>
 								</div>
 								<div className={styles.statContent}>
-									<div className={styles.statNumber}>{job.selected || 0}</div>
-									<div className={styles.statLabel}>Selected</div>
+									<div className={styles.statNumber}>{job.screening_cleared ?? job.selected ?? 0}</div>
+									<div className={styles.statLabel}>Screening Cleared</div>
 								</div>
 							</div>
 

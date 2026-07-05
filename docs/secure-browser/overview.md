@@ -16,6 +16,10 @@ fullscreen kiosk.
   site opens a `secure-interview://` link; the OS hands it to this app along
   with the session data (login token, backend address, which
   application/practice session).
+- **Verifies who's sitting there** — before a real interview starts, the
+  candidate's face is checked against the identity registered on their
+  first-ever interview; impersonators are blocked and the attempt is
+  reported to the recruiter.
 - **Locks down during the interview** — fullscreen kiosk, always on top,
   can't be closed or minimized; Alt+Tab, Escape, F12/DevTools, reload, and
   close shortcuts are all blocked. If focus is somehow lost, the window

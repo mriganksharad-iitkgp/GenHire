@@ -101,20 +101,36 @@ The in-browser interview experience (also largely mirrored inside the
 Electron kiosk's own `renderer.js`). Responsibilities:
 
 1. Starts the session — `POST /api/interviews/start` (or is handed one), and
-   for practice mode targets `/api/practice/*` instead.
-2. Captures a reference selfie → `POST /api/interviews/<id>/register-face`.
+   for practice mode targets `/api/practice/*` instead. Reads
+   `max_questions` / `question_deadline` for progress display and pacing.
+2. Runs the **identity gate** — captures a selfie →
+   `POST /api/interviews/<id>/register-face`, and handles the outcomes:
+   quality problems become "retake photo" toasts, `face_mismatch` shows
+   attempts remaining, `face_mismatch_blocked` parks the candidate on a
+   dedicated "Identity Verification Failed" screen (interview over).
+   A transparency note tells first-time candidates their photo becomes the
+   account's registered identity.
 3. Opens a Socket.IO connection and streams webcam frames
    (`proctoring_frame`) once per second; listens for `proctoring_alert`.
-4. Plays questions aloud via `POST /api/speech/synthesize` (Google TTS) and
-   records the candidate's spoken answers.
-5. Submits answers to `/answer`, tracks per-question deadlines (auto-submits
-   an empty answer on timeout), renders next questions.
-6. Records the webcam (MediaRecorder) and uploads to `/upload-recording`;
+4. Plays questions aloud via `POST /api/speech/synthesize` (Google TTS,
+   authenticated) and records the candidate's spoken answers, showing the
+   question text as it's spoken.
+5. Enforces the two-phase silence rules: no speech at all → 30 s visible
+   countdown → auto-advance; spoke then went silent → 10 s → auto-submit.
+   Substantive answers get a short spoken acknowledgement; the
+   `InterviewHeader` shows a phase-aware indicator (listening / countdown /
+   recording / auto-submit).
+6. Submits answers to `/answer`, renders next questions ("Question x of y").
+7. Records the webcam (MediaRecorder) and uploads to `/upload-recording`;
    pairs a phone via QR (`react-qr-code`) for the mobile environment camera.
-7. Runs the inline GazeRecorder integration and posts results to
+8. Runs the inline GazeRecorder integration and posts results to
    `/gaze-recorder-results`.
-8. On finish: `POST .../end`, then `PUT /api/applications/<id>/update-score`,
-   then shows the result screen.
+9. On finish: `POST .../end`. Three outcomes: the normal result screen (plus
+   `PUT /api/applications/<id>/update-score`); a retryable "Couldn't
+   Finalize" screen if `/end` failed (answers are safe server-side); or an
+   "Interview Not Recorded" screen when the backend returns
+   `interview_discarded` — no answers were given, credits were refunded,
+   and the interview can be retaken.
 
 ## Component organization (`src/components/`)
 
@@ -132,8 +148,15 @@ Electron kiosk's own `renderer.js`). Responsibilities:
 - **`admin/`** — `AdminLayout`, `UserTable`, detail/confirm modals.
 - **`common/`** — `ConfirmDialog`, `DeleteAccountModal`, `EmptyState`,
   `Loading`.
-- **`interview/`** — interview sub-components (`InterviewHeader`, …).
+- **`interview/`** — interview sub-components (`InterviewHeader` with the
+  phase-aware timing indicator, …).
 - **`payment/`** — payment UI pieces.
+
+Application statuses render through `src/utils/applicationStatus.js` —
+`normalizeStatus()` folds the legacy `"selected"` value into
+`"screening_cleared"`, and the label maps display it as **"Screening
+Cleared"** (with `"rejected"` shown as **"Screening Not Cleared"** and, on
+candidate screens, `"pending"` as **"Awaiting Recruiter Review"**).
 
 Charts on the cost-statistics pages use `chart.js` + `react-chartjs-2`.
 `@ffmpeg/ffmpeg` (WASM) is available for client-side media processing of

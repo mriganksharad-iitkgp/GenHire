@@ -338,7 +338,8 @@
   color: #0e7490;
 }
 
-.badge.selected {
+.badge.selected,
+.badge.screening_cleared {
   background: #d1fae5;
   color: #047857;
 }

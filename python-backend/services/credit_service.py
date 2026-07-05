@@ -256,7 +256,7 @@ def generate_usage_history(cloudflare_used, nlp_used, llm_used, weeks=6, db=None
                     '$match': {
                         'job_id': {'$in': job_ids},
                         'is_visible': True,
-                        'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                        'status': {'$in': ['interviewed', 'selected', 'screening_cleared', 'rejected']},
                         'updated_at': {'$gte': start_date}
                     }
                 },
@@ -281,7 +281,7 @@ def generate_usage_history(cloudflare_used, nlp_used, llm_used, weeks=6, db=None
             for app in db.applications.find({
                 'job_id': {'$in': job_ids},
                 'is_visible': True,
-                'status': {'$in': ['interviewed', 'selected', 'rejected']},
+                'status': {'$in': ['interviewed', 'selected', 'screening_cleared', 'rejected']},
                 'updated_at': {'$gte': start_date}
             }, {'updated_at': 1}):
                 app_date = app.get('updated_at')

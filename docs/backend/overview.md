@@ -20,14 +20,25 @@ emails, and manages the credit/payment system.
 - **AI interviews** — an LLM interviewer ("Alex", powered by Groq) asks
   adaptive questions based on the candidate's CV and the job description,
   evaluates every answer, and produces a final report with an interview
-  score (70% answer quality + 30% communication quality).
+  score (70% answer quality + 30% communication quality). Interviews pace
+  themselves: 30 seconds of silence auto-advances a question; a 10-second
+  pause after the candidate speaks submits the answer. The recruiter's final
+  call is **Screening Cleared** or **Screening Not Cleared** — the platform
+  screens, it doesn't hire.
+- **Face identity verification** — the candidate's face is enrolled
+  permanently at their first real interview; every later real interview
+  (any company) must match it or is blocked, and the captured photo is
+  shared with the recruiter. Impersonation ("proxy interviewing") is the
+  #1 fraud vector this kills.
 - **Proctoring** — while the interview runs, the backend analyzes webcam
   frames (face identity + head pose), gaze-tracking data, tab switches, and
   an optional phone camera, producing a proctoring score for the recruiter.
 - **Payments & credits** — every costly action (interviews, AI job
   descriptions) spends credits from a wallet; credits are bought through
   Razorpay. Real interviews are paid by the **recruiter**, practice
-  interviews by the candidate.
+  interviews by the candidate. Interviews are charged at start and
+  **auto-refunded** if they end with zero answers (crash, abandonment,
+  identity block).
 - **Invites** — recruiters can bulk-invite candidates by email (CSV/Excel
   upload); invitees get temporary "Invite ID" accounts that skip signup.
 - **Real-time updates** — a Socket.IO channel pushes application changes to

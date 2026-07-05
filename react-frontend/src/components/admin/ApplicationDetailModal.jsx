@@ -8,8 +8,8 @@ const STATUS_OPTIONS = [
   { value: "reviewed", label: "Reviewed" },
   { value: "shortlisted", label: "Shortlisted" },
   { value: "interviewed", label: "Interviewed" },
-  { value: "selected", label: "Selected" },
-  { value: "rejected", label: "Rejected" },
+  { value: "screening_cleared", label: "Screening Cleared" },
+  { value: "rejected", label: "Screening Not Cleared" },
 ];
 
 const ApplicationDetailModal = ({

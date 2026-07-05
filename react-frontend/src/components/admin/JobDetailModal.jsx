@@ -235,7 +235,7 @@ const JobDetailModal = ({
               <ModalField label="Pending" value={data.stats?.pending || 0} />
               <ModalField label="Shortlisted" value={data.stats?.shortlisted || 0} />
               <ModalField label="Interviewed" value={data.stats?.interviewed || 0} />
-              <ModalField label="Selected" value={data.stats?.selected || 0} />
+              <ModalField label="Screening Cleared" value={data.stats?.screening_cleared ?? data.stats?.selected ?? 0} />
               <ModalField label="Rejected" value={data.stats?.rejected || 0} />
             </ModalGrid>
           </ModalSection>

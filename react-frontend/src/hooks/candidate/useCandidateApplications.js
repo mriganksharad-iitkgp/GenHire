@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApplications, getInterviewReport } from "../../services/api";
 import { useCandidateData } from "../../contexts/CandidateDataContext";
+import {
+  normalizeStatus,
+  candidateStatusLabel,
+} from "../../utils/applicationStatus";
 
 // Helper function to map application data
 const mapApplication = (a) => {
-  const mappedStatus = (a.status || "pending").replace(/\b\w/g, (c) =>
-    c.toUpperCase(),
-  );
+  // statusKey: canonical machine value ("screening_cleared", never legacy
+  // "selected"); status: candidate-facing display label.
+  const statusKey = normalizeStatus(a.status || "pending");
+  const mappedStatus = candidateStatusLabel(a.status || "pending");
 
   const processingStatus = a.processing_status || "completed";
   const isScoringFailed = processingStatus === "scoring_failed";
@@ -22,6 +27,7 @@ const mapApplication = (a) => {
     position: a.job_title || a.job_details?.title || "",
     appliedDate: a.applied_at,
     status: mappedStatus,
+    statusKey,
     processingStatus,
     scoringError: isScoringFailed,
     scoringRetrying: isScoringRetrying,

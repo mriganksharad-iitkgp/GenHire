@@ -58,8 +58,8 @@ const CandidatesFilters = ({
         <option value="Reviewed">Reviewed</option>
         <option value="Shortlisted">Shortlisted</option>
         <option value="Interviewed">Interviewed</option>
-        <option value="Selected">Selected</option>
-        <option value="Rejected">Rejected</option>
+        <option value="screening_cleared">Screening Cleared</option>
+        <option value="Rejected">Screening Not Cleared</option>
       </select>
       <select
         className={styles.filterSelect}

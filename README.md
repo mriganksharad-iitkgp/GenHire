@@ -1,9 +1,11 @@
 # GenHire => AI Powered Interview Platform
 
-**AI-powered hiring platform** — recruiters post jobs and get automatically
+**AI-powered screening platform** — recruiters post jobs and get automatically
 CV-scored applicants; candidates take adaptive, voice-based AI interviews
-inside a locked-down secure browser with live proctoring; recruiters receive
-full interview reports with transcripts, scores, and integrity signals.
+inside a locked-down secure browser with live proctoring and face identity
+verification; recruiters receive full interview reports with transcripts,
+scores, and integrity signals, then mark candidates **Screening Cleared** for
+their own further hiring rounds.
 
 ## What's in this repository
 
@@ -27,14 +29,21 @@ Electron secure browser ──REST + Socket.IO┘   (runs the actual interview)
 1. A recruiter posts a job; candidates apply and their CVs are AI-scored
    automatically against the job description.
 2. Shortlisted candidates click "Start Interview" — the website deep-links
-   into the installed secure browser, which locks the screen and runs a
-   spoken AI interview while streaming proctoring signals (face identity,
-   head pose, gaze tracking, tab-switch detection, optional phone camera).
+   into the installed secure browser, which verifies the candidate's face
+   against the identity registered on their very first interview (blocking
+   impersonators), locks the screen, and runs a spoken AI interview while
+   streaming proctoring signals (face identity, head pose, gaze tracking,
+   tab-switch detection, optional phone camera). Interviews pace themselves:
+   30 seconds of silence after a question auto-advances; a 10-second pause
+   after the candidate stops speaking submits the answer.
 3. The recruiter reviews the interview report — transcript, answer/language
-   scores, per-answer AI-generation probability, proctoring score — and
-   selects or rejects, with the candidate notified by email and live
+   scores, per-answer AI-generation probability, proctoring score, captured
+   identity photo — and marks the candidate **Screening Cleared** or
+   **Screening Not Cleared**, with the candidate notified by email and live
    dashboard updates throughout.
 4. Everything billable runs on a credit wallet, topped up via Razorpay.
+   Interviews are charged when they start and automatically **refunded** if
+   they end with zero answers (crash, abandonment, identity block).
 
 ## Quick start
 

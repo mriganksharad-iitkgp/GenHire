@@ -21,7 +21,7 @@ from payment_module.models.credit_wallet import CreditWalletSchema  # noqa: E402
 from payment_module.models.payment import PaymentSchema  # noqa: E402
 
 MIGRATION_RECHARGE_AT = datetime(2024, 1, 1)
-INTERVIEWED_STATUSES = {"interviewed", "selected", "rejected"}
+INTERVIEWED_STATUSES = {"interviewed", "selected", "screening_cleared", "rejected"}
 
 
 def normalize_audience(user_type: str) -> str:

@@ -50,7 +50,7 @@ export default function ApplicationsList({
       app.company.toLowerCase().includes(companyFilter.toLowerCase());
     const matchesStatus =
       statusFilter === "" ||
-      app.status.toLowerCase() === statusFilter.toLowerCase();
+      (app.statusKey || app.status.toLowerCase()) === statusFilter.toLowerCase();
     const matchesJobType =
       jobTypeFilter === "" ||
       (app.jobType || "").toLowerCase() === jobTypeFilter.toLowerCase();
@@ -82,11 +82,11 @@ export default function ApplicationsList({
   const paginatedApplications = sorted.slice(startIndex, startIndex + itemsPerPage);
   const totalPages = Math.ceil(sorted.length / itemsPerPage);
 
-  const getButtonsForStatus = (status) => {
-    const s = status.toLowerCase();
+  const getButtonsForStatus = (statusKey) => {
+    const s = String(statusKey || "").toLowerCase();
     const base = ["viewCV", "details"];
     if (s === "shortlisted") return [...base, "giveInterview"];
-    if (["interviewed", "selected", "rejected"].includes(s)) return [...base, "report"];
+    if (["interviewed", "screening_cleared", "selected", "rejected"].includes(s)) return [...base, "report"];
     return base;
   };
 
@@ -124,12 +124,12 @@ export default function ApplicationsList({
             className={styles.filterSelect}
           >
             <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
+            <option value="pending">Awaiting Recruiter Review</option>
             <option value="reviewed">Reviewed</option>
             <option value="shortlisted">Shortlisted</option>
             <option value="interviewed">Interviewed</option>
-            <option value="selected">Selected</option>
-            <option value="rejected">Rejected</option>
+            <option value="screening_cleared">Screening Cleared</option>
+            <option value="rejected">Screening Not Cleared</option>
           </select>
         </div>
 
@@ -199,8 +199,9 @@ export default function ApplicationsList({
       <div className={styles.applicationsList}>
         {paginatedApplications.length > 0 ? (
           paginatedApplications.map((app) => {
-            const statusKey = app.status.toLowerCase().replace(/\s+/g, "");
-            const availableButtons = getButtonsForStatus(app.status);
+            const statusKey =
+              app.statusKey || app.status.toLowerCase().replace(/\s+/g, "");
+            const availableButtons = getButtonsForStatus(statusKey);
             return (
               <div
                 key={app.id}

@@ -11,6 +11,27 @@ window.addEventListener('unhandledrejection', function (event) {
 const REQUIRED_WIDTH = 640;
 const REQUIRED_HEIGHT = 480;
 
+// Interview pacing — mirrors react-frontend/src/pages/Chat.jsx: after the AI
+// finishes speaking, the candidate has NO_ANSWER_TIMEOUT_SECONDS to START
+// speaking (auto-advances on expiry); once they've spoken,
+// POST_SPEECH_SILENCE_SECONDS of sustained silence auto-submits the answer.
+const NO_ANSWER_TIMEOUT_SECONDS = 30;
+const POST_SPEECH_SILENCE_SECONDS = 10;
+// Short spoken acknowledgements between an answer and the next question so
+// the hand-off doesn't feel like an abrupt topic jump.
+const ACKNOWLEDGEMENTS = [
+    "Alright, thank you.",
+    "Got it.",
+    "Okay, thanks for sharing that.",
+    "Thanks.",
+];
+// Client-side ceiling on automatic face-capture retries for recoverable
+// issues (bad lighting, no face in frame). The SERVER enforces the real
+// mismatch limit (FACE_VERIFY_MAX_ATTEMPTS) — this is just a backstop
+// against looping forever if the camera never produces a usable frame.
+const FACE_CAPTURE_MAX_ATTEMPTS = 8;
+const FACE_CAPTURE_RETRY_DELAY_MS = 2500;
+
 let video, canvas, ctx;
 let objectDetector;
 let faceLandmarker;
@@ -175,7 +196,16 @@ let currentTranscript = "";
 let isRecording = false;
 let speechNetworkFailed = false;
 let lastSpeechTime = 0;
-let silenceInterval = null;
+
+// Question pacing state (see NO_ANSWER_TIMEOUT_SECONDS / POST_SPEECH_SILENCE_SECONDS)
+let pacingInterval = null;
+let hasSpokenThisQuestion = false;
+let questionListeningStartedAt = null;
+
+// Face identity gate + progress/discard state (mirrors Chat.jsx)
+let maxQuestions = 10;
+let identityStatus = null;
+let discardInfo = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Bind DOM
@@ -212,26 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnReturnDashboard = document.getElementById('btn-return-dashboard');
     if (btnReturnDashboard) {
         btnReturnDashboard.addEventListener('click', () => {
-            const targetPath = isPracticeMode ? '/practice' : '/profile#applications';
-            let dashboardUrl = `http://localhost:3000${targetPath}`;
-            if (apiUrl) {
-                try {
-                    const urlObj = new URL(apiUrl);
-                    dashboardUrl = `${urlObj.protocol}//${urlObj.hostname}:3000${targetPath}`;
-                } catch (e) {
-                    console.warn('Could not parse apiUrl, using default:', e);
-                }
-            }
-
-            if (window.electronAPI && window.electronAPI.openExternal) {
-                window.electronAPI.openExternal(dashboardUrl);
-            }
-
-            setTimeout(() => {
-                if (window.electronAPI && window.electronAPI.quitApp) {
-                    window.electronAPI.quitApp();
-                }
-            }, 1500);
+            returnToDashboardAndExit();
         });
     }
 
@@ -264,6 +275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (text) {
                 lastSpeechTime = Date.now();
+                hasSpokenThisQuestion = true;
             }
 
             // Show typing/speaking feedback
@@ -599,9 +611,12 @@ async function startInterview() {
             currentSessionId = payload.sessionId;
             currentQuestion = payload.initialQuestion;
             questionCount = 1;
-            
+
             if (payload.proctoringConfig) {
                 proctoringConfig = payload.proctoringConfig;
+            }
+            if (payload.maxQuestions) {
+                maxQuestions = payload.maxQuestions;
             }
         } else if (payload.sessionId && payload.initialQuestion) {
             // Fast path: session was pre-created by the platform — start instantly, no API call needed
@@ -610,6 +625,9 @@ async function startInterview() {
             questionCount = 1;
             if (payload.proctoringConfig) {
                 proctoringConfig = payload.proctoringConfig;
+            }
+            if (payload.maxQuestions) {
+                maxQuestions = payload.maxQuestions;
             }
         } else {
             // Fallback: create session here (slower — legacy path)
@@ -635,6 +653,9 @@ async function startInterview() {
             if (data.proctoring_config) {
                 proctoringConfig = data.proctoring_config;
             }
+            if (data.max_questions) {
+                maxQuestions = data.max_questions;
+            }
         }
     } catch (err) {
         testingOverlay.style.display = 'none';
@@ -645,6 +666,17 @@ async function startInterview() {
         return;
     }
 
+    // FACE IDENTITY GATE — must happen before kiosk lockdown/gaze calibration.
+    // First-ever real interview enrolls this capture as the account's
+    // permanent identity; every later real interview must match it or the
+    // attempt is blocked. Practice sessions soft-verify and never block.
+    const identityOk = await performIdentityCheck();
+    if (!identityOk) {
+        return; // a blocked/fatal-error screen has already been shown
+    }
+    document.getElementById('testing-title').textContent = 'Setting Up Your Interview';
+    document.getElementById('testing-text').textContent = 'Initializing secure environment — this takes just a moment.';
+
     // Start Gaze Tracking via WebGazer (only if gaze_heatmap enabled)
     if (proctoringConfig.gaze_heatmap && window.webgazer) {
         beginWebGazerRecording().catch((err) => {
@@ -654,6 +686,266 @@ async function startInterview() {
     } else {
         finalizeStartInterview();
     }
+}
+
+// ═══════════════════════════════════════
+//  FACE IDENTITY GATE
+// ═══════════════════════════════════════
+
+/** Capture one frame from the live webcam and POST it to the identity gate. */
+async function captureAndVerifyFace() {
+    if (!video || video.readyState < 3 || video.videoWidth === 0) {
+        return { ok: false, blocked: false, fatal: false, message: 'Camera is still initializing.' };
+    }
+
+    const snap = document.createElement('canvas');
+    snap.width = video.videoWidth;
+    snap.height = video.videoHeight;
+    snap.getContext('2d').drawImage(video, 0, 0, snap.width, snap.height);
+    const imageData = snap.toDataURL('image/jpeg', 0.9);
+
+    try {
+        const response = await fetch(`${apiUrl}/api/interviews/${currentSessionId}/register-face`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiToken}`
+            },
+            body: JSON.stringify({ image: imageData })
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            if (result.error_code === 'face_mismatch_blocked') {
+                return {
+                    ok: false,
+                    blocked: true,
+                    fatal: false,
+                    message: result.error || "Face verification failed repeatedly — this interview attempt has been locked because the captured face does not match this account's registered identity."
+                };
+            }
+            if (result.error_code === 'face_mismatch') {
+                const attemptsNote = typeof result.attempts_remaining === 'number'
+                    ? ` (${result.attempts_remaining} attempt${result.attempts_remaining === 1 ? '' : 's'} remaining)`
+                    : '';
+                return {
+                    ok: false,
+                    blocked: false,
+                    fatal: false,
+                    message: `${result.error || 'The captured face does not match the identity registered on this account.'}${attemptsNote}`
+                };
+            }
+            if (response.status === 404) {
+                // Session genuinely doesn't exist — retrying won't help.
+                return { ok: false, blocked: false, fatal: true, message: result.error || 'Interview session not found.' };
+            }
+            // Quality issues (no_face_detected / multiple_faces_detected / invalid_image) — retryable.
+            return { ok: false, blocked: false, fatal: false, message: result.error || 'Face capture failed. Please try again.' };
+        }
+
+        const identity = result.identity || {};
+        return { ok: true, blocked: false, fatal: false, status: identity.status || null };
+    } catch (err) {
+        console.error('Face verification request failed:', err);
+        return { ok: false, blocked: false, fatal: false, message: 'Network error while verifying identity.' };
+    }
+}
+
+/**
+ * Runs the identity gate before the interview can proceed. Returns true once
+ * verification clears (or is skipped/soft for practice); returns false if the
+ * candidate is blocked or capture fails fatally — in both cases a terminal
+ * screen has already been shown and startInterview() must stop.
+ */
+async function performIdentityCheck() {
+    testingOverlay.style.display = 'flex';
+    document.getElementById('testing-title').textContent = 'Verifying Your Identity';
+    document.getElementById('testing-text').textContent =
+        "Please look directly at the camera. This confirms it's really you sitting the interview.";
+
+    // Give the camera a brief moment to settle exposure/focus after setupCamera().
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    for (let attempt = 1; attempt <= FACE_CAPTURE_MAX_ATTEMPTS; attempt++) {
+        const outcome = await captureAndVerifyFace();
+
+        if (outcome.ok) {
+            identityStatus = outcome.status;
+            if (identityStatus === 'registered_new') {
+                document.getElementById('testing-text').textContent =
+                    "Face registered — this photo is now your account's verified identity for future interviews.";
+            } else if (identityStatus === 'verified') {
+                document.getElementById('testing-text').textContent = 'Identity verified ✓';
+            }
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            return true;
+        }
+
+        if (outcome.blocked) {
+            showIdentityBlockedScreen(outcome.message);
+            return false;
+        }
+
+        if (outcome.fatal) {
+            resetToStartupView();
+            showError(outcome.message);
+            return false;
+        }
+
+        document.getElementById('testing-text').textContent = `${outcome.message} Retrying…`;
+        await new Promise((resolve) => setTimeout(resolve, FACE_CAPTURE_RETRY_DELAY_MS));
+    }
+
+    // Exhausted client-side retries without a definitive verdict (camera
+    // never produced a usable frame) — this is an edge case worth surfacing
+    // rather than looping forever.
+    resetToStartupView();
+    showError('Could not verify your identity after several attempts. Please check your camera and restart the interview.');
+    return false;
+}
+
+/** Leaves the candidate on a usable "Begin Interview Setup" screen instead of
+ * a blank one after a fatal identity-check error is dismissed. */
+function resetToStartupView() {
+    testingOverlay.style.display = 'none';
+    startupView.style.display = 'flex';
+    btnStart.disabled = false;
+    btnStart.textContent = "Begin Interview Setup";
+}
+
+/** Terminal screen for a permanently blocked identity mismatch. No kiosk
+ * lockdown was ever engaged at this point, so there is nothing to unlock. */
+function showIdentityBlockedScreen(message) {
+    testingOverlay.style.display = 'none';
+    startupView.style.display = 'none';
+    interviewView.style.display = 'none';
+    resultsView.style.display = 'none';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'identity-blocked-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg, rgba(10,14,23,0.98), rgba(20,10,10,0.98));z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;text-align:center;padding:40px;';
+    overlay.innerHTML = `
+      <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+      <h2 style="color:#fc8181;font-size:1.8rem;margin-bottom:14px;">Identity Verification Failed</h2>
+      <p style="max-width:560px;color:#f8d7d7;line-height:1.6;background:rgba(153,27,27,0.25);border:1px solid rgba(252,129,129,0.4);border-radius:10px;padding:14px 18px;margin-bottom:14px;">${message}</p>
+      <p style="max-width:560px;color:#a0aec0;line-height:1.6;margin-bottom:24px;">For fairness and security, interviews must be taken by the account owner whose face was registered during their first interview. This attempt has been recorded. If you believe this is an error, please contact support.</p>
+      <button id="identity-blocked-exit" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:14px 32px;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;">Return to Genhire</button>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('identity-blocked-exit').addEventListener('click', () => {
+        returnToDashboardAndExit();
+    });
+
+    if (video && video.srcObject) {
+        video.srcObject.getTracks().forEach((t) => t.stop());
+        video.srcObject = null;
+    }
+    if (audioStream) {
+        audioStream.getTracks().forEach((t) => t.stop());
+        audioStream = null;
+    }
+}
+
+/** Shared "open the dashboard in the default browser, then quit" action used
+ * by both the identity-blocked and interview-discarded terminal screens. */
+function returnToDashboardAndExit() {
+    const targetPath = isPracticeMode ? '/practice' : '/profile#applications';
+    let dashboardUrl = `http://localhost:3000${targetPath}`;
+    if (apiUrl) {
+        try {
+            const urlObj = new URL(apiUrl);
+            dashboardUrl = `${urlObj.protocol}//${urlObj.hostname}:3000${targetPath}`;
+        } catch (e) {
+            console.warn('Could not parse apiUrl, using default:', e);
+        }
+    }
+
+    if (window.electronAPI && window.electronAPI.openExternal) {
+        window.electronAPI.openExternal(dashboardUrl);
+    }
+
+    setTimeout(() => {
+        if (window.electronAPI && window.electronAPI.quitApp) {
+            window.electronAPI.quitApp();
+        }
+    }, 1500);
+}
+
+/** Terminal screen for a zero-answer /end response: the interview was
+ * discarded and credits were refunded instead of scored. */
+function showDiscardedScreen(info) {
+    const refundLine = info.refundSuccess
+        ? (isPracticeMode
+            ? `The ${info.creditsRefunded || ''} credits deducted for this practice session were refunded to your wallet. You can start a fresh practice interview any time.`
+            : 'The credits deducted for this interview were refunded to the recruiter, and your application is unaffected. You can retake the interview from your applications page.')
+        : 'No report was generated for this session. You can retake the interview at any time.';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'discarded-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg, rgba(10,14,23,0.98), rgba(30,20,5,0.98));z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;text-align:center;padding:40px;';
+    overlay.innerHTML = `
+      <div style="font-size:48px;margin-bottom:16px;">📋</div>
+      <h2 style="color:#f6e05e;font-size:1.8rem;margin-bottom:14px;">Interview Not Recorded</h2>
+      <p style="max-width:560px;color:#fef3c7;line-height:1.6;background:rgba(146,64,14,0.25);border:1px solid rgba(246,224,94,0.4);border-radius:10px;padding:14px 18px;margin-bottom:14px;">${info.message}</p>
+      <p style="max-width:560px;color:#a0aec0;line-height:1.6;margin-bottom:24px;">${refundLine}</p>
+      <button id="discarded-exit" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:14px 32px;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;">${isPracticeMode ? '↩ Return to Practice Page' : '↩ Return to My Applications'}</button>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('discarded-exit').addEventListener('click', () => {
+        returnToDashboardAndExit();
+    });
+}
+
+// ═══════════════════════════════════════
+//  QUESTION PACING (30s no-answer / 10s post-speech silence)
+// ═══════════════════════════════════════
+function updatePacingStatus(text) {
+    const el = document.getElementById('pacing-status');
+    if (el) el.textContent = text || '';
+}
+
+function beginQuestionPacing() {
+    hasSpokenThisQuestion = false;
+    questionListeningStartedAt = Date.now();
+    lastSpeechTime = Date.now();
+
+    if (pacingInterval) clearInterval(pacingInterval);
+    pacingInterval = setInterval(() => {
+        if (!isInterviewActive || isSubmittingAnswer) return;
+        const now = Date.now();
+
+        if (!hasSpokenThisQuestion) {
+            const waited = (now - questionListeningStartedAt) / 1000;
+            if (waited >= NO_ANSWER_TIMEOUT_SECONDS) {
+                clearInterval(pacingInterval);
+                pacingInterval = null;
+                submitAnswer();
+                return;
+            }
+            updatePacingStatus(`No answer yet — auto-advancing in ${Math.ceil(NO_ANSWER_TIMEOUT_SECONDS - waited)}s`);
+        } else {
+            const silentFor = (now - lastSpeechTime) / 1000;
+            if (silentFor >= POST_SPEECH_SILENCE_SECONDS && currentTranscript.trim().length > 0) {
+                clearInterval(pacingInterval);
+                pacingInterval = null;
+                submitAnswer();
+                return;
+            }
+            updatePacingStatus(
+                silentFor >= 1 ? `Submitting in ${Math.ceil(POST_SPEECH_SILENCE_SECONDS - silentFor)}s…` : 'Listening…'
+            );
+        }
+    }, 1000);
+}
+
+function stopQuestionPacing() {
+    if (pacingInterval) {
+        clearInterval(pacingInterval);
+        pacingInterval = null;
+    }
+    updatePacingStatus('');
 }
 
 function finalizeStartInterview() {
@@ -717,9 +1009,15 @@ function finalizeStartInterview() {
         currentAudioObj = playQuestionWithReveal(currentQuestion, base64Audio, () => {
             isAISpeaking = false;
             updateSendButtonState();
+            // Recording captures the candidate's spoken ANSWER — it must
+            // always start regardless of the voice_detection proctoring
+            // toggle (that flag only gates the separate VAD proctoring
+            // signal below, not answer capture; see submitAnswer's
+            // unconditional startRecording() for the next-question case).
             if (isInterviewActive && !isRecording && !speechNetworkFailed) {
-                if (proctoringConfig.voice_detection) startRecording();
+                startRecording();
             }
+            beginQuestionPacing();
         });
     };
     finishSetupAndSpeak();
@@ -731,6 +1029,8 @@ function finalizeStartInterview() {
     }, 1000);
 
     document.getElementById('q-count').textContent = questionCount;
+    const qMaxEl = document.getElementById('q-max');
+    if (qMaxEl) qMaxEl.textContent = maxQuestions;
     transcriptText.textContent = currentQuestion;
 
     // Start tracking loops conditionally
@@ -753,7 +1053,8 @@ function finalizeStartInterview() {
 async function endInterview() {
     isInterviewActive = false;
     clearInterval(clockInterval);
-    if (silenceInterval) clearInterval(silenceInterval);
+    stopQuestionPacing();
+    discardInfo = null;
 
     stopRecording();
 
@@ -829,9 +1130,26 @@ async function endInterview() {
             })
         });
 
+        let endData = null;
+        try {
+            endData = await endResp.json();
+        } catch (e) {
+            endData = null;
+        }
+
         if (!endResp.ok) {
-            const endError = await endResp.text();
-            throw new Error(`Interview end request failed (${endResp.status}): ${endError}`);
+            throw new Error((endData && (endData.error || endData.message)) || `Interview end request failed (${endResp.status})`);
+        }
+
+        if (endData && endData.status === "interview_discarded") {
+            // Zero answers were recorded — the backend refunded the
+            // start-of-interview credits and discarded the session instead
+            // of scoring it.
+            discardInfo = {
+                message: endData.message || "No answers were recorded, so this interview was discarded and your credits were refunded.",
+                refundSuccess: !!(endData.refund && endData.refund.success),
+                creditsRefunded: Number((endData.refund && endData.refund.credits_refunded) || 0),
+            };
         }
     } catch (e) {
         console.error("Failed to signal backend to end interview or send gaze tracking data", e);
@@ -842,8 +1160,14 @@ async function endInterview() {
         window.electronAPI.disableKiosk();
     }
 
-    // Prepare Results View
     interviewView.style.display = 'none';
+
+    if (discardInfo) {
+        showDiscardedScreen(discardInfo);
+        return;
+    }
+
+    // Prepare Results View
     resultsView.style.display = 'flex';
 
     // Populate Metrics
@@ -885,6 +1209,7 @@ async function submitAnswer() {
     updateSendButtonState();
     sendBtn.innerHTML = "Processing...";
 
+    stopQuestionPacing();
     stopRecording();
 
     try {
@@ -913,39 +1238,57 @@ async function submitAnswer() {
 
         const data = await response.json();
 
-        if (data.interview_complete || questionCount >= 10) {
+        if (data.interview_complete || questionCount >= maxQuestions) {
             isSubmittingAnswer = false;
             endInterview();
             return;
         }
 
-        // Setup next question
+        // Mirror the backend's own count instead of blindly incrementing — on
+        // a repeated question (data.repeated_question) the backend
+        // deliberately leaves progress.questions_asked unchanged, so the
+        // visible progress here correctly stays put too.
+        if (data.progress && typeof data.progress.questions_asked === 'number') {
+            questionCount = data.progress.questions_asked + 1;
+        } else if (!data.repeated_question) {
+            questionCount++;
+        }
         currentQuestion = data.next_question;
-        questionCount++;
         document.getElementById('q-count').textContent = questionCount;
 
         // Reset speech variables
         currentTranscript = "";
         lastSpeechTime = Date.now();
 
-        // Speak next question with word-by-word reveal
+        // Speak naturally: repeat requests get the question verbatim; a
+        // skipped question moves on gently; a real answer earns a brief
+        // acknowledgement before the next question.
+        let spokenText = currentQuestion;
+        if (!data.repeated_question) {
+            const ack = answerText && answerText !== "(No answer provided)"
+                ? ACKNOWLEDGEMENTS[Math.floor(Math.random() * ACKNOWLEDGEMENTS.length)]
+                : "No problem, let's move on.";
+            spokenText = `${ack} ${currentQuestion}`;
+        }
+
         if (currentAudioObj) { currentAudioObj.pause(); currentAudioObj.currentTime = 0; }
         isAISpeaking = true;
         updateSendButtonState();
 
         let base64Audio = null;
         try {
-            base64Audio = await window.electronAPI.synthesizeSpeech(currentQuestion);
+            base64Audio = await window.electronAPI.synthesizeSpeech(spokenText);
         } catch (ttsErr) {
             console.error("Google TTS failed:", ttsErr);
         }
 
-        currentAudioObj = playQuestionWithReveal(currentQuestion, base64Audio, () => {
+        currentAudioObj = playQuestionWithReveal(spokenText, base64Audio, () => {
             isAISpeaking = false;
             updateSendButtonState();
             if (isInterviewActive && !isRecording && !speechNetworkFailed) {
                 startRecording();
             }
+            beginQuestionPacing();
         });
 
     } catch (err) {
@@ -1229,23 +1572,14 @@ function startRecording() {
     // Send data chunks every 250ms for streaming STT
     mediaRecorder.start(250);
     lastSpeechTime = Date.now();
-
-    // Silence auto-submit timer
-    if (silenceInterval) clearInterval(silenceInterval);
-    silenceInterval = setInterval(() => {
-        if (!isInterviewActive || isSubmittingAnswer || !isRecording) return;
-        const timeSinceLastSpeech = (Date.now() - lastSpeechTime) / 1000;
-        if (timeSinceLastSpeech >= 5 && currentTranscript.trim().length > 0) {
-            submitAnswer();
-        }
-    }, 1000);
+    // Auto-submit pacing (30s no-answer / 10s post-speech silence) is driven
+    // by beginQuestionPacing(), called once per question alongside this.
 }
 
 function stopRecording() {
     if (!isRecording) return;
     isRecording = false;
 
-    if (silenceInterval) clearInterval(silenceInterval);
     document.getElementById('mic-btn').classList.remove('mic-recording');
 
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {

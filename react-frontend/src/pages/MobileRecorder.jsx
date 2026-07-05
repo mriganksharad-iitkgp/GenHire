@@ -13,13 +13,14 @@ const MobileRecorder = () => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // 1. Initialize Socket
-    // If proctoring is disabled, mobile recorder might not be needed?
-    // Or it might still be needed for just recording without proctoring logic?
-    // Assuming mobile recorder is part of proctoring suite, so uses proctoring server.
+    // 1. Initialize Socket — always the real API URL (the fallback here was
+    // previously the literal string "process.env.REACT_APP_API_URL", which
+    // made the mobile companion dial a nonsense host whenever proctoring was
+    // disabled). This page is opened from a QR code without a JWT; the
+    // backend accepts tokenless connects for exactly this session-room flow.
     const socketUrl = proctoringConfig.enabled
       ? proctoringConfig.serverUrl
-      : "process.env.REACT_APP_API_URL";
+      : process.env.REACT_APP_API_URL;
     const newSocket = io(socketUrl);
     setSocket(newSocket);
 

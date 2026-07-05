@@ -91,6 +91,7 @@ from routes.speech_routes import speech_bp
 
 import threading
 from services.cv_scoring_service import CVScoringService
+from services import face_verification_service as face_service
 from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
 from controllers.admin_controller import AdminController
@@ -425,6 +426,17 @@ interview_manager = InterviewSessionManager(
     config=interview_config, llm_config=llm_config
 )
 
+# Credit-lifecycle sweeper: refunds start-time debits for interviews that
+# never produced a single answer (abandoned tab, identity block, crash) and
+# auto-finalizes substantive-but-unended sessions into scored reports.
+from services import interview_credit_service
+
+interview_refund_sweeper = interview_credit_service.get_interview_refund_sweeper(
+    collections, interview_manager
+)
+interview_refund_sweeper.start()
+logger.info("[OK] Interview credit-refund sweeper started")
+
 # === INTERVIEW SYSTEM (REMAINS IN APP.PY) ===
 # All interview-related routes and Socket.IO handlers remain here
 
@@ -734,6 +746,13 @@ def start_interview(current_user):
         else int(PaymentConfig.RECRUITER_REAL_INTERVIEW_CREDITS)
     )
     recruiter_deduction = None
+    # Refund-aware idempotency: after a refunded attempt the counter changes
+    # the debit key so the next genuine attempt is charged again, while plain
+    # retries of the same attempt still dedupe (see interview_credit_service).
+    interview_refund_count = int(app_doc.get("interview_refund_count") or 0)
+    debit_idempotency_key = interview_credit_service.real_interview_debit_key(
+        application_id, interview_refund_count
+    )
 
     # --- Interview start credit pre-check and deduction ---
     if job:
@@ -778,8 +797,9 @@ def start_interview(current_user):
                     "job_id": str(job.get("_id")),
                     "proctoring_enabled": proctoring_enabled,
                     "proctoring_config": proctoring_config or {},
+                    "attempt": interview_refund_count,
                 },
-                idempotency_key=f"real-interview:{application_id}",
+                idempotency_key=debit_idempotency_key,
             )
 
             if not recruiter_deduction.get("success"):
@@ -808,7 +828,36 @@ def start_interview(current_user):
                     "recruiter_id": str(recruiter_id),
                     "credits_impact": 0,
                 },
-                idempotency_key=f"real-interview-candidate-audit:{application_id}",
+                idempotency_key=(
+                    f"real-interview-candidate-audit:{application_id}"
+                    if interview_refund_count <= 0
+                    else f"real-interview-candidate-audit:{application_id}:r{interview_refund_count}"
+                ),
+            )
+
+    def _refund_start_debit(reason):
+        """Reverse the just-taken recruiter debit when the start attempt dies
+        before a usable session exists — credits used to simply vanish here."""
+        if not (recruiter_deduction and recruiter_deduction.get("success")):
+            return
+        try:
+            interview_credit_service.refund_recruiter_debit(
+                db_config.get_db(),
+                applications_collection,
+                application_id=str(application_id),
+                recruiter_id=(
+                    str(job.get("created_by")) if job and job.get("created_by") else None
+                ),
+                deduction=recruiter_deduction,
+                debit_key=debit_idempotency_key,
+                session_id=None,
+                reason=reason,
+            )
+        except Exception:
+            logger.error(
+                "Start-failure refund failed for application %s",
+                application_id,
+                exc_info=True,
             )
 
     # Build plain-text CV — prefer snapshot text (PDF CVs), fall back to structured details
@@ -821,65 +870,79 @@ def start_interview(current_user):
             else _format_cv_from_details(cv_details)
         )
     else:
+        _refund_start_debit("start_failed_empty_cv")
         return jsonify({"error": "CV content is empty. Please re-apply with a valid CV."}), 400
-    jd_text = (
-        cv_service.format_job_description(job)
-        if cv_service
-        else _format_job_from_doc(job)
-    )
 
-    # Persist as temporary .txt files for the interview document pipeline
-    import uuid as _uuid
+    try:
+        jd_text = (
+            cv_service.format_job_description(job)
+            if cv_service
+            else _format_job_from_doc(job)
+        )
 
-    cv_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_cv.txt")
-    jd_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_jd.txt")
-    with open(cv_txt_path, "w", encoding="utf-8") as f:
-        f.write(cv_text)
-    with open(jd_txt_path, "w", encoding="utf-8") as f:
-        f.write(jd_text)
+        # Persist as temporary .txt files for the interview document pipeline
+        import uuid as _uuid
 
-    # pre_validated=True: we just wrote these files from trusted MongoDB data
-    # so there is no need to re-read and validate them inside create_session.
-    session_details = interview_manager.create_session(
-        cv_path=cv_txt_path,
-        jd_path=jd_txt_path,
-        reference_paths=[],
-        proctoring_config=proctoring_config,
-        pre_validated=True,
-    )
+        cv_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_cv.txt")
+        jd_txt_path = os.path.join(TMP_FOLDER, f"{_uuid.uuid4()}_jd.txt")
+        with open(cv_txt_path, "w", encoding="utf-8") as f:
+            f.write(cv_text)
+        with open(jd_txt_path, "w", encoding="utf-8") as f:
+            f.write(jd_text)
 
-    if "error" in session_details:
-        return jsonify(session_details), 400
+        # pre_validated=True: we just wrote these files from trusted MongoDB data
+        # so there is no need to re-read and validate them inside create_session.
+        session_details = interview_manager.create_session(
+            cv_path=cv_txt_path,
+            jd_path=jd_txt_path,
+            reference_paths=[],
+            proctoring_config=proctoring_config,
+            pre_validated=True,
+        )
 
-    cv_score = app_doc.get("cv_score")
-    sim_score = (
-        (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
-    )
+        if "error" in session_details:
+            _refund_start_debit("start_failed_session_creation")
+            return jsonify(session_details), 400
 
-    interview_doc = {
-        "user_id": str(current_user["_id"]),
-        "session_id": session_details["session_id"],
-        "cv_path": cv_txt_path,
-        "jd_path": jd_txt_path,
-        "reference_paths": [],
-        "application_id": application_id,
-        "recruiter_id": (
-            str(job.get("created_by")) if job and job.get("created_by") else None
-        ),
-        "status": "active",
-        "similarity_score": sim_score,
-        "proctoring_config": proctoring_config,
-        # Initialized here (not just at /end) so a crashed/abandoned interview
-        # still has an auditable record instead of no proctoring data at all.
-        "proctoring_score": None,
-        "proctoring_status": "pending",
-        "usage_deduction": recruiter_deduction,
-        "created_at": datetime.datetime.utcnow(),
-        "updated_at": datetime.datetime.utcnow(),
-        "start_time": time.time(),
-    }
+        cv_score = app_doc.get("cv_score")
+        sim_score = (
+            (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
+        )
 
-    interview_id = interviews_collection.insert_one(interview_doc).inserted_id
+        interview_doc = {
+            "user_id": str(current_user["_id"]),
+            "session_id": session_details["session_id"],
+            "cv_path": cv_txt_path,
+            "jd_path": jd_txt_path,
+            "reference_paths": [],
+            "application_id": application_id,
+            "recruiter_id": (
+                str(job.get("created_by")) if job and job.get("created_by") else None
+            ),
+            "status": "active",
+            "similarity_score": sim_score,
+            "proctoring_config": proctoring_config,
+            # Initialized here (not just at /end) so a crashed/abandoned interview
+            # still has an auditable record instead of no proctoring data at all.
+            "proctoring_score": None,
+            "proctoring_status": "pending",
+            "usage_deduction": recruiter_deduction,
+            # Persisted so refunds can reverse exactly this debit later (the
+            # transaction payload stored above doesn't carry the key).
+            "debit_idempotency_key": debit_idempotency_key,
+            "questions_answered_count": 0,
+            "created_at": datetime.datetime.utcnow(),
+            "updated_at": datetime.datetime.utcnow(),
+            "start_time": time.time(),
+        }
+
+        interview_id = interviews_collection.insert_one(interview_doc).inserted_id
+    except Exception:
+        # Any unexpected failure between the debit and a persisted session
+        # doc means no interview can ever happen for this charge — refund,
+        # then let the global 500 handler answer the client.
+        _refund_start_debit("start_failed_unexpected_error")
+        raise
 
     return jsonify(
         {
@@ -890,6 +953,7 @@ def start_interview(current_user):
             "conversation_context": session_details.get("conversation_context", {}),
             "question_timeout_seconds": session_details.get("question_timeout_seconds"),
             "question_deadline": session_details.get("question_deadline"),
+            "max_questions": session_details.get("max_questions"),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
             "usage_deduction": recruiter_deduction,
@@ -899,7 +963,18 @@ def start_interview(current_user):
 
 
 @app.route("/api/interviews/<session_id>/question", methods=["GET"])
-def get_interview_question(session_id):
+@token_required
+def get_interview_question(current_user, session_id):
+    # Only the candidate who owns this session may read its questions.
+    user_id = str(current_user["_id"])
+    owns_session = interviews_collection.find_one(
+        {"session_id": session_id, "user_id": user_id}, {"_id": 1}
+    ) or collections["practice_sessions"].find_one(
+        {"session_id": session_id, "user_id": user_id}, {"_id": 1}
+    )
+    if not owns_session:
+        return jsonify({"error": "Session not found"}), 404
+
     question_result = interview_manager.get_next_question(session_id)
 
     if "error" in question_result:
@@ -927,6 +1002,24 @@ def submit_answer(current_user, session_id):
 
         if "error" in result:
             return jsonify(result), 400
+
+        # Restart-safe evidence for the credit-refund policy: count
+        # substantive answers on the interview doc itself. Repeat requests and
+        # empty auto-skips deliberately don't count — an interview with zero
+        # real answers is refundable.
+        if not result.get("repeated_question") and str(answer or "").strip():
+            try:
+                interviews_collection.update_one(
+                    {"session_id": session_id, "user_id": str(current_user["_id"])},
+                    {
+                        "$inc": {"questions_answered_count": 1},
+                        "$set": {"updated_at": datetime.datetime.utcnow()},
+                    },
+                )
+            except Exception:
+                logger.warning(
+                    "questions_answered_count bump failed for %s", session_id
+                )
 
         # Deep JSON serialization function to handle all types
         def make_json_serializable(obj):
@@ -986,13 +1079,71 @@ def end_interview(current_user, session_id):
     final_evaluation = {}
     interview_transcript = []
 
-    # Interview score will be computed from final_evaluation below
+    # Interview score will be computed from final_evaluation below.
+    # NOTE: CostTracker().end_session is called exactly once, further down,
+    # after the fallback estimates are known — an earlier extra call here used
+    # clear_events=True and wiped the real tracked usage before the billing
+    # call could read it.
     interview_score = None  # Calculated after evaluation is generated
-    usage_summary = CostTracker().end_session(session_id, clear_events=True)
     usage_deduction = None
     session_doc = interviews_collection.find_one(
         {"session_id": session_id, "user_id": str(current_user["_id"])}
     )
+
+    # --- Zero-answer discard -------------------------------------------------
+    # The candidate ended (or lost) the interview without one substantive
+    # answer: don't score it, don't mark the application interviewed, and
+    # refund the recruiter's start-time debit so nobody pays for a screening
+    # that never happened. The application stays in its prior status, so the
+    # candidate can simply start again.
+    answered_count = interview_credit_service.count_answered_questions(
+        session, session_doc
+    )
+    if session_doc and answered_count == 0:
+        refund = None
+        if session_doc.get("usage_deduction"):
+            refund = interview_credit_service.refund_recruiter_debit(
+                db_config.get_db(),
+                applications_collection,
+                application_id=session_doc.get("application_id"),
+                recruiter_id=session_doc.get("recruiter_id"),
+                deduction=session_doc.get("usage_deduction"),
+                debit_key=session_doc.get("debit_idempotency_key"),
+                session_id=session_id,
+                reason="ended_no_answers",
+            )
+        interviews_collection.update_one(
+            {"_id": session_doc["_id"]},
+            {
+                "$set": {
+                    "status": "abandoned",
+                    "abandoned_reason": "ended_no_answers",
+                    "credits_refund": refund,
+                    "updated_at": utc_now(),
+                }
+            },
+        )
+        interview_manager.sessions.pop(session_id, None)
+        CostTracker().end_session(session_id, clear_events=True)
+
+        refunded_credits = 0
+        if refund and refund.get("success"):
+            refunded_credits = abs(
+                int(((refund.get("transaction") or {}).get("delta_credits")) or 0)
+            )
+        return jsonify(
+            {
+                "status": "interview_discarded",
+                "message": (
+                    "No answers were recorded, so this interview was not counted. "
+                    "The interview credits were refunded and the interview can be retaken."
+                ),
+                "refund": {
+                    "success": bool(refund and refund.get("success")),
+                    "credits_refunded": refunded_credits,
+                },
+            }
+        )
 
     if session:
         # If ended prematurely or completed normally, generate evaluation now
@@ -1214,6 +1365,10 @@ def end_interview(current_user, session_id):
                 )
 
             previous_status = str(existing_app.get("status", "pending")).lower()
+            # Must be assigned before the notification block below uses it —
+            # it previously wasn't set until after that block, so the email
+            # thread died on a NameError and no completion mail ever went out.
+            recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
 
             result = applications_collection.update_one(
                 {"_id": ObjectId(application_id)},
@@ -1233,10 +1388,8 @@ def end_interview(current_user, session_id):
 
             # Push the finished interview's scores live — this write path is
             # raw pymongo directly in this route (not routed through
-            # ApplicationController), so Step 1's real-time sync never covered
-            # it; reuses the exact same application_update event shape.
-            # (recruiter_actor_id isn't assigned until further down this
-            # function, so read the recruiter id straight from existing_app.)
+            # ApplicationController), so the controller's real-time sync never
+            # covered it; reuses the exact same application_update event shape.
             try:
                 _score_update_payload = {
                     "_id": str(application_id),
@@ -1260,7 +1413,13 @@ def end_interview(current_user, session_id):
                 logger.warning("application_update emit failed at interview end", exc_info=True)
 
             # Keep recruiter job-card counters in sync with the application status transition
-            status_counters = ["pending", "interviewed", "selected", "rejected"]
+            status_counters = [
+                "pending",
+                "interviewed",
+                "screening_cleared",
+                "selected",  # legacy counter field on unmigrated job docs
+                "rejected",
+            ]
             job_counter_update = {}
 
             if previous_status in status_counters and previous_status != "interviewed":
@@ -1312,8 +1471,6 @@ def end_interview(current_user, session_id):
                 print(
                     f"❌ Warning: Application {application_id} was not updated (no documents modified)"
                 )
-
-            recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
 
             record_usage_event(
                 collections,
@@ -1498,8 +1655,16 @@ def upload_recording(current_user, session_id):
 
 
 @app.route("/api/interviews/<session_id>/upload-mobile-recording", methods=["POST"])
-# @token_required  <-- NOTE: You might need to relax auth or pass a temporary token via URL for the mobile device
+# No JWT here on purpose: the mobile companion is opened from a QR link and
+# has no token. The unguessable session_id acts as the capability; we at
+# least require it to reference a real session before accepting a file.
 def upload_mobile_recording(session_id):
+    session_exists = interviews_collection.find_one(
+        {"session_id": session_id}, {"_id": 1}
+    ) or collections["practice_sessions"].find_one({"session_id": session_id}, {"_id": 1})
+    if not session_exists:
+        return jsonify({"error": "Session not found"}), 404
+
     if "recording" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -1584,48 +1749,389 @@ def get_user_interviews(current_user):
 # ... other imports
 
 
+def _identity_summary(identity, session_id):
+    """Compact copy of an identity_verification block for the application doc,
+    so recruiter candidate lists can badge identity state without joining the
+    interviews collection."""
+    return {
+        "status": identity.get("status"),
+        "verified": identity.get("verified"),
+        "distance": identity.get("distance"),
+        "threshold": identity.get("threshold"),
+        "session_id": session_id,
+        "checked_at": identity.get("checked_at"),
+    }
+
+
 @app.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
 def register_face(current_user, session_id):
+    """
+    Capture the candidate's face before the interview starts.
+
+    Real interviews enforce account-level identity: the first-ever real
+    interview enrolls the capture as the account's canonical face; every later
+    real interview must DeepFace-match that canonical photo (across any job /
+    company) or the interview is blocked after a few attempts. The capture and
+    verdict are stored on the interview + application so the recruiter can see
+    exactly who sat the interview. Practice interviews only capture (for live
+    proctoring) — they never enroll and never block.
+    """
     data = request.get_json()
     if not data or "image" not in data:
-        return jsonify({"error": "No image data provided"}), 400
+        return jsonify({"error": "No image data provided", "error_code": "invalid_image"}), 400
+
     try:
         # Strip the data-URL prefix (e.g. "data:image/jpeg;base64,...")
         raw = data["image"]
         encoded = raw.split(",", 1)[1] if "," in raw else raw
         decoded_image = base64.b64decode(encoded)
+    except Exception:
+        return jsonify({"error": "Invalid image data", "error_code": "invalid_image"}), 400
 
-        # Store face bytes and initialise proctoring state for this session
+    user_id = str(current_user["_id"])
+
+    interview_doc = interviews_collection.find_one(
+        {"session_id": session_id, "user_id": user_id}
+    )
+    practice_doc = None
+    if not interview_doc:
+        practice_doc = collections["practice_sessions"].find_one(
+            {"session_id": session_id, "user_id": user_id}
+        )
+        if not practice_doc:
+            return jsonify({"error": "Interview session not found", "error_code": "session_not_found"}), 404
+
+    quality = face_service.assess_face_image(decoded_image)
+    if not quality.get("ok"):
+        return (
+            jsonify(
+                {
+                    "error": quality.get("message", "Face image rejected"),
+                    "error_code": quality.get("error_code", "invalid_image"),
+                }
+            ),
+            400,
+        )
+
+    now = datetime.datetime.utcnow()
+    mode = face_service.get_mode()
+    identity = {
+        "checked_at": now,
+        "mode": mode,
+        "model": face_service.FACE_MODEL_NAME,
+    }
+
+    try:
+        user_doc = users_collection.find_one({"_id": current_user["_id"]}, {"face_profile": 1})
+        face_profile = (user_doc or {}).get("face_profile") or {}
+        reference_file_id = face_profile.get("image_file_id")
+
+        if practice_doc is not None:
+            # Practice: capture for live proctoring, softly verify against the
+            # canonical identity when one exists, never enroll, never block.
+            identity["status"] = "practice_captured"
+            identity["verified"] = None
+            if reference_file_id and mode != "off":
+                try:
+                    ref_bytes, _ = face_service.load_face_image(db, reference_file_id)
+                    verdict = face_service.verify_face_images(ref_bytes, decoded_image)
+                    if verdict.get("available"):
+                        identity["verified"] = verdict["verified"]
+                        identity["distance"] = verdict["distance"]
+                        identity["threshold"] = verdict["threshold"]
+                except Exception as exc:
+                    print(f"Practice face soft-verify failed for {session_id}: {exc}")
+            collections["practice_sessions"].update_one(
+                {"_id": practice_doc["_id"]},
+                {"$set": {"identity_verification": identity, "updated_at": now}},
+            )
+        else:
+            prior = interview_doc.get("identity_verification") or {}
+            attempts = int(prior.get("attempts") or 0)
+            max_attempts = face_service.get_max_attempts()
+
+            if mode == "off":
+                identity.update({"status": "skipped", "verified": None, "attempts": attempts})
+            elif not reference_file_id:
+                # First real interview on this account — enroll this capture as
+                # the canonical identity all future interviews are matched to.
+                file_id = face_service.store_face_image(
+                    db, decoded_image, user_id=user_id, session_id=session_id, purpose="enrollment"
+                )
+                users_collection.update_one(
+                    {"_id": current_user["_id"]},
+                    {
+                        "$set": {
+                            "face_profile": {
+                                "image_file_id": file_id,
+                                "registered_at": now,
+                                "source_session_id": session_id,
+                                "source_application_id": interview_doc.get("application_id"),
+                            }
+                        }
+                    },
+                )
+                identity.update(
+                    {
+                        "status": "registered_new",
+                        "verified": None,
+                        "attempts": attempts,
+                        "captured_image_file_id": file_id,
+                        "reference_image_file_id": file_id,
+                    }
+                )
+            else:
+                identity["reference_image_file_id"] = reference_file_id
+                ref_bytes = None
+                try:
+                    ref_bytes, _ = face_service.load_face_image(db, reference_file_id)
+                except Exception as exc:
+                    print(f"Failed to load canonical face {reference_file_id}: {exc}")
+
+                verdict = (
+                    face_service.verify_face_images(ref_bytes, decoded_image)
+                    if ref_bytes
+                    else {"available": False, "verified": None, "distance": None, "threshold": None}
+                )
+
+                if not verdict.get("available"):
+                    # Face stack down / reference unreadable: fail open so a
+                    # server-side dependency problem can't lock candidates out,
+                    # but record the gap honestly for the recruiter.
+                    captured_id = face_service.store_face_image(
+                        db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
+                    )
+                    identity.update(
+                        {
+                            "status": "unverified_system_unavailable",
+                            "verified": None,
+                            "attempts": attempts,
+                            "captured_image_file_id": captured_id,
+                        }
+                    )
+                elif verdict["verified"]:
+                    captured_id = face_service.store_face_image(
+                        db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
+                    )
+                    identity.update(
+                        {
+                            "status": "verified",
+                            "verified": True,
+                            "distance": verdict["distance"],
+                            "threshold": verdict["threshold"],
+                            "attempts": attempts,
+                            "captured_image_file_id": captured_id,
+                        }
+                    )
+                else:
+                    attempts += 1
+                    identity.update(
+                        {
+                            "verified": False,
+                            "distance": verdict["distance"],
+                            "threshold": verdict["threshold"],
+                            "attempts": attempts,
+                        }
+                    )
+                    blocked = mode == "enforce" and attempts >= max_attempts
+
+                    if mode == "monitor":
+                        # Record the mismatch but let the interview proceed.
+                        captured_id = face_service.store_face_image(
+                            db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
+                        )
+                        identity["status"] = "unverified_monitor"
+                        identity["captured_image_file_id"] = captured_id
+                    else:
+                        if blocked:
+                            evidence_id = face_service.store_face_image(
+                                db,
+                                decoded_image,
+                                user_id=user_id,
+                                session_id=session_id,
+                                purpose="mismatch_evidence",
+                            )
+                            identity["status"] = "mismatch_blocked"
+                            identity["captured_image_file_id"] = evidence_id
+                        else:
+                            identity["status"] = "mismatch"
+
+                        update_fields = {"identity_verification": identity, "updated_at": now}
+                        if blocked:
+                            update_fields["status"] = "identity_blocked"
+                        interviews_collection.update_one(
+                            {"_id": interview_doc["_id"]}, {"$set": update_fields}
+                        )
+                        if interview_doc.get("application_id"):
+                            try:
+                                applications_collection.update_one(
+                                    {"_id": ObjectId(interview_doc["application_id"])},
+                                    {
+                                        "$set": {
+                                            "identity_verification": _identity_summary(identity, session_id),
+                                            "updated_at": now,
+                                        }
+                                    },
+                                )
+                            except Exception:
+                                pass
+
+                        if blocked:
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "Face verification failed repeatedly — this interview attempt has been locked because the captured face does not match this account's registered identity.",
+                                        "error_code": "face_mismatch_blocked",
+                                        "attempts_remaining": 0,
+                                    }
+                                ),
+                                403,
+                            )
+                        return (
+                            jsonify(
+                                {
+                                    "error": "The captured face does not match the identity registered on this account. Make sure you are the account owner, face the camera directly in good lighting, and try again.",
+                                    "error_code": "face_mismatch",
+                                    "attempts_remaining": max(0, max_attempts - attempts),
+                                }
+                            ),
+                            403,
+                        )
+
+            # Allowed real-interview paths: persist verdict and activate session
+            interviews_collection.update_one(
+                {"_id": interview_doc["_id"]},
+                {"$set": {"identity_verification": identity, "status": "active", "updated_at": now}},
+            )
+            if interview_doc.get("application_id"):
+                try:
+                    applications_collection.update_one(
+                        {"_id": ObjectId(interview_doc["application_id"])},
+                        {
+                            "$set": {
+                                "identity_verification": _identity_summary(identity, session_id),
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                except Exception:
+                    pass
+
+        # Live proctoring reference for this session. Also keep a decoded
+        # ndarray: DeepFace inside analyze_frame_for_proctoring does not accept
+        # raw bytes, so the per-frame identity check needs the array form.
         live_sessions[session_id] = {
             "registered_face": decoded_image,
+            "registered_face_np": face_service.decode_image(decoded_image),
             "proctoring_score": 100,
             "infractions": {},
         }
 
-        # Mark interview as active in the database
-        interviews_collection.update_one(
-            {"session_id": session_id, "user_id": str(current_user["_id"])},
-            {"$set": {"status": "active"}},
+        status = identity.get("status")
+        if status == "registered_new":
+            message = "Face registered successfully — this photo is now the verified identity for your account."
+        elif status == "verified":
+            message = "Identity verified successfully."
+        else:
+            message = "Face captured successfully."
+
+        return (
+            jsonify(
+                {
+                    "message": message,
+                    "identity": {
+                        "status": status,
+                        "verified": identity.get("verified"),
+                        "distance": identity.get("distance"),
+                        "threshold": identity.get("threshold"),
+                    },
+                }
+            ),
+            200,
         )
-        return jsonify({"message": "Face registered successfully"}), 200
     except Exception as e:
         print(f"Error during face registration: {e}")
+        import traceback
+
+        traceback.print_exc()
         return jsonify({"error": "Failed to process image"}), 500
+
+
+@app.route("/api/interviews/<session_id>/face-image/<kind>", methods=["GET"])
+@token_required
+def get_interview_face_image(current_user, session_id, kind):
+    """Serve the identity photos for a session to authorized viewers only:
+    the candidate themself, the recruiter who owns the job, or an admin."""
+    if kind not in ("captured", "reference"):
+        return jsonify({"error": "Invalid image kind"}), 400
+
+    doc = interviews_collection.find_one({"session_id": session_id})
+    is_practice = False
+    if not doc:
+        doc = collections["practice_sessions"].find_one({"session_id": session_id})
+        if not doc:
+            return jsonify({"error": "Session not found"}), 404
+        is_practice = True
+
+    user_id = str(current_user["_id"])
+    user_type = current_user.get("user_type", "candidate")
+    is_owner = user_id == str(doc.get("user_id", ""))
+    is_job_recruiter = (
+        not is_practice
+        and user_type == "recruiter"
+        and user_id == str(doc.get("recruiter_id") or "")
+    )
+    if not (is_owner or is_job_recruiter or user_type == "admin"):
+        return jsonify({"error": "Unauthorized"}), 403
+
+    identity = doc.get("identity_verification") or {}
+    file_id = identity.get(f"{kind}_image_file_id")
+    if not file_id and kind == "reference":
+        # Fall back to the account's canonical photo
+        try:
+            profile_doc = users_collection.find_one(
+                {"_id": ObjectId(str(doc.get("user_id")))}, {"face_profile": 1}
+            )
+            file_id = ((profile_doc or {}).get("face_profile") or {}).get("image_file_id")
+        except Exception:
+            file_id = None
+    if not file_id:
+        return jsonify({"error": "Image not found"}), 404
+
+    try:
+        image_bytes, content_type = face_service.load_face_image(db, file_id)
+    except Exception:
+        return jsonify({"error": "Image not found"}), 404
+
+    return Response(
+        image_bytes,
+        mimetype=content_type or "image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @socketio.on("connect")
 def handle_connect(auth):
     """
-    Authenticate the socket connection and join a room keyed by the user's
-    own id, so application/status/score updates can be pushed to exactly
-    the candidate or recruiter they belong to (see application_controller.py
-    emits). Proctoring/mobile handlers below are unaffected — they join
-    session-id rooms separately and don't require this room.
+    Join a per-user room when the client authenticates, so application/
+    status/score updates can be pushed to exactly the candidate or recruiter
+    they belong to (see application_controller.py emits).
+
+    Connections WITHOUT a token are allowed but join no user room: the mobile
+    companion page is opened from a QR link and has no JWT to present, and it
+    only ever joins a session-id room via join_mobile_session below (which
+    validates the session exists). A token that is present but invalid is
+    still rejected outright — previously ANY tokenless connect was rejected,
+    which silently killed the interview page's live proctoring stream and the
+    entire mobile companion flow.
     """
     from middleware.auth_middleware import decode_user_from_token
 
     token = (auth or {}).get("token")
+    if not token:
+        return  # anonymous session-room-only connection (mobile companion)
+
     current_user, error = decode_user_from_token(token)
     if error:
         # Reject the handshake outright; client falls back to REST polling.
@@ -1679,9 +2185,16 @@ def handle_proctoring_frame(data):
         if frame is None:
             return
 
+        # Prefer the decoded ndarray reference — DeepFace.verify inside
+        # analyze_frame_for_proctoring does not accept raw bytes, which made
+        # the identity check silently fail on every frame before.
+        reference_face = session.get("registered_face_np")
+        if reference_face is None:
+            reference_face = session["registered_face"]
+
         result = analyze_frame_for_proctoring(
             current_frame=frame,
-            registered_face_img=session["registered_face"],
+            registered_face_img=reference_face,
             current_score=session["proctoring_score"],
             infractions=session["infractions"],
         )
@@ -1719,7 +2232,16 @@ def handle_proctoring_violation(data):
 
 @socketio.on("join_mobile_session")
 def handle_mobile_join(data):
-    session_id = data.get("session_id")
+    session_id = (data or {}).get("session_id")
+    if not session_id:
+        return
+    # The mobile companion connects without a JWT (QR link), so gate the room
+    # join on the session actually existing instead.
+    session_exists = interviews_collection.find_one(
+        {"session_id": session_id}, {"_id": 1}
+    ) or collections["practice_sessions"].find_one({"session_id": session_id}, {"_id": 1})
+    if not session_exists:
+        return
     join_room(session_id)
     socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
 
@@ -1753,5 +2275,10 @@ if __name__ == "__main__":
         try:
             invite_cleanup_scheduler.stop()
             logger.info("Invite cleanup scheduler stopped")
+        except Exception:
+            pass
+        try:
+            interview_refund_sweeper.stop()
+            logger.info("Interview refund sweeper stopped")
         except Exception:
             pass

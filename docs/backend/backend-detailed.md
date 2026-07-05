@@ -34,8 +34,10 @@ same port, and runs two background worker threads. It is started with
 10. **Wallet bootstrap** — grants the signup bonus to any existing users who
     don't have a wallet yet (idempotent, runs every boot).
 11. **Background workers** — starts the `BackgroundProcessor` (async CV scoring
-    queue) and the `InviteCleanupScheduler` (purges dormant invite-only
-    accounts).
+    queue), the `InviteCleanupScheduler` (purges dormant invite-only
+    accounts), and the `InterviewRefundSweeper` (refunds or auto-finalizes
+    interviews abandoned mid-session — see
+    [interview-engine.md](interview-engine.md)).
 12. **Blueprint registration** — see the table below.
 13. **Interview system init** — creates the global `InterviewSessionManager`
     with `InterviewConfig` + `LLMConfig` (Groq via `GROQ_API_KEY`).
@@ -90,6 +92,8 @@ See [interview-engine.md](interview-engine.md).
 | `invite_service.py` | The invite system: parses emails from text/CSV/XLSX, classifies them, creates invite tokens (SHA-hashed, TTL-limited) and "burner" invite-only accounts with generated Invite IDs, tracks batches, and consumes tokens at redemption. |
 | `invite_email_templates.py` | HTML templates for invite emails. |
 | `invite_cleanup_scheduler.py` | Recurring scheduler that purges dormant burner accounts. |
+| `face_verification_service.py` | Candidate face identity: image quality gate, DeepFace (VGG-Face) enroll/verify against the account's registered face, GridFS storage of identity photos. Modes via `FACE_VERIFICATION_MODE` (`enforce`/`monitor`/`off`); degrades to photo-capture-only if the DeepFace stack isn't installed. |
+| `interview_credit_service.py` | The interview credit-refund lifecycle: idempotent refunds (`refund:<debit-key>`) when a session ends with zero answers, refund-count-aware debit keys (`real-interview:<app_id>:r<n>`), and the `InterviewRefundSweeper` daemon that refunds unanswered stale sessions and auto-finalizes answered ones into scored reports. |
 | `credit_service.py`, `interview_quota_service.py`, `candidate_practice_quota_service.py` | Credit/quota checks around interviews and practice sessions. |
 | `usage_telemetry_service.py` | `record_usage_event()` — writes usage/cost events (LLM, STT seconds, TTS characters) that power the admin/recruiter/candidate cost-statistics screens. |
 | `google_speech_service.py` | Google Cloud STT/TTS used by `/api/speech/*`. |
@@ -116,7 +120,7 @@ circular imports). Handlers registered in `app.py`:
 
 | Event | Direction | Purpose |
 |---|---|---|
-| `connect` | client → server | JWT-authenticated handshake; joins a room named after the user's id. Unauthenticated connects are rejected (client falls back to REST polling). |
+| `connect` | client → server | JWT-authenticated handshake; joins a room named after the user's id. Invalid tokens are rejected; *tokenless* connects are allowed but get no user room — needed for the mobile-camera QR companion page, which only joins session rooms. |
 | `application_update` | server → client | Pushed to the candidate's and recruiter's rooms on apply / status change / score update. Payload: `{type, application}`. |
 | `start_proctoring` | kiosk → server | Kiosk announces it will stream frames; joins a room keyed by interview `session_id`. |
 | `proctoring_frame` | kiosk → server | One base64 JPEG per second → MediaPipe head-pose + DeepFace identity check → score/infractions updated in the in-memory `live_sessions` store. |
@@ -141,6 +145,8 @@ Defined in `python-backend/.env.example`. The important ones:
 | `GROQ_API_KEY` | LLM interview engine |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Payments |
 | `SIGNUP_BONUS_CREDITS`, `CANDIDATE_PRACTICE_CREDITS`, `CANDIDATE_PRACTICE_PROCTORED_CREDITS`, `RECRUITER_AI_JD_CREDITS`, `RECRUITER_REAL_INTERVIEW_CREDITS`, `RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS` | Credit pricing (defaults 100 / 30 / 50 / 10 / 30 / 50) |
+| `FACE_VERIFICATION_MODE`, `FACE_VERIFY_MAX_ATTEMPTS` | Face identity gate: `enforce` (default) / `monitor` / `off`; mismatch attempts before blocking (default 3) |
+| `INTERVIEW_ABANDON_TTL_MINUTES`, `INTERVIEW_REFUND_SWEEP_INTERVAL_MINUTES` | Refund sweeper: how long an "active" session may idle before it's treated as abandoned (default 120), and sweep frequency (default 15) |
 | `UPLOAD_FOLDER` | Local storage root for recordings/proctoring artifacts (default `uploads/`) |
 | `REDIS_URL` | Optional shared rate-limit storage |
 | `SENTRY_DSN` | Optional error tracking |
@@ -153,3 +159,47 @@ Defined in `python-backend/.env.example`. The important ones:
 - `uploads/mobile_recordings/` — phone-camera environment recordings
 - `uploads/tmp/` — temporary CV/JD `.txt` files fed to the interview document pipeline
 - CV PDFs — GridFS (`GET /api/files/<gridfs_id>`) and/or Google Cloud Storage via `gcs_service.py`
+
+## Deployment: Cloud Run and keeping it warm
+
+Production is deployed to **Google Cloud Run** from `python-backend/Dockerfile`
+(Gunicorn + eventlet worker, listens on `$PORT`, default `8080`). Cloud Run's
+default billing model scales a service to **zero instances** after a period
+of no traffic — the next request then pays a cold-start penalty (container
+boot + Python imports + a fresh MongoDB connection).
+
+**Mitigation in this repo**: `.github/workflows/keep-backend-warm.yml` is a
+GitHub Actions scheduled workflow that pings `GET /health` on the production
+URL every 5 minutes (plus a manual `workflow_dispatch` trigger for on-demand
+testing). It needs no GCP credentials — it's a plain unauthenticated HTTP GET
+from GitHub's runners. Two things worth knowing:
+
+- **It's best-effort, not a guarantee.** Google does not promise that
+  incoming traffic alone prevents scale-to-zero (Cloud Run can still recycle
+  an idle instance), and GitHub's cron scheduler is not perfectly punctual
+  under load. Occasional cold starts can still happen.
+- **It works the same on a private or public repo** — scheduled workflows
+  run regardless of visibility. The only difference is billing: a public
+  repo's Actions minutes are unlimited/free, while a private repo draws down
+  the account's monthly free quota (2,000 min/month on GitHub Free, 3,000 on
+  Pro). At a 5-minute cadence this workflow uses roughly ~1,400 minutes/month
+  on its own — fine in isolation, but worth checking against other CI usage
+  on the same account. Widen the cron interval in the workflow file (e.g.
+  `*/10 * * * *`) if quota becomes tight.
+- GitHub also disables **any** scheduled workflow after 60 days with no
+  commits pushed to the default branch — a routine push re-enables it.
+
+**The guaranteed fix** (costs continuous compute instead of Actions minutes):
+set a minimum instance count on the Cloud Run service so one instance never
+scales down —
+
+```bash
+gcloud run services update <SERVICE_NAME> \
+  --region=europe-west1 \
+  --min-instances=1
+```
+
+This isn't run from this repo (no deploy automation/IaC is checked in here —
+deployment is manual `gcloud`/Cloud Console) and requires GCP credentials, so
+it's a manual, deliberate choice rather than something the keep-warm workflow
+does automatically.

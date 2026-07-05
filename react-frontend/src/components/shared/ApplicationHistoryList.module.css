@@ -255,7 +255,8 @@ body.dark .filterSelect,
   background: linear-gradient(90deg, #8b5cf6, #7c3aed);
 }
 
-.applicationCard[data-status="selected"]::before {
+.applicationCard[data-status="selected"]::before,
+.applicationCard[data-status="screening_cleared"]::before {
   background: linear-gradient(90deg, #10b981, #059669);
 }
 
@@ -400,7 +401,8 @@ body.dark .companyAvatar,
   border-color: #c4b5fd;
 }
 
-.statusBadge.selected {
+.statusBadge.selected,
+.statusBadge.screening_cleared {
   background: var(--success-50);
   color: var(--success-700);
   border-color: var(--success-200);
@@ -434,7 +436,9 @@ body.dark .statusBadge.interviewed,
 }
 
 body.dark .statusBadge.selected,
-:global(.dark) .statusBadge.selected {
+body.dark .statusBadge.screening_cleared,
+:global(.dark) .statusBadge.selected,
+:global(.dark) .statusBadge.screening_cleared {
   background: rgba(52, 211, 153, 0.1);
   color: #34d399;
   border-color: rgba(52, 211, 153, 0.2);

@@ -61,7 +61,9 @@ const ApplicationView = () => {
 						},
 					];
 
-					const status = String(app.status || "pending").toLowerCase();
+					const rawStatus = String(app.status || "pending").toLowerCase();
+					// "selected" is the legacy name for "screening_cleared"
+					const status = rawStatus === "selected" ? "screening_cleared" : rawStatus;
 					const pushEvent = (id, type, desc, icon, done = true) =>
 						timeline.push({
 							id,
@@ -72,17 +74,17 @@ const ApplicationView = () => {
 							icon,
 						});
 
-					if (["reviewed", "shortlisted", "interviewed", "selected", "rejected"].includes(status)) {
+					if (["reviewed", "shortlisted", "interviewed", "screening_cleared", "rejected"].includes(status)) {
 						if (status === "reviewed")
 							pushEvent(2, "Application Reviewed", "Your application was reviewed by our hiring team.", "fa-check-circle");
 						if (status === "shortlisted")
 							pushEvent(3, "Shortlisted", "You've been shortlisted for the next round.", "fa-star");
 						if (status === "interviewed")
 							pushEvent(4, "Interview Completed", "Your interview has been completed.", "fa-video-camera");
-						if (status === "selected")
-							pushEvent(5, "Offer", "Congratulations! You've been selected.", "fa-trophy");
+						if (status === "screening_cleared")
+							pushEvent(5, "Screening Cleared", "Congratulations! You cleared the AI screening round. The recruiter will contact you about their next interview rounds.", "fa-trophy");
 						if (status === "rejected")
-							pushEvent(6, "Rejection", "We proceeded with other candidates.", "fa-times-circle");
+							pushEvent(6, "Screening Not Cleared", "The recruiter decided not to move your application forward.", "fa-times-circle");
 					}
 
 					setApplication({
@@ -90,7 +92,12 @@ const ApplicationView = () => {
 						position: app.job_details?.title || app.job_title || "Applied Position",
 						company: app.job_details?.company || "TechCorp Solutions",
 						jobId: app.job_id,
-						status: status.charAt(0).toUpperCase() + status.slice(1),
+						status:
+							status === "screening_cleared"
+								? "Screening Cleared"
+								: status === "rejected"
+									? "Screening Not Cleared"
+									: status.charAt(0).toUpperCase() + status.slice(1),
 						appliedDate: appliedDateISO,
 						timeline,
 					});

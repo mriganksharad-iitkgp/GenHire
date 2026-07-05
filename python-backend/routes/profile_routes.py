@@ -319,7 +319,7 @@ def get_recruiter_cost_statistics(current_user):
                         app
                         for app in applications
                         if str(app.get("status", "")).lower()
-                        in ["interviewed", "selected", "rejected"]
+                        in ["interviewed", "selected", "screening_cleared", "rejected"]
                     ]
                 ),
                 "activeJobs": len(

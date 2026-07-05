@@ -843,7 +843,8 @@ body.dark .viewDetailsButton:hover,
 .applicationCard[data-status="shortlisted"]::after { background:#a7f3d0; }
 .applicationCard[data-status="pending"]::after { background:#fee57a; }
 .applicationCard[data-status="interviewed"]::after { background:#b8f7cc; }
-.applicationCard[data-status="selected"]::after { background:#9ee8b5; }
+.applicationCard[data-status="selected"]::after,
+.applicationCard[data-status="screening_cleared"]::after { background:#9ee8b5; }
 .applicationCard[data-status="rejected"]::after { background:#ffc1cc; }
 
 .applicationCard.liveInterview {
@@ -917,7 +918,7 @@ body.dark .viewDetailsButton:hover,
 	background-color: #a7f3d0;
 	color: #016342;
 }
-.selected { background:#9ee8b5; color:#0c5d2c; }
+.selected, .screening_cleared { background:#9ee8b5; color:#0c5d2c; }
 .interviewed { background:#b8f7cc; color:#0b6a35; }
 
 .applicationDetails {

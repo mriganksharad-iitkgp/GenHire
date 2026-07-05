@@ -1,6 +1,61 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styles from "./JobDetailsModal.module.css";
 import GazeHeatmapPanel from "./GazeHeatmapPanel";
+import { getToken } from "../utils/sessionManager";
+
+// Human-readable rendering of the identity_verification verdict set by
+// /register-face (see face_verification_service.py on the backend).
+const IDENTITY_DISPLAY = {
+  verified: {
+    label: "Identity Verified",
+    color: "#166534",
+    background: "#f0fdf4",
+    border: "#bbf7d0",
+    note: "The captured face matched this account's registered identity.",
+  },
+  registered_new: {
+    label: "Identity Registered (First Interview)",
+    color: "#1e40af",
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    note: "This was the candidate's first interview on this account — the photo below was enrolled as their identity baseline for all future interviews.",
+  },
+  mismatch_blocked: {
+    label: "Identity Mismatch — Blocked",
+    color: "#991b1b",
+    background: "#fef2f2",
+    border: "#fecdd3",
+    note: "The captured face repeatedly failed to match the account's registered identity; the attempt was locked.",
+  },
+  unverified_monitor: {
+    label: "Identity Mismatch (Not Enforced)",
+    color: "#9a3412",
+    background: "#fff7ed",
+    border: "#fed7aa",
+    note: "The face did not match the registered identity, but verification was running in monitor mode so the interview was allowed.",
+  },
+  unverified_system_unavailable: {
+    label: "Identity Not Verified",
+    color: "#9a3412",
+    background: "#fff7ed",
+    border: "#fed7aa",
+    note: "The identity check could not run for this session (face verification was unavailable). The captured photo is shown for manual review.",
+  },
+  practice_captured: {
+    label: "Practice Capture",
+    color: "#475569",
+    background: "#f8fafc",
+    border: "#e2e8f0",
+    note: "Face captured for practice proctoring — identity is not enforced in practice mode.",
+  },
+  skipped: {
+    label: "Identity Check Disabled",
+    color: "#475569",
+    background: "#f8fafc",
+    border: "#e2e8f0",
+    note: "Face verification was disabled at the time of this interview.",
+  },
+};
 
 export default function InterviewReportModal({
   isOpen,
@@ -10,6 +65,50 @@ export default function InterviewReportModal({
   interviewScore,
 }) {
   const [tab, setTab] = useState("summary"); // summary | transcript | gaze | raw
+  const [capturedFaceUrl, setCapturedFaceUrl] = useState(null);
+  const [referenceFaceUrl, setReferenceFaceUrl] = useState(null);
+
+  const identity = report?.identity_verification || null;
+
+  // Fetch identity photos with the auth token and expose them as blob URLs —
+  // a plain <img src> can't send the Authorization header the endpoint needs.
+  useEffect(() => {
+    if (!isOpen || !report?.session_id || !identity) return undefined;
+
+    let cancelled = false;
+    const objectUrls = [];
+
+    const fetchImage = async (kind, setter) => {
+      try {
+        const res = await fetch(
+          `${process.env.REACT_APP_API_URL}/api/interviews/${report.session_id}/face-image/${kind}`,
+          { headers: { Authorization: `Bearer ${getToken()}` } },
+        );
+        if (!res.ok || cancelled) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        objectUrls.push(url);
+        setter(url);
+      } catch {
+        /* photo unavailable — section still shows the verdict */
+      }
+    };
+
+    if (identity.has_captured_image) fetchImage("captured", setCapturedFaceUrl);
+    // The reference photo is only informative when it differs from the capture
+    // (i.e. not a first-interview enrollment).
+    if (identity.has_reference_image && identity.status !== "registered_new") {
+      fetchImage("reference", setReferenceFaceUrl);
+    }
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((u) => URL.revokeObjectURL(u));
+      setCapturedFaceUrl(null);
+      setReferenceFaceUrl(null);
+    };
+  }, [isOpen, report?.session_id, identity]);
 
   const finalScore = useMemo(() => {
     if (typeof interviewScore === "number") return Math.round(interviewScore);
@@ -285,6 +384,130 @@ export default function InterviewReportModal({
           <div style={{ paddingTop: 14 }}>
             {tab === "summary" && (
               <div>
+                {/* Candidate identity verification — who actually sat this interview */}
+                {identity && (
+                  <div style={{ marginBottom: 18 }}>
+                    <SectionTitle>🪪 Candidate Identity</SectionTitle>
+                    {(() => {
+                      const display =
+                        IDENTITY_DISPLAY[identity.status] || {
+                          label: "Identity Status Unknown",
+                          color: "#475569",
+                          background: "#f8fafc",
+                          border: "#e2e8f0",
+                          note: "No identity verdict was recorded for this session.",
+                        };
+                      return (
+                        <div
+                          style={{
+                            background: display.background,
+                            border: `1px solid ${display.border}`,
+                            borderRadius: 10,
+                            padding: "12px 14px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                color: display.color,
+                                fontWeight: 700,
+                                fontSize: 14,
+                              }}
+                            >
+                              {display.label}
+                            </span>
+                            {typeof identity.distance === "number" &&
+                              typeof identity.threshold === "number" && (
+                                <span style={{ color: "#5f6b7a", fontSize: 12 }}>
+                                  match distance {identity.distance.toFixed(3)} (threshold{" "}
+                                  {identity.threshold.toFixed(3)})
+                                </span>
+                              )}
+                          </div>
+                          <div
+                            style={{
+                              color: "#5f6b7a",
+                              fontSize: 13,
+                              marginTop: 6,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {display.note}
+                          </div>
+                          {(capturedFaceUrl || referenceFaceUrl) && (
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 16,
+                                marginTop: 12,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {capturedFaceUrl && (
+                                <div style={{ textAlign: "center" }}>
+                                  <img
+                                    src={capturedFaceUrl}
+                                    alt="Face captured at interview"
+                                    style={{
+                                      maxHeight: 160,
+                                      maxWidth: 220,
+                                      borderRadius: 8,
+                                      border: "1px solid #e1e7ef",
+                                      display: "block",
+                                    }}
+                                  />
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#5f6b7a",
+                                      marginTop: 6,
+                                    }}
+                                  >
+                                    {identity.status === "registered_new"
+                                      ? "Enrolled identity photo"
+                                      : "Captured at this interview"}
+                                  </div>
+                                </div>
+                              )}
+                              {referenceFaceUrl && (
+                                <div style={{ textAlign: "center" }}>
+                                  <img
+                                    src={referenceFaceUrl}
+                                    alt="Registered account identity"
+                                    style={{
+                                      maxHeight: 160,
+                                      maxWidth: 220,
+                                      borderRadius: 8,
+                                      border: "1px solid #e1e7ef",
+                                      display: "block",
+                                    }}
+                                  />
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#5f6b7a",
+                                      marginTop: 6,
+                                    }}
+                                  >
+                                    Registered account identity
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* Display quantitative metrics if available - matches Chat.jsx format */}
                 {evaluationObj?.quantitative && (
                   <div>

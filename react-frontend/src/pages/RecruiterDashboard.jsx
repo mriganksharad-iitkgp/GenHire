@@ -189,7 +189,7 @@ const RecruiterDashboard = () => {
       jobId: 1,
       jobTitle: "Senior Business Development Manager",
       appliedDate: "2025-08-06",
-      status: "Selected",
+      status: "Screening Cleared",
       cvMatchScore: 88,
       interviewScore: 91,
       interviewDate: "2025-08-09",
@@ -266,7 +266,8 @@ const RecruiterDashboard = () => {
         return "#e74c3c";
       case "scheduled":
         return "#3498db";
-      case "selected":
+      case "screening_cleared":
+      case "selected": // legacy name for screening_cleared
         return "#27ae60";
       case "rejected":
         return "#e74c3c";
@@ -297,8 +298,9 @@ const RecruiterDashboard = () => {
       reviewed: "Reviewed",
       shortlisted: "Shortlisted",
       interviewed: "Interviewed",
-      selected: "Selected",
-      rejected: "Rejected",
+      screening_cleared: "Screening Cleared",
+      selected: "Screening Cleared", // legacy name
+      rejected: "Screening Not Cleared",
     };
     return map[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
   };
@@ -323,12 +325,16 @@ const RecruiterDashboard = () => {
     }
 
     if (selectedStatus) {
-      // Direct status matching with proper case handling
-      const normalizedSelectedStatus = selectedStatus.toLowerCase();
-      filtered = filtered.filter((app) => {
-        const appStatus = String(app.status || "").toLowerCase();
-        return appStatus === normalizedSelectedStatus;
-      });
+      // Direct status matching with proper case handling; legacy "selected"
+      // docs count as "screening_cleared".
+      const normalizeAppStatus = (s) => {
+        const v = String(s || "").toLowerCase();
+        return v === "selected" ? "screening_cleared" : v;
+      };
+      const normalizedSelectedStatus = normalizeAppStatus(selectedStatus);
+      filtered = filtered.filter(
+        (app) => normalizeAppStatus(app.status) === normalizedSelectedStatus
+      );
     }
 
     if (minCvScore) {
@@ -479,13 +485,13 @@ const RecruiterDashboard = () => {
   };
 
   const handleSelectCandidate = (candidate) => {
-    // Update candidate status to selected
+    // Mark candidate as having cleared the screening round
     setCandidates((prev) =>
       prev.map((c) =>
-        c.id === candidate.id ? { ...c, status: "Selected" } : c
+        c.id === candidate.id ? { ...c, status: "Screening Cleared" } : c
       )
     );
-    showToast(`${candidate.name} has been selected!`, "success");
+    showToast(`${candidate.name} has cleared screening!`, "success");
   };
 
   const handleRejectCandidate = (candidate) => {

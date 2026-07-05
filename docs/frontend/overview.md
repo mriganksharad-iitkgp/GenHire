@@ -16,8 +16,9 @@ refresh themselves.
   credit recharge page.
 - **Recruiters** — `/recruiter-dashboard` for posting jobs (with an
   "AI generate" option), reviewing applicants with CV scores, opening
-  interview reports (transcript, scores, gaze heatmap), bulk-inviting
-  candidates, plus cost statistics and credit packs.
+  interview reports (transcript, scores, gaze heatmap, candidate identity
+  photo), marking candidates **Screening Cleared** / **Not Cleared**,
+  bulk-inviting candidates, plus cost statistics and credit packs.
 - **Admins** — an admin portal under `/admin/*` for verifying recruiters,
   managing users/jobs/applications, and platform-wide cost statistics.
 

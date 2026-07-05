@@ -38,6 +38,28 @@ the recruiter who posted the job does. When a candidate starts an interview,
 the backend checks and debits the *recruiter's* wallet, and writes a
 zero-credit audit transaction on the candidate side for traceability.
 
+## Interview refunds (charge at start, refund if nothing happened)
+
+Interview credits are debited at `/start` and **reversed automatically**
+when the session ends with zero substantive answers — start failure after
+the debit, identity-verification block, abandonment, or an `/end` with
+nothing answered (`services/interview_credit_service.py`; a background
+sweeper handles abandoned sessions). Mechanics that matter for the ledger:
+
+- Refunds are `credit_wallet` calls with idempotency key
+  `refund:<original-debit-key>` and transaction types
+  `real_interview_refund` / `practice_interview_refund` — a refund can only
+  ever apply once no matter how often it's retried.
+- Real-interview debit keys are refund-count-aware:
+  `real-interview:<application_id>` initially, then `:r1`, `:r2`… after each
+  refund (tracked by `interview_refund_count` on the application). Without
+  this, retrying `/start` after a refund would idempotently replay the old
+  debit and the recruiter would never actually be re-charged.
+- Once the candidate gives **one** real answer, the charge stands; stale
+  answered sessions are auto-finalized into scored reports instead of
+  refunded. See
+  [interview-engine.md](interview-engine.md#credit-lifecycle--refunds-servicesinterview_credit_servicepy).
+
 ## Recharge packs (`PaymentConfig.DEFAULT_PLANS`, seeded on first run)
 
 | Pack | Price | Credits | Audience |

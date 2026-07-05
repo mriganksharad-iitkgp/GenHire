@@ -104,7 +104,7 @@ class JobController:
                 job_applications = apps_by_job.get(job_id_str, [])
 
                 interviewed_count = 0
-                selected_count = 0
+                screening_cleared_count = 0
                 rejected_count = 0
                 pending_count = 0
 
@@ -112,8 +112,8 @@ class JobController:
                     status = str(app.get('status', 'pending')).lower()
                     if status == 'interviewed':
                         interviewed_count += 1
-                    elif status == 'selected':
-                        selected_count += 1
+                    elif status in ('screening_cleared', 'selected'):  # 'selected' = legacy value
+                        screening_cleared_count += 1
                     elif status == 'rejected':
                         rejected_count += 1
                     elif status in ['pending', 'reviewed', 'shortlisted']:
@@ -121,7 +121,9 @@ class JobController:
 
                 job['applicants'] = len(job_applications)
                 job['interviewed'] = interviewed_count
-                job['selected'] = selected_count
+                job['screening_cleared'] = screening_cleared_count
+                # Deprecated alias kept one release for older clients/kiosk builds.
+                job['selected'] = screening_cleared_count
                 job['rejected'] = rejected_count
                 job['pending'] = pending_count
 
@@ -302,7 +304,7 @@ class JobController:
             'deadline': job_data.get('deadline'),
             'applicants': 0,
             'interviewed': 0,
-            'selected': 0,
+            'screening_cleared': 0,
             'rejected': 0,
             'pending': 0,
             # JD PDF fields (Phase 4)

@@ -109,9 +109,15 @@ this explicit API surface via `contextBridge` as `window.electronAPI`:
 calls the **same Flask API the website uses**:
 
 - `POST {apiUrl}/api/interviews/start` — begins the session (real mode).
+- `POST .../api/interviews/<session_id>/register-face` — the face identity
+  gate: enrolls the face on the first-ever real interview, verifies against
+  the registered identity on every later one; repeated mismatches block the
+  interview (see
+  [../backend/interview-engine.md](../backend/interview-engine.md)).
 - `POST .../api/interviews/<session_id>/answer` or
   `.../api/practice/<session_id>/answer` — submits each answer (the same
-  renderer handles both real and practice modes).
+  renderer handles both real and practice modes; pacing — 30 s no-answer
+  countdown, 10 s post-speech silence — matches the browser interview UI).
 - `POST .../api/interviews/<session_id>/gaze-recorder-results` — gaze data.
 - `POST .../api/interviews/<session_id>/end` or `.../api/practice/<session_id>/end`.
 - **Socket.IO** to `apiUrl`: on connect emits `start_proctoring`

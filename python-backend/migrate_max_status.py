@@ -48,13 +48,13 @@ def migrate_max_status():
             update_data = {'highest_status_reached': highest_status_reached}
             
             # Add mock CV score for reviewed and above
-            if highest_status_reached in ['reviewed', 'shortlisted', 'interviewed', 'selected']:
+            if highest_status_reached in ['reviewed', 'shortlisted', 'interviewed', 'selected', 'screening_cleared']:
                 if not app.get('cv_score') or app.get('cv_score') == 85.0:
                     update_data['cv_score'] = 87.0
                     print(f"  -> Adding mock CV score: 87.0")
             
             # Add mock interview score for interviewed and above
-            if highest_status_reached in ['interviewed', 'selected'] and not app.get('interview_score'):
+            if highest_status_reached in ['interviewed', 'selected', 'screening_cleared'] and not app.get('interview_score'):
                 update_data['interview_score'] = 78.0
                 print(f"  -> Adding mock interview score: 78.0")
             

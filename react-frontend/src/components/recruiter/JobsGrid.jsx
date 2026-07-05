@@ -46,8 +46,8 @@ const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, on
             <span className={styles.progressLabel}>Interviewed</span>
           </div>
           <div className={styles.progressItem}>
-            <span className={styles.progressNumber}>{job.selected}</span>
-            <span className={styles.progressLabel}>Selected</span>
+            <span className={styles.progressNumber}>{job.screening_cleared ?? job.selected ?? 0}</span>
+            <span className={styles.progressLabel}>Screening Cleared</span>
           </div>
           <div className={styles.progressItem}>
             <span className={styles.progressNumber}>{job.rejected}</span>

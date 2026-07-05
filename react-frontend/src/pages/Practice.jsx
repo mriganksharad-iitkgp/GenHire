@@ -235,6 +235,10 @@ const Practice = () => {
             cvScore: data.cv_score || 0,
             usageDeduction: data.usage_deduction || null,
             walletQuota: data.quota || null,
+            // Pacing config so practice runs identically to real interviews
+            questionDeadline: data.question_deadline || null,
+            questionTimeoutSeconds: data.question_timeout_seconds || null,
+            maxQuestions: data.max_questions || null,
           },
         });
         return;
@@ -249,6 +253,9 @@ const Practice = () => {
         sessionId: data.session_id,
         initialQuestion: data.initial_questions?.[0] || "",
         similarityScore: data.similarity_score || 0,
+        questionDeadline: data.question_deadline || null,
+        questionTimeoutSeconds: data.question_timeout_seconds || null,
+        maxQuestions: data.max_questions || null,
         proctoringConfig: {
           voice_detection: proctoringEnabled,
           object_detection: proctoringEnabled,

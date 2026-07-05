@@ -791,7 +791,7 @@ const RecruiterDetail = () => {
                       <th>Status</th>
                       <th>Applicants</th>
                       <th>Interviewed</th>
-                      <th>Selected</th>
+                      <th>Screening Cleared</th>
                       <th>Posted</th>
                       <th>Actions</th>
                     </tr>
@@ -815,7 +815,7 @@ const RecruiterDetail = () => {
                         </td>
                         <td>{job.applicants || 0}</td>
                         <td>{job.interviewed || 0}</td>
-                        <td>{job.selected || 0}</td>
+                        <td>{job.screening_cleared ?? job.selected ?? 0}</td>
                         <td>{formatDate(job.created_at)}</td>
                         <td>
                           <div

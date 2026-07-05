@@ -29,16 +29,19 @@ implemented today.
 - **[backend/overview.md](backend/overview.md)** — what it does, in simple terms.
 - **[backend/backend-detailed.md](backend/backend-detailed.md)** — startup
   sequence, every blueprint/service/middleware, Socket.IO events, env vars,
-  file storage.
+  file storage, Cloud Run deployment and the keep-warm workflow.
 - **[backend/api-reference.md](backend/api-reference.md)** — every HTTP
   endpoint with method, auth requirement, and purpose.
 - **[backend/database.md](backend/database.md)** — MongoDB collections,
   document fields, and indexes.
 - **[backend/interview-engine.md](backend/interview-engine.md)** — the AI
-  interviewer: session lifecycle, question generation, scoring formula, all
-  four proctoring signals, cost tracking.
+  interviewer: session lifecycle, interview pacing (30 s / 10 s silence
+  rules), question generation, scoring formula, **face identity
+  verification**, all four proctoring signals, the **credit refund
+  lifecycle + abandon sweeper**, cost tracking.
 - **[backend/payment-module.md](backend/payment-module.md)** — credits,
-  wallets, recharge packs, the Razorpay flow, and the webhook.
+  wallets, recharge packs, interview refunds, the Razorpay flow, and the
+  webhook.
 
 ### Frontend (`react-frontend/`)
 - **[frontend/overview.md](frontend/overview.md)** — what each role sees and

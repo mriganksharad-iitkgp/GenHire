@@ -15,8 +15,28 @@ import PreInterviewChecklist from "../components/interview/PreInterviewChecklist
 import Toast from "../components/Toast";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 
+// Listening pace: after the AI finishes a question the candidate has
+// NO_ANSWER_TIMEOUT_SECONDS to START speaking (with a visible countdown);
+// once they have spoken, POST_SPEECH_SILENCE_SECONDS of sustained silence
+// auto-submits the answer. A manual "Stop & Send" is always available.
+const NO_ANSWER_TIMEOUT_SECONDS = 30;
+const POST_SPEECH_SILENCE_SECONDS = 10;
+// Mic volume (0-255 byte-frequency average) above which we count as speech.
+const SPEECH_VOLUME_THRESHOLD = 10;
+// If the GazeRecorder CDN never fires a calibration callback, unstick the
+// candidate after this long instead of leaving them on the calibration
+// screen forever.
+const CALIBRATION_WATCHDOG_MS = 45000;
+// Short spoken acknowledgements between an answer and the next question so
+// the hand-off doesn't feel like an abrupt topic jump.
+const ACKNOWLEDGEMENTS = [
+  "Alright, thank you.",
+  "Got it.",
+  "Okay, thanks for sharing that.",
+  "Thanks.",
+];
+
 export default function Chat({ interviewId }) {
-  const MAX_QUESTIONS = 10;
   // --- STATE MANAGEMENT ---
 
   const currentAudioRef = useRef(null);
@@ -57,16 +77,38 @@ export default function Chat({ interviewId }) {
     setToast({ message, type, id: Date.now() });
   }, []);
   const [showEndInterviewConfirm, setShowEndInterviewConfirm] = useState(false);
+  // Account-level identity check result from /register-face:
+  // "registered_new" (first real interview — photo enrolled as the account's
+  // identity) | "verified" | "unverified_system_unavailable" | others.
+  const [identityStatus, setIdentityStatus] = useState(null);
+  const [identityBlockMessage, setIdentityBlockMessage] = useState("");
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [questionCount, setQuestionCount] = useState(1);
+  // Question cap comes from the backend session config (single source of
+  // truth); 10 is only the fallback until /start responds.
+  const [maxQuestions, setMaxQuestions] = useState(10);
   // Epoch-seconds deadline (from the backend's question_timeout_seconds) after
   // which we auto-submit an empty answer so a stalled candidate doesn't hang
   // the interview forever. Absent/undefined => no server-provided deadline
-  // (e.g. practice mode) => no auto-advance timer runs.
+  // => no server-side backstop timer runs (the 30s no-answer timer still does).
   const [questionDeadline, setQuestionDeadline] = useState(null);
   const [timeoutWarning, setTimeoutWarning] = useState(false);
-  const [silenceTimer, setSilenceTimer] = useState(0); // Track silence duration
+  const [silenceTimer, setSilenceTimer] = useState(0); // Silence AFTER the candidate spoke
+  // Countdown until the question is skipped because the candidate never
+  // started answering; null when not listening or once they've spoken.
+  const [noAnswerRemaining, setNoAnswerRemaining] = useState(null);
+  // Whether the candidate has said anything for the current question (UI copy
+  // switches from "waiting to hear you" to "recording your answer").
+  const [hasSpokenThisQuestion, setHasSpokenThisQuestion] = useState(false);
+  const hasSpokenRef = useRef(false);
+  const listeningStartedAtRef = useRef(null);
+  // If /end fails we park on an "end_failed" screen with a retry button
+  // instead of silently flipping back to "active".
+  const [endError, setEndError] = useState("");
+  // Set when /end reports the interview was discarded (zero answers) and the
+  // start-of-interview credits were refunded.
+  const [discardInfo, setDiscardInfo] = useState(null);
   const silenceTimerRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -143,6 +185,18 @@ export default function Chat({ interviewId }) {
   useEffect(() => {
     warningCountRef.current = warningCount;
   }, [warningCount]);
+
+  // Ref mirrors read by long-lived callbacks (MediaRecorder.onstop, TTS audio
+  // events, GazeRecorder callbacks) that would otherwise capture stale state.
+  const interviewStatusRef = useRef(interviewStatus);
+  useEffect(() => {
+    interviewStatusRef.current = interviewStatus;
+  }, [interviewStatus]);
+  // onSend is recreated whenever currentQuestion changes; the MediaRecorder's
+  // onstop handler is wired once per status change and previously kept the
+  // FIRST onSend it saw — every later answer was submitted against question 1.
+  const onSendRef = useRef(null);
+  const beginListeningRef = useRef(null);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -255,6 +309,8 @@ export default function Chat({ interviewId }) {
     };
   }, [interviewStatus]);
 
+  const calibrationWatchdogRef = useRef(null);
+
   const startInlineGazeRecorder = useCallback(async () => {
     if (gazeRecorderTrackingRef.current) return;
     try {
@@ -300,6 +356,10 @@ export default function Chat({ interviewId }) {
       };
 
       window.GazeCloudAPI.OnCalibrationComplete = function () {
+        if (calibrationWatchdogRef.current) {
+          clearTimeout(calibrationWatchdogRef.current);
+          calibrationWatchdogRef.current = null;
+        }
         // If interview is already active, this is a demo-timeout recalibration — ignore it
         // and gracefully degrade (interview continues without gaze tracking)
         if (gazeRecorderTrackingRef.current) {
@@ -321,25 +381,51 @@ export default function Chat({ interviewId }) {
         gazeRecorderTrackingRef.current = true;
         gazeStartTimeRef.current = Date.now();
         setGazeRecorderStatus("tracking");
-        
-        // Progress interview status to ready once tracking starts
-        if (interviewStatus === "calibrating") {
-           setInterviewStatus("ready_to_start");
-        }
+
+        // Progress to ready once tracking starts. Functional update — this
+        // callback is created once inside a stable useCallback, so reading
+        // `interviewStatus` directly here would see the value from the first
+        // render ("starting"), never match "calibrating", and leave the
+        // candidate stuck on the calibration screen forever.
+        setInterviewStatus((prev) =>
+          prev === "calibrating" ? "ready_to_start" : prev,
+        );
       };
 
       // Handle camera denial / errors from GazeCloudAPI
       window.GazeCloudAPI.OnCamDenied = function () {
         console.warn("⚠️ GazeCloudAPI camera access denied.");
+        if (calibrationWatchdogRef.current) {
+          clearTimeout(calibrationWatchdogRef.current);
+          calibrationWatchdogRef.current = null;
+        }
         gazeRecorderTrackingRef.current = false;
         setGazeRecorderStatus("failed");
-        if (interviewStatus === "calibrating") {
-           setInterviewStatus("ready_to_start"); // degrade gracefully
-        }
+        setInterviewStatus((prev) =>
+          prev === "calibrating" ? "ready_to_start" : prev,
+        ); // degrade gracefully
       };
 
       window.GazeCloudAPI.StartEyeTracking();
-      
+
+      // Watchdog: if the third-party calibration never completes (CDN down,
+      // ad-blocker, service hiccup), fail gaze tracking gracefully and let
+      // the interview proceed rather than stranding the candidate.
+      calibrationWatchdogRef.current = setTimeout(() => {
+        calibrationWatchdogRef.current = null;
+        if (gazeRecorderTrackingRef.current) return;
+        console.warn("⚠️ Gaze calibration timed out — continuing without eye tracking.");
+        try {
+          window.GazeCloudAPI.StopEyeTracking();
+        } catch (e) {
+          /* not started */
+        }
+        setGazeRecorderStatus("failed");
+        setInterviewStatus((prev) =>
+          prev === "calibrating" ? "ready_to_start" : prev,
+        );
+      }, CALIBRATION_WATCHDOG_MS);
+
       // Simulate calibration progress
       let p = 0;
       const progressInterval = setInterval(() => {
@@ -351,9 +437,9 @@ export default function Chat({ interviewId }) {
     } catch (error) {
       console.error("Failed to start inline GazeRecorder:", error);
       setGazeRecorderStatus("failed");
-      if (interviewStatus === "calibrating") {
-         setInterviewStatus("ready_to_start");
-      }
+      setInterviewStatus((prev) =>
+        prev === "calibrating" ? "ready_to_start" : prev,
+      );
     }
   }, [loadScript]);
 
@@ -416,7 +502,11 @@ export default function Chat({ interviewId }) {
     if (!currentSessionId || (socketRef.current && socketRef.current.connected))
       return;
 
-    const socket = io(process.env.REACT_APP_API_URL);
+    // Authenticate the socket — the backend joins us to our user room and
+    // (crucially) accepts the proctoring frame stream on this connection.
+    const socket = io(process.env.REACT_APP_API_URL, {
+      auth: { token: getToken() },
+    });
     socketRef.current = socket;
 
     // Register ALL event handlers at the socket level (not inside "connect") so
@@ -500,7 +590,47 @@ export default function Chat({ interviewId }) {
       clearInterval(proctoringIntervalRef.current);
       proctoringIntervalRef.current = null;
     }
-  }, []); // --- FACE REGISTRATION (No changes needed) ---
+  }, []);
+
+  // Centralized camera shutdown to ensure hardware and browser indicator turn off.
+  // Defined before handleFaceRegistration, which references it.
+  const stopCamera = useCallback(() => {
+    try {
+      // Stop via <video> element stream if present
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject;
+        try {
+          stream.getTracks().forEach((t) => t.stop());
+        } catch (e) {
+          // ignore
+        }
+        videoRef.current.srcObject = null;
+      }
+
+      // Stop any tracked stream not attached to the element
+      if (cameraStreamRef.current) {
+        try {
+          cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+        } catch (e) {
+          // ignore
+        }
+        cameraStreamRef.current = null;
+      }
+
+      // Fully reset the video element
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+        } catch (e) {}
+        videoRef.current.removeAttribute("src");
+        try {
+          videoRef.current.load();
+        } catch (e) {}
+      }
+    } catch (e) {
+      // no-op
+    }
+  }, []); // --- FACE REGISTRATION ---
 
   const handleFaceRegistration = useCallback(async () => {
     const elem = document.documentElement;
@@ -550,10 +680,56 @@ export default function Chat({ interviewId }) {
           body: JSON.stringify({ image: imageData }),
         },
       );
-      if (!response.ok)
-        throw new Error(
-          (await response.json()).message || "Face registration failed.",
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // Identity permanently blocked — the captured face repeatedly failed
+        // to match this account's registered identity.
+        if (result.error_code === "face_mismatch_blocked") {
+          setIdentityBlockMessage(
+            result.error ||
+              "Face verification failed repeatedly — this interview attempt has been locked.",
+          );
+          setInterviewStatus("identity_blocked");
+          if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+          stopCamera();
+          return;
+        }
+        // Mismatch with attempts left — keep the candidate on this screen.
+        if (result.error_code === "face_mismatch") {
+          const attemptsNote =
+            typeof result.attempts_remaining === "number"
+              ? ` Attempts remaining: ${result.attempts_remaining}.`
+              : "";
+          showToast(
+            `${result.error || "The captured face does not match the identity registered on this account."}${attemptsNote}`,
+          );
+          return;
+        }
+        // Capture-quality problems (no face / multiple faces / bad image).
+        if (
+          result.error_code === "no_face_detected" ||
+          result.error_code === "multiple_faces_detected" ||
+          result.error_code === "invalid_image"
+        ) {
+          showToast(result.error || "Face capture failed. Please try again.", "warning");
+          return;
+        }
+        throw new Error(result.error || result.message || "Face registration failed.");
+      }
+
+      const identityInfo = result.identity || {};
+      setIdentityStatus(identityInfo.status || null);
+      if (identityInfo.status === "registered_new") {
+        showToast(
+          "Face registered — this photo is now your account's verified identity for future interviews.",
+          "success",
         );
+      } else if (identityInfo.status === "verified") {
+        showToast("Identity verified ✓", "success");
+      }
 
       console.log(
         "✅ Face registered successfully, starting live proctoring...",
@@ -567,7 +743,7 @@ export default function Chat({ interviewId }) {
       console.error("Face registration error:", error);
       showToast(`Could not register face: ${error.message}.`);
     }
-  }, [startInlineGazeRecorder, startLiveProctoring, showToast]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
+  }, [startInlineGazeRecorder, startLiveProctoring, showToast, stopCamera]); // --- ARCHIVAL VIDEO RECORDING & UPLOADING (No changes needed) ---
 
   const uploadRecording = useCallback(
     async (blob) => {
@@ -635,45 +811,6 @@ export default function Chat({ interviewId }) {
     });
   }, [mediaRecorder]);
 
-  // Centralized camera shutdown to ensure hardware and browser indicator turn off
-  const stopCamera = useCallback(() => {
-    try {
-      // Stop via <video> element stream if present
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject;
-        try {
-          stream.getTracks().forEach((t) => t.stop());
-        } catch (e) {
-          // ignore
-        }
-        videoRef.current.srcObject = null;
-      }
-
-      // Stop any tracked stream not attached to the element
-      if (cameraStreamRef.current) {
-        try {
-          cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-        } catch (e) {
-          // ignore
-        }
-        cameraStreamRef.current = null;
-      }
-
-      // Fully reset the video element
-      if (videoRef.current) {
-        try {
-          videoRef.current.pause();
-        } catch (e) {}
-        videoRef.current.removeAttribute("src");
-        try {
-          videoRef.current.load();
-        } catch (e) {}
-      }
-    } catch (e) {
-      // no-op
-    }
-  }, []);
-
   const startWebcamAndArchivalRecording = useCallback(async () => {
     try {
       // Ensure any previous stream is fully stopped before acquiring a new one
@@ -738,6 +875,11 @@ export default function Chat({ interviewId }) {
         sessionIdRef.current = location.state.sessionId;
         setSimilarityScore(location.state.similarityScore || 0);
         setCurrentQuestion(location.state.initialQuestion);
+        // Same pacing config as real interviews (passed through by Practice)
+        if (location.state.questionDeadline)
+          setQuestionDeadline(location.state.questionDeadline);
+        if (location.state.maxQuestions)
+          setMaxQuestions(location.state.maxQuestions);
         setInterviewStatus("registering");
         return;
       }
@@ -777,6 +919,7 @@ export default function Chat({ interviewId }) {
           setSimilarityScore(data.similarity_score);
           setCurrentQuestion(data.initial_questions[0]);
           if (data.question_deadline) setQuestionDeadline(data.question_deadline);
+          if (data.max_questions) setMaxQuestions(data.max_questions);
           setInterviewStatus("registering");
         })
         .catch((err) => {
@@ -809,7 +952,10 @@ export default function Chat({ interviewId }) {
         const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
         const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
           body: JSON.stringify({ text: textToSpeak, session_id: sessionIdRef.current }),
         });
         if (!response.ok) return;
@@ -898,11 +1044,14 @@ export default function Chat({ interviewId }) {
     const currentSessionId = sessionIdRef.current;
     if (
       !currentSessionId ||
-      (interviewStatus !== "active" && interviewStatus !== "ending") || // Allow ending from active state
+      (interviewStatus !== "active" &&
+        interviewStatus !== "ending" &&
+        interviewStatus !== "end_failed") || // allow retry after a failed /end
       uploadStatus === "uploading"
     )
       return;
 
+    setEndError("");
     setInterviewStatus("ending");
 
     // CRITICAL: Stop timer and speech recognition IMMEDIATELY
@@ -949,6 +1098,23 @@ export default function Chat({ interviewId }) {
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Failed to end interview");
+
+      if (data.status === "interview_discarded") {
+        // No answers were recorded — the backend refunded the start-of-
+        // interview credits and discarded the session.
+        setDiscardInfo({
+          isPractice: !!isPracticeMode,
+          refundSuccess: !!data?.refund?.success,
+          creditsRefunded: Number(data?.refund?.credits_refunded || 0),
+          message: data.message || "",
+        });
+        sessionStorage.setItem("credits-needs-refresh", "true");
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        setInterviewStatus("discarded");
+        return;
+      }
 
       setInterviewStatus("completed");
       setEvaluation(data.evaluation);
@@ -1042,7 +1208,10 @@ export default function Chat({ interviewId }) {
       }));
     } catch (error) {
       console.error("Failed to end interview:", error);
-      setInterviewStatus("active"); // Revert status on failure
+      // Don't silently flip back to "active" — the candidate already stopped;
+      // park on a retry screen instead. Answers are safe server-side.
+      setEndError(error.message || "Could not finalize the interview.");
+      setInterviewStatus("end_failed");
     } finally {
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.disconnect();
@@ -1095,7 +1264,7 @@ export default function Chat({ interviewId }) {
           throw new Error(data.error || "Failed to submit answer");
 
         // Auto-end interview after configured max questions
-        if (data.interview_complete || questionCount >= MAX_QUESTIONS) {
+        if (data.interview_complete || questionCount >= maxQuestions) {
           // Reset submitting state before ending
           setIsSubmittingAnswer(false);
           isSubmittingAnswerRef.current = false;
@@ -1108,8 +1277,7 @@ export default function Chat({ interviewId }) {
           // backend counter only tracks dynamically-generated questions
           // (starts at 0), while this display counter also counts the
           // hardcoded greeting as "question 1". Falls back to the old
-          // increment-by-1 for responses without a progress field (e.g.
-          // practice mode, which isn't wired to this yet).
+          // increment-by-1 for responses without a progress field.
           setQuestionCount((prev) =>
             data.progress?.questions_asked != null
               ? data.progress.questions_asked + 1
@@ -1118,11 +1286,26 @@ export default function Chat({ interviewId }) {
           if (data.question_deadline) setQuestionDeadline(data.question_deadline);
           setTimeoutWarning(false);
           setCurrentQuestion(data.next_question);
-          speakResponse(data.next_question);
+
+          // Speak naturally: repeat requests get the question verbatim; a
+          // skipped question moves on gently; a real answer earns a brief
+          // acknowledgement before the next question.
+          let spokenText = data.next_question;
+          if (!data.repeated_question) {
+            const ack = answer
+              ? ACKNOWLEDGEMENTS[
+                  Math.floor(Math.random() * ACKNOWLEDGEMENTS.length)
+                ]
+              : "No problem, let's move on.";
+            spokenText = `${ack} ${data.next_question}`;
+          }
+          speakResponse(spokenText);
         }
       } catch (error) {
         console.error("Error in onSend:", error);
-        speakResponse(`An error occurred: ${error.message}`);
+        speakResponse(
+          "Sorry, something went wrong on our side. Please answer the question again.",
+        );
       } finally {
         setIsSubmittingAnswer(false);
         isSubmittingAnswerRef.current = false;
@@ -1133,9 +1316,16 @@ export default function Chat({ interviewId }) {
       interviewStatus,
       endInterview,
       questionCount,
+      maxQuestions,
       location.state,
     ],
   );
+
+  // Fresh-closure mirror for the MediaRecorder onstop handler (see onSendRef
+  // declaration for why this matters).
+  useEffect(() => {
+    onSendRef.current = onSend;
+  }, [onSend]);
 
   // No-response timeout: if the candidate never answers at all (distinct from
   // the in-speech silence timer below, which only fires once they've started
@@ -1151,12 +1341,16 @@ export default function Chat({ interviewId }) {
     const checkDeadline = () => {
       const remaining = questionDeadline - Date.now() / 1000;
       if (remaining <= 0) {
+        // Never cut a candidate off mid-answer: once they've spoken, the
+        // post-speech silence logic owns submission. This backstop only
+        // rescues questions nobody ever started answering.
+        if (hasSpokenRef.current) return;
         if (!isSubmittingAnswerRef.current) {
           onSend("");
         }
         return;
       }
-      setTimeoutWarning(remaining <= 30);
+      setTimeoutWarning(remaining <= 30 && !hasSpokenRef.current);
     };
 
     checkDeadline();
@@ -1164,39 +1358,62 @@ export default function Chat({ interviewId }) {
     return () => clearInterval(id);
   }, [questionDeadline, interviewStatus, onSend]);
 
-  // --- FIXED --- Only silence detection, no 30-second timer
+  // Listening pace driver. Two distinct phases per question:
+  //  1. Candidate hasn't spoken yet — count down NO_ANSWER_TIMEOUT_SECONDS
+  //     (they get a full 30 seconds to think), then auto-skip with an empty answer.
+  //  2. Candidate has spoken — POST_SPEECH_SILENCE_SECONDS of sustained
+  //     silence submits what they said. (Replaces the old 3-second cutoff
+  //     that submitted an empty answer before candidates could even think.)
   useEffect(() => {
-    // Don't run timer if interview is not active
-    if (interviewStatus !== "active") {
+    if (interviewStatus !== "active" || !isTimerRunning) {
       clearInterval(silenceTimerRef.current);
-      return;
+      if (interviewStatus !== "active") {
+        setSilenceTimer(0);
+        setNoAnswerRemaining(null);
+      }
+      return () => clearInterval(silenceTimerRef.current);
     }
 
-    if (isTimerRunning) {
-      // Only silence detection timer - checks every second
-      silenceTimerRef.current = setInterval(() => {
-        const timeSinceLastSpeech =
-          (Date.now() - lastSpeechTimeRef.current) / 1000;
-        setSilenceTimer(Math.floor(timeSinceLastSpeech));
+    silenceTimerRef.current = setInterval(() => {
+      if (!hasSpokenRef.current) {
+        const waited =
+          (Date.now() - (listeningStartedAtRef.current || Date.now())) / 1000;
+        const remaining = Math.max(
+          0,
+          Math.ceil(NO_ANSWER_TIMEOUT_SECONDS - waited),
+        );
+        setNoAnswerRemaining(remaining);
+        setSilenceTimer(0);
 
-        // Auto-submit after 3 seconds of silence
-        if (timeSinceLastSpeech >= 3) {
+        if (remaining <= 0) {
           clearInterval(silenceTimerRef.current);
           setIsTimerRunning(false);
-
-          pendingSubmissionRef.current = true;
+          setNoAnswerRemaining(null);
+          pendingSubmissionRef.current = "no_answer";
           stopRecording();
-          setSilenceTimer(0);
         }
-      }, 1000);
-    } else {
-      clearInterval(silenceTimerRef.current);
-    }
+      } else {
+        setNoAnswerRemaining(null);
+        const silentFor = (Date.now() - lastSpeechTimeRef.current) / 1000;
+        setSilenceTimer(Math.floor(silentFor));
+
+        if (silentFor >= POST_SPEECH_SILENCE_SECONDS) {
+          clearInterval(silenceTimerRef.current);
+          setIsTimerRunning(false);
+          setSilenceTimer(0);
+          pendingSubmissionRef.current = "silence";
+          stopRecording();
+        }
+      }
+    }, 1000);
 
     return () => {
       clearInterval(silenceTimerRef.current);
     };
-  }, [isTimerRunning, isRecording, onSend, interviewStatus]);
+    // isRecording is a dep so the interval re-captures a fresh stopRecording
+    // closure once recording actually starts (its internal guard reads the
+    // isRecording value from its creation render).
+  }, [isTimerRunning, isRecording, interviewStatus]);
 
   // Replace your entire SpeechRecognition useEffect with this final version
 
@@ -1265,6 +1482,39 @@ export default function Chat({ interviewId }) {
             );
           }
 
+          // Resolve a pending submission when transcription produced nothing
+          // usable (STT failure, empty result). Previously these paths simply
+          // returned, leaving "Alex is thinking..." on screen forever.
+          const resolvePendingWithoutTranscript = () => {
+            const reason = pendingSubmissionRef.current;
+            if (!reason) {
+              setIsSubmittingAnswer(false);
+              return;
+            }
+            pendingSubmissionRef.current = null;
+
+            const heardText = transcriptRef.current.trim();
+            if (heardText) {
+              setInput("");
+              transcriptRef.current = "";
+              if (onSendRef.current) onSendRef.current(heardText);
+            } else if (reason === "no_answer") {
+              // Candidate never spoke within the answer window — advance
+              // with an empty answer (deliberate skip, scored as such).
+              if (onSendRef.current) onSendRef.current("");
+            } else {
+              // Candidate DID speak but nothing was transcribed — never
+              // convert their real answer into an empty submit. Let them
+              // try again; the server question deadline still backstops.
+              setIsSubmittingAnswer(false);
+              showToast(
+                "We couldn't hear that clearly — please answer again.",
+                "warning",
+              );
+              if (beginListeningRef.current) beginListeningRef.current();
+            }
+          };
+
           // Send to backend for transcription
           const reader = new FileReader();
           reader.readAsDataURL(audioBlob);
@@ -1284,7 +1534,10 @@ export default function Chat({ interviewId }) {
 
               const response = await fetch(`${apiUrl}/api/speech/transcribe`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${getToken()}`,
+                },
                 body: JSON.stringify({
                   audio_base64: base64Audio,
                   sample_rate_hertz: sampleRate,
@@ -1294,11 +1547,12 @@ export default function Chat({ interviewId }) {
               });
 
               if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({}));
                 console.error(
                   `❌ Transcription API error: ${response.status}`,
                   errorData,
                 );
+                resolvePendingWithoutTranscript();
                 return;
               }
 
@@ -1313,27 +1567,23 @@ export default function Chat({ interviewId }) {
                 setInput(finalTranscript);
                 transcriptRef.current = finalTranscript;
 
-                // If auto-submit or manual send was triggered
+                // If auto-submit or manual send was triggered. Submit via the
+                // ref — this handler is wired once per status change, and a
+                // direct onSend reference would keep the closure from that
+                // render, submitting every answer against question 1.
                 if (pendingSubmissionRef.current) {
-                  pendingSubmissionRef.current = false;
-                  onSend(finalTranscript);
+                  pendingSubmissionRef.current = null;
                   setInput("");
                   transcriptRef.current = "";
+                  if (onSendRef.current) onSendRef.current(finalTranscript);
                 }
               } else {
                 console.warn("⚠️ No transcript received from backend.");
-                // Still handle pending submission even if no transcript
-                if (pendingSubmissionRef.current) {
-                  pendingSubmissionRef.current = false;
-                  if (transcriptRef.current.trim()) {
-                    onSend(transcriptRef.current.trim());
-                    setInput("");
-                    transcriptRef.current = "";
-                  }
-                }
+                resolvePendingWithoutTranscript();
               }
             } catch (error) {
               console.error("❌ Transcription network/fetch error:", error);
+              resolvePendingWithoutTranscript();
             }
           };
         };
@@ -1360,7 +1610,11 @@ export default function Chat({ interviewId }) {
     setInput("");
     transcriptRef.current = "";
     lastSpeechTimeRef.current = Date.now();
+    listeningStartedAtRef.current = Date.now();
+    hasSpokenRef.current = false;
+    setHasSpokenThisQuestion(false);
     setSilenceTimer(0);
+    setNoAnswerRemaining(NO_ANSWER_TIMEOUT_SECONDS);
 
     try {
       audioChunksRef.current = [];
@@ -1389,11 +1643,14 @@ export default function Chat({ interviewId }) {
         }
         const average = sum / bufferLength;
 
-        // Threshold for speech detection (adjust as needed)
-        if (average > 10) {
+        if (average > SPEECH_VOLUME_THRESHOLD) {
           lastSpeechTimeRef.current = Date.now();
-          if (silenceTimer > 0) {
-            setSilenceTimer(0);
+          if (!hasSpokenRef.current) {
+            // First detected speech for this question: switch from the
+            // "waiting for you to start" countdown to answer-silence tracking.
+            hasSpokenRef.current = true;
+            setHasSpokenThisQuestion(true);
+            setNoAnswerRemaining(null);
           }
         }
       }, 100);
@@ -1428,6 +1685,24 @@ export default function Chat({ interviewId }) {
       console.error("Error stopping MediaRecorder:", e);
     }
   }, [isRecording]);
+
+  // (Re)open the mic for the current question — used after the AI finishes
+  // speaking, after a TTS failure (so the flow never dies with the audio),
+  // and when transcription misses and the candidate needs another go.
+  const beginListening = useCallback(() => {
+    if (interviewStatusRef.current !== "active") return;
+    setIsSubmittingAnswer(false);
+    setSilenceTimer(0);
+    lastSpeechTimeRef.current = Date.now();
+    setIsTimerRunning(true);
+    startRecording();
+  }, [startRecording]);
+
+  // Keep the long-lived handlers (MediaRecorder.onstop, TTS audio events)
+  // pointed at the freshest closures.
+  useEffect(() => {
+    beginListeningRef.current = beginListening;
+  }, [beginListening]);
   const speakResponse = async (text) => {
     if (!text) {
       console.warn("⚠️ speakResponse called with no text.");
@@ -1490,12 +1765,9 @@ export default function Chat({ interviewId }) {
         currentAudioRef.current = null;
         clearInterval(typingIntervalRef.current);
         setDisplayedText(text);
-        if (interviewStatus === "active") {
-          console.log("🎤 AI finished speaking. Starting silence detection & recording...");
-          setSilenceTimer(0);
-          lastSpeechTimeRef.current = Date.now();
-          setIsTimerRunning(true);
-          startRecording();
+        if (interviewStatusRef.current === "active") {
+          console.log("🎤 AI finished speaking. Opening the mic...");
+          beginListening();
         }
       };
 
@@ -1505,12 +1777,16 @@ export default function Chat({ interviewId }) {
         currentAudioRef.current = null;
         clearInterval(typingIntervalRef.current);
         setDisplayedText(text);
+        // Audio died mid-question — the text is on screen; keep the
+        // interview moving by opening the mic anyway.
+        if (interviewStatusRef.current === "active") beginListening();
       };
 
       audio.play().catch((e) => {
         console.error("❌ Audio play() failed:", e);
         setIsSpeaking(false);
         setDisplayedText(text);
+        if (interviewStatusRef.current === "active") beginListening();
       });
     };
 
@@ -1524,21 +1800,32 @@ export default function Chat({ interviewId }) {
       return;
     }
 
+    // TTS is unavailable: display the full question immediately and open the
+    // mic so the interview continues silently instead of stalling. The
+    // candidate reads the question rather than hearing it.
+    const continueWithoutAudio = () => {
+      setIsSpeaking(false);
+      setDisplayedText(text);
+      if (interviewStatusRef.current === "active") beginListening();
+    };
+
     // Slow path: fetch TTS from the backend.
     try {
       const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
       console.log(`🔊 Fetching TTS from: ${apiUrl}/api/speech/synthesize`);
       const response = await fetch(`${apiUrl}/api/speech/synthesize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
         body: JSON.stringify({ text, session_id: sessionIdRef.current }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         console.error(`❌ TTS API error: ${response.status}`, errorData);
-        setIsSpeaking(false);
-        setDisplayedText(text);
+        continueWithoutAudio();
         return;
       }
 
@@ -1548,13 +1835,11 @@ export default function Chat({ interviewId }) {
         setupAndPlayAudio(`data:audio/mp3;base64,${data.audio_base64}`);
       } else {
         console.error("❌ No audio_base64 in TTS response.");
-        setIsSpeaking(false);
-        setDisplayedText(text);
+        continueWithoutAudio();
       }
     } catch (error) {
       console.error("❌ Error in Google TTS fetch:", error);
-      setIsSpeaking(false);
-      setDisplayedText(text);
+      continueWithoutAudio();
     }
   }; // Automatically speak the first question
   useEffect(() => {
@@ -1614,7 +1899,11 @@ export default function Chat({ interviewId }) {
 
   // --- Interview Completion Camera Cleanup ---
   useEffect(() => {
-    if (interviewStatus === "completed" || interviewStatus === "ending") {
+    if (
+      interviewStatus === "completed" ||
+      interviewStatus === "ending" ||
+      interviewStatus === "discarded"
+    ) {
       // Comprehensive camera and media cleanup
       const cleanup = () => {
         // Ensure camera shutdown via centralized function
@@ -1834,6 +2123,19 @@ export default function Chat({ interviewId }) {
                 Register Face & Calibrate
               </button>
             </div>
+            <p
+              style={{
+                color: "#94a3b8",
+                fontSize: "0.75rem",
+                marginTop: "12px",
+                lineHeight: "1.5",
+                maxWidth: "320px",
+              }}
+            >
+              Your photo is matched against your account's registered identity
+              and shared with the recruiter to confirm who took the interview.
+              Make sure only you are visible.
+            </p>
           </div>
         </div>
           </>
@@ -1884,6 +2186,150 @@ export default function Chat({ interviewId }) {
     );
   }
 
+  if (interviewStatus === "identity_blocked") {
+    return (
+      <div className={Styles.loadingContainer}>
+        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px", fontWeight: "600" }}>
+          Identity Verification Failed
+        </h3>
+        <p
+          style={{
+            color: "#991b1b",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "12px",
+            padding: "12px 14px",
+            borderRadius: "10px",
+            background: "#fef2f2",
+            border: "1px solid #fecdd3",
+          }}
+        >
+          {identityBlockMessage ||
+            "The captured face repeatedly did not match the identity registered on this account."}
+        </p>
+        <p
+          style={{
+            color: "#64748b",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "8px",
+          }}
+        >
+          For fairness and security, interviews must be taken by the account
+          owner whose face was registered during their first interview. This
+          attempt has been recorded. If you believe this is an error, please
+          contact support.
+        </p>
+        <div style={{ marginTop: "18px" }}>
+          <button
+            onClick={() =>
+              navigate(location.state?.isPractice ? "/practice" : "/profile#applications")
+            }
+            className={Styles.registerButton}
+          >
+            {location.state?.isPractice ? "Back to Practice" : "Back to Applications"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (interviewStatus === "end_failed") {
+    return (
+      <div className={Styles.loadingContainer}>
+        <h3 style={{ marginTop: "20px", color: "#dc2626", fontSize: "24px", fontWeight: "600" }}>
+          Couldn't Finalize Your Interview
+        </h3>
+        <p
+          style={{
+            color: "#991b1b",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "12px",
+            padding: "12px 14px",
+            borderRadius: "10px",
+            background: "#fef2f2",
+            border: "1px solid #fecdd3",
+          }}
+        >
+          {endError || "A network problem interrupted the wrap-up."}
+        </p>
+        <p
+          style={{
+            color: "#64748b",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "8px",
+          }}
+        >
+          Your answers are already saved on our servers — nothing is lost.
+          Click retry to finish generating your report.
+        </p>
+        <div style={{ marginTop: "18px" }}>
+          <button onClick={() => endInterview()} className={Styles.registerButton}>
+            Retry Finalizing
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (interviewStatus === "discarded") {
+    const isPracticeDiscard = !!discardInfo?.isPractice;
+    return (
+      <div className={Styles.loadingContainer}>
+        <h3 style={{ marginTop: "20px", color: "#b45309", fontSize: "24px", fontWeight: "600" }}>
+          Interview Not Recorded
+        </h3>
+        <p
+          style={{
+            color: "#92400e",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "12px",
+            padding: "12px 14px",
+            borderRadius: "10px",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+          }}
+        >
+          {discardInfo?.message ||
+            "No answers were recorded, so this interview was discarded instead of being scored."}
+        </p>
+        <p
+          style={{
+            color: "#64748b",
+            maxWidth: "560px",
+            textAlign: "center",
+            lineHeight: "1.6",
+            marginTop: "8px",
+          }}
+        >
+          {discardInfo?.refundSuccess
+            ? isPracticeDiscard
+              ? `The ${discardInfo?.creditsRefunded || ""} credits deducted for this practice session were refunded to your wallet. You can start a fresh practice interview any time.`
+              : "The credits deducted for this interview were refunded to the recruiter, and your application is unaffected. You can retake the interview from your applications page."
+            : "No report was generated for this session. You can retake the interview at any time."}
+        </p>
+        <div style={{ marginTop: "18px" }}>
+          <button
+            onClick={() =>
+              navigate(isPracticeDiscard ? "/practice" : "/profile#applications")
+            }
+            className={Styles.registerButton}
+          >
+            {isPracticeDiscard ? "Back to Practice" : "Back to Applications"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (interviewStatus === "ready_to_start") {
     return (
       <div className={Styles.registrationContainer}>
@@ -1894,6 +2340,24 @@ export default function Chat({ interviewId }) {
         <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
           Your camera, microphone, and tracking systems are verified.
         </p>
+        {(identityStatus === "verified" || identityStatus === "registered_new") && (
+          <p
+            style={{
+              color: "#166534",
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "10px",
+              padding: "10px 16px",
+              fontSize: "0.95rem",
+              textAlign: "center",
+              marginBottom: "12px",
+            }}
+          >
+            {identityStatus === "verified"
+              ? "🪪 Identity verified — face matched your registered account identity."
+              : "🪪 Face registered — this photo is now your account's verified identity."}
+          </p>
+        )}
         <div style={{ textAlign: "center", marginTop: "20px" }}>
           <button 
              className={Styles.registerButton}
@@ -1981,11 +2445,13 @@ export default function Chat({ interviewId }) {
       {interviewStatus === "active" && (
         <InterviewHeader
           questionCount={questionCount}
-          maxQuestions={MAX_QUESTIONS}
+          maxQuestions={maxQuestions}
           interviewElapsedTime={interviewElapsedTime}
           silenceTimer={silenceTimer}
           isTimerRunning={isTimerRunning}
-          transcriptLength={transcriptRef.current.trim().length}
+          hasSpoken={hasSpokenThisQuestion}
+          noAnswerRemaining={noAnswerRemaining}
+          autoSubmitAfter={POST_SPEECH_SILENCE_SECONDS}
         />
       )}
       {interviewStatus === "active" && timeoutWarning && (
@@ -2063,6 +2529,18 @@ export default function Chat({ interviewId }) {
               {input.split(" ").length} words • {input.length} characters
             </div>
           )}
+          {isRecording && !hasSpokenThisQuestion && !isSubmittingAnswer && (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255, 255, 255, 0.55)",
+                fontStyle: "italic",
+              }}
+            >
+              💡 Take a moment to think — or say "please repeat the question"
+              to hear it again.
+            </div>
+          )}
         </div>
 
         <button
@@ -2089,7 +2567,7 @@ export default function Chat({ interviewId }) {
             if (isRecording) {
               clearInterval(silenceTimerRef.current);
               setIsTimerRunning(false);
-              pendingSubmissionRef.current = true;
+              pendingSubmissionRef.current = "manual";
               stopRecording();
               return;
             }

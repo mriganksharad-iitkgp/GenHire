@@ -9,7 +9,7 @@ class Application:
     student_name: str
     student_email: str
     cover_letter: str
-    status: str  # 'pending', 'reviewed', 'shortlisted', 'interviewed', 'selected', 'rejected'
+    status: str  # 'pending', 'reviewed', 'shortlisted', 'interviewed', 'screening_cleared', 'rejected' ('selected' = legacy)
     job_title: str
     recruiter_id: str
     cv_score: Optional[float] = 85.0

@@ -339,20 +339,24 @@ class EmailService:
         dashboard_url = f"{self.frontend_url}/dashboard"
         year = datetime.now().year
 
+        # Canonical status is "screening_cleared"; "selected" is its legacy name.
+        if new_status == "selected":
+            new_status = "screening_cleared"
+
         _STATUS_CONFIG = {
-            "selected": {
-                "subject": f"Congratulations! You've been selected — {job_title}",
+            "screening_cleared": {
+                "subject": f"Congratulations! You've cleared the screening round — {job_title}",
                 "eyebrow": "Application update",
-                "title": "You've been selected!",
+                "title": "Screening cleared!",
                 "intro": (
                     f"Congratulations! {escape(company_name or 'The recruiter')} has reviewed your application "
-                    f"for <strong>{escape(job_title)}</strong> and selected you to move forward. "
-                    f"Log in to your dashboard to see next steps."
+                    f"for <strong>{escape(job_title)}</strong> and you have cleared the AI screening round. "
+                    f"The recruiter will contact you directly about the next rounds of their hiring process."
                 ),
                 "cta_label": "View My Dashboard",
                 "expiry_text": "Log in to your Genhire dashboard to see the full update and any further instructions from the recruiter.",
                 "notice_title": "What's next?",
-                "notice_body": "Check your dashboard and respond promptly to any messages from the recruiter.",
+                "notice_body": "Check your dashboard and respond promptly to any messages from the recruiter about their further interview rounds.",
             },
             "shortlisted": {
                 "subject": f"You've been shortlisted — {job_title}",
@@ -462,7 +466,7 @@ class EmailService:
 </html>"""
 
         plain_intros = {
-            "selected": f"Congratulations! {company_name or 'The recruiter'} has selected your application for {job_title}.",
+            "screening_cleared": f"Congratulations! You have cleared the AI screening round for {job_title} at {company_name or 'the company'}. The recruiter will contact you about the next rounds.",
             "shortlisted": f"{company_name or 'The recruiter'} has shortlisted your application for {job_title}. You may be contacted soon.",
             "rejected": f"Thank you for applying to {job_title}. The recruiter has decided not to move forward with your application at this time.",
         }

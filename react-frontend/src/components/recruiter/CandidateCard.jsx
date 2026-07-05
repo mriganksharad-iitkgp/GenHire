@@ -1,6 +1,7 @@
 import React from 'react';
 import styles from '../../pages/RecruiterDashboard.module.css';
 import { getToken, getUser, clearSession, isLoggedIn } from "../../utils/sessionManager";
+import { normalizeStatus, statusLabel } from "../../utils/applicationStatus";
 
 const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const cvScorePct = (typeof application.cv_score === 'number')
@@ -14,34 +15,56 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
     : null;
 
   // Define the status progression hierarchy
-  const statusHierarchy = ['pending', 'reviewed', 'shortlisted', 'interviewed', 'selected', 'rejected'];
-  
+  const statusHierarchy = ['pending', 'reviewed', 'shortlisted', 'interviewed', 'screening_cleared', 'rejected'];
+
   // Get available status options based on current status (one-way progression)
   const getAvailableStatusOptions = (currentStatus) => {
     const currentIndex = statusHierarchy.indexOf(currentStatus);
-    
+
     // If current status is not found, default to all options
     if (currentIndex === -1) {
       return statusHierarchy;
     }
-    
+
     // Allow current status and all subsequent statuses
     const availableStatuses = statusHierarchy.slice(currentIndex);
-    
-    // Special case: if interviewed, can go to either selected or rejected
+
+    // Special case: if interviewed, screening either clears or doesn't
     if (currentStatus === 'interviewed') {
-      return ['interviewed', 'selected', 'rejected'];
+      return ['interviewed', 'screening_cleared', 'rejected'];
     }
-    
-    // Special case: if selected or rejected, no further progression
-    if (currentStatus === 'selected' || currentStatus === 'rejected') {
+
+    // Special case: terminal statuses — no further progression
+    if (currentStatus === 'screening_cleared' || currentStatus === 'rejected') {
       return [currentStatus];
     }
-    
+
     return availableStatuses;
   };
-  
-  const availableStatuses = getAvailableStatusOptions(application.status);
+
+  const availableStatuses = getAvailableStatusOptions(normalizeStatus(application.status));
+
+  // Identity verification summary written by /register-face — tells the
+  // recruiter whether the person on camera matched the account's registered
+  // face before this interview.
+  const identity = application.identity_verification;
+  const identityChip = (() => {
+    if (!identity || !identity.status) return null;
+    switch (identity.status) {
+      case 'verified':
+        return { text: '✓ ID Verified', color: '#166534', background: '#f0fdf4', border: '#bbf7d0' };
+      case 'registered_new':
+        return { text: '🪪 ID Registered (1st interview)', color: '#1e40af', background: '#eff6ff', border: '#bfdbfe' };
+      case 'mismatch':
+      case 'mismatch_blocked':
+        return { text: '⚠ ID Mismatch', color: '#991b1b', background: '#fef2f2', border: '#fecdd3' };
+      case 'unverified_monitor':
+      case 'unverified_system_unavailable':
+        return { text: 'ID Unverified', color: '#9a3412', background: '#fff7ed', border: '#fed7aa' };
+      default:
+        return null;
+    }
+  })();
 
   return (
     <div className={styles.candidateCard}>
@@ -70,6 +93,26 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
             {new Date(application.applied_at).toLocaleDateString()}
           </span>
         </div>
+        {identityChip && (
+          <div className={styles.scoreItem}>
+            <span className={styles.scoreLabel}>Identity</span>
+            <span
+              style={{
+                color: identityChip.color,
+                background: identityChip.background,
+                border: `1px solid ${identityChip.border}`,
+                borderRadius: 12,
+                padding: '2px 10px',
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+              title="Face verification result from the pre-interview identity check"
+            >
+              {identityChip.text}
+            </span>
+          </div>
+        )}
         {cvScorePct !== null && (
           <div className={styles.scoreItem}>
             <span className={styles.scoreLabel}>CV Score</span>
@@ -108,19 +151,14 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
       <div className={styles.candidateActions}>
         <select
           className={styles.statusSelect}
-          value={application.status}
+          value={normalizeStatus(application.status)}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
           title={`Current: ${displayStatus(application.status)} - Can only progress forward`}
           aria-label={`Update application status for ${application.student_name}`}
         >
           {availableStatuses.map(status => (
             <option key={status} value={status}>
-              {status === 'pending' && 'Pending'}
-              {status === 'reviewed' && 'Reviewed'}
-              {status === 'shortlisted' && 'Shortlisted'}
-              {status === 'interviewed' && 'Interviewed'}
-              {status === 'selected' && 'Selected'}
-              {status === 'rejected' && 'Rejected'}
+              {statusLabel(status)}
             </option>
           ))}
         </select>

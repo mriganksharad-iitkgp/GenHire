@@ -10,6 +10,7 @@ import logging
 from services.pdf_parser_service import get_pdf_parser
 from controllers.cv_controller import CVController
 from services.usage_telemetry_service import record_usage_event
+from services import interview_credit_service
 from payment_module.services.wallet_service import WalletService
 from payment_module.config.settings import PaymentConfig
 
@@ -411,16 +412,55 @@ class PracticeController:
                 "usage_deduction": usage_deduction,
             }
 
-            self.collections["practice_sessions"].insert_one(practice_session)
+            # Anything failing after the debit must give the credits back —
+            # the candidate never got a usable session.
+            try:
+                self.collections["practice_sessions"].insert_one(practice_session)
 
-            # Get first question
-            question_result = self.interview_api.get_question(session_id)
+                # Get first question
+                question_result = self.interview_api.get_question(session_id)
+                if "error" in (question_result or {}):
+                    raise RuntimeError(
+                        f"Failed to generate first question: {question_result.get('error')}"
+                    )
+            except Exception as post_debit_error:
+                logger.error(
+                    f"Practice start failed after debit, refunding: {post_debit_error}"
+                )
+                interview_credit_service.refund_practice_debit(
+                    self.collections["users"].database,
+                    {
+                        "usage_deduction": usage_deduction,
+                        "user_id": user_id,
+                        "session_id": session_id,
+                    },
+                    reason="start_failed",
+                )
+                self.collections["practice_sessions"].update_one(
+                    {"session_id": session_id},
+                    {
+                        "$set": {
+                            "status": "abandoned",
+                            "abandoned_reason": "start_failed",
+                            "updated_at": datetime.utcnow(),
+                        }
+                    },
+                )
+                self.interview_api.session_manager.sessions.pop(session_id, None)
+                return {
+                    "error": "Failed to start practice interview. Your credits have been refunded.",
+                }, 500
 
             return {
                 "session_id": session_id,
                 "similarity_score": cv_score_normalized,  # Return normalized CV score (0-1)
                 "cv_score": cv_score,  # Return CV score as percentage (0-100) for display
                 "initial_questions": [question_result.get("question", "")],
+                # Timing/progress config so practice interviews run with the
+                # same client-side pacing as real ones.
+                "question_timeout_seconds": session_result.get("question_timeout_seconds"),
+                "question_deadline": session_result.get("question_deadline"),
+                "max_questions": session_result.get("max_questions"),
                 "message": "Practice interview session started successfully",
                 "credits_required": required_credits,
                 "usage_deduction": usage_deduction,
@@ -561,6 +601,55 @@ class PracticeController:
 
             if not session:
                 return {"error": "Practice session not found"}, 404
+
+            # Zero-answer discard: if the candidate never gave a single
+            # substantive answer, refund the practice credits and abandon the
+            # session instead of producing an empty report.
+            internal_answered = 0
+            _internal = self.interview_api.session_manager._get_session(session_id)
+            if _internal is not None and getattr(_internal, "interview_data", None):
+                internal_answered = sum(
+                    1
+                    for qa in _internal.interview_data
+                    if str((qa or {}).get("answer") or "").strip()
+                )
+            doc_answered = sum(
+                1
+                for qa in (session.get("qa_pairs") or [])
+                if str((qa or {}).get("answer") or "").strip()
+            )
+            if max(internal_answered, doc_answered) == 0 and session.get("status") == "active":
+                refund = interview_credit_service.refund_practice_debit(
+                    self.collections["users"].database,
+                    session,
+                    reason="ended_no_answers",
+                )
+                self.collections["practice_sessions"].update_one(
+                    {"session_id": session_id},
+                    {
+                        "$set": {
+                            "status": "abandoned",
+                            "abandoned_reason": "ended_no_answers",
+                            "credits_refund": refund,
+                            "updated_at": datetime.utcnow(),
+                        }
+                    },
+                )
+                self.interview_api.session_manager.sessions.pop(session_id, None)
+                CostTracker().end_session(session_id, clear_events=True)
+                refunded_credits = 0
+                if refund and refund.get("success"):
+                    _txn = refund.get("transaction") or {}
+                    refunded_credits = abs(int(_txn.get("delta_credits") or 0))
+                return {
+                    "status": "interview_discarded",
+                    "message": "No answers were recorded, so this practice session was discarded and your credits were refunded.",
+                    "refund": {
+                        "success": bool(refund and refund.get("success")),
+                        "credits_refunded": refunded_credits,
+                    },
+                    "session_id": session_id,
+                }, 200
 
             # End interview via API
             result = self.interview_api.end_interview(session_id)

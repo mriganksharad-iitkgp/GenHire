@@ -39,8 +39,8 @@ def validate_job_status(status: str) -> bool:
     return status in ['draft', 'active', 'paused', 'closed']
 
 def validate_application_status(status: str) -> bool:
-    """Validate application status"""
-    return status in ['pending', 'reviewed', 'shortlisted', 'interviewed', 'selected', 'rejected']
+    """Validate application status ('selected' is the legacy name for 'screening_cleared')"""
+    return status in ['pending', 'reviewed', 'shortlisted', 'interviewed', 'screening_cleared', 'selected', 'rejected']
 
 def validate_file_extension(filename: str, allowed_extensions: set) -> bool:
     """Validate file extension"""

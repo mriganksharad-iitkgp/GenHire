@@ -90,7 +90,7 @@ Flask API directly:
 | Role | Entry point | What they can do |
 |---|---|---|
 | Candidate | `/dashboard`, `/practice`, `/profile` | Browse jobs, upload CVs, apply, take practice + real AI interviews, buy candidate credit packs |
-| Recruiter | `/recruiter-dashboard` | Post jobs (with AI JD generation), review applications and interview reports, invite candidates in bulk, buy recruiter credit packs |
+| Recruiter | `/recruiter-dashboard` | Post jobs (with AI JD generation), review applications and interview reports, mark candidates **Screening Cleared** / **Not Cleared**, invite candidates in bulk, buy recruiter credit packs |
 | Admin | `/admin/*` | Verify recruiters, manage users/jobs/applications, view platform cost statistics |
 | Invite-only candidate | `/invite/redeem` | A "burner" account created by a recruiter invite; logs in with an Invite ID instead of email |
 
@@ -104,7 +104,11 @@ Everything costly runs on **credits** held in per-user wallets
 - Recruiter AI job-description generation: **10**
 - Real interview (charged to the **recruiter** who owns the job): **30** (or **50** with proctoring)
 
-Credits are bought via Razorpay recharge packs. See
+Interviews are charged when they **start** and refunded automatically —
+always idempotently — if the session ends with **zero answers** (candidate
+never spoke, browser crashed, identity verification blocked the session). A
+background sweeper also refunds or auto-finalizes sessions abandoned
+mid-interview. Credits are bought via Razorpay recharge packs. See
 [backend/payment-module.md](backend/payment-module.md).
 
 ## Where to go next

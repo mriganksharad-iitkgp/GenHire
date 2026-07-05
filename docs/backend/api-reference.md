@@ -51,7 +51,7 @@ new browser tab).
 | POST | `/api/jobs/<job_id>/apply` | 🎓 | Apply with a CV (uploaded file or saved CV / manual details). Kicks off async CV scoring; emits real-time `application_update`. |
 | DELETE | `/api/jobs/<job_id>/withdraw` | 🎓 | Withdraw own application. |
 | GET | `/api/applications` | 🔑 | Own applications (candidate) or applications to own jobs (recruiter). |
-| PUT | `/api/applications/<id>/status` | 🧑‍💼 | Change status (`pending`/`shortlisted`/`interviewed`/`selected`/`rejected`); emails candidate; updates job counters; emits socket event. |
+| PUT | `/api/applications/<id>/status` | 🧑‍💼 | Change status (`pending`/`reviewed`/`shortlisted`/`interviewed`/`screening_cleared`/`rejected`; legacy `selected` is accepted and normalized to `screening_cleared`); emails candidate; updates job counters; emits socket event. |
 | GET | `/api/applications/<id>` | 🔑 | One application (owner or job's recruiter). |
 | GET | `/api/applications/<id>/cv` | 🔑 | The CV snapshot attached to the application. |
 | GET | `/api/applications/<id>/interview-report` | 🔑 | Full AI interview report (evaluation, transcript, proctoring). |
@@ -84,13 +84,16 @@ Candidates can store multiple CVs; one is "primary".
 
 ## Practice Interviews — `routes/practice_routes.py` (prefix `/api/practice`)
 
-Candidate-paid mock interviews (30 credits, 50 with proctoring).
+Candidate-paid mock interviews (30 credits, 50 with proctoring). Same
+credit-refund rules as real interviews: a start that fails after the debit
+refunds it, and ending with zero answers discards the session and refunds
+the candidate (`{status: "interview_discarded"}`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/practice/start` | Start a practice session (deducts candidate credits). |
+| POST | `/api/practice/start` | Start a practice session (deducts candidate credits; returns pacing config: `question_timeout_seconds`, `question_deadline`, `max_questions`). |
 | POST | `/api/practice/<session_id>/answer` | Submit an answer, get the next question. |
-| POST | `/api/practice/<session_id>/end` | End + generate evaluation. |
+| POST | `/api/practice/<session_id>/end` | End + generate evaluation (or discard + refund when nothing was answered). |
 | GET | `/api/practice/history` | Own past sessions. |
 | GET | `/api/practice/<session_id>/report` | Full report for one session. |
 
@@ -98,11 +101,12 @@ Candidate-paid mock interviews (30 credits, 50 with proctoring).
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/interviews/start` | 🎓 | Start the real AI interview for an application. Verifies ownership + CV, checks & debits the **recruiter's** wallet (30/50 credits), writes CV/JD temp files, creates the LLM session, returns `session_id` + first question. |
-| GET | `/api/interviews/<session_id>/question` | 🔓 | Next question for the session. |
-| POST | `/api/interviews/<session_id>/answer` | 🎓 | Submit an answer (empty string allowed — auto-submitted on timeout). Returns evaluation + next question. |
-| POST | `/api/interviews/<session_id>/end` | 🎓 | Finalize: builds evaluation + transcript, computes interview score (70% answers / 30% language), merges proctoring signals, updates interview + application docs, syncs job counters, emails recruiter & candidate, records usage telemetry. |
-| POST | `/api/interviews/<session_id>/register-face` | 🎓 | Store the reference face image; initializes the live proctoring session. |
+| POST | `/api/interviews/start` | 🎓 | Start the real AI interview for an application. Verifies ownership + CV, checks & debits the **recruiter's** wallet (30/50 credits, refund-count-aware idempotency key), writes CV/JD temp files, creates the LLM session, returns `session_id` + first question + `max_questions` + `question_deadline`. Anything failing after the debit refunds it. |
+| GET | `/api/interviews/<session_id>/question` | 🔑 | Next question for the session (owner-checked). |
+| POST | `/api/interviews/<session_id>/answer` | 🎓 | Submit an answer (empty string allowed — auto-submitted on timeout). Returns evaluation + next question; non-empty answers increment `questions_answered_count`. |
+| POST | `/api/interviews/<session_id>/end` | 🎓 | Finalize: builds evaluation + transcript, computes interview score (70% answers / 30% language), merges proctoring signals, updates interview + application docs, syncs job counters, emails recruiter & candidate, records usage telemetry. If **zero answers** were recorded, the session is discarded instead — recruiter credits refunded, response `{status: "interview_discarded", refund: {...}}`. |
+| POST | `/api/interviews/<session_id>/register-face` | 🎓 | The face identity gate. First real interview: enrolls the face permanently on the account (`users.face_profile`). Later interviews: verifies the captured face against the registered one (DeepFace); mismatches return `error_code: face_mismatch` (attempts left) or `face_mismatch_blocked` (interview blocked, status `identity_blocked`). Also initializes the live proctoring session. Practice sessions soft-verify (never block). |
+| GET | `/api/interviews/<session_id>/face-image/<kind>` | 🔑 | Serve the `captured` or `reference` identity photo (interview owner, the job's recruiter, or admin only). |
 | GET | `/api/interviews/<session_id>/gaze-recorder-page` | 🔓 (token via query) | Server-rendered HTML page that loads the GazeRecorder eye-tracking scripts. |
 | POST | `/api/interviews/<session_id>/gaze-recorder-results` | 🎓 | Receives gaze points; computes cheating score → `proctoring_score`. |
 | POST | `/api/interviews/<session_id>/upload-recording` | 🎓 | Upload the webcam recording (`.webm`). |
@@ -139,6 +143,9 @@ Cost statistics: `GET /cost-statistics`,
 `.../recruiters/credit-summary`, `.../recruiters/<id>/credit-lines`.
 
 ## Speech — `routes/speech_routes.py` (prefix `/api/speech`)
+
+Both endpoints require authentication (🔑) — they proxy paid Google Cloud
+APIs.
 
 | Method | Path | Purpose |
 |---|---|---|

@@ -426,7 +426,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
         postedDate: new Date().toISOString().split('T')[0],
         applicants: 0,
         interviewed: 0,
-        selected: 0,
+        screening_cleared: 0,
         rejected: 0,
         pending: 0,
         skills: jobData.skills // Already an array

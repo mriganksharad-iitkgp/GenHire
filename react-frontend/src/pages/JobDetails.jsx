@@ -138,7 +138,7 @@ const JobDetails = () => {
 					jobData.applicants = data.applicants || 0;
 					jobData.pending = data.pending || 0;
 					jobData.interviewed = data.interviewed || 0;
-					jobData.selected = data.selected || 0;
+					jobData.screeningCleared = data.screening_cleared ?? data.selected ?? 0;
 					jobData.rejected = data.rejected || 0;
 				}
 
@@ -630,8 +630,8 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 										<i className="fa fa-check-circle"></i>
 									</div>
 									<div className={styles.statContent}>
-										<div className={styles.statNumber}>{job.selected || 0}</div>
-										<div className={styles.statLabel}>Selected</div>
+										<div className={styles.statNumber}>{job.screeningCleared || 0}</div>
+										<div className={styles.statLabel}>Screening Cleared</div>
 									</div>
 								</div>
 

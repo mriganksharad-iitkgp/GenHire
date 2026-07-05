@@ -117,7 +117,11 @@ links manually.
    (application flips to shortlisted/rejected) and the recruiter dashboard
    update in real time.
 5. Start the interview (needs the kiosk installed, plus Groq + Google keys).
-6. As the recruiter: open the interview report on the application.
+   The first interview enrolls the candidate's face as their permanent
+   identity; later interviews verify against it.
+6. As the recruiter: open the interview report on the application (including
+   the Candidate Identity section) and mark the candidate
+   **Screening Cleared** or **Screening Not Cleared**.
 
 ## Where things live (quick reference)
 
@@ -126,6 +130,8 @@ links manually.
 | An API endpoint | `python-backend/routes/` → its controller in `controllers/` |
 | Interview questions/evaluation | `python-backend/interview/`, `evaluation_model/rubrics_eval/` |
 | Proctoring | `python-backend/security_check.py`, `utils/gaze_recorder_service.py`, Socket.IO handlers in `app.py` |
+| Face identity verification | `python-backend/services/face_verification_service.py` (+ `register_face` in `app.py`) |
+| Interview credit refunds / abandon sweeper | `python-backend/services/interview_credit_service.py` |
 | Credits/payments | `python-backend/payment_module/` |
 | Emails | `python-backend/services/email_service.py`, `invite_email_templates.py` |
 | A screen in the website | `react-frontend/src/pages/` (+ `components/`) |
@@ -139,8 +145,23 @@ links manually.
   usually need to be mirrored in both.
 - **Real interviews charge the recruiter's wallet** at `/api/interviews/start`.
   If interviews won't start with a credits error, top up / check the
-  *recruiter's* balance, not the candidate's.
+  *recruiter's* balance, not the candidate's. Interviews that end with zero
+  answers are refunded automatically (`interview_credit_service.py`).
+- **Face verification needs the DeepFace/OpenCV stack** (in
+  `requirements.txt`). Without it, identity checks degrade to photo capture
+  only — useful in dev, but don't mistake it for the production behavior
+  (`FACE_VERIFICATION_MODE=enforce`).
+- **Status rename migration**: the terminal positive status is
+  `screening_cleared` (formerly `selected`). Databases created before the
+  rename should run `python scripts/migrate_screening_cleared.py migrate`
+  once (the code reads legacy values fine in the meantime).
 - The backend keeps interview sessions and live proctoring state
-  **in memory** — restarting the server mid-interview loses the session.
+  **in memory** — restarting the server mid-interview loses the session
+  (the refund sweeper cleans up and refunds/finalizes such sessions).
+- **Production (Cloud Run) scales to zero when idle**, causing cold starts.
+  `.github/workflows/keep-backend-warm.yml` pings `/health` every 5 minutes
+  as a free, best-effort mitigation — see
+  [backend-detailed.md](backend/backend-detailed.md#deployment-cloud-run-and-keeping-it-warm)
+  for how it works and the guaranteed (paid) alternative.
 - `locustfile.py` (backend root) has load tests; `test_*.py` files are
   ad-hoc integration scripts, not a pytest suite.

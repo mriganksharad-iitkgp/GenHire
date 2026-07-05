@@ -5,7 +5,7 @@ This script recalculates and updates, for every job:
   - applicants
   - pending
   - interviewed
-  - selected
+  - screening_cleared (formerly "selected"; the legacy field is removed)
   - rejected
 
 Usage:
@@ -36,7 +36,7 @@ def _compute_counters_for_job(applications_collection, job_id_str):
     )
 
     interviewed = 0
-    selected = 0
+    screening_cleared = 0
     rejected = 0
     pending = 0
 
@@ -44,8 +44,8 @@ def _compute_counters_for_job(applications_collection, job_id_str):
         status = str(app.get("status", "pending")).lower()
         if status == "interviewed":
             interviewed += 1
-        elif status == "selected":
-            selected += 1
+        elif status in ("screening_cleared", "selected"):  # 'selected' = legacy value
+            screening_cleared += 1
         elif status == "rejected":
             rejected += 1
         elif status in ["pending", "reviewed", "shortlisted"]:
@@ -55,7 +55,7 @@ def _compute_counters_for_job(applications_collection, job_id_str):
         "applicants": len(apps),
         "pending": pending,
         "interviewed": interviewed,
-        "selected": selected,
+        "screening_cleared": screening_cleared,
         "rejected": rejected,
     }
 
@@ -65,7 +65,7 @@ def show_status():
     jobs_collection = db["jobs"]
     applications_collection = db["applications"]
 
-    jobs = list(jobs_collection.find({}, {"_id": 1, "title": 1, "applicants": 1, "pending": 1, "interviewed": 1, "selected": 1, "rejected": 1}))
+    jobs = list(jobs_collection.find({}, {"_id": 1, "title": 1, "applicants": 1, "pending": 1, "interviewed": 1, "screening_cleared": 1, "selected": 1, "rejected": 1}))
 
     print("=" * 90)
     print("Job Counter Backfill Status")
@@ -82,7 +82,7 @@ def show_status():
             "applicants": int(job.get("applicants", 0) or 0),
             "pending": int(job.get("pending", 0) or 0),
             "interviewed": int(job.get("interviewed", 0) or 0),
-            "selected": int(job.get("selected", 0) or 0),
+            "screening_cleared": int(job.get("screening_cleared", job.get("selected", 0)) or 0),
             "rejected": int(job.get("rejected", 0) or 0),
         }
 
@@ -106,7 +106,7 @@ def migrate(dry_run=False):
     jobs_collection = db["jobs"]
     applications_collection = db["applications"]
 
-    jobs = list(jobs_collection.find({}, {"_id": 1, "title": 1, "applicants": 1, "pending": 1, "interviewed": 1, "selected": 1, "rejected": 1}))
+    jobs = list(jobs_collection.find({}, {"_id": 1, "title": 1, "applicants": 1, "pending": 1, "interviewed": 1, "screening_cleared": 1, "selected": 1, "rejected": 1}))
 
     print("=" * 90)
     print("Backfill Job Counters")
@@ -125,11 +125,11 @@ def migrate(dry_run=False):
             "applicants": int(job.get("applicants", 0) or 0),
             "pending": int(job.get("pending", 0) or 0),
             "interviewed": int(job.get("interviewed", 0) or 0),
-            "selected": int(job.get("selected", 0) or 0),
+            "screening_cleared": int(job.get("screening_cleared", job.get("selected", 0)) or 0),
             "rejected": int(job.get("rejected", 0) or 0),
         }
 
-        if current == computed:
+        if current == computed and "selected" not in job:
             continue
 
         updated += 1
@@ -144,7 +144,9 @@ def migrate(dry_run=False):
                     "$set": {
                         **computed,
                         "updated_at": datetime.datetime.utcnow(),
-                    }
+                    },
+                    # Remove the legacy counter so nothing double-counts.
+                    "$unset": {"selected": ""},
                 },
             )
 
