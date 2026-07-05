@@ -77,7 +77,7 @@ See [interview-engine.md](interview-engine.md).
 | `auth_middleware.py` | JWT auth. `decode_user_from_token()` is the single decode path shared by REST and Socket.IO. Decorators: `@token_required` (accepts `Authorization: Bearer <jwt>` header **or** `?token=` query param for new-tab file views), `@admin_required`, `@recruiter_required`, `@candidate_required`, `@verified_required` (recruiter must be admin-approved), `@permission_required('x.y')` (admin permission system, `*` = super admin). Tokens are HS256, signed with `JWT_SECRET_KEY`, expiry `JWT_EXPIRATION_DAYS` (default 7 days). |
 | `cors_middleware.py` | CORS setup helper. |
 | `input_validator.py` | Request payload validation helpers. |
-| `rate_limiter.py` | Rate-limiting helpers used by specific routes. |
+| `rate_limiter.py` | Per-route `@rate_limit(max_calls, window_seconds, key_func=None)` decorator (separate from the global Flask-Limiter above) — e.g. register (5/60s), login (10/60s), forgot-password (3/300s). Sliding window, shared via Redis when `REDIS_URL` is set, otherwise in-process only. Keys by client IP (`X-Forwarded-For`, falling back to `remote_addr`) unless `key_func` is given; forgot-password keys by the **target email** instead, since IP-keying can misfire behind a reverse proxy/CDN that doesn't cleanly forward each visitor's distinct IP (collapses many different real users into one shared bucket) — email-keying is also the more correct defense for that endpoint's actual abuse vector (spamming one inbox), and sidesteps proxy quirks entirely. |
 
 ## Services (`services/`)
 

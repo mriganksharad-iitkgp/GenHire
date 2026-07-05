@@ -40,19 +40,37 @@ def _get_redis_client():
     return _redis_client
 
 
-def rate_limit(max_calls: int, window_seconds: int):
+def rate_limit(max_calls: int, window_seconds: int, key_func=None):
     """
-    Per-IP rate limiter, shared across processes via Redis when REDIS_URL is
-    configured and reachable; otherwise an in-process sliding window (correct
-    for a single worker, but each additional worker/container tracks its own
-    independent counters).
+    Per-IP rate limiter by default, shared across processes via Redis when
+    REDIS_URL is configured and reachable; otherwise an in-process sliding
+    window (correct for a single worker, but each additional worker/container
+    tracks its own independent counters).
     Returns 429 with Retry-After header when the limit is exceeded.
+
+    key_func: optional callable(*view_args, **view_kwargs) -> str | None,
+    used INSTEAD of the client IP to identify "the same requester" when
+    provided and it returns a truthy value (falls back to IP otherwise).
+    Use this for endpoints where the real abuse vector is "repeated attempts
+    against the same target" rather than "repeated attempts from the same
+    network address" — e.g. forgot-password should limit per email, not per
+    IP: behind a reverse proxy/CDN that doesn't cleanly forward each visitor's
+    distinct IP (common for a custom domain in front of Cloud Run), many
+    different real users can otherwise collapse into one shared IP bucket and
+    lock each other out, while a lone developer on localhost never notices.
     """
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or 'unknown').split(',')[0].strip()
-            key = f'{f.__name__}:{ip}'
+            identity = None
+            if key_func is not None:
+                try:
+                    identity = key_func(*args, **kwargs)
+                except Exception:
+                    identity = None
+            if not identity:
+                identity = (request.headers.get('X-Forwarded-For') or request.remote_addr or 'unknown').split(',')[0].strip()
+            key = f'{f.__name__}:{identity}'
 
             redis_client = _get_redis_client()
             if redis_client is not None:

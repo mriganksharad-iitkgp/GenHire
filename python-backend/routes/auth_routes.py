@@ -79,9 +79,17 @@ def resend_verification():
     result, status_code = auth_controller.resend_verification_email(email)
     return jsonify(result), status_code
 
+def _forgot_password_rate_limit_key():
+    """Rate-limit by the target email, not IP — see rate_limit()'s key_func
+    docstring for why. Falls back to IP (the decorator's default) if the
+    body has no usable email, so malformed requests still get throttled."""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get('email') or '').strip().lower()
+    return f"email:{email}" if email else None
+
 @auth_bp.route('/forgot-password', methods=['POST'])
 @cross_origin()
-@rate_limit(max_calls=3, window_seconds=60)
+@rate_limit(max_calls=3, window_seconds=300, key_func=_forgot_password_rate_limit_key)
 def forgot_password():
     """Request password reset email"""
     data = request.get_json()
