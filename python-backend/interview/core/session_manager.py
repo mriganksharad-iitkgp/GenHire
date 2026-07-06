@@ -92,7 +92,10 @@ class InterviewSessionManager:
         # Map of provider -> (env_key, default_model)
         fallback_options = [
             (LLMProvider.OPENAI, "OPENAI_API_KEY", "gpt-4o-mini"),
-            (LLMProvider.GEMINI, "GOOGLE_API_KEY", "models/gemini-1.5-flash"),
+            # "models/gemini-1.5-flash" was retired by Google — confirmed via
+            # genai.list_models() that it's no longer in this key's catalog,
+            # which is why the Gemini fallback was silently 404'ing.
+            (LLMProvider.GEMINI, "GOOGLE_API_KEY", "models/gemini-2.5-flash"),
             (LLMProvider.GROQ, "GROQ_API_KEY", "llama-3.3-70b-versatile"),
         ]
 

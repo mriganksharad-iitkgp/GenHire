@@ -31,7 +31,7 @@ class GeminiLLM(BaseLLM):
     def _create_llama_index_llm(self) -> Any:
         """Create the llama_index Gemini LLM instance."""
         return Gemini(
-            model=self.model_name,
+            model_name=self.model_name,
             api_key=self.api_key,
             temperature=self.config.get("temperature", 0.7),
             max_tokens=self.config.get("max_tokens"),

@@ -139,7 +139,12 @@ class LLMFallbackService:
                 name="google",
                 provider_type="google",
                 api_key=google_key,
-                model=os.getenv("CV_SCORING_MODEL", "gemini-flash-latest"),
+                # "gemini-flash-latest" is a moving alias — Google has pointed it at
+                # gemini-3.5-flash (preview, 20 requests/day free-tier quota), which
+                # exhausts almost immediately. Pin to a stable, generously-quota'd
+                # model instead; see session_manager._create_fallback_llm for the
+                # same reasoning on the interview side.
+                model=os.getenv("CV_SCORING_MODEL", "gemini-2.5-flash"),
                 temperature=0.3,
             ))
 

@@ -768,8 +768,12 @@ class PromptBasedQuestionGenerator:
     def _extract_job_role(self, job_title: str, jd_keywords: List[str]) -> str:
         title = (job_title or "").lower()
         blob = " ".join(jd_keywords or []).lower()
+        combined = f"{title} {blob}"
         def has(*words):
-            return any(w in title or w in blob for w in words)
+            # Word-boundary match — a plain substring check lets short tokens
+            # like "ba" false-positive inside ordinary words (e.g. "database",
+            # "SQL Basics"), silently misrouting the role classification.
+            return any(re.search(rf"\b{re.escape(w)}\b", combined) for w in words)
         if has("data analyst", "data analysis"):
             return "data_analyst"
         if has("business analyst", "business analysis", "ba"):
@@ -824,7 +828,16 @@ class PromptBasedQuestionGenerator:
             ],
             "software_engineer": [
                 "algorithm", "data structure", "system design", "api", "database", "cache", "concurrency", "testing",
-                "oop", "solid", "design patterns", "architecture", "refactoring", "performance", "scalability"
+                "oop", "solid", "design patterns", "architecture", "refactoring", "performance", "scalability",
+                # Common languages/tools that a generic SDE JD lists as required skills — without these,
+                # legitimate JD keywords were being silently filtered out, collapsing technical questions
+                # down to whichever single term happened to match (e.g. only "api"/"database").
+                "python", "java", "javascript", "typescript", "c++", "c#", "golang",
+                "git", "github", "version control", "code review", "debugging", "unit test", "integration test",
+                "sql", "nosql", "mongodb", "postgres", "mysql", "redis",
+                "docker", "kubernetes", "ci/cd", "continuous integration", "continuous deployment", "jenkins", "pipeline",
+                "agile", "scrum", "kafka", "rabbitmq", "message queue",
+                "node", "express", "rest", "restful", "microservices", "cloud", "aws", "gcp", "azure", "linux",
             ],
         }
         return mapping.get(role, mapping["software_engineer"])  # default generic

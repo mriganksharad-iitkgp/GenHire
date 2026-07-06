@@ -75,6 +75,9 @@ python-backend/uploads/
 python-backend/media/
 python-backend/staticfiles/
 
+# ── Local question-generation test output (contains real CV text) ───────────
+python-backend/question_generation_tests/
+
 # ── Electron binaries ────────────────────────────────────────────────────────
 *.exe
 *.dmg
