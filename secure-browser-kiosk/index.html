@@ -172,6 +172,70 @@
       100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
     }
 
+    /* Live face-capture preview shown during the identity-verification step */
+    #face-capture-stage {
+      margin-bottom: 10px;
+    }
+
+    .face-frame {
+      position: relative;
+      width: 260px;
+      height: 260px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .face-frame video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror, matches main interview preview */
+    }
+
+    .face-oval-guide {
+      position: absolute;
+      inset: 10px;
+      border: 3px solid rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      pointer-events: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .face-oval-guide.face-ok {
+      border-color: #48bb78;
+      box-shadow: 0 0 24px rgba(72, 187, 120, 0.55);
+    }
+
+    .face-oval-guide.face-warn {
+      border-color: #f6ad55;
+    }
+
+    .face-guide-status {
+      font-size: 0.95rem;
+      color: var(--dark-muted);
+      margin-bottom: 4px;
+      min-height: 1.3em;
+    }
+
+    .face-capture-btn {
+      margin-top: 16px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      color: var(--dark-text);
+      padding: 11px 26px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .face-capture-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
     /* ─── 2. INTERVIEW VIEW ─── */
 
     /* Loading Overlay during Model Load */
@@ -491,9 +555,21 @@
   <!-- Testing System Overlay -->
   <div id="testing-overlay">
     <div class="testing-content">
-      <div class="pulsing-dot"></div>
+      <div class="pulsing-dot" id="testing-spinner"></div>
+
+      <!-- Live face-capture preview — shown only during the identity-verification step -->
+      <div id="face-capture-stage" style="display:none;">
+        <div class="face-frame">
+          <video id="identity-video" autoplay playsinline muted></video>
+          <div class="face-oval-guide" id="face-oval-guide"></div>
+        </div>
+        <p id="face-guide-status" class="face-guide-status">Position your face in the frame</p>
+      </div>
+
       <h2 id="testing-title">Setting Up Your Interview</h2>
       <p id="testing-text">Initializing secure environment — this takes just a moment.</p>
+
+      <button id="btn-face-capture" class="face-capture-btn" style="display:none;">Capture Now</button>
     </div>
   </div>
 

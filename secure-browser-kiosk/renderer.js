@@ -30,7 +30,13 @@ const ACKNOWLEDGEMENTS = [
 // mismatch limit (FACE_VERIFY_MAX_ATTEMPTS) — this is just a backstop
 // against looping forever if the camera never produces a usable frame.
 const FACE_CAPTURE_MAX_ATTEMPTS = 8;
-const FACE_CAPTURE_RETRY_DELAY_MS = 2500;
+
+// Local (client-side) face-guide thresholds for the identity-capture preview.
+// Normalized (0-1) landmark coordinates from MediaPipe FaceLandmarker.
+const FACE_GUIDE_MIN_WIDTH = 0.20;   // face too small/far below this
+const FACE_GUIDE_MAX_WIDTH = 0.70;   // face too large/close above this
+const FACE_GUIDE_CENTER_TOLERANCE = 0.16; // max allowed offset from frame center
+const FACE_GUIDE_STABLE_MS = 550;    // hold a good, centered frame this long before auto-capturing
 
 let video, canvas, ctx;
 let objectDetector;
@@ -40,6 +46,7 @@ let optionalModelsPromise = null;
 
 // UI Elements
 let loadingOverlay, testingOverlay, startupView, interviewView, resultsView;
+let testingSpinner, faceCaptureStage, identityVideo, faceOvalGuide, faceGuideStatus, btnFaceCapture;
 let btnStart;
 let btnEndInterview, btnDownload;
 let timeDisplay, transcriptText;
@@ -218,6 +225,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     startupView = document.getElementById('startup-view');
     interviewView = document.getElementById('interview-view');
     resultsView = document.getElementById('results-view');
+
+    testingSpinner = document.getElementById('testing-spinner');
+    faceCaptureStage = document.getElementById('face-capture-stage');
+    identityVideo = document.getElementById('identity-video');
+    faceOvalGuide = document.getElementById('face-oval-guide');
+    faceGuideStatus = document.getElementById('face-guide-status');
+    btnFaceCapture = document.getElementById('btn-face-capture');
 
     btnStart = document.getElementById('btn-start');
     btnEndInterview = document.getElementById('btn-end-interview');
@@ -669,8 +683,9 @@ async function startInterview() {
     // FACE IDENTITY GATE — must happen before kiosk lockdown/gaze calibration.
     // First-ever real interview enrolls this capture as the account's
     // permanent identity; every later real interview must match it or the
-    // attempt is blocked. Practice sessions soft-verify and never block.
-    const identityOk = await performIdentityCheck();
+    // attempt is blocked. Practice interviews never go through this at all —
+    // there's no account identity to protect for a practice session.
+    const identityOk = isPracticeMode ? true : await performIdentityCheck();
     if (!identityOk) {
         return; // a blocked/fatal-error screen has already been shown
     }
@@ -751,33 +766,136 @@ async function captureAndVerifyFace() {
     }
 }
 
+/** One MediaPipe pass on the live webcam feed; returns the face-guide state
+ * used to drive the oval outline + status text under the preview. Reuses the
+ * same `faceLandmarker`/`video` the in-interview proctoring loop uses later —
+ * that loop is inactive at this point (isInterviewActive is still false), so
+ * there's no contention. */
+function evaluateFaceFrame() {
+    if (!faceLandmarker || !video || video.readyState < 2) {
+        return { ok: false, code: 'camera_warming_up', message: 'Starting camera…' };
+    }
+
+    const results = faceLandmarker.detectForVideo(video, performance.now());
+    const faces = results.faceLandmarks || [];
+
+    if (faces.length > 1) {
+        return { ok: false, code: 'multiple_faces', message: 'Only one person should be in frame' };
+    }
+    if (faces.length === 0) {
+        return { ok: false, code: 'no_face', message: 'Position your face in the frame' };
+    }
+
+    const { minX, maxX, minY, maxY } = getFaceBounds(faces[0]);
+    const width = maxX - minX;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    if (width < FACE_GUIDE_MIN_WIDTH) {
+        return { ok: false, code: 'too_far', message: 'Move a little closer' };
+    }
+    if (width > FACE_GUIDE_MAX_WIDTH) {
+        return { ok: false, code: 'too_close', message: 'Move back a little' };
+    }
+    if (Math.abs(centerX - 0.5) > FACE_GUIDE_CENTER_TOLERANCE || Math.abs(centerY - 0.5) > FACE_GUIDE_CENTER_TOLERANCE) {
+        return { ok: false, code: 'off_center', message: 'Center your face in the frame' };
+    }
+
+    return { ok: true, code: 'good', message: 'Hold still…' };
+}
+
+/**
+ * Drives the live oval guide + status text and resolves once the candidate's
+ * face has been centered and steady for FACE_GUIDE_STABLE_MS (auto-capture),
+ * or the candidate clicks "Capture Now"/"Retake Photo" themselves. Either way
+ * capture only ever happens from a frame the candidate has actually seen
+ * themselves centered in the preview — nothing is captured blind.
+ */
+function waitForCaptureTrigger() {
+    return new Promise((resolve) => {
+        let rafId = null;
+        let stableSince = null;
+        let settled = false;
+
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            if (rafId) cancelAnimationFrame(rafId);
+            btnFaceCapture.removeEventListener('click', finish);
+            resolve();
+        };
+
+        btnFaceCapture.addEventListener('click', finish);
+
+        const tick = () => {
+            if (settled) return;
+            const state = evaluateFaceFrame();
+
+            faceGuideStatus.textContent = state.message;
+            faceOvalGuide.classList.remove('face-ok', 'face-warn');
+
+            if (state.ok) {
+                faceOvalGuide.classList.add('face-ok');
+                if (stableSince === null) stableSince = performance.now();
+                if (performance.now() - stableSince >= FACE_GUIDE_STABLE_MS) {
+                    finish();
+                    return;
+                }
+            } else {
+                stableSince = null;
+                if (state.code !== 'camera_warming_up') {
+                    faceOvalGuide.classList.add('face-warn');
+                }
+            }
+
+            rafId = requestAnimationFrame(tick);
+        };
+
+        rafId = requestAnimationFrame(tick);
+    });
+}
+
 /**
  * Runs the identity gate before the interview can proceed. Returns true once
- * verification clears (or is skipped/soft for practice); returns false if the
- * candidate is blocked or capture fails fatally — in both cases a terminal
- * screen has already been shown and startInterview() must stop.
+ * verification clears; returns false if the candidate is blocked or capture
+ * fails fatally — in both cases a terminal screen has already been shown and
+ * startInterview() must stop. Never called for practice interviews.
  */
 async function performIdentityCheck() {
     testingOverlay.style.display = 'flex';
+    testingSpinner.style.display = 'none';
+    faceCaptureStage.style.display = 'block';
+    identityVideo.srcObject = videoStream;
+
     document.getElementById('testing-title').textContent = 'Verifying Your Identity';
     document.getElementById('testing-text').textContent =
-        "Please look directly at the camera. This confirms it's really you sitting the interview.";
+        "Center your face in the frame below — we'll capture automatically once it's steady, or click Capture Now.";
+    btnFaceCapture.textContent = 'Capture Now';
+    btnFaceCapture.style.display = 'inline-block';
 
-    // Give the camera a brief moment to settle exposure/focus after setupCamera().
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    // Brief moment for the camera to settle exposure/focus after setupCamera().
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     for (let attempt = 1; attempt <= FACE_CAPTURE_MAX_ATTEMPTS; attempt++) {
+        await waitForCaptureTrigger();
+
+        faceGuideStatus.textContent = 'Verifying your photo…';
+        faceOvalGuide.classList.remove('face-ok', 'face-warn');
+        btnFaceCapture.style.display = 'none';
+
         const outcome = await captureAndVerifyFace();
 
         if (outcome.ok) {
             identityStatus = outcome.status;
+            faceCaptureStage.style.display = 'none';
+            testingSpinner.style.display = 'flex';
             if (identityStatus === 'registered_new') {
                 document.getElementById('testing-text').textContent =
                     "Face registered — this photo is now your account's verified identity for future interviews.";
             } else if (identityStatus === 'verified') {
                 document.getElementById('testing-text').textContent = 'Identity verified ✓';
             }
-            await new Promise((resolve) => setTimeout(resolve, 700));
+            await new Promise((resolve) => setTimeout(resolve, 500));
             return true;
         }
 
@@ -792,13 +910,19 @@ async function performIdentityCheck() {
             return false;
         }
 
-        document.getElementById('testing-text').textContent = `${outcome.message} Retrying…`;
-        await new Promise((resolve) => setTimeout(resolve, FACE_CAPTURE_RETRY_DELAY_MS));
+        // Recoverable failure (no face / multiple faces / bad image / mismatch
+        // with attempts remaining) — tell the candidate exactly what went
+        // wrong and let THEM decide when to retake, instead of silently
+        // retrying on a fixed timer.
+        faceGuideStatus.textContent = outcome.message;
+        faceOvalGuide.classList.add('face-warn');
+        btnFaceCapture.textContent = 'Retake Photo';
+        btnFaceCapture.style.display = 'inline-block';
     }
 
-    // Exhausted client-side retries without a definitive verdict (camera
-    // never produced a usable frame) — this is an edge case worth surfacing
-    // rather than looping forever.
+    // Exhausted attempts without a definitive verdict (e.g. camera never
+    // produced a usable frame) — surface this rather than looping forever.
+    faceCaptureStage.style.display = 'none';
     resetToStartupView();
     showError('Could not verify your identity after several attempts. Please check your camera and restart the interview.');
     return false;
@@ -809,6 +933,9 @@ async function performIdentityCheck() {
 function resetToStartupView() {
     testingOverlay.style.display = 'none';
     startupView.style.display = 'flex';
+    faceCaptureStage.style.display = 'none';
+    testingSpinner.style.display = 'flex';
+    btnFaceCapture.style.display = 'none';
     btnStart.disabled = false;
     btnStart.textContent = "Begin Interview Setup";
 }
