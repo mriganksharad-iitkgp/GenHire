@@ -1,21 +1,11 @@
 from functools import wraps
 from flask import request, jsonify
 import jwt as pyjwt
-import os
 from bson import ObjectId
 from config.database import db_config
+from core.security import get_jwt_secret
 
-_flask_env = os.getenv("FLASK_ENV", "").strip().lower()
-_JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-if not _JWT_SECRET_KEY:
-    if _flask_env == "production":
-        raise RuntimeError(
-            "JWT_SECRET_KEY is not set. Refusing to start in production with a "
-            "guessable default secret — set this env var before starting the app."
-        )
-    print("[WARN] JWT_SECRET_KEY is not set — using an insecure development-only default. "
-          "This MUST be set before deploying to production.")
-    _JWT_SECRET_KEY = "your-secret-key-here"
+_JWT_SECRET_KEY = get_jwt_secret()
 
 # Fetch only the fields needed for auth — loading the full user document
 # (which includes large cv_details, raw_cv_text, etc.) on every authenticated

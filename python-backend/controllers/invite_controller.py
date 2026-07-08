@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import jwt as pyjwt
 from bson import ObjectId
 
+from core.security import get_jwt_secret
 from services.email_service import EmailService
 from services.invite_service import (
     InviteService,
@@ -333,7 +334,7 @@ class InviteController:
         except ValueError:
             ttl_hours = 4
 
-        secret_key = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+        secret_key = get_jwt_secret()
         jwt_token = pyjwt.encode(
             {
                 "user_id": str(user["_id"]),

@@ -1,11 +1,6 @@
-"""
-Shared Flask extension instances.
+"""Legacy import path — the shared socketio instance moved to core/extensions.py.
 
-socketio is created here (unbound) so any module — app.py or the
-controllers — can `from extensions import socketio` and either call
-`.init_app(app)` once (app.py) or `.emit(...)` (controllers) without
-creating a circular import back into app.py.
+Kept as a permanent re-export so the many controllers doing
+`from extensions import socketio` keep working unchanged.
 """
-from flask_socketio import SocketIO
-
-socketio = SocketIO(cors_allowed_origins="*")
+from core.extensions import socketio  # noqa: F401

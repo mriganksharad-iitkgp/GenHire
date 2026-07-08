@@ -12,11 +12,12 @@ import requests as http_requests
 from services.email_service import EmailService
 from payment_module.services.wallet_service import WalletService
 from middleware.input_validator import validate_email, validate_password, validate_name
+from core.security import get_jwt_secret
 
 class AuthController:
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
-        self.secret_key = os.getenv('JWT_SECRET_KEY', 'your-secret-key-here')
+        self.secret_key = get_jwt_secret()
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.email_service = EmailService()
         self.require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'true').lower() == 'true'
