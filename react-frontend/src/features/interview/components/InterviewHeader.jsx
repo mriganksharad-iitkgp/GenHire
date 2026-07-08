@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import Styles from "../../pages/Chat.module.css";
+import Styles from "../pages/Chat.module.css";
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60);

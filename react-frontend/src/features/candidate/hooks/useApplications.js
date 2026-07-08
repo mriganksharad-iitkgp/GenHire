@@ -3,7 +3,7 @@ import {
   getApplications,
   getInterviewReport,
   setApplicationStatus,
-} from "services/api";
+} from "shared/api/endpoints";
 import useRealtimeApplications from "./useRealtimeApplications";
 
 export default function useApplications(toast) {

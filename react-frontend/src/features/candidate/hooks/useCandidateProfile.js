@@ -5,7 +5,7 @@ import {
   uploadCV,
   uploadPhoto,
   updateCvDetails,
-} from "services/api";
+} from "shared/api/endpoints";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 
 export default function useCandidateProfile(toast) {

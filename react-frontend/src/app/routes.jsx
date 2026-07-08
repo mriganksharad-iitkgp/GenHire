@@ -7,7 +7,7 @@ import ProtectedRoute from "app/ProtectedRoute";
 const Login = React.lazy(() => import("features/auth/pages/Login"));
 const Profile = React.lazy(() => import("features/candidate/pages/Profile"));
 const Dashboard = React.lazy(() => import("features/candidate/pages/Dashboard"));
-const Interview = React.lazy(() => import("pages/Interview"));
+const Interview = React.lazy(() => import("features/interview/pages/Interview"));
 const JobDetails = React.lazy(() => import("features/candidate/pages/JobDetails"));
 const Register = React.lazy(() => import("features/auth/pages/Register"));
 const RecruiterOnboarding = React.lazy(() => import("features/auth/pages/RecruiterOnboarding"));
@@ -20,7 +20,7 @@ const ForgotPassword = React.lazy(() => import("features/auth/pages/ForgotPasswo
 const ResetPassword = React.lazy(() => import("features/auth/pages/ResetPassword"));
 const InviteRedeem = React.lazy(() => import("features/auth/pages/InviteRedeem"));
 const Practice = React.lazy(() => import("features/candidate/pages/Practice"));
-const MobileRecorder = React.lazy(() => import("pages/MobileRecorder"));
+const MobileRecorder = React.lazy(() => import("features/interview/pages/MobileRecorder"));
 const PaymentSuccess = React.lazy(() => import("features/payment/pages/PaymentSuccess"));
 const PaymentCancel = React.lazy(() => import("features/payment/pages/PaymentCancel"));
 const CandidateSubscriptionPlans = React.lazy(() => import("features/payment/pages/CandidateSubscriptionPlans"));

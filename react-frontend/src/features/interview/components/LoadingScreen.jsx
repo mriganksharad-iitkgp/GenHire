@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import Styles from "../../pages/Chat.module.css";
+import Styles from "../pages/Chat.module.css";
 
 // Exported so Chat.jsx can reference the length for the cycling useEffect
 export const LOADING_STEPS = [

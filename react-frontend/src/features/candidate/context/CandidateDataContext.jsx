@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { viewPhoto } from 'services/api';
+import { viewPhoto } from 'shared/api/endpoints';
 import { getToken } from 'shared/utils/session';
 import useRealtimeApplications from 'features/candidate/hooks/useRealtimeApplications';
 import { connectAppSocket, disconnectAppSocket } from 'shared/api/socket';

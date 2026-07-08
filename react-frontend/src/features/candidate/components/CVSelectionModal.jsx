@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useCandidateData } from 'features/candidate/context/CandidateDataContext';
-import { getProfile } from 'services/api';
+import { getProfile } from 'shared/api/endpoints';
 import { isProfileCvComplete } from 'shared/utils/cvDetails';
 import styles from './CVSelectionModal.module.css';
 

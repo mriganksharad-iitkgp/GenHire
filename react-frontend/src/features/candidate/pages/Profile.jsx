@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import InterviewReportModal from "components/InterviewReportModal";
-import DeleteAccountModal from "components/common/DeleteAccountModal";
+import InterviewReportModal from "features/interview/components/InterviewReportModal";
+import DeleteAccountModal from "shared/components/account/DeleteAccountModal";
 import Toast from "shared/components/ui/Toast";
 import SkeletonCard from "shared/components/ui/SkeletonCard";
 import styles from "./Profile.module.css";
@@ -10,7 +10,7 @@ import BioForm from "features/candidate/components/BioForm";
 import ApplicationsList from "features/candidate/components/ApplicationsList";
 import useCandidateProfile from "features/candidate/hooks/useCandidateProfile";
 import useCandidateApplications from "features/candidate/hooks/useCandidateApplications";
-import { viewApplicationCV } from "services/api";
+import { viewApplicationCV } from "shared/api/endpoints";
 import cvService from "features/candidate/api/cvService";
 import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
 

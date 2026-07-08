@@ -4,7 +4,7 @@ import styles from "./Navbar.module.css";
 import { UpgradeButton } from "features/payment/components/recruiter-subscription";
 import { CandidatePlanButton } from "features/payment/components/candidate-subscription";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
-import { getProfile } from "services/api";
+import { getProfile } from "shared/api/endpoints";
 import { getToken, clearSession } from "shared/utils/session";
 
 const Navbar = ({ userType = "candidate" }) => {

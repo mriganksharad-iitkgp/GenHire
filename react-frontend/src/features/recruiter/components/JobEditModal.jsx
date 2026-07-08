@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { INDIA_LOCATION_OPTIONS } from 'constants/jobTaxonomy';
+import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
 import styles from './JobEditModal.module.css';
 import proctoringStyles from './JobCreationModal.module.css';

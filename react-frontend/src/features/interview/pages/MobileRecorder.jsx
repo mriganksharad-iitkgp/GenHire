@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import io from "socket.io-client";
 import axios from "axios";
 import { proctoringConfig } from "../config/proctoring";
+import { API_BASE } from "shared/api/client";
 
 const MobileRecorder = () => {
   const { sessionId } = useParams();
@@ -93,7 +94,7 @@ const MobileRecorder = () => {
       // So we KEEP localhost:5000 for uploads, but socket moves to proctoring server if enabled?
       // Actually, app.py handles the "upload-mobile-recording" route.
       // So this URL should remain pointing to main backend.
-      const uploadUrl = `${process.env.REACT_APP_API_URL}/api/interviews/${sessionId}/upload-mobile-recording`;
+      const uploadUrl = `${API_BASE}/interviews/${sessionId}/upload-mobile-recording`;
       await axios.post(uploadUrl, formData);
       setStatus("Upload Complete! You can close this tab.");
       socket.emit("mobile_status_update", {

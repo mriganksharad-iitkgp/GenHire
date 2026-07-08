@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createJob, deleteJob, getJobs, updateJob } from "services/api";
+import { createJob, deleteJob, getJobs, updateJob } from "shared/api/endpoints";
 
 function normalizeJobPayload(jobData) {
   return {

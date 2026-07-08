@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import Chat from "./Chat";
 import io from "socket.io-client";
-import { proctoringConfig } from "../config/proctoring";
+import { proctoringConfig } from "features/interview/config/proctoring";
 
 // Thin wrapper around Chat. NOTE: the previous version also created an
 // unmanaged `io(...)` socket on every render (never cleaned up) — Chat owns

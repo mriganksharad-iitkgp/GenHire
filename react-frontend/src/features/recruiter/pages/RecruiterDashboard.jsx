@@ -7,9 +7,9 @@ import JobCreationModal from "features/recruiter/components/JobCreationModal";
 import JobDetailsModal from "features/recruiter/components/JobDetailsModal";
 import JobEditModal from "features/recruiter/components/JobEditModal";
 import CVViewer from "features/candidate/components/CVViewer";
-import InterviewReportModal from "components/InterviewReportModal";
-import ProctoringResultModal from "components/ProctoringResultModal";
-import DeleteAccountModal from "components/common/DeleteAccountModal";
+import InterviewReportModal from "features/interview/components/InterviewReportModal";
+import ProctoringResultModal from "features/interview/components/ProctoringResultModal";
+import DeleteAccountModal from "shared/components/account/DeleteAccountModal";
 import {
   Tabs,
   SectionHeader,
@@ -28,7 +28,7 @@ import useApplications from "features/candidate/hooks/useApplications";
 import {
   getProfile,
   updateCompanyProfile as apiUpdateCompanyProfile,
-} from "services/api";
+} from "shared/api/endpoints";
 import { getUser, setUser } from "shared/utils/session";
 
 const RecruiterDashboard = () => {

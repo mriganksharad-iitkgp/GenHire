@@ -4,16 +4,17 @@ import Styles from "./Chat.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
-import Avatar from "../components/Avatar";
+import Avatar from "shared/components/layout/Avatar";
 import QRCode from "react-qr-code";
-import { proctoringConfig } from "../config/proctoring";
-import { getToken, getUser, clearSession, isLoggedIn } from "../utils/sessionManager";
-import LoadingScreen, { LOADING_STEPS } from "../components/interview/LoadingScreen";
-import InterviewHeader from "../components/interview/InterviewHeader";
-import PhaseIndicator from "../components/interview/PhaseIndicator";
-import PreInterviewChecklist from "../components/interview/PreInterviewChecklist";
-import Toast from "../components/Toast";
-import ConfirmDialog from "../components/common/ConfirmDialog";
+import { proctoringConfig } from "features/interview/config/proctoring";
+import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { API_BASE } from "shared/api/client";
+import LoadingScreen, { LOADING_STEPS } from "features/interview/components/LoadingScreen";
+import InterviewHeader from "features/interview/components/InterviewHeader";
+import PhaseIndicator from "features/interview/components/PhaseIndicator";
+import PreInterviewChecklist from "features/interview/components/PreInterviewChecklist";
+import Toast from "shared/components/ui/Toast";
+import ConfirmDialog from "shared/components/ui/ConfirmDialog";
 
 // Listening pace: after the AI finishes a question the candidate has
 // NO_ANSWER_TIMEOUT_SECONDS to START speaking (with a visible countdown);
@@ -670,7 +671,7 @@ export default function Chat({ interviewId }) {
     try {
       const token = getToken();
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/register-face`,
+        `${API_BASE}/interviews/${currentSessionId}/register-face`,
         {
           method: "POST",
           headers: {
@@ -779,7 +780,7 @@ export default function Chat({ interviewId }) {
         );
         const token = getToken();
         const response = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/upload-recording`,
+          `${API_BASE}/interviews/${currentSessionId}/upload-recording`,
           {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
@@ -890,7 +891,7 @@ export default function Chat({ interviewId }) {
       const token = getToken();
 
       // For real interviews (not practice with pre-created session)
-      const endpoint = `${process.env.REACT_APP_API_URL}/api/interviews/start`;
+      const endpoint = `${API_BASE}/interviews/start`;
 
       fetch(endpoint, {
         method: "POST",
@@ -1084,8 +1085,8 @@ export default function Chat({ interviewId }) {
 
       // Use different endpoint for practice mode
       const endpoint = isPracticeMode
-        ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/end`
-        : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/end`;
+        ? `${API_BASE}/practice/${currentSessionId}/end`
+        : `${API_BASE}/interviews/${currentSessionId}/end`;
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -1179,7 +1180,7 @@ export default function Chat({ interviewId }) {
         try {
           // Update the application with the actual interview score
           await fetch(
-            `${process.env.REACT_APP_API_URL}/api/applications/${location.state?.applicationId}/update-score`,
+            `${API_BASE}/applications/${location.state?.applicationId}/update-score`,
             {
               method: "PUT",
               headers: {
@@ -1248,8 +1249,8 @@ export default function Chat({ interviewId }) {
 
         // Use different endpoint for practice mode
         const endpoint = isPracticeMode
-          ? `${process.env.REACT_APP_API_URL}/api/practice/${currentSessionId}/answer`
-          : `${process.env.REACT_APP_API_URL}/api/interviews/${currentSessionId}/answer`;
+          ? `${API_BASE}/practice/${currentSessionId}/answer`
+          : `${API_BASE}/interviews/${currentSessionId}/answer`;
 
         const response = await fetch(endpoint, {
           method: "POST",

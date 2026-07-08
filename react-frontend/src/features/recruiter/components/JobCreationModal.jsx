@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { generateJobWithAI } from 'services/api';
-import { INDIA_LOCATION_OPTIONS } from 'constants/jobTaxonomy';
+import { generateJobWithAI } from 'shared/api/endpoints';
+import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import styles from './JobCreationModal.module.css';
 
 // Predefined data for auto-suggestions

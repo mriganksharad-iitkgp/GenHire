@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getApplications, getInterviewReport } from "services/api";
+import { getApplications, getInterviewReport } from "shared/api/endpoints";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import {
   normalizeStatus,

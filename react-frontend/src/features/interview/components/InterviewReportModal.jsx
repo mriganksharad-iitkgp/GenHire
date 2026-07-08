@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import styles from "features/recruiter/components/JobDetailsModal.module.css";
 import GazeHeatmapPanel from "./GazeHeatmapPanel";
-import { getToken } from "../utils/sessionManager";
+import { getToken } from "shared/utils/session";
 
 // Human-readable rendering of the identity_verification verdict set by
 // /register-face (see face_verification_service.py on the backend).

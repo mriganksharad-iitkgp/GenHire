@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './DeleteAccountModal.module.css';
-import { getToken, clearSession } from '../../utils/sessionManager';
+import { getToken, clearSession } from 'shared/utils/session';
 
 const DeleteAccountModal = ({ isOpen, onClose, onLogout }) => {
   const [isDeleting, setIsDeleting] = useState(false);

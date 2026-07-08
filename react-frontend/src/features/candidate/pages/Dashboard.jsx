@@ -5,7 +5,7 @@ import SkeletonCard from "shared/components/ui/SkeletonCard";
 import Pagination from "shared/components/ui/Pagination";
 import CVSelectionModal from "features/candidate/components/CVSelectionModal";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
-import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "constants/jobTaxonomy";
+import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "shared/constants/jobTaxonomy";
 import styles from "./Dashboard.module.css";
 import { getToken, getUser, isLoggedIn } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";

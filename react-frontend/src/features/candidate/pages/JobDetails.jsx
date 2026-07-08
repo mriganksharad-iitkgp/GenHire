@@ -4,11 +4,11 @@ import Toast from "shared/components/ui/Toast";
 import JobEditModal from "features/recruiter/components/JobEditModal";
 import CVSelectionModal from "features/candidate/components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
-import InterviewReportModal from 'components/InterviewReportModal';
+import InterviewReportModal from 'features/interview/components/InterviewReportModal';
 import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
-import { checkCvMatchScore, getJdDownloadUrl } from "services/api";
+import { checkCvMatchScore, getJdDownloadUrl } from "shared/api/endpoints";
 
 const JobDetails = () => {
 	const { jobId } = useParams();
