@@ -1,6 +1,13 @@
 """Shared state and platform-overview stats for the admin controller mixins."""
 
 import datetime
+from repositories import (
+    ApplicationRepository,
+    InterviewRepository,
+    JobRepository,
+    RecruiterRepository,
+    UserRepository,
+)
 from services.email_service import EmailService
 
 
@@ -16,6 +23,19 @@ class AdminBase:
         # Store reference to db for accessing other collections like subscriptions
         self.db_collections = db_collections
         self.email_service = EmailService()
+
+        # Repositories — preferred access path for new/simple queries; the
+        # remaining raw collection calls (aggregations, counts) migrate
+        # opportunistically as their methods get touched.
+        self.user_repo = UserRepository(self.users_collection)
+        self.recruiter_repo = RecruiterRepository(self.users_collection)
+        self.job_repo = JobRepository(self.jobs_collection)
+        self.application_repo = ApplicationRepository(self.applications_collection)
+        self.interview_repo = (
+            InterviewRepository(self.interviews_collection)
+            if self.interviews_collection is not None
+            else None
+        )
 
     def get_dashboard_stats(self, current_user):
         """Get platform statistics for admin dashboard"""

@@ -2,8 +2,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as pyjwt
 import datetime
 import os
-import re
-from bson import ObjectId
 import secrets
 from pymongo.errors import DuplicateKeyError
 from google.oauth2 import id_token
@@ -11,20 +9,23 @@ from google.auth.transport import requests as google_requests
 import requests as http_requests
 from services.email_service import EmailService
 from payment_module.services.wallet_service import WalletService
-from middleware.input_validator import validate_email, validate_password, validate_name
+from middleware.input_validator import validate_password
 from core.security import get_jwt_secret
+from repositories.user_repository import UserRepository, normalize_email
+from schemas.auth_schemas import RegisterRequest
 
 class AuthController:
     def __init__(self, db_collections):
-        self.users_collection = db_collections['users']
+        self.db = db_collections['users'].database
+        self.users = UserRepository(db_collections['users'])
         self.secret_key = get_jwt_secret()
         self.google_client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.email_service = EmailService()
         self.require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', 'true').lower() == 'true'
-        self.wallet_service = WalletService(self.users_collection.database)
+        self.wallet_service = WalletService(self.db)
 
     def _normalize_email(self, email):
-        return str(email or '').strip().lower()
+        return normalize_email(email)
 
     def _recruiter_onboarding_complete(self, user_data):
         if str((user_data or {}).get('user_type', '')).strip().lower() != 'recruiter':
@@ -53,65 +54,12 @@ class AuthController:
         }, 200
 
     def _find_user_by_identifier(self, identifier):
-        """Resolve a user by email (if it contains '@') or by Invite ID otherwise.
-        Email lookup intentionally skips invite-only burner accounts so a real
-        candidate can keep using their email after they've been invited."""
-        if not identifier:
-            return None
-        s = str(identifier).strip()
-        if '@' in s:
-            return self._find_user_by_email(s)
-        s_lower = s.lower()
-        # Invite ID lookup. Fall back to legacy `username_lower` for old data.
-        return self.users_collection.find_one(
-            {'$or': [{'invite_id_lower': s_lower}, {'username_lower': s_lower}]}
-        )
+        """Resolve a user by email or Invite ID (logic lives in UserRepository)."""
+        return self.users.find_by_identifier(identifier)
 
     def _find_user_by_email(self, email):
-        """Lookup a real (non-invite-only) account by email. Burner accounts
-        are excluded so login-by-email never resolves to a temp invite account."""
-        normalized_email = self._normalize_email(email)
-        if not normalized_email:
-            return None
-
-        not_invite = {'is_invite_only': {'$ne': True}}
-
-        user = self.users_collection.find_one({
-            '$and': [
-                not_invite,
-                {'$or': [
-                    {'email_lower': normalized_email},
-                    {'email': normalized_email},
-                    {'email': str(email or '').strip()},
-                ]},
-            ]
-        })
-        if user:
-            return user
-
-        # Fallback for legacy records with mixed case or accidental spaces in `email`.
-        escaped = re.escape(normalized_email)
-        user = self.users_collection.find_one({
-            '$and': [
-                not_invite,
-                {'email': {'$regex': f'^\\s*{escaped}\\s*$', '$options': 'i'}},
-            ]
-        })
-        if user:
-            return user
-
-        # Last-resort normalization query using Mongo expressions.
-        return self.users_collection.find_one({
-            '$and': [
-                not_invite,
-                {'$expr': {
-                    '$eq': [
-                        {'$toLower': {'$trim': {'input': {'$ifNull': ['$email', '']}}}},
-                        normalized_email,
-                    ]
-                }},
-            ]
-        })
+        """Lookup a real (non-invite-only) account by email (see UserRepository)."""
+        return self.users.find_by_email(email)
 
     def check_email_account_type(self, email, requested_user_type='candidate'):
         """Check if an email is available for the requested account type."""
@@ -152,33 +100,15 @@ class AuthController:
         
     def register_user(self, user_data):
         """Register a new user"""
-        name = user_data.get('name')
-        email = user_data.get('email')
-        password = user_data.get('password')
-        confirm_password = user_data.get('confirmPassword')
-        user_type = str(user_data.get('userType', 'candidate')).strip().lower()
-        normalized_email = self._normalize_email(email)
+        req = RegisterRequest.model_validate(user_data or {})
+        error = req.first_error()
+        if error:
+            return error
 
-        # Validation
-        if not all([name, normalized_email, password, confirm_password]):
-            return {'error': 'All fields are required'}, 400
-
-        err = validate_name(name)
-        if err:
-            return {'error': err}, 400
-        err = validate_email(normalized_email)
-        if err:
-            return {'error': err}, 400
-        err = validate_password(password)
-        if err:
-            return {'error': err}, 400
-
-        if password != confirm_password:
-            return {'error': 'Passwords do not match'}, 400
-
-        # Only allow candidate and recruiter registration (admins created manually)
-        if user_type not in ['candidate', 'recruiter']:
-            return {'error': 'Invalid user type'}, 400
+        name = req.name
+        password = req.password
+        user_type = req.normalized_user_type
+        normalized_email = req.normalized_email
 
         verification_token = secrets.token_urlsafe(32) if self.require_email_verification else None
         is_verified = user_type == 'candidate'
@@ -229,7 +159,7 @@ class AuthController:
             })
         
         try:
-            user_id = self.users_collection.insert_one(user_doc).inserted_id
+            user_id = self.users.insert(user_doc)
         except DuplicateKeyError:
             existing_user = self._find_user_by_email(normalized_email)
             existing_type = str((existing_user or {}).get('user_type', 'candidate')).strip().lower()
@@ -248,7 +178,7 @@ class AuthController:
                 email_sent = False
 
             if not email_sent:
-                self.users_collection.delete_one({'_id': user_id})
+                self.users.delete_by_id(user_id)
                 return {'error': 'Could not send verification email. Please try again later.'}, 502
 
         self.wallet_service.grant_signup_bonus_once(str(user_id), user_type, email=normalized_email)
@@ -334,7 +264,7 @@ class AuthController:
         stored_email = user.get('email') or ''
         canonical_email = self._normalize_email(stored_email)
         if canonical_email and (stored_email != canonical_email or not user.get('email_lower')):
-            self.users_collection.update_one(
+            self.users.update_one(
                 {'_id': user['_id']},
                 {
                     '$set': {
@@ -383,7 +313,7 @@ class AuthController:
                 token = token[7:]
 
             data = pyjwt.decode(token, self.secret_key, algorithms=['HS256'])
-            current_user = self.users_collection.find_one({'_id': ObjectId(data['user_id'])})
+            current_user = self.users.find_one_by_id(data['user_id'])
 
             if not current_user:
                 return None, 'User not found'
@@ -416,7 +346,7 @@ class AuthController:
     
     def verify_email(self, token):
         """Verify user's email address using token"""
-        user = self.users_collection.find_one({
+        user = self.users.find_one({
             'verification_token': token,
             'email_verified': False
         })
@@ -430,7 +360,7 @@ class AuthController:
                 return {'error': 'Verification token has expired'}, 400
         
         # Update user document
-        self.users_collection.update_one(
+        self.users.update_one(
             {'_id': user['_id']},
             {
                 '$set': {
@@ -470,7 +400,7 @@ class AuthController:
         verification_token = secrets.token_urlsafe(32)
         
         # Update user document with new token
-        self.users_collection.update_one(
+        self.users.update_one(
             {'_id': user['_id']},
             {
                 '$set': {
@@ -508,7 +438,7 @@ class AuthController:
         reset_token = secrets.token_urlsafe(32)
         
         # Update user document with reset token
-        self.users_collection.update_one(
+        self.users.update_one(
             {'_id': user['_id']},
             {
                 '$set': {
@@ -542,7 +472,7 @@ class AuthController:
         if err:
             return {'error': err}, 400
         
-        user = self.users_collection.find_one({
+        user = self.users.find_one({
             'reset_token': token
         })
         
@@ -555,7 +485,7 @@ class AuthController:
                 return {'error': 'Reset token has expired'}, 400
         
         # Update password and remove reset token
-        self.users_collection.update_one(
+        self.users.update_one(
             {'_id': user['_id']},
             {
                 '$set': {
@@ -640,7 +570,7 @@ class AuthController:
                     if not has_onboarding_data:
                         return self._google_onboarding_response(email, name, user)
 
-                    self.users_collection.update_one(
+                    self.users.update_one(
                         {'_id': user['_id']},
                         {'$set': {
                             'name': name or user.get('name', ''),
@@ -656,10 +586,10 @@ class AuthController:
                             'updated_at': datetime.datetime.utcnow(),
                         }}
                     )
-                    user = self.users_collection.find_one({'_id': user['_id']})
+                    user = self.users.find_one_by_id(user['_id'])
 
                 # Update existing user if they signed up with local auth
-                self.users_collection.update_one(
+                self.users.update_one(
                     {'_id': user['_id']},
                     {
                         '$set': {
@@ -744,7 +674,7 @@ class AuthController:
                     })
                 
                 try:
-                    user_id = self.users_collection.insert_one(user_doc).inserted_id
+                    user_id = self.users.insert(user_doc)
                 except DuplicateKeyError:
                     existing_user = self._find_user_by_email(email)
                     existing_type = str((existing_user or {}).get('user_type', 'candidate')).strip().lower()
@@ -801,20 +731,20 @@ class AuthController:
                 return {'error': 'Admin accounts cannot be deleted through this endpoint'}, 403
 
             # Hard delete the user
-            self.users_collection.delete_one({'_id': ObjectId(user_id)})
+            self.users.delete_by_id(user_id)
             
             # Delete related data
             if user_type == 'candidate':
                 # Delete candidate's applications and practice sessions
-                applications_coll = self.users_collection.database['applications']
-                practice_coll = self.users_collection.database.get('practice_sessions')
+                applications_coll = self.db['applications']
+                practice_coll = self.db.get('practice_sessions')
                 applications_coll.delete_many({'student_id': str(user_id)})
                 if practice_coll is not None:
                     practice_coll.delete_many({'user_id': str(user_id)})
             elif user_type == 'recruiter':
                 # Delete recruiter's jobs and applications for those jobs
-                jobs_coll = self.users_collection.database['jobs']
-                applications_coll = self.users_collection.database['applications']
+                jobs_coll = self.db['jobs']
+                applications_coll = self.db['applications']
                 recruiter_jobs = list(jobs_coll.find({'created_by': str(user_id)}, {'_id': 1}))
                 job_ids = [str(job['_id']) for job in recruiter_jobs]
                 if job_ids:

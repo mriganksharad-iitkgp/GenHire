@@ -1,14 +1,13 @@
 """Job moderation: listing, details, updates, deletion."""
 
 import datetime
-from bson import ObjectId
 
 
 class JobAdmin:
     def get_job_details(self, current_user, job_id):
         """Get comprehensive job details with all applicants"""
         try:
-            job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
+            job = self.job_repo.find_one_by_id(job_id)
 
             if not job:
                 return {"error": "Job not found"}, 404
@@ -25,7 +24,7 @@ class JobAdmin:
 
             # Get recruiter info
             recruiter = (
-                self.users_collection.find_one({"_id": ObjectId(job["created_by"])})
+                self.user_repo.find_one_by_id(job["created_by"])
                 if job.get("created_by")
                 else None
             )
@@ -38,7 +37,7 @@ class JobAdmin:
             applicants = []
             for app in applications_cursor:
                 candidate = (
-                    self.users_collection.find_one({"_id": ObjectId(app["student_id"])})
+                    self.user_repo.find_one_by_id(app["student_id"])
                     if app.get("student_id")
                     else None
                 )
@@ -95,7 +94,7 @@ class JobAdmin:
     def delete_job(self, current_user, job_id):
         """Delete a job and its applications"""
         try:
-            job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
+            job = self.job_repo.find_one_by_id(job_id)
 
             if not job:
                 return {"error": "Job not found"}, 404
@@ -104,7 +103,7 @@ class JobAdmin:
             self.applications_collection.delete_many({"job_id": str(job["_id"])})
 
             # Delete the job
-            self.jobs_collection.delete_one({"_id": ObjectId(job_id)})
+            self.job_repo.delete_by_id(job_id)
 
             return {
                 "message": f'Job "{job.get("title")}" has been deleted',
@@ -165,7 +164,7 @@ class JobAdmin:
             for job in jobs_cursor:
                 # Get recruiter info
                 recruiter = (
-                    self.users_collection.find_one({"_id": ObjectId(job["created_by"])})
+                    self.user_repo.find_one_by_id(job["created_by"])
                     if job.get("created_by")
                     else None
                 )
@@ -212,7 +211,7 @@ class JobAdmin:
     def update_job(self, current_user, job_id, data):
         """Update job details"""
         try:
-            job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
+            job = self.job_repo.find_one_by_id(job_id)
 
             if not job:
                 return {"error": "Job not found"}, 404
@@ -245,8 +244,7 @@ class JobAdmin:
                         }, 400
                     update_data[field] = data[field]
 
-            self.jobs_collection.update_one(
-                {"_id": ObjectId(job_id)}, {"$set": update_data}
+            self.job_repo.update_by_id(job_id, {"$set": update_data}
             )
 
             return {

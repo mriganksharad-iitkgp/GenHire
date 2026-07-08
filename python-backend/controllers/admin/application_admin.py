@@ -8,9 +8,7 @@ class ApplicationAdmin:
     def update_application_status(self, current_user, application_id, status):
         """Update application status"""
         try:
-            application = self.applications_collection.find_one(
-                {"_id": ObjectId(application_id)}
-            )
+            application = self.application_repo.find_one_by_id(application_id)
 
             if not application:
                 return {"error": "Application not found"}, 404
@@ -30,8 +28,7 @@ class ApplicationAdmin:
                     "error": f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
                 }, 400
 
-            self.applications_collection.update_one(
-                {"_id": ObjectId(application_id)},
+            self.application_repo.update_by_id(application_id,
                 {
                     "$set": {
                         "status": status,
@@ -53,9 +50,7 @@ class ApplicationAdmin:
     def get_application_details(self, current_user, application_id):
         """Get comprehensive application details"""
         try:
-            application = self.applications_collection.find_one(
-                {"_id": ObjectId(application_id)}
-            )
+            application = self.application_repo.find_one_by_id(application_id)
 
             if not application:
                 return {"error": "Application not found"}, 404
@@ -72,21 +67,17 @@ class ApplicationAdmin:
 
             # Get related data
             candidate = (
-                self.users_collection.find_one(
-                    {"_id": ObjectId(application["student_id"])}
-                )
+                self.user_repo.find_one_by_id(application["student_id"])
                 if application.get("student_id")
                 else None
             )
             job = (
-                self.jobs_collection.find_one({"_id": ObjectId(application["job_id"])})
+                self.job_repo.find_one_by_id(application["job_id"])
                 if application.get("job_id")
                 else None
             )
             recruiter = (
-                self.users_collection.find_one(
-                    {"_id": ObjectId(application["recruiter_id"])}
-                )
+                self.user_repo.find_one_by_id(application["recruiter_id"])
                 if application.get("recruiter_id")
                 else None
             )
@@ -157,9 +148,7 @@ class ApplicationAdmin:
     def update_application(self, current_user, application_id, data):
         """Update application details"""
         try:
-            application = self.applications_collection.find_one(
-                {"_id": ObjectId(application_id)}
-            )
+            application = self.application_repo.find_one_by_id(application_id)
 
             if not application:
                 return {"error": "Application not found"}, 404
@@ -196,8 +185,7 @@ class ApplicationAdmin:
                         }, 400
                     update_data[field] = data[field]
 
-            self.applications_collection.update_one(
-                {"_id": ObjectId(application_id)}, {"$set": update_data}
+            self.application_repo.update_by_id(application_id, {"$set": update_data}
             )
 
             return {
@@ -211,20 +199,17 @@ class ApplicationAdmin:
     def delete_application(self, current_user, application_id):
         """Delete an application"""
         try:
-            application = self.applications_collection.find_one(
-                {"_id": ObjectId(application_id)}
-            )
+            application = self.application_repo.find_one_by_id(application_id)
 
             if not application:
                 return {"error": "Application not found"}, 404
 
             # Delete the application
-            self.applications_collection.delete_one({"_id": ObjectId(application_id)})
+            self.application_repo.delete_by_id(application_id)
 
             # Update job applicant count if job exists
             if application.get("job_id"):
-                self.jobs_collection.update_one(
-                    {"_id": ObjectId(application["job_id"])},
+                self.job_repo.update_by_id(application["job_id"],
                     {"$inc": {"applicants": -1}},
                 )
 
@@ -242,9 +227,7 @@ class ApplicationAdmin:
             print(f"[Admin] Getting application report for: {application_id}")
 
             try:
-                app_doc = self.applications_collection.find_one(
-                    {"_id": ObjectId(application_id)}
-                )
+                app_doc = self.application_repo.find_one_by_id(application_id)
             except Exception as e:
                 print(f"[Admin] Invalid application ID format: {e}")
                 return {"error": "Invalid application ID"}, 400

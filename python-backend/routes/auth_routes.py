@@ -4,6 +4,7 @@ from controllers.auth_controller import AuthController
 from middleware.auth_middleware import token_required
 from middleware.rate_limiter import rate_limit
 from config.database import db_config
+from schemas.auth_schemas import LoginRequest
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 
@@ -37,12 +38,11 @@ def check_email_account_type():
 def login():
     """User login endpoint. Accepts either an email or a username under
     `identifier` (preferred) or the legacy `email` field for backward compat."""
-    data = request.get_json() or {}
-    identifier = data.get('identifier') or data.get('email') or data.get('username')
-    password = data.get('password')
-    user_type = data.get('userType', 'candidate')
+    req = LoginRequest.model_validate(request.get_json() or {})
 
-    result, status_code = auth_controller.login_user(identifier, password, user_type)
+    result, status_code = auth_controller.login_user(
+        req.resolved_identifier, req.password, req.normalized_user_type
+    )
     return jsonify(result), status_code
 
 @auth_bp.route('/me', methods=['GET'])

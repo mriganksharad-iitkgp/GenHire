@@ -1,23 +1,13 @@
 """Recruiter administration: pending queue, verification, details, updates."""
 
 import datetime
-from bson import ObjectId
 
 
 class RecruiterAdmin:
     def get_pending_recruiters(self, current_user):
         """Get list of recruiters pending verification"""
         try:
-            query = {
-                "user_type": "recruiter", 
-                "is_verified": False,
-                "$or": [
-                    {"rejection_reason": None},
-                    {"rejection_reason": {"$exists": False}}
-                ]
-            }
-
-            recruiters_cursor = self.users_collection.find(query).sort("created_at", -1)
+            recruiters_cursor = self.recruiter_repo.find_pending()
 
             recruiters = []
             for recruiter in recruiters_cursor:
@@ -54,7 +44,7 @@ class RecruiterAdmin:
     def verify_recruiter(self, current_user, recruiter_id):
         """Verify a recruiter account"""
         try:
-            recruiter = self.users_collection.find_one({"_id": ObjectId(recruiter_id)})
+            recruiter = self.user_repo.find_one_by_id(recruiter_id)
 
             if not recruiter:
                 return {"error": "Recruiter not found"}, 404
@@ -66,8 +56,7 @@ class RecruiterAdmin:
                 return {"error": "Recruiter is already verified"}, 400
 
             # Update verification status
-            self.users_collection.update_one(
-                {"_id": ObjectId(recruiter_id)},
+            self.user_repo.update_by_id(recruiter_id,
                 {
                     "$set": {
                         "is_verified": True,
@@ -100,7 +89,7 @@ class RecruiterAdmin:
     def reject_recruiter(self, current_user, recruiter_id, reason=None):
         """Reject/suspend a recruiter account"""
         try:
-            recruiter = self.users_collection.find_one({"_id": ObjectId(recruiter_id)})
+            recruiter = self.user_repo.find_one_by_id(recruiter_id)
 
             if not recruiter:
                 return {"error": "Recruiter not found"}, 404
@@ -111,8 +100,7 @@ class RecruiterAdmin:
             stored_reason = reason or "Account verification rejected by admin"
 
             # Update to unverified status with rejection reason
-            self.users_collection.update_one(
-                {"_id": ObjectId(recruiter_id)},
+            self.user_repo.update_by_id(recruiter_id,
                 {
                     "$set": {
                         "is_verified": False,
@@ -144,7 +132,7 @@ class RecruiterAdmin:
     def get_recruiter_details(self, current_user, recruiter_id):
         """Get comprehensive details about a recruiter including jobs and statistics"""
         try:
-            recruiter = self.users_collection.find_one({"_id": ObjectId(recruiter_id)})
+            recruiter = self.user_repo.find_one_by_id(recruiter_id)
 
             if not recruiter:
                 return {"error": "Recruiter not found"}, 404
@@ -266,7 +254,7 @@ class RecruiterAdmin:
     def update_recruiter(self, current_user, recruiter_id, data):
         """Update recruiter details"""
         try:
-            recruiter = self.users_collection.find_one({"_id": ObjectId(recruiter_id)})
+            recruiter = self.user_repo.find_one_by_id(recruiter_id)
 
             if not recruiter:
                 return {"error": "Recruiter not found"}, 404
@@ -292,8 +280,7 @@ class RecruiterAdmin:
                 if field in data:
                     update_data[field] = data[field]
 
-            self.users_collection.update_one(
-                {"_id": ObjectId(recruiter_id)}, {"$set": update_data}
+            self.user_repo.update_by_id(recruiter_id, {"$set": update_data}
             )
 
             return {

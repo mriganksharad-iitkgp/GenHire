@@ -1,7 +1,6 @@
 """Candidate/user administration: listing, details, permissions, CV, deletion."""
 
 import datetime
-from bson import ObjectId
 from models.user import AVAILABLE_PERMISSIONS
 
 
@@ -154,7 +153,7 @@ class UserAdmin:
     def get_user_details(self, current_user, user_id):
         """Get detailed information about a specific user"""
         try:
-            user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            user = self.user_repo.find_one_by_id(user_id)
 
             if not user:
                 return {"error": "User not found"}, 404
@@ -234,7 +233,7 @@ class UserAdmin:
     def update_user_permissions(self, current_user, user_id, permissions):
         """Update user permissions (and promote to admin if granting admin-level permissions)"""
         try:
-            user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            user = self.user_repo.find_one_by_id(user_id)
 
             if not user:
                 return {"error": "User not found"}, 404
@@ -279,8 +278,7 @@ class UserAdmin:
                 new_role = user.get("user_type")
 
             # Update user
-            self.users_collection.update_one(
-                {"_id": ObjectId(user_id)}, {"$set": update_data}
+            self.user_repo.update_by_id(user_id, {"$set": update_data}
             )
 
             return {
@@ -297,7 +295,7 @@ class UserAdmin:
     def update_user_type(self, current_user, user_id, new_user_type):
         """Update user type (promote/demote users)"""
         try:
-            user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            user = self.user_repo.find_one_by_id(user_id)
 
             if not user:
                 return {"error": "User not found"}, 404
@@ -334,8 +332,7 @@ class UserAdmin:
             if new_user_type == "candidate" and user.get("user_type") == "admin":
                 update_data["permissions"] = []
 
-            self.users_collection.update_one(
-                {"_id": ObjectId(user_id)}, {"$set": update_data}
+            self.user_repo.update_by_id(user_id, {"$set": update_data}
             )
 
             return {
@@ -354,7 +351,7 @@ class UserAdmin:
     def delete_user(self, current_user, user_id):
         """Delete a user account (soft delete or hard delete)"""
         try:
-            user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            user = self.user_repo.find_one_by_id(user_id)
 
             if not user:
                 return {"error": "User not found"}, 404
@@ -371,7 +368,7 @@ class UserAdmin:
                     }, 403
 
             # Hard delete the user
-            self.users_collection.delete_one({"_id": ObjectId(user_id)})
+            self.user_repo.delete_by_id(user_id)
 
             # Also delete related data based on user type
             if user.get("user_type") == "candidate":
@@ -404,7 +401,7 @@ class UserAdmin:
     def get_candidate_details(self, current_user, candidate_id):
         """Get comprehensive details about a candidate including applications and interview history"""
         try:
-            candidate = self.users_collection.find_one({"_id": ObjectId(candidate_id)})
+            candidate = self.user_repo.find_one_by_id(candidate_id)
 
             if not candidate:
                 return {"error": "Candidate not found"}, 404
@@ -434,13 +431,9 @@ class UserAdmin:
                 recruiter = None
                 try:
                     if app.get("job_id"):
-                        job = self.jobs_collection.find_one(
-                            {"_id": ObjectId(app["job_id"])}
-                        )
+                        job = self.job_repo.find_one_by_id(app["job_id"])
                     if app.get("recruiter_id"):
-                        recruiter = self.users_collection.find_one(
-                            {"_id": ObjectId(app["recruiter_id"])}
-                        )
+                        recruiter = self.user_repo.find_one_by_id(app["recruiter_id"])
                 except:
                     pass
 
@@ -549,7 +542,7 @@ class UserAdmin:
     def update_candidate(self, current_user, candidate_id, data):
         """Update candidate details"""
         try:
-            candidate = self.users_collection.find_one({"_id": ObjectId(candidate_id)})
+            candidate = self.user_repo.find_one_by_id(candidate_id)
 
             if not candidate:
                 return {"error": "Candidate not found"}, 404
@@ -582,8 +575,7 @@ class UserAdmin:
                 if field in data:
                     update_data[field] = data[field]
 
-            self.users_collection.update_one(
-                {"_id": ObjectId(candidate_id)}, {"$set": update_data}
+            self.user_repo.update_by_id(candidate_id, {"$set": update_data}
             )
 
             return {
@@ -597,7 +589,7 @@ class UserAdmin:
     def get_candidate_cv(self, current_user, candidate_id):
         """Get candidate CV details"""
         try:
-            candidate = self.users_collection.find_one({"_id": ObjectId(candidate_id)})
+            candidate = self.user_repo.find_one_by_id(candidate_id)
 
             if not candidate:
                 return {"error": "Candidate not found"}, 404
@@ -622,7 +614,7 @@ class UserAdmin:
     def delete_candidate_cv(self, current_user, candidate_id):
         """Delete candidate CV"""
         try:
-            candidate = self.users_collection.find_one({"_id": ObjectId(candidate_id)})
+            candidate = self.user_repo.find_one_by_id(candidate_id)
 
             if not candidate:
                 return {"error": "Candidate not found"}, 404
@@ -631,8 +623,7 @@ class UserAdmin:
                 return {"error": "User is not a candidate"}, 400
 
             # Clear CV data
-            self.users_collection.update_one(
-                {"_id": ObjectId(candidate_id)},
+            self.user_repo.update_by_id(candidate_id,
                 {
                     "$set": {
                         "cv_path": None,
@@ -655,7 +646,7 @@ class UserAdmin:
         """Get practice interview history for a specific candidate"""
         try:
             # Verify candidate exists
-            candidate = self.users_collection.find_one({"_id": ObjectId(candidate_id)})
+            candidate = self.user_repo.find_one_by_id(candidate_id)
             if not candidate:
                 return {"error": "Candidate not found"}, 404
 
