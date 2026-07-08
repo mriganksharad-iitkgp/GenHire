@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import Layout from "components/Layout";
+import Layout from "shared/components/layout/Layout";
 import ProtectedRoute from "app/ProtectedRoute";
 
 // Lazy-loaded pages (paths update as pages move into features/)

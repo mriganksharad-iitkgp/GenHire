@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { CandidateDataProvider } from "contexts/CandidateDataContext";
-import ErrorBoundary from "components/ErrorBoundary";
+import ErrorBoundary from "shared/components/ui/ErrorBoundary";
 
 /**
  * App-wide providers (everything that wraps the router).
