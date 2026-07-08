@@ -3,44 +3,21 @@
 // - Redeem endpoints are public; we hit them without an auth header so an
 //   already-logged-in candidate clicking a magic link doesn't trip the JWT check.
 
-import { getToken } from "../utils/sessionManager";
+import { request } from "shared/api/client";
 
-const API_BASE =
-  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
-
-function authHeaders() {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
+// Redeem endpoints are public (withAuth: false); invite calls never
+// broadcast session-expiry on 401 (matching the previous implementation).
 async function jsonRequest(path, { method = "GET", body, headers, withAuth = true } = {}) {
-  const finalHeaders = {
-    ...(withAuth ? authHeaders() : {}),
-    ...(headers || {}),
-  };
-  if (body && !(body instanceof FormData)) {
-    finalHeaders["Content-Type"] = finalHeaders["Content-Type"] || "application/json";
-  }
-  const finalBody = body instanceof FormData || body == null ? body : JSON.stringify(body);
-  const res = await fetch(`${API_BASE}${path}`, {
+  const finalBody =
+    body instanceof FormData || body == null ? body : JSON.stringify(body);
+  return request(path, {
     method,
-    headers: finalHeaders,
+    headers,
     body: finalBody,
+    auth: withAuth,
+    signalOn401: false,
+    catchNetwork: false,
   });
-
-  let data = null;
-  try {
-    data = await res.json();
-  } catch (_) {
-    // empty body
-  }
-  if (!res.ok) {
-    const err = new Error((data && (data.error || data.message)) || `Request failed (${res.status})`);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
 }
 
 // ----- Recruiter endpoints (auth required) ---------------------------------

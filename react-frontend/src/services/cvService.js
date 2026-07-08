@@ -3,14 +3,10 @@
  * Handles all CV-related API calls
  */
 
-import { getToken, clearSession } from "../utils/sessionManager";
+import { getToken } from "shared/utils/session";
+import { API_BASE, authedFetch, signalExpiredSession } from "shared/api/client";
 
-const API_BASE_URL = `${process.env.REACT_APP_API_URL}/api`;
-
-function signalExpiredSession() {
-  clearSession();
-  window.dispatchEvent(new CustomEvent("auth:session-expired"));
-}
+const API_BASE_URL = API_BASE;
 
 function throwIfExpired(response) {
   if (response.status === 401) {
@@ -21,15 +17,9 @@ function throwIfExpired(response) {
   }
 }
 
-async function safeFetch(url, options) {
-  try {
-    return await fetch(url, options);
-  } catch (_) {
-    const error = new Error("Unable to reach the server. Please check your internet connection.");
-    error.status = 0;
-    throw error;
-  }
-}
+// authedFetch (shared/api/client) provides the network-error wrapping that
+// the local safeFetch used to; 401s now throw there with the same message.
+const safeFetch = authedFetch;
 
 class CVService {
   async uploadCV(cvFile, isPrimary = false) {

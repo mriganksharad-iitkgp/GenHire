@@ -1,54 +1,7 @@
 // Admin API Service - Centralized API layer for admin operations
 
-import { getToken, getUser, clearSession } from "../utils/sessionManager";
-
-function signalExpiredSession() {
-  clearSession();
-  window.dispatchEvent(new CustomEvent("auth:session-expired"));
-}
-
-const API_BASE =
-  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
-
-function authHeaders() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
-
-async function request(path, options = {}) {
-  const headers = { ...authHeaders(), ...(options.headers || {}) };
-
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch (_) {
-    const error = new Error("Unable to reach the server. Please check your internet connection.");
-    error.status = 0;
-    throw error;
-  }
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      signalExpiredSession();
-      const error = new Error("Your session has expired. Please log in again.");
-      error.status = 401;
-      throw error;
-    }
-    let errMsg = "Request failed";
-    try {
-      const data = await res.json();
-      errMsg = data.error || data.message || errMsg;
-    } catch (_) {}
-    const error = new Error(errMsg);
-    error.status = res.status;
-    throw error;
-  }
-
-  if (res.status === 204) return null;
-  return res.json();
-}
+import { request } from "shared/api/client";
+import { getUser } from "shared/utils/session";
 
 // Dashboard Stats
 export const getStats = () => request("/admin/stats");

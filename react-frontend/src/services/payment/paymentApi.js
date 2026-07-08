@@ -1,43 +1,13 @@
 // Payment & Wallet API Layer
 // Centralized recharge and wallet endpoints
 
-import { getToken } from "../../utils/sessionManager";
+import { request as clientRequest } from "shared/api/client";
 
-const API_BASE =
-  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
-
-function authHeaders() {
-  const token = getToken();
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-async function request(path, options = {}) {
-  const headers = { ...authHeaders(), ...(options.headers || {}) };
-  if (
-    options.body &&
-    typeof FormData !== "undefined" &&
-    !(options.body instanceof FormData)
-  ) {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (!res.ok) {
-    let errMsg = "Request failed";
-    try {
-      const data = await res.json();
-      errMsg = data.error || data.message || errMsg;
-    } catch (_) {
-      // ignore json parse error
-    }
-    const error = new Error(errMsg);
-    error.status = res.status;
-    throw error;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
+// Payment calls intentionally do NOT broadcast session-expiry on 401 and do
+// not wrap network failures (matching the previous local implementation), so
+// an in-flight payment error never logs the user out.
+const request = (path, options = {}) =>
+  clientRequest(path, { signalOn401: false, catchNetwork: false, ...options });
 
 // =============================================================================
 // PLANS
