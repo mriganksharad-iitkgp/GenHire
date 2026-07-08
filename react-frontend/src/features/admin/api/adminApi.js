@@ -1,6 +1,6 @@
 // Admin API Service - Centralized API layer for admin operations
 
-import { request } from "shared/api/client";
+import { request, requestBlob } from "shared/api/client";
 import { getUser } from "shared/utils/session";
 
 // Dashboard Stats
@@ -221,6 +221,22 @@ export const getRecruiterCreditLines = (recruiterId, params = {}) => {
 
 // Permissions
 export const getAvailablePermissions = () => request("/admin/permissions");
+
+// Identity card (candidate ID used for interview face verification)
+export const getCandidateIdentityCardBlob = (candidateId) =>
+  requestBlob(`/admin/candidates/${candidateId}/identity-card`);
+
+export const replaceCandidateIdentityCard = (candidateId, file) => {
+  const formData = new FormData();
+  formData.append("identity_card", file);
+  return request(`/admin/candidates/${candidateId}/identity-card`, {
+    method: "PUT",
+    body: formData,
+  });
+};
+
+export const resetCandidateIdentityCard = (candidateId) =>
+  request(`/admin/candidates/${candidateId}/identity-card`, { method: "DELETE" });
 
 // Helper to get current admin info
 export const getCurrentAdmin = () => {

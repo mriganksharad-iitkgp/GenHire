@@ -7,6 +7,7 @@ import SkeletonCard from "shared/components/ui/SkeletonCard";
 import styles from "./Profile.module.css";
 import SidebarProfile from "features/candidate/components/SidebarProfile";
 import BioForm from "features/candidate/components/BioForm";
+import IdentityCardUpload from "features/candidate/components/IdentityCardUpload";
 import ApplicationsList from "features/candidate/components/ApplicationsList";
 import useCandidateProfile from "features/candidate/hooks/useCandidateProfile";
 import useCandidateApplications from "features/candidate/hooks/useCandidateApplications";
@@ -441,6 +442,9 @@ const Profile = () => {
 							</div>
 						</div>
 					</div>
+
+					{/* Identity card: required before interviews, one-time upload */}
+					<IdentityCardUpload showToast={showToast} />
 				</SidebarProfile>
 
 				<div className={styles.mainContent}>

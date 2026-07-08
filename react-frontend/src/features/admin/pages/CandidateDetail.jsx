@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "features/admin/components/AdminLayout";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import ApplicationDetailModal from "features/admin/components/ApplicationDetailModal";
+import IdentityCardPanel from "features/admin/components/IdentityCardPanel";
 import InterviewReportModal from "features/interview/components/InterviewReportModal";
 import CVDetailsForm from "features/candidate/components/CVDetailsForm";
 import CVDetailsModal from "features/candidate/components/CVDetailsModal";
@@ -878,6 +879,9 @@ const CandidateDetail = () => {
             )}
           </div>
         </div>
+
+        {/* Identity card (interview face verification reference) */}
+        <IdentityCardPanel candidateId={candidateId} showNotification={showNotification} />
 
         {/* Profile CV (Parsed CV Data) */}
         {candidate.cv_details && Object.keys(candidate.cv_details).length > 0 && (

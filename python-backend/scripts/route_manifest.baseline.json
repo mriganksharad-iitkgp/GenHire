@@ -5,7 +5,7 @@
       "methods": [
         "GET"
       ],
-      "endpoint": "index"
+      "endpoint": "system.index"
     },
     {
       "rule": "/api/admin/applications/<application_id>",
@@ -69,6 +69,27 @@
         "GET"
       ],
       "endpoint": "admin.get_candidate_cv"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/identity-card",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "admin.reset_candidate_identity_card"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/identity-card",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_identity_card"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/identity-card",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.replace_candidate_identity_card"
     },
     {
       "rule": "/api/admin/candidates/<candidate_id>/practice-history",
@@ -341,7 +362,7 @@
       "methods": [
         "POST"
       ],
-      "endpoint": "chat_with_cost_tracking"
+      "endpoint": "cost.chat_with_cost_tracking"
     },
     {
       "rule": "/api/check-email-account-type",
@@ -362,7 +383,7 @@
       "methods": [
         "GET"
       ],
-      "endpoint": "cost_summary"
+      "endpoint": "cost.cost_summary"
     },
     {
       "rule": "/api/cv-details",
@@ -453,7 +474,7 @@
       "methods": [
         "GET"
       ],
-      "endpoint": "serve_gridfs_file"
+      "endpoint": "system.serve_gridfs_file"
     },
     {
       "rule": "/api/forgot-password",
@@ -470,81 +491,102 @@
       "endpoint": "auth.google_oauth"
     },
     {
+      "rule": "/api/identity-card",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "identity.get_identity_card_status"
+    },
+    {
+      "rule": "/api/identity-card",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "identity.upload_identity_card"
+    },
+    {
+      "rule": "/api/identity-card/image",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "identity.view_identity_card"
+    },
+    {
       "rule": "/api/interviews",
       "methods": [
         "GET"
       ],
-      "endpoint": "get_user_interviews"
+      "endpoint": "interviews.get_user_interviews"
     },
     {
       "rule": "/api/interviews/<session_id>/answer",
       "methods": [
         "POST"
       ],
-      "endpoint": "submit_answer"
+      "endpoint": "interviews.submit_answer"
     },
     {
       "rule": "/api/interviews/<session_id>/end",
       "methods": [
         "POST"
       ],
-      "endpoint": "end_interview"
+      "endpoint": "interviews.end_interview"
     },
     {
       "rule": "/api/interviews/<session_id>/face-image/<kind>",
       "methods": [
         "GET"
       ],
-      "endpoint": "get_interview_face_image"
+      "endpoint": "interviews.get_interview_face_image"
     },
     {
       "rule": "/api/interviews/<session_id>/gaze-recorder-page",
       "methods": [
         "GET"
       ],
-      "endpoint": "get_gaze_recorder_page"
+      "endpoint": "interviews.get_gaze_recorder_page"
     },
     {
       "rule": "/api/interviews/<session_id>/gaze-recorder-results",
       "methods": [
         "POST"
       ],
-      "endpoint": "upload_gaze_recorder_results"
+      "endpoint": "interviews.upload_gaze_recorder_results"
     },
     {
       "rule": "/api/interviews/<session_id>/question",
       "methods": [
         "GET"
       ],
-      "endpoint": "get_interview_question"
+      "endpoint": "interviews.get_interview_question"
     },
     {
       "rule": "/api/interviews/<session_id>/register-face",
       "methods": [
         "POST"
       ],
-      "endpoint": "register_face"
+      "endpoint": "interviews.register_face"
     },
     {
       "rule": "/api/interviews/<session_id>/upload-mobile-recording",
       "methods": [
         "POST"
       ],
-      "endpoint": "upload_mobile_recording"
+      "endpoint": "interviews.upload_mobile_recording"
     },
     {
       "rule": "/api/interviews/<session_id>/upload-recording",
       "methods": [
         "POST"
       ],
-      "endpoint": "upload_recording"
+      "endpoint": "interviews.upload_recording"
     },
     {
       "rule": "/api/interviews/start",
       "methods": [
         "POST"
       ],
-      "endpoint": "start_interview"
+      "endpoint": "interviews.start_interview"
     },
     {
       "rule": "/api/invite/redeem",
@@ -936,7 +978,7 @@
       "methods": [
         "POST"
       ],
-      "endpoint": "stt_cost"
+      "endpoint": "cost.stt_cost"
     },
     {
       "rule": "/api/test-jobs",
@@ -950,7 +992,7 @@
       "methods": [
         "POST"
       ],
-      "endpoint": "tts_cost"
+      "endpoint": "cost.tts_cost"
     },
     {
       "rule": "/api/upload",
@@ -1006,21 +1048,21 @@
       "methods": [
         "POST"
       ],
-      "endpoint": "chat_with_cost_tracking"
+      "endpoint": "cost.chat_with_cost_tracking"
     },
     {
       "rule": "/cost-summary",
       "methods": [
         "GET"
       ],
-      "endpoint": "cost_summary"
+      "endpoint": "cost.cost_summary"
     },
     {
       "rule": "/health",
       "methods": [
         "GET"
       ],
-      "endpoint": "health_check"
+      "endpoint": "system.health_check"
     },
     {
       "rule": "/static/<path:filename>",
@@ -1034,14 +1076,14 @@
       "methods": [
         "POST"
       ],
-      "endpoint": "stt_cost"
+      "endpoint": "cost.stt_cost"
     },
     {
       "rule": "/tts-cost",
       "methods": [
         "POST"
       ],
-      "endpoint": "tts_cost"
+      "endpoint": "cost.tts_cost"
     }
   ],
   "socket_events": [

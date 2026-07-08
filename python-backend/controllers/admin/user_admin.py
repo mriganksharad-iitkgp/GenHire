@@ -698,3 +698,64 @@ class UserAdmin:
             print(f"Error getting candidate practice history: {str(e)}")
             print(traceback.format_exc())
             return {"error": "Failed to get practice history"}, 500
+
+    def replace_candidate_identity_card(self, current_user, candidate_id, file):
+        """Replace a candidate's identity card with an admin-supplied image."""
+        from services import identity_card_service
+
+        try:
+            user = self.user_repo.find_one_by_id(candidate_id, {"identity_card": 1, "user_type": 1})
+        except Exception:
+            return {"error": "Invalid candidate id"}, 400
+        if not user or user.get("user_type") != "candidate":
+            return {"error": "Candidate not found"}, 404
+
+        if file is None or not file.filename:
+            return {"error": "No identity card file provided"}, 400
+        image_bytes = file.read()
+        content_type = (file.mimetype or "").lower()
+        error = identity_card_service.validate_upload(image_bytes, content_type)
+        if error:
+            return {"error": error}, 400
+
+        db = self.users_collection.database
+        old_file_id = (user.get("identity_card") or {}).get("image_file_id")
+        file_id = identity_card_service.store_identity_card(
+            db,
+            image_bytes,
+            user_id=user["_id"],
+            content_type=content_type,
+            original_filename=file.filename,
+            uploaded_by=f"admin:{current_user['_id']}",
+        )
+        card = identity_card_service.build_card_record(
+            file_id,
+            content_type=content_type,
+            original_filename=file.filename,
+            uploaded_by=f"admin:{current_user['_id']}",
+        )
+        self.user_repo.update_by_id(candidate_id, {"$set": {"identity_card": card}})
+        if old_file_id:
+            identity_card_service.delete_identity_card_file(db, old_file_id)
+        return {"message": "Identity card replaced", "identity_card": identity_card_service.public_status({"identity_card": card})}, 200
+
+    def reset_candidate_identity_card(self, current_user, candidate_id):
+        """Remove a candidate's identity card so they can upload a fresh one."""
+        from services import identity_card_service
+
+        try:
+            user = self.user_repo.find_one_by_id(candidate_id, {"identity_card": 1, "user_type": 1})
+        except Exception:
+            return {"error": "Invalid candidate id"}, 400
+        if not user or user.get("user_type") != "candidate":
+            return {"error": "Candidate not found"}, 404
+
+        card = user.get("identity_card") or {}
+        if not card.get("image_file_id"):
+            return {"error": "No identity card on file"}, 404
+
+        self.user_repo.update_by_id(candidate_id, {"$unset": {"identity_card": ""}})
+        identity_card_service.delete_identity_card_file(
+            self.users_collection.database, card["image_file_id"]
+        )
+        return {"message": "Identity card removed. The candidate can upload a new one."}, 200

@@ -46,6 +46,7 @@ from routes.practice_routes import practice_bp
 from routes.cv_routes import create_cv_routes
 from routes.admin_routes import admin_bp, init_admin_routes
 from routes.invite_routes import invite_bp
+from routes.identity_routes import identity_bp
 
 try:
     from google.cloud import speech  # noqa: F401
@@ -271,6 +272,7 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(speech_bp, url_prefix="/api/speech")
     app.register_blueprint(invite_bp)
+    app.register_blueprint(identity_bp)
     logger.info("[OK] Admin routes registered at /api/admin")
     logger.info("[OK] Invite routes registered")
 

@@ -69,6 +69,55 @@ def update_candidate(current_user, candidate_id):
     return jsonify(result), status
 
 
+@admin_bp.route('/candidates/<candidate_id>/identity-card', methods=['GET'])
+@token_required
+@admin_required
+def get_candidate_identity_card(current_user, candidate_id):
+    """Stream a candidate's identity-card image (admin review)."""
+    from flask import Response
+    from config.database import db_config
+    from services import identity_card_service
+    from repositories import UserRepository
+
+    users = UserRepository(db_config.get_collections()['users'])
+    try:
+        user = users.find_one_by_id(candidate_id, {'identity_card': 1})
+    except Exception:
+        user = None
+    card = (user or {}).get('identity_card') or {}
+    if not card.get('image_file_id'):
+        return jsonify({'error': 'No identity card on file'}), 404
+    try:
+        image_bytes, content_type = identity_card_service.load_identity_card(
+            db_config.get_db(), card['image_file_id']
+        )
+    except Exception:
+        return jsonify({'error': 'Identity card image unavailable'}), 404
+    return Response(image_bytes, mimetype=content_type,
+                    headers={'Cache-Control': 'private, max-age=300'})
+
+
+@admin_bp.route('/candidates/<candidate_id>/identity-card', methods=['PUT'])
+@token_required
+@admin_required
+def replace_candidate_identity_card(current_user, candidate_id):
+    """Replace a candidate's identity card (candidates cannot do this themselves)."""
+    file = request.files.get('identity_card')
+    result, status = admin_controller.replace_candidate_identity_card(
+        current_user, candidate_id, file
+    )
+    return jsonify(result), status
+
+
+@admin_bp.route('/candidates/<candidate_id>/identity-card', methods=['DELETE'])
+@token_required
+@admin_required
+def reset_candidate_identity_card(current_user, candidate_id):
+    """Remove a candidate's identity card so they can upload a fresh one."""
+    result, status = admin_controller.reset_candidate_identity_card(current_user, candidate_id)
+    return jsonify(result), status
+
+
 @admin_bp.route('/recruiters/<recruiter_id>', methods=['GET'])
 @token_required
 @admin_required
