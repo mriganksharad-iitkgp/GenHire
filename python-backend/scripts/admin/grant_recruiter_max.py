@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 
 # Allow imports from project root
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.database import db_config
 from payment_module.services.wallet_service import WalletService

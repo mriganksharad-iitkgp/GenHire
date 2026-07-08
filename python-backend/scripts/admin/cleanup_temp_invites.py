@@ -16,7 +16,7 @@ import sys
 # Allow running as `python scripts/cleanup_temp_invites.py` from the backend
 # folder OR from the repo root.
 HERE = os.path.dirname(os.path.abspath(__file__))
-BACKEND_ROOT = os.path.abspath(os.path.join(HERE, ".."))
+BACKEND_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 if BACKEND_ROOT not in sys.path:
     sys.path.insert(0, BACKEND_ROOT)
 

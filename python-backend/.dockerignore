@@ -2,6 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+venv/
+.venv/
+uploads/
+scripts/dev/
+*.stackdump
+requirements.lock.txt
 .env
 .env.*
 *.md
