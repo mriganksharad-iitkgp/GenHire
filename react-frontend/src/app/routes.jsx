@@ -4,38 +4,38 @@ import Layout from "shared/components/layout/Layout";
 import ProtectedRoute from "app/ProtectedRoute";
 
 // Lazy-loaded pages (paths update as pages move into features/)
-const Login = React.lazy(() => import("pages/Login"));
+const Login = React.lazy(() => import("features/auth/pages/Login"));
 const Profile = React.lazy(() => import("pages/Profile"));
 const Dashboard = React.lazy(() => import("pages/Dashboard"));
 const Interview = React.lazy(() => import("pages/Interview"));
 const JobDetails = React.lazy(() => import("pages/JobDetails"));
-const Register = React.lazy(() => import("pages/Register"));
-const RecruiterOnboarding = React.lazy(() => import("pages/RecruiterOnboarding"));
+const Register = React.lazy(() => import("features/auth/pages/Register"));
+const RecruiterOnboarding = React.lazy(() => import("features/auth/pages/RecruiterOnboarding"));
 const RecruiterDashboard = React.lazy(() => import("pages/RecruiterDashboard"));
-const SubscriptionPlans = React.lazy(() => import("pages/SubscriptionPlans"));
+const SubscriptionPlans = React.lazy(() => import("features/payment/pages/SubscriptionPlans"));
 const NotFound = React.lazy(() => import("pages/NotFound"));
 const ApplicationView = React.lazy(() => import("pages/ApplicationView"));
-const VerifyEmail = React.lazy(() => import("pages/VerifyEmail"));
-const ForgotPassword = React.lazy(() => import("pages/ForgotPassword"));
-const ResetPassword = React.lazy(() => import("pages/ResetPassword"));
-const InviteRedeem = React.lazy(() => import("pages/InviteRedeem"));
+const VerifyEmail = React.lazy(() => import("features/auth/pages/VerifyEmail"));
+const ForgotPassword = React.lazy(() => import("features/auth/pages/ForgotPassword"));
+const ResetPassword = React.lazy(() => import("features/auth/pages/ResetPassword"));
+const InviteRedeem = React.lazy(() => import("features/auth/pages/InviteRedeem"));
 const Practice = React.lazy(() => import("pages/Practice"));
 const MobileRecorder = React.lazy(() => import("pages/MobileRecorder"));
-const PaymentSuccess = React.lazy(() => import("pages/PaymentSuccess"));
-const PaymentCancel = React.lazy(() => import("pages/PaymentCancle"));
-const CandidateSubscriptionPlans = React.lazy(() => import("pages/candidate/CandidateSubscriptionPlans"));
+const PaymentSuccess = React.lazy(() => import("features/payment/pages/PaymentSuccess"));
+const PaymentCancel = React.lazy(() => import("features/payment/pages/PaymentCancel"));
+const CandidateSubscriptionPlans = React.lazy(() => import("features/payment/pages/CandidateSubscriptionPlans"));
 const CandidateCostStatistics = React.lazy(() => import("pages/candidate/CandidateCostStatistics"));
 const TeamPage = React.lazy(() => import("pages/TeamPage"));
 
 // Admin pages
-const AdminOverview = React.lazy(() => import("pages/admin/AdminOverview"));
-const ManageCandidates = React.lazy(() => import("pages/admin/ManageCandidates"));
-const ManageRecruiters = React.lazy(() => import("pages/admin/ManageRecruiters"));
-const ManageAdmins = React.lazy(() => import("pages/admin/ManageAdmins"));
-const CandidateDetail = React.lazy(() => import("pages/admin/CandidateDetail"));
-const RecruiterDetail = React.lazy(() => import("pages/admin/RecruiterDetail"));
-const Verification = React.lazy(() => import("pages/admin/Verification"));
-const CostStatistics = React.lazy(() => import("pages/admin/CostStatistics"));
+const AdminOverview = React.lazy(() => import("features/admin/pages/AdminOverview"));
+const ManageCandidates = React.lazy(() => import("features/admin/pages/ManageCandidates"));
+const ManageRecruiters = React.lazy(() => import("features/admin/pages/ManageRecruiters"));
+const ManageAdmins = React.lazy(() => import("features/admin/pages/ManageAdmins"));
+const CandidateDetail = React.lazy(() => import("features/admin/pages/CandidateDetail"));
+const RecruiterDetail = React.lazy(() => import("features/admin/pages/RecruiterDetail"));
+const Verification = React.lazy(() => import("features/admin/pages/Verification"));
+const CostStatistics = React.lazy(() => import("features/admin/pages/CostStatistics"));
 
 // Recruiter pages
 const RecruiterCostStatistics = React.lazy(() => import("pages/recruiter/RecruiterCostStatistics"));

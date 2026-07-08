@@ -10,10 +10,10 @@ export { default as RecentActivity } from "./RecentActivity";
 export { default as StatusBadge } from "./StatusBadge";
 export { default as InviteCandidatesModal } from "./InviteCandidatesModal";
 
-// Subscription module - decoupled in separate folder
+// Subscription module - moved to the payment feature
 export {
   SubscriptionBanner,
   UpgradePlanModal,
   UpgradeButton,
   useSubscription,
-} from "./subscription";
+} from "features/payment/components/recruiter-subscription";

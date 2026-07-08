@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
-import { UpgradeButton } from "components/recruiter/subscription";
-import { CandidatePlanButton } from "components/candidate/subscription";
+import { UpgradeButton } from "features/payment/components/recruiter-subscription";
+import { CandidatePlanButton } from "features/payment/components/candidate-subscription";
 import { useCandidateData } from "contexts/CandidateDataContext";
 import { getProfile } from "services/api";
 import { getToken, clearSession } from "shared/utils/session";
