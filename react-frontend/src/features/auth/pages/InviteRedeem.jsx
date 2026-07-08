@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { redeemInvite } from "services/inviteApi";
+import { redeemInvite } from "features/recruiter/api/inviteApi";
 import { setToken, setUser } from "shared/utils/session";
 
 const containerStyle = {

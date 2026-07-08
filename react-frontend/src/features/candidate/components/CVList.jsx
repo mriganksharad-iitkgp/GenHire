@@ -1,0 +1,239 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useCandidateData } from 'features/candidate/context/CandidateDataContext';
+import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
+import styles from './CVList.module.css';
+import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+
+const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
+  const { cvs, cvsLoaded, loadCvsCached, invalidateCvs } = useCandidateData();
+  const [cvList, setCvList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [settingPrimary, setSettingPrimary] = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchCVs = useCallback(async (force = false) => {
+    setLoading(true);
+    try {
+      const token = getToken();
+      const loadedCvs = await loadCvsCached(force, async () => {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/list`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to load CVs');
+        }
+
+        const data = await response.json();
+        return data.cvs || [];
+      });
+
+      setCvList(loadedCvs || []);
+    } catch (err) {
+      console.error('Error fetching CVs:', err);
+      showToast?.(err.message || 'Failed to load CVs', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadCvsCached, showToast]);
+
+  useEffect(() => {
+    if (cvsLoaded) {
+      setCvList(cvs || []);
+      setLoading(false);
+      return;
+    }
+
+    fetchCVs(false);
+  }, [cvsLoaded, cvs, fetchCVs]);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchCVs(true);
+    }
+  }, [refreshTrigger, fetchCVs]);
+
+  const handleSetPrimary = async (cvId, e) => {
+    e.stopPropagation();
+    setSettingPrimary(cvId);
+
+    try {
+      const token = getToken();
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}/set-primary`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        showToast?.(data.error || 'Failed to set primary CV', 'error');
+        return;
+      }
+
+      showToast?.('Primary CV updated successfully', 'success');
+      invalidateCvs();
+      await fetchCVs(true);
+    } catch (err) {
+      console.error('Error setting primary CV:', err);
+      showToast?.('Failed to set primary CV', 'error');
+    } finally {
+      setSettingPrimary(null);
+    }
+  };
+
+  const handleDeleteCV = (cvId, e) => {
+    e.stopPropagation();
+    setPendingDeleteId(cvId);
+  };
+
+  const confirmDeleteCV = async () => {
+    const cvId = pendingDeleteId;
+    if (!cvId) return;
+    setIsDeleting(true);
+    try {
+      const token = getToken();
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/cv/${cvId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        showToast?.(data.error || 'Failed to delete CV', 'error');
+        return;
+      }
+
+      showToast?.('CV deleted successfully', 'success');
+      invalidateCvs();
+      await fetchCVs(true);
+    } catch (err) {
+      console.error('Error deleting CV:', err);
+      showToast?.('Failed to delete CV', 'error');
+    } finally {
+      setIsDeleting(false);
+      setPendingDeleteId(null);
+    }
+  };
+
+  const handleCVClick = (cv) => {
+    onCVClick?.(cv);
+  };
+
+  if (loading) {
+    return (
+      <div className={styles.loading}>
+        <i className="fa fa-spinner fa-spin"></i>
+        <span>Loading CVs...</span>
+      </div>
+    );
+  }
+
+  if (cvList.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <i className="fa fa-file-text-o"></i>
+        <p>No CVs uploaded yet</p>
+        <small>Upload your first CV above to get started</small>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.cvList}>
+      <div className={styles.header}>
+        <h4>
+          <i className="fa fa-list"></i> Uploaded CVs ({cvList.length})
+        </h4>
+        <small>Click to view in new tab</small>
+      </div>
+
+      <div className={styles.list}>
+        {cvList.map((cv) => (
+          <div
+            key={cv.cv_id}
+            className={`${styles.cvCard} ${cv.is_primary ? styles.primary : ''}`}
+            onClick={() => handleCVClick(cv)}
+          >
+            <div className={styles.cvIcon}>
+              <i className="fa fa-file-pdf-o"></i>
+            </div>
+
+            <div className={styles.cvInfo}>
+              <div className={styles.cvFileName} title={cv.filename}>
+                {cv.filename || cv.file_name || cv.original_filename || 'Uploaded CV'}
+              </div>
+              <div className={styles.cvActions}>
+                {cv.is_primary ? (
+                  <span className={styles.primaryBadge}>
+                    <i className="fa fa-star"></i> Primary
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      className={styles.primaryButton}
+                      onClick={(e) => handleSetPrimary(cv.cv_id, e)}
+                      disabled={settingPrimary === cv.cv_id}
+                      title="Set as primary CV"
+                    >
+                      {settingPrimary === cv.cv_id ? (
+                        <i className="fa fa-spinner fa-spin"></i>
+                      ) : (
+                        <>
+                          <i className="fa fa-star-o"></i>
+                          <span>Make Primary</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteCV(cv.cv_id, e)}
+                      title="Delete CV"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc3545",
+                        cursor: "pointer",
+                        padding: "5px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "14px"
+                      }}
+                    >
+                      <i className="fa fa-trash"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.footer}>
+        <i className="fa fa-info-circle"></i>
+        <small>Primary CV is auto-selected when applying for jobs or starting practice interviews</small>
+      </div>
+
+      <ConfirmDialog
+        isOpen={!!pendingDeleteId}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={confirmDeleteCV}
+        title="Delete CV"
+        message="Are you sure you want to delete this CV?"
+        confirmText="Delete"
+        confirmVariant="danger"
+        isLoading={isDeleting}
+      />
+    </div>
+  );
+};
+
+export default CVList;

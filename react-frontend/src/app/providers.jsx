@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { CandidateDataProvider } from "contexts/CandidateDataContext";
+import { CandidateDataProvider } from "features/candidate/context/CandidateDataContext";
 import ErrorBoundary from "shared/components/ui/ErrorBoundary";
 
 /**

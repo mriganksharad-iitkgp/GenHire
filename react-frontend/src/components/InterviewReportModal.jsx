@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import styles from "./JobDetailsModal.module.css";
+import styles from "features/recruiter/components/JobDetailsModal.module.css";
 import GazeHeatmapPanel from "./GazeHeatmapPanel";
 import { getToken } from "../utils/sessionManager";
 

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useGoogleLogin } from "@react-oauth/google";
 import styles from "./Login.module.css";
-import { useCandidateData } from "contexts/CandidateDataContext";
+import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { setToken, setUser } from "shared/utils/session";
 import { authPost } from "features/auth/api/authApi";
 

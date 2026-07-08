@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "features/admin/components/AdminLayout";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import JobDetailModal from "features/admin/components/JobDetailModal";
-import JobEditModal from "components/JobEditModal";
+import JobEditModal from "features/recruiter/components/JobEditModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "features/admin/api/adminApi";
 import { API_BASE } from "shared/api/client";

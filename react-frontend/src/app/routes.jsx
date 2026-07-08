@@ -5,27 +5,27 @@ import ProtectedRoute from "app/ProtectedRoute";
 
 // Lazy-loaded pages (paths update as pages move into features/)
 const Login = React.lazy(() => import("features/auth/pages/Login"));
-const Profile = React.lazy(() => import("pages/Profile"));
-const Dashboard = React.lazy(() => import("pages/Dashboard"));
+const Profile = React.lazy(() => import("features/candidate/pages/Profile"));
+const Dashboard = React.lazy(() => import("features/candidate/pages/Dashboard"));
 const Interview = React.lazy(() => import("pages/Interview"));
-const JobDetails = React.lazy(() => import("pages/JobDetails"));
+const JobDetails = React.lazy(() => import("features/candidate/pages/JobDetails"));
 const Register = React.lazy(() => import("features/auth/pages/Register"));
 const RecruiterOnboarding = React.lazy(() => import("features/auth/pages/RecruiterOnboarding"));
-const RecruiterDashboard = React.lazy(() => import("pages/RecruiterDashboard"));
+const RecruiterDashboard = React.lazy(() => import("features/recruiter/pages/RecruiterDashboard"));
 const SubscriptionPlans = React.lazy(() => import("features/payment/pages/SubscriptionPlans"));
-const NotFound = React.lazy(() => import("pages/NotFound"));
-const ApplicationView = React.lazy(() => import("pages/ApplicationView"));
+const NotFound = React.lazy(() => import("app/NotFound"));
+const ApplicationView = React.lazy(() => import("features/candidate/pages/ApplicationView"));
 const VerifyEmail = React.lazy(() => import("features/auth/pages/VerifyEmail"));
 const ForgotPassword = React.lazy(() => import("features/auth/pages/ForgotPassword"));
 const ResetPassword = React.lazy(() => import("features/auth/pages/ResetPassword"));
 const InviteRedeem = React.lazy(() => import("features/auth/pages/InviteRedeem"));
-const Practice = React.lazy(() => import("pages/Practice"));
+const Practice = React.lazy(() => import("features/candidate/pages/Practice"));
 const MobileRecorder = React.lazy(() => import("pages/MobileRecorder"));
 const PaymentSuccess = React.lazy(() => import("features/payment/pages/PaymentSuccess"));
 const PaymentCancel = React.lazy(() => import("features/payment/pages/PaymentCancel"));
 const CandidateSubscriptionPlans = React.lazy(() => import("features/payment/pages/CandidateSubscriptionPlans"));
-const CandidateCostStatistics = React.lazy(() => import("pages/candidate/CandidateCostStatistics"));
-const TeamPage = React.lazy(() => import("pages/TeamPage"));
+const CandidateCostStatistics = React.lazy(() => import("features/candidate/pages/CandidateCostStatistics"));
+const TeamPage = React.lazy(() => import("features/recruiter/pages/TeamPage"));
 
 // Admin pages
 const AdminOverview = React.lazy(() => import("features/admin/pages/AdminOverview"));
@@ -38,11 +38,11 @@ const Verification = React.lazy(() => import("features/admin/pages/Verification"
 const CostStatistics = React.lazy(() => import("features/admin/pages/CostStatistics"));
 
 // Recruiter pages
-const RecruiterCostStatistics = React.lazy(() => import("pages/recruiter/RecruiterCostStatistics"));
-const RecruiterTeam = React.lazy(() => import("pages/recruiter/RecruiterTeam"));
+const RecruiterCostStatistics = React.lazy(() => import("features/recruiter/pages/RecruiterCostStatistics"));
+const RecruiterTeam = React.lazy(() => import("features/recruiter/pages/RecruiterTeam"));
 
 // Landing page
-const LandingPage = React.lazy(() => import("pages/LandingPage"));
+const LandingPage = React.lazy(() => import("features/landing/pages/LandingPage"));
 
 const admin = (page) => <ProtectedRoute allow="admin">{page}</ProtectedRoute>;
 

@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
 import { UpgradeButton } from "features/payment/components/recruiter-subscription";
 import { CandidatePlanButton } from "features/payment/components/candidate-subscription";
-import { useCandidateData } from "contexts/CandidateDataContext";
+import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { getProfile } from "services/api";
 import { getToken, clearSession } from "shared/utils/session";
 
