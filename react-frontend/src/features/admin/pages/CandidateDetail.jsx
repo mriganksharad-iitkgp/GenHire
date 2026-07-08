@@ -13,7 +13,7 @@ import JDDetailsModal from "components/JDDetailsModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "features/admin/api/adminApi";
 import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { authedFetch, API_BASE } from "shared/api/client";
 
 const CandidateDetail = () => {
   const navigate = useNavigate();
@@ -176,7 +176,7 @@ const CandidateDetail = () => {
   const handleApplicationStatusChange = async (appId, newStatus) => {
     try {
       const token = getToken();
-      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/applications/${appId}/status`, {
+      const response = await authedFetch(`${API_BASE}/admin/applications/${appId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -203,9 +203,9 @@ const CandidateDetail = () => {
     setCvLoading(true);
     try {
       const token = getToken();
-      let url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
+      let url = `${API_BASE}/admin/cv/${candidateId}?token=${token}`;
       if (app.cv_id) {
-        url = `${process.env.REACT_APP_API_URL}/api/cv/${app.cv_id}/preview?token=${token}`;
+        url = `${API_BASE}/cv/${app.cv_id}/preview?token=${token}`;
       }
       window.open(url, "_blank");
     } catch (error) {
@@ -224,7 +224,7 @@ const CandidateDetail = () => {
     setCvLoading(true);
     try {
       const token = getToken();
-      const url = `${process.env.REACT_APP_API_URL}/api/admin/cv/${candidateId}?token=${token}`;
+      const url = `${API_BASE}/admin/cv/${candidateId}?token=${token}`;
       window.open(url, "_blank");
     } catch (error) {
       console.error("Error viewing CV:", error);
@@ -255,7 +255,7 @@ const CandidateDetail = () => {
     setPracticeLoading(true);
     try {
       const token = getToken();
-      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/practice-history`, {
+      const response = await authedFetch(`${API_BASE}/admin/candidates/${candidateId}/practice-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -276,7 +276,7 @@ const CandidateDetail = () => {
   const handleViewReport = async (app) => {
     try {
       const token = getToken();
-      const url = `${process.env.REACT_APP_API_URL}/api/admin/applications/${app.id}/report`;
+      const url = `${API_BASE}/admin/applications/${app.id}/report`;
       const response = await authedFetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -303,7 +303,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReport = async (session) => {
     try {
       const token = getToken();
-      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${session.session_id}/report`, {
+      const response = await authedFetch(`${API_BASE}/admin/practice/${session.session_id}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -322,7 +322,7 @@ const CandidateDetail = () => {
   const handleViewPracticeReportById = async (sessionId) => {
     try {
       const token = getToken();
-      const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/admin/practice/${sessionId}/report`, {
+      const response = await authedFetch(`${API_BASE}/admin/practice/${sessionId}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -342,7 +342,7 @@ const CandidateDetail = () => {
     if (session.cv_id) {
       try {
         const token = getToken();
-        const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview?token=${token}`;
+        const url = `${API_BASE}/cv/${session.cv_id}/preview?token=${token}`;
         window.open(url, '_blank');
       } catch (err) {
         console.error('Error opening CV:', err);
