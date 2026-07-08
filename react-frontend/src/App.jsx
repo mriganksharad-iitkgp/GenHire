@@ -22,7 +22,6 @@ const Register = React.lazy(() => import("./pages/Register"));
 const RecruiterOnboarding = React.lazy(() => import("./pages/RecruiterOnboarding"));
 const RecruiterDashboard = React.lazy(() => import("./pages/RecruiterDashboard"));
 const SubscriptionPlans = React.lazy(() => import("./pages/SubscriptionPlans"));
-const AdminDashboard = React.lazy(() => import("./pages/AdminDashboard"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const ApplicationView = React.lazy(() => import("./pages/ApplicationView"));
 const VerifyEmail = React.lazy(() => import("./pages/VerifyEmail"));
@@ -101,7 +100,6 @@ function App() {
                 <Route path="/admin/admins" element={<ManageAdmins />} />
                 <Route path="/admin/verification" element={<Verification />} />
                 <Route path="/admin/cost-statistics" element={<CostStatistics />} />
-                <Route path="/admin/old" element={<AdminDashboard />} />
                 
                 {/* Recruiter Cost Statistics */}
                 <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />
