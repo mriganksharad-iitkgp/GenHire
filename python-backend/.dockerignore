@@ -8,6 +8,10 @@ uploads/
 scripts/dev/
 *.stackdump
 requirements.lock.txt
+# standalone deployables — not imported by the main app (see their READMEs)
+cv_jd_processing/
+gpu_intensive_task/
+question_generation_tests/
 .env
 .env.*
 *.md
