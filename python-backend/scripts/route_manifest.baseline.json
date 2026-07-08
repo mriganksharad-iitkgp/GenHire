@@ -1,0 +1,1057 @@
+{
+  "http": [
+    {
+      "rule": "/",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "index"
+    },
+    {
+      "rule": "/api/admin/applications/<application_id>",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "admin.delete_application"
+    },
+    {
+      "rule": "/api/admin/applications/<application_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_application_details"
+    },
+    {
+      "rule": "/api/admin/applications/<application_id>",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_application"
+    },
+    {
+      "rule": "/api/admin/applications/<application_id>/report",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_application_report"
+    },
+    {
+      "rule": "/api/admin/applications/<application_id>/status",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_application_status"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_details"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_candidate"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/cv",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "admin.delete_candidate_cv"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/cv",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_cv"
+    },
+    {
+      "rule": "/api/admin/candidates/<candidate_id>/practice-history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_practice_history"
+    },
+    {
+      "rule": "/api/admin/cost-statistics",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_admin_cost_statistics"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/candidates/<candidate_id>/credit-lines",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_credit_lines"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/candidates/<candidate_id>/usage-lines",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_usage_lines"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/candidates/credit-summary",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_credit_summary"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/candidates/usage",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_candidate_usage_summary"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/recruiters/<recruiter_id>/credit-lines",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_recruiter_credit_lines"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/recruiters/<recruiter_id>/usage-lines",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_recruiter_usage_lines"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/recruiters/credit-summary",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_recruiter_credit_summary"
+    },
+    {
+      "rule": "/api/admin/cost-statistics/recruiters/usage",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_recruiter_usage_summary"
+    },
+    {
+      "rule": "/api/admin/cv/<user_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.admin_view_cv"
+    },
+    {
+      "rule": "/api/admin/jobs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_all_jobs"
+    },
+    {
+      "rule": "/api/admin/jobs/<job_id>",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "admin.delete_job"
+    },
+    {
+      "rule": "/api/admin/jobs/<job_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_job_details"
+    },
+    {
+      "rule": "/api/admin/jobs/<job_id>",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_job"
+    },
+    {
+      "rule": "/api/admin/pending-recruiters",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_pending_recruiters"
+    },
+    {
+      "rule": "/api/admin/permissions",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_available_permissions"
+    },
+    {
+      "rule": "/api/admin/photo/<user_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.admin_view_photo"
+    },
+    {
+      "rule": "/api/admin/practice/<session_id>/report",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_practice_report"
+    },
+    {
+      "rule": "/api/admin/recruiters/<recruiter_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_recruiter_details"
+    },
+    {
+      "rule": "/api/admin/recruiters/<recruiter_id>",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_recruiter"
+    },
+    {
+      "rule": "/api/admin/stats",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_dashboard_stats"
+    },
+    {
+      "rule": "/api/admin/system/stats",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_system_stats"
+    },
+    {
+      "rule": "/api/admin/users",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_users"
+    },
+    {
+      "rule": "/api/admin/users/<recruiter_id>/reject",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.reject_recruiter"
+    },
+    {
+      "rule": "/api/admin/users/<recruiter_id>/verify",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.verify_recruiter"
+    },
+    {
+      "rule": "/api/admin/users/<user_id>",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "admin.delete_user"
+    },
+    {
+      "rule": "/api/admin/users/<user_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "admin.get_user_details"
+    },
+    {
+      "rule": "/api/admin/users/<user_id>/permissions",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_user_permissions"
+    },
+    {
+      "rule": "/api/admin/users/<user_id>/user-type",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "admin.update_user_type"
+    },
+    {
+      "rule": "/api/applications",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "applications.get_applications"
+    },
+    {
+      "rule": "/api/applications/<application_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "applications.get_application_by_id"
+    },
+    {
+      "rule": "/api/applications/<application_id>/cv",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "applications.get_application_cv"
+    },
+    {
+      "rule": "/api/applications/<application_id>/interview-report",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "applications.get_interview_report"
+    },
+    {
+      "rule": "/api/applications/<application_id>/recalculate-score",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "applications.recalculate_cv_score"
+    },
+    {
+      "rule": "/api/applications/<application_id>/status",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "applications.update_application_status"
+    },
+    {
+      "rule": "/api/applications/<application_id>/update-score",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "applications.update_interview_score"
+    },
+    {
+      "rule": "/api/candidate/cost-statistics",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "profile.get_candidate_cost_statistics"
+    },
+    {
+      "rule": "/api/chat",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "chat_with_cost_tracking"
+    },
+    {
+      "rule": "/api/check-email-account-type",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.check_email_account_type"
+    },
+    {
+      "rule": "/api/company-profile",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "profile.update_company_profile"
+    },
+    {
+      "rule": "/api/cost-summary",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cost_summary"
+    },
+    {
+      "rule": "/api/cv-details",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "profile.get_cv_details"
+    },
+    {
+      "rule": "/api/cv-details",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "profile.update_cv_details"
+    },
+    {
+      "rule": "/api/cv/<cv_id>",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "cv.delete_cv"
+    },
+    {
+      "rule": "/api/cv/<cv_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cv.get_cv"
+    },
+    {
+      "rule": "/api/cv/<cv_id>/download-url",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cv.get_cv_download_url"
+    },
+    {
+      "rule": "/api/cv/<cv_id>/preview",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cv.preview_cv"
+    },
+    {
+      "rule": "/api/cv/<cv_id>/set-primary",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "cv.set_primary_cv"
+    },
+    {
+      "rule": "/api/cv/<cv_id>/text",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cv.get_cv_text"
+    },
+    {
+      "rule": "/api/cv/list",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cv.list_cvs"
+    },
+    {
+      "rule": "/api/cv/upload",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "cv.upload_cv"
+    },
+    {
+      "rule": "/api/debug/applications",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "applications.debug_applications"
+    },
+    {
+      "rule": "/api/download-cv",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.download_cv"
+    },
+    {
+      "rule": "/api/files/<gridfs_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "serve_gridfs_file"
+    },
+    {
+      "rule": "/api/forgot-password",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.forgot_password"
+    },
+    {
+      "rule": "/api/google-oauth",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.google_oauth"
+    },
+    {
+      "rule": "/api/interviews",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "get_user_interviews"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/answer",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "submit_answer"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/end",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "end_interview"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/face-image/<kind>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "get_interview_face_image"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/gaze-recorder-page",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "get_gaze_recorder_page"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/gaze-recorder-results",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "upload_gaze_recorder_results"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/question",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "get_interview_question"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/register-face",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "register_face"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/upload-mobile-recording",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "upload_mobile_recording"
+    },
+    {
+      "rule": "/api/interviews/<session_id>/upload-recording",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "upload_recording"
+    },
+    {
+      "rule": "/api/interviews/start",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "start_interview"
+    },
+    {
+      "rule": "/api/invite/redeem",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "invites.lookup_invite_route"
+    },
+    {
+      "rule": "/api/invite/redeem",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "invites.redeem_invite_route"
+    },
+    {
+      "rule": "/api/jobs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.get_jobs"
+    },
+    {
+      "rule": "/api/jobs",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "jobs.create_job"
+    },
+    {
+      "rule": "/api/jobs/<job_id>",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "jobs.delete_job"
+    },
+    {
+      "rule": "/api/jobs/<job_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.get_job_details"
+    },
+    {
+      "rule": "/api/jobs/<job_id>",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "jobs.update_job"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/applications",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.get_job_applications"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/apply",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "applications.apply_for_job"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/check-cv-score",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "applications.check_cv_match_score"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/jd-download",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.get_jd_download_url"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/withdraw",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "applications.withdraw_application"
+    },
+    {
+      "rule": "/api/jobs/generate-ai",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "jobs.generate_jd_with_ai"
+    },
+    {
+      "rule": "/api/login",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.login"
+    },
+    {
+      "rule": "/api/me",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "auth.delete_account"
+    },
+    {
+      "rule": "/api/me",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "auth.get_current_user"
+    },
+    {
+      "rule": "/api/payment/credits/transactions",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_wallet_transactions"
+    },
+    {
+      "rule": "/api/payment/health",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.health_check"
+    },
+    {
+      "rule": "/api/payment/interviews/use",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.use_interview"
+    },
+    {
+      "rule": "/api/payment/payments/<payment_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_payment"
+    },
+    {
+      "rule": "/api/payment/payments/<payment_id>/refund",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.request_refund"
+    },
+    {
+      "rule": "/api/payment/payments/history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_payment_history"
+    },
+    {
+      "rule": "/api/payment/payments/initiate",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.initiate_payment"
+    },
+    {
+      "rule": "/api/payment/payments/verify",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.verify_payment"
+    },
+    {
+      "rule": "/api/payment/plans",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_plans"
+    },
+    {
+      "rule": "/api/payment/plans/<plan_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_plan"
+    },
+    {
+      "rule": "/api/payment/plans/slug/<slug>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_plan_by_slug"
+    },
+    {
+      "rule": "/api/payment/recharge/initiate",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.initiate_payment"
+    },
+    {
+      "rule": "/api/payment/recharge/packs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_plans"
+    },
+    {
+      "rule": "/api/payment/recharge/verify",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.verify_payment"
+    },
+    {
+      "rule": "/api/payment/subscriptions/cancel",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.cancel_subscription"
+    },
+    {
+      "rule": "/api/payment/subscriptions/check",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.check_subscription"
+    },
+    {
+      "rule": "/api/payment/subscriptions/history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_subscription_history"
+    },
+    {
+      "rule": "/api/payment/subscriptions/me",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_current_subscription"
+    },
+    {
+      "rule": "/api/payment/wallet/check",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.check_subscription"
+    },
+    {
+      "rule": "/api/payment/wallet/summary",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_current_subscription"
+    },
+    {
+      "rule": "/api/payment/wallet/transactions",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "payment.get_wallet_transactions"
+    },
+    {
+      "rule": "/api/payment/webhooks/razorpay",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "payment.razorpay_webhook"
+    },
+    {
+      "rule": "/api/practice/<session_id>/answer",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "practice.submit_practice_answer"
+    },
+    {
+      "rule": "/api/practice/<session_id>/end",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "practice.end_practice_interview"
+    },
+    {
+      "rule": "/api/practice/<session_id>/report",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "practice.get_practice_report"
+    },
+    {
+      "rule": "/api/practice/history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "practice.get_practice_history"
+    },
+    {
+      "rule": "/api/practice/start",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "practice.start_practice_interview"
+    },
+    {
+      "rule": "/api/profile",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "profile.get_profile"
+    },
+    {
+      "rule": "/api/profile",
+      "methods": [
+        "PUT"
+      ],
+      "endpoint": "profile.update_profile"
+    },
+    {
+      "rule": "/api/recruiter/cost-statistics",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "profile.get_recruiter_cost_statistics"
+    },
+    {
+      "rule": "/api/recruiter/jobs/<job_id>/invites",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "invites.send_invites"
+    },
+    {
+      "rule": "/api/recruiter/jobs/<job_id>/invites/batches/<batch_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "invites.get_invite_batch_status"
+    },
+    {
+      "rule": "/api/recruiter/jobs/<job_id>/invites/preview",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "invites.preview_invites"
+    },
+    {
+      "rule": "/api/register",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.register"
+    },
+    {
+      "rule": "/api/remove-sample-jobs",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "jobs.remove_sample_jobs"
+    },
+    {
+      "rule": "/api/resend-verification",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.resend_verification"
+    },
+    {
+      "rule": "/api/reset-password",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.reset_password"
+    },
+    {
+      "rule": "/api/speech/synthesize",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "speech.synthesize"
+    },
+    {
+      "rule": "/api/speech/transcribe",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "speech.transcribe"
+    },
+    {
+      "rule": "/api/stt-cost",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "stt_cost"
+    },
+    {
+      "rule": "/api/test-jobs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.test_jobs"
+    },
+    {
+      "rule": "/api/tts-cost",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "tts_cost"
+    },
+    {
+      "rule": "/api/upload",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "files.upload_files"
+    },
+    {
+      "rule": "/api/upload-cv",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "files.upload_cv"
+    },
+    {
+      "rule": "/api/upload-photo",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "files.upload_photo"
+    },
+    {
+      "rule": "/api/verify-email",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "auth.verify_email"
+    },
+    {
+      "rule": "/api/view-cv",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.view_cv"
+    },
+    {
+      "rule": "/api/view-file",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.view_file"
+    },
+    {
+      "rule": "/api/view-photo",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "files.view_photo"
+    },
+    {
+      "rule": "/chat",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "chat_with_cost_tracking"
+    },
+    {
+      "rule": "/cost-summary",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "cost_summary"
+    },
+    {
+      "rule": "/health",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "health_check"
+    },
+    {
+      "rule": "/static/<path:filename>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "static"
+    },
+    {
+      "rule": "/stt-cost",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "stt_cost"
+    },
+    {
+      "rule": "/tts-cost",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "tts_cost"
+    }
+  ],
+  "socket_events": [
+    "connect",
+    "control_mobile_recording",
+    "disconnect",
+    "join_mobile_session",
+    "mobile_status_update",
+    "proctoring_frame",
+    "proctoring_violation",
+    "start_proctoring"
+  ]
+}
