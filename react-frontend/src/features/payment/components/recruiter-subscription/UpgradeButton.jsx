@@ -20,7 +20,7 @@ const UpgradeButton = () => {
   } = useSubscription();
 
   const handleClick = () => {
-    navigate("/subscription");
+    navigate("/recruiter/subscription");
   };
 
   // Determine button style based on subscription status

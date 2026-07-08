@@ -225,7 +225,7 @@ const Practice = () => {
       // Handle practice session launch
       if (window.electronAPI) {
         // If already inside secure browser, just navigate
-        navigate(`/interview/${data.session_id}`, {
+        navigate(`/interviews/${data.session_id}`, {
           state: {
             isPractice: true,
             practiceRole: selectedRole,

@@ -40,7 +40,7 @@ export default function useAuth(requiredType = "recruiter") {
         if (userType === 'admin') {
           navigate("/admin");
         } else if (userType === 'recruiter') {
-          navigate("/recruiter-dashboard");
+          navigate("/recruiter/dashboard");
         } else {
           navigate("/");
         }

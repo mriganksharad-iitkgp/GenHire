@@ -1,7 +1,20 @@
 import React, { Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+
 import Layout from "shared/components/layout/Layout";
 import ProtectedRoute from "app/ProtectedRoute";
+// Preserves params + query string when redirecting a legacy path to its
+// renamed successor (old links in emails/bookmarks keep working).
+function LegacyRedirect({ to }) {
+  const params = useParams();
+  const location = useLocation();
+  let path = to;
+  Object.entries(params).forEach(([key, value]) => {
+    path = path.replace(`:${key}`, value);
+  });
+  return <Navigate to={`${path}${location.search}`} replace />;
+}
+
 
 // Lazy-loaded pages (paths update as pages move into features/)
 const Login = React.lazy(() => import("features/auth/pages/Login"));
@@ -67,14 +80,14 @@ export default function AppRoutes() {
 
         {/* Recruiter */}
         <Route
-          path="/recruiter-dashboard"
+          path="/recruiter/dashboard"
           element={
             <ProtectedRoute allow="recruiter">
               <RecruiterDashboard />
             </ProtectedRoute>
           }
         />
-        <Route path="/subscription" element={<SubscriptionPlans />} />
+        <Route path="/recruiter/subscription" element={<SubscriptionPlans />} />
         <Route path="/candidate/subscription" element={<CandidateSubscriptionPlans />} />
 
         {/* Payment routes */}
@@ -100,7 +113,7 @@ export default function AppRoutes() {
         {/* Landing page - public home */}
         <Route path="/" element={<LandingPage />} />
 
-        <Route path="/mobile-cam/:sessionId" element={<MobileRecorder />} />
+        <Route path="/mobile-camera/:sessionId" element={<MobileRecorder />} />
 
         {/* Routes with shared Layout (any authenticated user; Layout also
             verifies the token against the backend as before) */}
@@ -115,11 +128,20 @@ export default function AppRoutes() {
           <Route path="/team" element={<TeamPage />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/practice" element={<Practice />} />
-          <Route path="/job/:jobId" element={<JobDetails />} />
-          <Route path="/application/:applicationId" element={<ApplicationView />} />
+          <Route path="/jobs/:jobId" element={<JobDetails />} />
+          <Route path="/applications/:applicationId" element={<ApplicationView />} />
         </Route>
 
-        <Route path="/interview/:interviewId" element={<Interview />} />
+        <Route path="/interviews/:interviewId" element={<Interview />} />
+
+        {/* Legacy paths (renamed 2026-07) — emails/bookmarks keep working */}
+        <Route path="/recruiter-dashboard" element={<Navigate to="/recruiter/dashboard" replace />} />
+        <Route path="/subscription" element={<Navigate to="/recruiter/subscription" replace />} />
+        <Route path="/job/:jobId" element={<LegacyRedirect to="/jobs/:jobId" />} />
+        <Route path="/application/:applicationId" element={<LegacyRedirect to="/applications/:applicationId" />} />
+        <Route path="/interview/:interviewId" element={<LegacyRedirect to="/interviews/:interviewId" />} />
+        <Route path="/mobile-cam/:sessionId" element={<LegacyRedirect to="/mobile-camera/:sessionId" />} />
+
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" />} />
       </Routes>

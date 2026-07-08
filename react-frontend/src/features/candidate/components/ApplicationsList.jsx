@@ -356,7 +356,7 @@ export default function ApplicationsList({
                     </button>
 
                     <Link
-                      to={`/application/${app.id}`}
+                      to={`/applications/${app.id}`}
                       className={styles.viewTimelineButton}
                     >
                       <i className="fa fa-info-circle" /> Details

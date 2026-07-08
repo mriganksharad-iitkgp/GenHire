@@ -2027,7 +2027,7 @@ export default function Chat({ interviewId }) {
 
   if (interviewStatus === "registering") {
     // Construct URL using current hostname (handles localhost vs IP address)
-    const mobileUrl = `${window.location.protocol}//${window.location.hostname}:3000/mobile-cam/${sessionId}`;
+    const mobileUrl = `${window.location.protocol}//${window.location.hostname}:3000/mobile-camera/${sessionId}`;
 
     return (
       <div className={Styles.registrationContainer}>

@@ -287,7 +287,7 @@ const RecruiterOnboarding = () => {
       
       // Don't auto-login, show success and redirect after delay
       setTimeout(() => {
-        navigate(data.token ? "/recruiter-dashboard" : "/login");
+        navigate(data.token ? "/recruiter/dashboard" : "/login");
       }, 5000);
       
     } catch (err) {

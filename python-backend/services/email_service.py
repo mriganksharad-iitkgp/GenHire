@@ -224,7 +224,7 @@ class EmailService:
         application_id: str,
     ) -> bool:
         """Notify recruiter when a candidate finishes a real interview."""
-        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        dashboard_url = f"{self.frontend_url}/recruiter/dashboard"
         safe_recruiter = escape(recruiter_name or "there")
         safe_candidate = escape(candidate_name or "A candidate")
         safe_job = escape(job_title or "the position")
@@ -526,7 +526,7 @@ class EmailService:
         self, to_email: str, recruiter_name: str, candidate_name: str, job_title: str
     ) -> bool:
         """Notify a recruiter that a new candidate applied to their job."""
-        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        dashboard_url = f"{self.frontend_url}/recruiter/dashboard"
         safe_candidate = escape(candidate_name or "A candidate")
         safe_job = escape(job_title or "your job posting")
 
@@ -669,7 +669,7 @@ class EmailService:
 
     def send_recruiter_approved_email(self, to_email: str, recruiter_name: str, company_name: str) -> bool:
         """Notify recruiter that their account has been approved by admin."""
-        dashboard_url = f"{self.frontend_url}/recruiter-dashboard"
+        dashboard_url = f"{self.frontend_url}/recruiter/dashboard"
         safe_company = escape(company_name or "your company")
 
         html_content = self._render_auth_email(

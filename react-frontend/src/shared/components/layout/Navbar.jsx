@@ -62,7 +62,7 @@ const Navbar = ({ userType = "candidate" }) => {
       <div className={styles.navContainer}>
         <div className={styles.navBrand}>
           <Link
-            to={userType === "recruiter" ? "/recruiter-dashboard" : "/dashboard"}
+            to={userType === "recruiter" ? "/recruiter/dashboard" : "/dashboard"}
             className={styles.brandLink}
           >
             <div className={styles.logoIcon}>
@@ -83,9 +83,9 @@ const Navbar = ({ userType = "candidate" }) => {
           {userType === "recruiter" ? (
             <>
               <Link
-                to="/recruiter-dashboard"
+                to="/recruiter/dashboard"
                 className={`${styles.navLink} ${
-                  location.pathname === "/recruiter-dashboard"
+                  location.pathname === "/recruiter/dashboard"
                     ? styles.active
                     : ""
                 }`}
@@ -191,7 +191,7 @@ const Navbar = ({ userType = "candidate" }) => {
                 {userType === "recruiter" ? (
                   <>
                     <Link
-                      to="/recruiter-dashboard"
+                      to="/recruiter/dashboard"
                       className={styles.dropdownItem}
                       onClick={() => setUserMenuOpen(false)}
                     >
@@ -269,7 +269,7 @@ const Navbar = ({ userType = "candidate" }) => {
         <div className={styles.mobileNavLinks}>
           {userType === "recruiter" ? (
             <>
-              <Link to="/recruiter-dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
+              <Link to="/recruiter/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
               <Link to="/recruiter/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>
               <Link to="/recruiter/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>
               <div className={styles.mobileDivider}></div>

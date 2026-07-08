@@ -60,7 +60,7 @@ const Login = () => {
 			if (data.user.user_type === "admin" || userType === "admin") {
 				navigate("/admin");
 			} else if (data.user.user_type === "recruiter" || userType === "recruiter") {
-				navigate("/recruiter-dashboard");
+				navigate("/recruiter/dashboard");
 			} else {
 				navigate("/dashboard");
 			}
@@ -103,7 +103,7 @@ const Login = () => {
 			if (data.user.user_type === "admin") {
 				navigate("/admin");
 			} else if (data.user.user_type === "recruiter") {
-				navigate("/recruiter-dashboard");
+				navigate("/recruiter/dashboard");
 			} else {
 				navigate("/dashboard");
 			}

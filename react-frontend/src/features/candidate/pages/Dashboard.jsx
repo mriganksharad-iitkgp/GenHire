@@ -972,7 +972,7 @@ const Dashboard = () => {
 
 														<div className={styles.jobActions}>
 															<Link
-																to={`/job/${job._id}`}
+																to={`/jobs/${job._id}`}
 																className={styles.viewButton}
 															>
 																View Details
@@ -1050,7 +1050,7 @@ const Dashboard = () => {
 														</div>
 
 														<div className={styles.jobActions}>
-															<Link to={`/job/${job._id}`} className={styles.viewButton}>
+															<Link to={`/jobs/${job._id}`} className={styles.viewButton}>
 																View Details
 															</Link>
 															{(() => {

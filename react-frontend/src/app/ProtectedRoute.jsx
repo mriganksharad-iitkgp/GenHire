@@ -36,7 +36,7 @@ export default function ProtectedRoute({ allow = "any", children }) {
     return <Navigate to="/admin" replace />;
   }
   if (userType === "recruiter") {
-    return <Navigate to="/recruiter-dashboard" replace />;
+    return <Navigate to="/recruiter/dashboard" replace />;
   }
   return <Navigate to="/" replace />;
 }

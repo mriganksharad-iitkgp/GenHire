@@ -452,7 +452,7 @@ const RecruiterCostStatistics = () => {
                     </div>
                     <button
                       className={styles.upgradeBtn}
-                      onClick={() => navigate("/subscription")}
+                      onClick={() => navigate("/recruiter/subscription")}
                     >
                       Recharge Wallet
                     </button>
@@ -691,7 +691,7 @@ const RecruiterCostStatistics = () => {
               </div>
               <button
                 className={styles.managePlanBtn}
-                onClick={() => navigate("/subscription")}
+                onClick={() => navigate("/recruiter/subscription")}
               >
                 Recharge Wallet
                 <svg

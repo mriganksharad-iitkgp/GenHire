@@ -273,7 +273,7 @@ const Profile = () => {
 			// Check if we are already inside the secure browser via Electron injected API
 			if (window.electronAPI) {
 				showToast(`Starting interview session for ${application.position}...`, 'info');
-				navigate(`/interview/start`, {
+				navigate(`/interviews/start`, {
 					state: { applicationId: application.id }
 				});
 				return;

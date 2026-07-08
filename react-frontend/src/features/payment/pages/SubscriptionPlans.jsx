@@ -375,7 +375,7 @@ const SubscriptionPlans = () => {
         <header className={styles.pageHeader}>
           <button
             className={styles.backButton}
-            onClick={() => navigate("/recruiter-dashboard")}
+            onClick={() => navigate("/recruiter/dashboard")}
             aria-label="Back to Dashboard"
           >
             <ArrowLeftIcon />

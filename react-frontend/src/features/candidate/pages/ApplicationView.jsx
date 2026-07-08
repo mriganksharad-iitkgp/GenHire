@@ -270,7 +270,7 @@ const ApplicationView = () => {
 					</div>
 					<div className={styles.applicationActions}>
 						<Link
-							to={`/job/${application.jobId}`}
+							to={`/jobs/${application.jobId}`}
 							className={styles.viewJobButton}
 						>
 							<i className="fa fa-file-text-o"></i> View Job
@@ -388,7 +388,7 @@ const ApplicationView = () => {
 																</>
 															)}
 															<Link
-																to={`/interview/${event.interviewDetails.id}?practice=true`}
+																to={`/interviews/${event.interviewDetails.id}?practice=true`}
 																className={
 																	styles.practiceButton
 																}
