@@ -47,8 +47,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorflo
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="tf_keras")
 
 from flask import Flask, request, jsonify, Response, g
-from utils.gaze_recorder_service import GazeRecorderService
-from flask_socketio import join_room, disconnect
 from extensions import socketio
 from werkzeug.utils import secure_filename
 import datetime
@@ -56,14 +54,7 @@ import uuid
 import base64
 from bson import ObjectId
 
-import numpy as np
 import time
-
-try:
-    from security_check import analyze_frame_for_proctoring
-    _proctoring_available = True
-except Exception:
-    _proctoring_available = False
 
 # Import configuration
 from config.env_loader import load_environment
@@ -99,8 +90,6 @@ from payment_module.services.subscription_service import SubscriptionService
 from payment_module.services.wallet_service import WalletService
 from payment_module.config.settings import PaymentConfig
 from interview.core.cost_tracker import CostTracker
-from interview.core.llm_wrapper import call_llm_with_tracking, get_cost_summary
-from interview.core.speech_cost_tracker import process_stt, process_tts
 
 # Optional import - RecordingAnalyzer has heavy dependencies that may conflict
 # try:
@@ -344,8 +333,6 @@ users_collection = collections["users"]
 interviews_collection = collections["interviews"]
 applications_collection = collections["applications"]
 jobs_collection = collections["jobs"]
-openai_cost_logs_collection = db.get_collection("openai_cost_logs")
-speech_cost_logs_collection = db.get_collection("speech_cost_logs")
 
 if PAYMENT_MODULE_AVAILABLE and WalletService:
     try:
@@ -380,20 +367,6 @@ app.register_blueprint(application_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(practice_bp)
 
-@app.route("/api/files/<gridfs_id>")
-def serve_gridfs_file(gridfs_id):
-    try:
-        import gridfs
-        fs = gridfs.GridFS(db)
-        file_data = fs.get(ObjectId(gridfs_id))
-        return Response(
-            file_data.read(),
-            mimetype=file_data.content_type,
-            headers={"Content-Disposition": f"inline; filename={file_data.filename}"}
-        )
-    except Exception as e:
-        return jsonify({"error": "File not found"}), 404
-
 # Register CV routes (requires collections, so created after database initialization)
 cv_bp = create_cv_routes(collections)
 app.register_blueprint(cv_bp, url_prefix="/api/cv")
@@ -407,23 +380,16 @@ app.register_blueprint(invite_bp)
 logger.info("[OK] Admin routes registered at /api/admin")
 logger.info("[OK] Invite routes registered")
 
-# Define a dictionary to hold a detector instance for each session
-# Define a dictionary to hold a detector instance for each session
-# proctoring_detectors = {}  # Moved to separate service
-
-# Initialize interview system with proper configuration
-from interview.config.settings import InterviewConfig, LLMConfig, LLMProvider
-from interview.core.session_manager import InterviewSessionManager
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# Use default configurations but override for GROQ
-interview_config = InterviewConfig()
-llm_config = LLMConfig()
-
-# Initialize interview session manager with proper config
-interview_manager = InterviewSessionManager(
-    config=interview_config, llm_config=llm_config
+# Interview runtime state (session manager singleton, live proctoring session
+# store, upload folder layout, gaze recorder) lives in interview/runtime.py so
+# the socket handlers, interview routes, and sweepers all share one instance.
+from interview.runtime import (
+    PROCTORING_FOLDER,
+    RECORDING_FOLDER,
+    TMP_FOLDER,
+    gaze_recorder_service,
+    interview_manager,
+    live_sessions,
 )
 
 # Credit-lifecycle sweeper: refunds start-time debits for interviews that
@@ -437,32 +403,11 @@ interview_refund_sweeper = interview_credit_service.get_interview_refund_sweeper
 interview_refund_sweeper.start()
 logger.info("[OK] Interview credit-refund sweeper started")
 
-# === INTERVIEW SYSTEM (REMAINS IN APP.PY) ===
-# All interview-related routes and Socket.IO handlers remain here
-
-# In-memory store: session_id -> { registered_face_bytes, proctoring_score, infractions }
-live_sessions = {}
-
-# Define directories for storing files
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
-PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
-
-# Ensure folders exist
-os.makedirs(PROCTORING_FOLDER, exist_ok=True)
-RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
-M_RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "mobile_recordings")
-os.makedirs(RECORDING_FOLDER, exist_ok=True)
-os.makedirs(M_RECORDING_FOLDER, exist_ok=True)
-TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
-os.makedirs(TMP_FOLDER, exist_ok=True)
+# === INTERVIEW REST ROUTES (extraction pending — see routes/interview_routes.py plan) ===
 
 app.config["PROCTORING_FOLDER"] = PROCTORING_FOLDER
 app.config["RECORDING_FOLDER"] = RECORDING_FOLDER
 app.config["TMP_FOLDER"] = TMP_FOLDER
-
-GAZE_RECORDER_FOLDER = os.path.join(PROCTORING_FOLDER, "gaze_recorder")
-os.makedirs(GAZE_RECORDER_FOLDER, exist_ok=True)
-gaze_recorder_service = GazeRecorderService(output_dir=GAZE_RECORDER_FOLDER)
 
 # Import middleware for interview routes
 from middleware.auth_middleware import token_required
@@ -582,101 +527,14 @@ else:
 
 
 
-# Readiness check — previously an unconditional 200 regardless of whether
-# anything downstream (Mongo) was actually reachable, which is exactly the
-# case a load balancer/orchestrator needs this endpoint to catch. Pings the
-# database with a short timeout; a slow/unreachable DB now reports 503
-# instead of a false "healthy".
-@app.route("/health", methods=["GET"])
-def health_check():
-    try:
-        db.command("ping", maxTimeMS=2000)
-        return jsonify({"status": "healthy", "database": "connected"}), 200
-    except Exception as e:
-        logger.warning(f"Health check failed: {e}")
-        return jsonify({"status": "unhealthy", "database": "unreachable"}), 503
+# System routes (index, /health, GridFS files) and cost-tracking routes
+# (/chat, /cost-summary, /stt-cost, /tts-cost) moved to their own blueprints;
+# registered here where they were previously defined.
+from routes.system_routes import create_system_routes
+from routes.cost_routes import create_cost_routes
 
-
-# Direct tracked chat endpoint (actual cost from response.usage only)
-@app.route("/chat", methods=["POST"])
-@app.route("/api/chat", methods=["POST"])
-def chat_with_cost_tracking():
-    data = request.get_json() or {}
-    messages = data.get("messages")
-    model = data.get("model", "gpt-4o-mini")
-    user_id = data.get("user_id")
-
-    if not isinstance(messages, list) or not messages:
-        return jsonify({"error": "messages (non-empty list) is required"}), 400
-
-    try:
-        response, cost, log_data = call_llm_with_tracking(
-            model=model,
-            messages=messages,
-            user_id=user_id,
-            logs_collection=openai_cost_logs_collection,
-        )
-    except Exception as exc:
-        logger.exception("Tracked chat request failed")
-        return jsonify({"error": "LLM request failed", "details": str(exc), "cost": None}), 500
-
-    content = ""
-    try:
-        choice = (getattr(response, "choices", None) or [None])[0]
-        message = getattr(choice, "message", None) if choice is not None else None
-        content = getattr(message, "content", "") if message is not None else ""
-    except Exception:
-        content = ""
-
-    return jsonify(
-        {
-            "response": content,
-            "cost": cost,
-            "request_id": log_data.get("request_id"),
-        }
-    )
-
-
-@app.route("/cost-summary", methods=["GET"])
-@app.route("/api/cost-summary", methods=["GET"])
-def cost_summary():
-    user_id = request.args.get("user_id")
-    summary = get_cost_summary(
-        logs_collection=openai_cost_logs_collection,
-        user_id=user_id,
-    )
-    return jsonify(summary), 200
-
-
-@app.route("/stt-cost", methods=["POST"])
-@app.route("/api/stt-cost", methods=["POST"])
-def stt_cost():
-    data = request.get_json() or {}
-    cost = process_stt(
-        data.get("audio_seconds"),
-        user_id=data.get("user_id"),
-        logs_collection=speech_cost_logs_collection,
-    )
-    return jsonify({"cost": cost}), 200
-
-
-@app.route("/tts-cost", methods=["POST"])
-@app.route("/api/tts-cost", methods=["POST"])
-def tts_cost():
-    data = request.get_json() or {}
-    cost = process_tts(
-        data.get("text"),
-        data.get("voice_type", "standard"),
-        data.get("user_id"),
-        logs_collection=speech_cost_logs_collection,
-    )
-    return jsonify({"cost": cost}), 200
-
-
-# basic index route
-@app.route("/")
-def index():
-    return "Welcome to the Interview System API. Please use the /api endpoints to interact with the system."
+app.register_blueprint(create_system_routes(db))
+app.register_blueprint(create_cost_routes(db))
 
 
 # Interview System API Routes
@@ -2111,156 +1969,11 @@ def get_interview_face_image(current_user, session_id, kind):
     )
 
 
-@socketio.on("connect")
-def handle_connect(auth):
-    """
-    Join a per-user room when the client authenticates, so application/
-    status/score updates can be pushed to exactly the candidate or recruiter
-    they belong to (see application_controller.py emits).
+# Socket.IO event handlers (proctoring stream + mobile companion) moved to
+# sockets/; registering here preserves the original definition position.
+import sockets
 
-    Connections WITHOUT a token are allowed but join no user room: the mobile
-    companion page is opened from a QR link and has no JWT to present, and it
-    only ever joins a session-id room via join_mobile_session below (which
-    validates the session exists). A token that is present but invalid is
-    still rejected outright — previously ANY tokenless connect was rejected,
-    which silently killed the interview page's live proctoring stream and the
-    entire mobile companion flow.
-    """
-    from middleware.auth_middleware import decode_user_from_token
-
-    token = (auth or {}).get("token")
-    if not token:
-        return  # anonymous session-room-only connection (mobile companion)
-
-    current_user, error = decode_user_from_token(token)
-    if error:
-        # Reject the handshake outright; client falls back to REST polling.
-        disconnect()
-        return False
-
-    join_room(str(current_user["_id"]))
-
-
-@socketio.on("disconnect")
-def handle_disconnect():
-    pass
-
-
-@socketio.on("start_proctoring")
-def handle_start_proctoring(data):
-    """Desktop client signals it is ready to send proctoring frames."""
-    session_id = data.get("session_id")
-    if not session_id:
-        return
-    join_room(session_id)
-    print(f"Proctoring started for session {session_id}")
-
-
-@socketio.on("proctoring_frame")
-def handle_proctoring_frame(data):
-    """
-    Receives a JPEG frame (base64) from the desktop client once per second,
-    runs MediaPipe head-pose + DeepFace identity check, and emits a
-    proctoring_alert back to the room if a violation is detected.
-    """
-    if not _proctoring_available:
-        return
-
-    session_id = data.get("session_id")
-    image_data = data.get("image", "")
-    if not session_id or not image_data:
-        return
-
-    session = live_sessions.get(session_id)
-    if not session:
-        return  # Face not registered yet — ignore frame
-
-    try:
-        # Decode base64 frame to numpy array
-        encoded = image_data.split(",", 1)[1] if "," in image_data else image_data
-        img_bytes = base64.b64decode(encoded)
-        img_array = np.frombuffer(img_bytes, dtype=np.uint8)
-        import cv2
-        frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-        if frame is None:
-            return
-
-        # Prefer the decoded ndarray reference — DeepFace.verify inside
-        # analyze_frame_for_proctoring does not accept raw bytes, which made
-        # the identity check silently fail on every frame before.
-        reference_face = session.get("registered_face_np")
-        if reference_face is None:
-            reference_face = session["registered_face"]
-
-        result = analyze_frame_for_proctoring(
-            current_frame=frame,
-            registered_face_img=reference_face,
-            current_score=session["proctoring_score"],
-            infractions=session["infractions"],
-        )
-
-        session["proctoring_score"] = result["score"]
-        session["infractions"] = result["infractions"]
-
-        if result["status"] != "Status: OK":
-            socketio.emit(
-                "proctoring_alert",
-                {
-                    "status": result["status"],
-                    "score": result["score"],
-                    "infractions": result["infractions"],
-                },
-                room=session_id,
-            )
-    except Exception as e:
-        print(f"proctoring_frame error for {session_id}: {e}")
-
-
-@socketio.on("proctoring_violation")
-def handle_proctoring_violation(data):
-    """Records a manual violation (tab switch, window blur) in the session store."""
-    session_id = data.get("session_id")
-    violation_type = data.get("type", "unknown")
-    if not session_id:
-        return
-    session = live_sessions.get(session_id)
-    if session:
-        key = f"manual_{violation_type}"
-        session["infractions"][key] = session["infractions"].get(key, 0) + 1
-    print(f"Manual violation [{violation_type}] for session {session_id}")
-
-
-@socketio.on("join_mobile_session")
-def handle_mobile_join(data):
-    session_id = (data or {}).get("session_id")
-    if not session_id:
-        return
-    # The mobile companion connects without a JWT (QR link), so gate the room
-    # join on the session actually existing instead.
-    session_exists = interviews_collection.find_one(
-        {"session_id": session_id}, {"_id": 1}
-    ) or collections["practice_sessions"].find_one({"session_id": session_id}, {"_id": 1})
-    if not session_exists:
-        return
-    join_room(session_id)
-    socketio.emit("mobile_connected", {"status": "connected"}, room=session_id)
-
-
-@socketio.on("control_mobile_recording")
-def handle_mobile_control(data):
-    session_id = data.get("session_id")
-    action = data.get("action")  # 'start' or 'stop'
-
-    # Relay the command to the mobile device in the room
-    socketio.emit("mobile_recording_action", {"action": action}, room=session_id)
-
-
-@socketio.on("mobile_status_update")
-def handle_mobile_status(data):
-    session_id = data.get("session_id")
-    status = data.get("status")  # e.g., 'recording', 'uploading', 'completed'
-    # Relay status back to desktop to show user
-    socketio.emit("mobile_status_dashboard", {"status": status}, room=session_id)
+sockets.register_all()
 
 
 if __name__ == "__main__":
