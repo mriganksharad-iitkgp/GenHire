@@ -36,6 +36,8 @@ from middleware.auth_middleware import token_required
 from payment_module.config.settings import PaymentConfig
 from payment_module.services.wallet_service import WalletService
 from services import face_verification_service as face_service
+from services import face_match_service
+from services import identity_card_service
 from services import interview_credit_service
 from services.cv_scoring_service import CVScoringService
 from services.email_service import EmailService
@@ -198,7 +200,7 @@ def start_interview(current_user):
         return jsonify({
             "error": "Please complete your application by uploading your CV before starting the interview.",
             "error_code": "application_incomplete",
-            "redirect": f"/job/{app_doc.get('job_id')}" if app_doc.get('job_id') else "/dashboard",
+            "redirect": f"/jobs/{app_doc.get('job_id')}" if app_doc.get('job_id') else "/dashboard",
         }), 400
 
     student = current_user
@@ -219,6 +221,24 @@ def start_interview(current_user):
     )
     if not cv_text_prefetched and not cv_details:
         return jsonify({"error": "CV not found for this application. Please re-apply with your CV before starting the interview."}), 400
+
+    # --- Identity-card check (before charging credits) ---
+    # Real interviews verify the candidate's face against their uploaded ID at
+    # register-face time; without a card on file the interview cannot start.
+    if face_service.get_mode() != "off":
+        id_holder = users_collection.find_one(
+            {"_id": current_user["_id"]}, {"identity_card": 1}
+        ) or {}
+        if not (id_holder.get("identity_card") or {}).get("image_file_id"):
+            return (
+                jsonify(
+                    {
+                        "error": "Please upload your identity card in your profile before starting an interview. Your face is verified against it when the interview begins.",
+                        "error_code": "identity_card_required",
+                    }
+                ),
+                403,
+            )
 
     proctoring_config = job.get("proctoring_config", {
         "voice_detection": True,
@@ -1341,52 +1361,59 @@ def register_face(current_user, session_id):
 
             if mode == "off":
                 identity.update({"status": "skipped", "verified": None, "attempts": attempts})
-            elif not reference_file_id:
-                # First real interview on this account — enroll this capture as
-                # the canonical identity all future interviews are matched to.
-                file_id = face_service.store_face_image(
-                    db, decoded_image, user_id=user_id, session_id=session_id, purpose="enrollment"
-                )
-                users_collection.update_one(
-                    {"_id": current_user["_id"]},
-                    {
-                        "$set": {
-                            "face_profile": {
-                                "image_file_id": file_id,
-                                "registered_at": now,
-                                "source_session_id": session_id,
-                                "source_application_id": interview_doc.get("application_id"),
-                            }
-                        }
-                    },
-                )
-                identity.update(
-                    {
-                        "status": "registered_new",
-                        "verified": None,
-                        "attempts": attempts,
-                        "captured_image_file_id": file_id,
-                        "reference_image_file_id": file_id,
-                    }
-                )
             else:
-                identity["reference_image_file_id"] = reference_file_id
-                ref_bytes = None
+                # The uploaded identity card is the reference identity: the
+                # live capture must match the face on the card (LLM-scored)
+                # before the interview can start. No enrollment happens here
+                # anymore -- the card itself is the one-time enrollment.
+                card_doc = users_collection.find_one(
+                    {"_id": current_user["_id"]}, {"identity_card": 1}
+                ) or {}
+                card = card_doc.get("identity_card") or {}
+                card_file_id = card.get("image_file_id")
+                if not card_file_id:
+                    return (
+                        jsonify(
+                            {
+                                "error": "Please upload your identity card in your profile before starting an interview.",
+                                "error_code": "identity_card_required",
+                            }
+                        ),
+                        403,
+                    )
+
+                identity["method"] = "llm_id_card_match"
+                identity["reference_image_file_id"] = card_file_id
+
+                card_bytes = None
+                card_content_type = None
                 try:
-                    ref_bytes, _ = face_service.load_face_image(db, reference_file_id)
+                    card_bytes, card_content_type = identity_card_service.load_identity_card(
+                        db, card_file_id
+                    )
                 except Exception as exc:
-                    print(f"Failed to load canonical face {reference_file_id}: {exc}")
+                    print(f"Failed to load identity card {card_file_id}: {exc}")
 
                 verdict = (
-                    face_service.verify_face_images(ref_bytes, decoded_image)
-                    if ref_bytes
-                    else {"available": False, "verified": None, "distance": None, "threshold": None}
+                    face_match_service.compare_faces(
+                        card_bytes, card_content_type, decoded_image
+                    )
+                    if card_bytes
+                    else {
+                        "available": False,
+                        "matched": None,
+                        "score": None,
+                        "threshold": face_match_service.get_threshold(),
+                        "model": face_match_service.get_model(),
+                        "reason": None,
+                    }
                 )
+                identity["model"] = verdict.get("model")
 
                 if not verdict.get("available"):
-                    # Face stack down / reference unreadable: fail open so a
-                    # server-side dependency problem can't lock candidates out,
-                    # but record the gap honestly for the recruiter.
+                    # LLM/provider down or card unreadable: fail open so a
+                    # server-side dependency problem cannot lock candidates
+                    # out, but record the gap honestly for the recruiter.
                     captured_id = face_service.store_face_image(
                         db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
                     )
@@ -1398,7 +1425,7 @@ def register_face(current_user, session_id):
                             "captured_image_file_id": captured_id,
                         }
                     )
-                elif verdict["verified"]:
+                elif verdict["matched"]:
                     captured_id = face_service.store_face_image(
                         db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
                     )
@@ -1406,8 +1433,9 @@ def register_face(current_user, session_id):
                         {
                             "status": "verified",
                             "verified": True,
-                            "distance": verdict["distance"],
+                            "score": verdict["score"],
                             "threshold": verdict["threshold"],
+                            "match_reason": verdict.get("reason"),
                             "attempts": attempts,
                             "captured_image_file_id": captured_id,
                         }
@@ -1417,8 +1445,9 @@ def register_face(current_user, session_id):
                     identity.update(
                         {
                             "verified": False,
-                            "distance": verdict["distance"],
+                            "score": verdict["score"],
                             "threshold": verdict["threshold"],
+                            "match_reason": verdict.get("reason"),
                             "attempts": attempts,
                         }
                     )
@@ -1469,7 +1498,7 @@ def register_face(current_user, session_id):
                             return (
                                 jsonify(
                                     {
-                                        "error": "Face verification failed repeatedly — this interview attempt has been locked because the captured face does not match this account's registered identity.",
+                                        "error": "Face verification failed repeatedly -- this interview attempt has been locked because your face does not match the identity card on your account.",
                                         "error_code": "face_mismatch_blocked",
                                         "attempts_remaining": 0,
                                     }
@@ -1479,7 +1508,7 @@ def register_face(current_user, session_id):
                         return (
                             jsonify(
                                 {
-                                    "error": "The captured face does not match the identity registered on this account. Make sure you are the account owner, face the camera directly in good lighting, and try again.",
+                                    "error": "Your face does not match the identity card on your account. Make sure you are the account owner, face the camera directly in good lighting, and try again.",
                                     "error_code": "face_mismatch",
                                     "attempts_remaining": max(0, max_attempts - attempts),
                                 }
@@ -1531,6 +1560,7 @@ def register_face(current_user, session_id):
                     "identity": {
                         "status": status,
                         "verified": identity.get("verified"),
+                        "score": identity.get("score"),
                         "distance": identity.get("distance"),
                         "threshold": identity.get("threshold"),
                     },

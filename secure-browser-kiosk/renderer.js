@@ -739,6 +739,16 @@ async function captureAndVerifyFace() {
                     message: result.error || "Face verification failed repeatedly — this interview attempt has been locked because the captured face does not match this account's registered identity."
                 };
             }
+            if (result.error_code === 'identity_card_required') {
+                // No ID card on file — uploading happens on the website, so
+                // this attempt cannot proceed inside the kiosk.
+                return {
+                    ok: false,
+                    blocked: true,
+                    fatal: false,
+                    message: result.error || 'Please upload your identity card in your GenHire profile before starting an interview.'
+                };
+            }
             if (result.error_code === 'face_mismatch') {
                 const attemptsNote = typeof result.attempts_remaining === 'number'
                     ? ` (${result.attempts_remaining} attempt${result.attempts_remaining === 1 ? '' : 's'} remaining)`
@@ -747,7 +757,7 @@ async function captureAndVerifyFace() {
                     ok: false,
                     blocked: false,
                     fatal: false,
-                    message: `${result.error || 'The captured face does not match the identity registered on this account.'}${attemptsNote}`
+                    message: `${result.error || 'Your face does not match the identity card on your account.'}${attemptsNote}`
                 };
             }
             if (response.status === 404) {

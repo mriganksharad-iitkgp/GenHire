@@ -698,6 +698,20 @@ export default function Chat({ interviewId }) {
           stopCamera();
           return;
         }
+        // No identity card on file — the candidate must upload one in their
+        // profile before any real interview can start.
+        if (result.error_code === "identity_card_required") {
+          setIdentityBlockMessage(
+            result.error ||
+              "Please upload your identity card in your profile before starting an interview.",
+          );
+          setInterviewStatus("identity_blocked");
+          if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+          stopCamera();
+          return;
+        }
         // Mismatch with attempts left — keep the candidate on this screen.
         if (result.error_code === "face_mismatch") {
           const attemptsNote =
@@ -723,13 +737,8 @@ export default function Chat({ interviewId }) {
 
       const identityInfo = result.identity || {};
       setIdentityStatus(identityInfo.status || null);
-      if (identityInfo.status === "registered_new") {
-        showToast(
-          "Face registered — this photo is now your account's verified identity for future interviews.",
-          "success",
-        );
-      } else if (identityInfo.status === "verified") {
-        showToast("Identity verified ✓", "success");
+      if (identityInfo.status === "verified") {
+        showToast("Identity verified against your ID card ✓", "success");
       }
 
       console.log(
