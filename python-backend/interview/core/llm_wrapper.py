@@ -6,24 +6,26 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from interview.core.cost_tracker import calculate_cost
-
-try:
-    from openai import OpenAI
-except Exception:  # pragma: no cover - import safety for environments without SDK
-    OpenAI = None
+from services.llm_fallback_service import get_llm_fallback_service
 
 logger = logging.getLogger(__name__)
 
-_client: Optional[Any] = None
 
+def _to_langchain_messages(messages: List[Dict[str, Any]]):
+    """OpenAI-style role dicts -> LangChain messages (chain input)."""
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-def _get_client():
-    global _client
-    if _client is None:
-        if OpenAI is None:
-            raise RuntimeError("OpenAI SDK is not installed or failed to import.")
-        _client = OpenAI()
-    return _client
+    converted = []
+    for message in messages or []:
+        role = (message.get("role") or "user").lower()
+        content = message.get("content") or ""
+        if role == "system":
+            converted.append(SystemMessage(content=content))
+        elif role == "assistant":
+            converted.append(AIMessage(content=content))
+        else:
+            converted.append(HumanMessage(content=content))
+    return converted
 
 
 def _safe_usage_value(usage: Any, key: str) -> Optional[int]:
@@ -94,16 +96,22 @@ def call_llm_with_tracking(
 
     Actual cost is computed only from response.usage. No manual token estimation.
     """
-    client = _get_client()
-    response = client.chat.completions.create(model=model, messages=messages)
+    # `model` is honored as the OpenAI-leg model; the actual provider follows
+    # LLM_PROVIDER_PRIORITY. The cost log records whichever model answered.
+    result = get_llm_fallback_service().invoke(
+        _to_langchain_messages(messages),
+        model_overrides={"openai": model} if model else None,
+    )
+    response = result["raw_response"]
+    model_used = f"{result['provider_used']}:{result['model_used']}"
 
-    usage = getattr(response, "usage", None)
-    cost = calculate_cost(model, usage)
-    usage_source = "actual" if usage else "missing"
+    usage = result.get("usage")
+    cost = calculate_cost(result["model_used"], usage)
+    usage_source = (usage or {}).get("usage_source") or ("actual" if usage else "missing")
     log_data = _build_log_data(
         request_id=str(uuid.uuid4()),
         user_id=user_id,
-        model=model,
+        model=model_used,
         usage=usage,
         cost=cost,
         usage_source=usage_source,

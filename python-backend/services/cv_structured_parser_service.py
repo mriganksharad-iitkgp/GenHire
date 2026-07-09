@@ -4,28 +4,19 @@ import os
 import re
 from typing import Any, Dict, Optional
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from services.llm_fallback_service import get_llm_fallback_service
 
 logger = logging.getLogger(__name__)
 
 
 class CVStructuredParserService:
-    """Convert extracted CV text into the schema consumed by CVDetailsForm."""
+    """Convert extracted CV text into the schema consumed by CVDetailsForm.
 
-    def __init__(self):
-        api_key = os.getenv("GOOGLE_API_KEY")
-        self.llm = (
-            ChatGoogleGenerativeAI(
-                model=os.getenv("CV_PARSER_MODEL", "gemini-flash-latest"),
-                temperature=0,
-                google_api_key=api_key,
-            )
-            if api_key
-            else None
-        )
+    Runs on the app-wide LLM chain (LLM_PROVIDER_PRIORITY order); the legacy
+    CV_PARSER_MODEL env still pins the Gemini model for this task."""
 
     def parse(self, text: str) -> Optional[Dict[str, Any]]:
-        if not self.llm or not str(text or "").strip():
+        if not str(text or "").strip():
             return None
 
         prompt = f"""
@@ -54,8 +45,13 @@ Resume:
 {text[:30000]}
 """
         try:
-            response = self.llm.invoke(prompt)
-            content = str(response.content or "").strip()
+            overrides = {}
+            if os.getenv("CV_PARSER_MODEL"):
+                overrides["google"] = os.getenv("CV_PARSER_MODEL")
+            result = get_llm_fallback_service().invoke(
+                prompt, json_mode=True, model_overrides=overrides or None
+            )
+            content = str(result["content"] or "").strip()
             content = content.replace("```json", "").replace("```", "").strip()
             match = re.search(r"\{.*\}", content, re.DOTALL)
             if not match:

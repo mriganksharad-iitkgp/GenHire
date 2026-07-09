@@ -45,9 +45,13 @@ def create_cost_routes(db):
 
         content = ""
         try:
-            choice = (getattr(response, "choices", None) or [None])[0]
-            message = getattr(choice, "message", None) if choice is not None else None
-            content = getattr(message, "content", "") if message is not None else ""
+            # Chain responses are LangChain messages (have .content directly);
+            # keep the OpenAI .choices path for compatibility.
+            content = getattr(response, "content", "") or ""
+            if not content:
+                choice = (getattr(response, "choices", None) or [None])[0]
+                message = getattr(choice, "message", None) if choice is not None else None
+                content = getattr(message, "content", "") if message is not None else ""
         except Exception:
             content = ""
 

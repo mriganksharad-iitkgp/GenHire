@@ -1,11 +1,14 @@
 """
-LLM Fallback Service — Resilient multi-provider LLM invocation with
-automatic failover on quota exhaustion.
+LLM Fallback Service — the app-wide resilient LLM chain with automatic
+failover on quota exhaustion.
 
-Provider chain (configurable):
-    1. Google Gemini  (GOOGLE_API_KEY)
-    2. OpenAI         (OPENAI_API_KEY)
-    3. Groq           (GROQ_API_KEY)
+Provider ORDER comes from the environment (primary -> secondary -> tertiary):
+    LLM_PROVIDER_PRIORITY=groq,gemini,openai        (single-var form)
+or  LLM_PRIMARY_PROVIDER / LLM_SECONDARY_PROVIDER / LLM_TERTIARY_PROVIDER
+
+Default order: groq, gemini, openai. "gemini" and "google" are aliases.
+Per-provider default models: LLM_GROQ_MODEL, LLM_GEMINI_MODEL,
+LLM_OPENAI_MODEL; call sites can pass task-specific model_overrides.
 
 Detects quota/rate-limit errors and transparently switches to the next
 available provider. Tracks exhausted providers with a cooldown so we
@@ -17,7 +20,7 @@ import time
 import logging
 import re
 from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from threading import Lock
 
 from dotenv import load_dotenv
@@ -69,6 +72,67 @@ def is_quota_error(error: Exception) -> bool:
         if code_val == 8 or code_val == 429:  # RESOURCE_EXHAUSTED
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Provider priority (primary / secondary / tertiary) — shared app-wide
+# ---------------------------------------------------------------------------
+
+_ALIASES = {"gemini": "google", "google": "google", "openai": "openai", "groq": "groq"}
+_DEFAULT_PRIORITY = ["groq", "google", "openai"]
+
+PROVIDER_SPECS = {
+    "google": {"key_env": "GOOGLE_API_KEY", "model_env": "LLM_GEMINI_MODEL",
+               # free-tier friendly default (gemini-2.x-flash has zero quota
+               # on keys without billing; flash-lite-latest works)
+               "default_model": "gemini-flash-lite-latest"},
+    "openai": {"key_env": "OPENAI_API_KEY", "model_env": "LLM_OPENAI_MODEL",
+               "default_model": "gpt-4o-mini"},
+    "groq":   {"key_env": "GROQ_API_KEY", "model_env": "LLM_GROQ_MODEL",
+               "default_model": "llama-3.3-70b-versatile"},
+}
+
+
+def get_provider_priority() -> List[str]:
+    """Canonical provider order from the environment (primary first).
+
+    LLM_PROVIDER_PRIORITY="groq,gemini,openai" wins; otherwise the
+    LLM_PRIMARY/SECONDARY/TERTIARY_PROVIDER triple; otherwise the default.
+    Unknown names are ignored; missing providers are appended so the chain
+    always knows about all three.
+    """
+    raw = os.getenv("LLM_PROVIDER_PRIORITY", "").strip()
+    if raw:
+        names = [part.strip().lower() for part in raw.split(",")]
+    else:
+        names = [
+            (os.getenv("LLM_PRIMARY_PROVIDER") or "").strip().lower(),
+            (os.getenv("LLM_SECONDARY_PROVIDER") or "").strip().lower(),
+            (os.getenv("LLM_TERTIARY_PROVIDER") or "").strip().lower(),
+        ]
+
+    ordered = []
+    for name in names:
+        canonical = _ALIASES.get(name)
+        if canonical and canonical not in ordered:
+            ordered.append(canonical)
+    for name in _DEFAULT_PRIORITY:
+        if name not in ordered:
+            ordered.append(name)
+    return ordered
+
+
+def default_model_for(provider: str) -> str:
+    """Provider's default model: LLM_<P>_MODEL env, else the built-in.
+    Legacy CV envs (CV_SCORING_MODEL / OPENAI_CV_MODEL / GROQ_CV_MODEL) are
+    still honored so existing deployments keep their explicit choices."""
+    spec = PROVIDER_SPECS[provider]
+    legacy = {
+        "google": os.getenv("CV_SCORING_MODEL"),
+        "openai": os.getenv("OPENAI_CV_MODEL"),
+        "groq": os.getenv("GROQ_CV_MODEL"),
+    }[provider]
+    return legacy or os.getenv(spec["model_env"]) or spec["default_model"]
 
 
 # ---------------------------------------------------------------------------
@@ -132,42 +196,18 @@ class LLMFallbackService:
     @staticmethod
     def _build_default_providers() -> List[ProviderConfig]:
         providers = []
-
-        google_key = os.getenv("GOOGLE_API_KEY")
-        if google_key:
+        for name in get_provider_priority():
+            spec = PROVIDER_SPECS[name]
+            api_key = os.getenv(spec["key_env"])
+            if not api_key:
+                continue
             providers.append(ProviderConfig(
-                name="google",
-                provider_type="google",
-                api_key=google_key,
-                # "gemini-flash-latest" is a moving alias — Google has pointed it at
-                # gemini-3.5-flash (preview, 20 requests/day free-tier quota), which
-                # exhausts almost immediately. Pin to a stable, generously-quota'd
-                # model instead; see session_manager._create_fallback_llm for the
-                # same reasoning on the interview side.
-                model=os.getenv("CV_SCORING_MODEL", "gemini-2.5-flash"),
+                name=name,
+                provider_type=name,
+                api_key=api_key,
+                model=default_model_for(name),
                 temperature=0.3,
             ))
-
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
-            providers.append(ProviderConfig(
-                name="openai",
-                provider_type="openai",
-                api_key=openai_key,
-                model=os.getenv("OPENAI_CV_MODEL", "gpt-4o-mini"),
-                temperature=0.3,
-            ))
-
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key:
-            providers.append(ProviderConfig(
-                name="groq",
-                provider_type="groq",
-                api_key=groq_key,
-                model=os.getenv("GROQ_CV_MODEL", "llama-3.3-70b-versatile"),
-                temperature=0.3,
-            ))
-
         return providers
 
     # ------------------------------------------------------------------
@@ -236,13 +276,23 @@ class LLMFallbackService:
     # Core invocation with fallback
     # ------------------------------------------------------------------
 
-    def invoke(self, prompt: str, json_mode: bool = False) -> Dict[str, Any]:
+    def invoke(
+        self,
+        prompt: str,
+        json_mode: bool = False,
+        images: Optional[List[Tuple[bytes, str]]] = None,
+        model_overrides: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         """
         Invoke the prompt against the provider chain.
 
         Args:
             prompt: The input prompt text.
             json_mode: If True, forces JSON output via model kwargs and cleans up markdown.
+            images: Optional list of (bytes, content_type) attached as vision
+                inputs (callers must pass vision-capable model_overrides).
+            model_overrides: Optional {provider_name: model} map for
+                task-specific models (e.g. vision models for face matching).
 
         Returns a dict with keys:
             content       – str, the LLM response text
@@ -255,7 +305,14 @@ class LLMFallbackService:
         errors: List[Tuple[str, Exception]] = []
         primary_name = self._providers[0].name if self._providers else None
 
-        for provider_cfg in self._providers:
+        payload = self._build_payload(prompt, images)
+
+        for base_cfg in self._providers:
+            provider_cfg = base_cfg
+            override = (model_overrides or {}).get(base_cfg.name)
+            if override and override != base_cfg.model:
+                provider_cfg = replace(base_cfg, model=override)
+
             if self._is_on_cooldown(provider_cfg.name):
                 logger.info(f"Skipping provider '{provider_cfg.name}' (on cooldown)")
                 continue
@@ -268,7 +325,7 @@ class LLMFallbackService:
                         if provider_cfg.provider_type in ["openai", "groq"]:
                             llm = llm.bind(response_format={"type": "json_object"})
 
-                    response = llm.invoke(prompt)
+                    response = llm.invoke(payload)
 
                     content = response.content
                     if not isinstance(content, str):
@@ -338,6 +395,30 @@ class LLMFallbackService:
             f"All LLM providers failed. Errors: {error_summary}",
             errors=errors,
         )
+
+    # ------------------------------------------------------------------
+    # Message building (text or multimodal)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_payload(prompt: str, images: Optional[List[Tuple[bytes, str]]]):
+        """Plain string for text prompts; LangChain multimodal message when
+        images are attached (image_url data URLs work across OpenAI/Groq/
+        Gemini chat models)."""
+        if not images:
+            return prompt
+
+        import base64
+        from langchain_core.messages import HumanMessage
+
+        content = [{"type": "text", "text": prompt}]
+        for image_bytes, content_type in images:
+            encoded = base64.b64encode(image_bytes).decode("ascii")
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{content_type or 'image/jpeg'};base64,{encoded}"},
+            })
+        return [HumanMessage(content=content)]
 
     # ------------------------------------------------------------------
     # Usage extraction

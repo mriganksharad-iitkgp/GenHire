@@ -79,40 +79,59 @@ class InterviewSessionManager:
     @staticmethod
     def _create_fallback_llm(primary_config: LLMConfig):
         """
-        Create an LLM with fallback providers from available .env keys.
-
-        Priority: primary_config provider first, then other available providers.
+        Create an LLM whose provider ORDER follows the app-wide priority
+        (LLM_PROVIDER_PRIORITY, default groq -> gemini -> openai — see
+        services/llm_fallback_service.py). primary_config supplies the
+        generation settings (temperature/max_tokens/timeout); INTERVIEW_LLM_MODEL
+        pins the first provider's model when it belongs to that provider.
         """
         import os
         from ..config.settings import LLMProvider
+        from services.llm_fallback_service import (
+            PROVIDER_SPECS,
+            default_model_for,
+            get_provider_priority,
+        )
 
-        configs = [primary_config]
-        seen_providers = {primary_config.provider}
+        chain_to_enum = {
+            "groq": LLMProvider.GROQ,
+            "google": LLMProvider.GEMINI,
+            "openai": LLMProvider.OPENAI,
+        }
 
-        # Map of provider -> (env_key, default_model)
-        fallback_options = [
-            (LLMProvider.OPENAI, "OPENAI_API_KEY", "gpt-4o-mini"),
-            # "models/gemini-1.5-flash" was retired by Google — confirmed via
-            # genai.list_models() that it's no longer in this key's catalog,
-            # which is why the Gemini fallback was silently 404'ing.
-            (LLMProvider.GEMINI, "GOOGLE_API_KEY", "models/gemini-2.5-flash"),
-            (LLMProvider.GROQ, "GROQ_API_KEY", "llama-3.3-70b-versatile"),
-        ]
+        def model_belongs_to(model_name: str, provider: str) -> bool:
+            name = (model_name or "").lower()
+            if provider == "openai":
+                return name.startswith(("gpt", "o1", "o3", "o4"))
+            if provider == "google":
+                return "gemini" in name or "gemma" in name
+            if provider == "groq":
+                return any(tag in name for tag in ("llama", "mixtral", "qwen", "deepseek", "kimi"))
+            return False
 
-        for provider, env_key, default_model in fallback_options:
-            if provider in seen_providers:
+        interview_model = os.getenv("INTERVIEW_LLM_MODEL", "").strip()
+
+        configs = []
+        for index, provider in enumerate(get_provider_priority()):
+            api_key = os.getenv(PROVIDER_SPECS[provider]["key_env"])
+            if not api_key:
                 continue
-            api_key = os.getenv(env_key)
-            if api_key:
-                configs.append(LLMConfig(
-                    provider=provider,
-                    model_name=default_model,
-                    api_key=api_key,
-                    temperature=primary_config.temperature,
-                    max_tokens=primary_config.max_tokens,
-                    timeout_seconds=primary_config.timeout_seconds,
-                ))
-                seen_providers.add(provider)
+            model_name = default_model_for(provider)
+            # Honor the legacy per-interview model pin only on the provider it
+            # actually belongs to (a gpt-* pin must not be sent to Groq).
+            if interview_model and model_belongs_to(interview_model, provider):
+                model_name = interview_model
+            configs.append(LLMConfig(
+                provider=chain_to_enum[provider],
+                model_name=model_name,
+                api_key=api_key,
+                temperature=primary_config.temperature,
+                max_tokens=primary_config.max_tokens,
+                timeout_seconds=primary_config.timeout_seconds,
+            ))
+
+        if not configs:
+            configs = [primary_config]
 
         return LLMFactory.create_with_fallback(configs)
 
