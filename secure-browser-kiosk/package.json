@@ -19,6 +19,13 @@
     "appId": "com.genhire.securebrowser",
     "productName": "Genhire",
     "artifactName": "Genhire.${ext}",
+    "files": [
+      "**/*",
+      "!credentials.json",
+      "!dist/**",
+      "!*.log",
+      "!.gitignore"
+    ],
     "protocols": {
       "name": "Genhire Secure Interview URL",
       "schemes": [
