@@ -6,6 +6,7 @@ import SkeletonCard from "shared/components/ui/SkeletonCard";
 import JobEditModal from "features/recruiter/components/JobEditModal";
 import JobDetailsModal from "features/recruiter/components/JobDetailsModal";
 import JobCreationModal from "features/recruiter/components/JobCreationModal";
+import { downloadScreeningClearedExport, saveBlob } from "features/recruiter/api/jobExportApi";
 import CVViewer from "features/candidate/components/CVViewer";
 import InterviewReportModal from "features/interview/components/InterviewReportModal";
 import ProctoringResultModal from "features/interview/components/ProctoringResultModal";
@@ -509,6 +510,18 @@ const RecruiterDashboard = () => {
   };
 
   // Function to handle job actions
+  const handleExportCleared = async (job) => {
+    const jobId = job._id || job.id;
+    try {
+      showToast("Preparing screening-cleared export…", "info");
+      const blob = await downloadScreeningClearedExport(jobId, "xlsx");
+      const stem = (job.title || "job").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_");
+      saveBlob(blob, `screening_cleared_${stem}.xlsx`);
+    } catch (err) {
+      showToast(err.message || "Failed to export screening-cleared candidates", "error");
+    }
+  };
+
   const handleViewJobDetails = (job) => {
     setSelectedJob(job);
     setIsJobDetailsModalOpen(true);
@@ -862,6 +875,7 @@ const RecruiterDashboard = () => {
                 getCandidatesForJob={getCandidatesForJob}
                 onViewDetails={handleViewJobDetails}
                 onViewCandidates={handleViewJobCandidates}
+                onExportCleared={handleExportCleared}
                 onEdit={
                   isVerified
                     ? handleEditJob

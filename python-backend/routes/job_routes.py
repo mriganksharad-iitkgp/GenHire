@@ -3,7 +3,7 @@ from flask_cors import cross_origin
 import datetime
 import json
 from controllers.job_controller import JobController
-from middleware.auth_middleware import token_required, verified_required
+from middleware.auth_middleware import token_required, recruiter_required, verified_required
 from config.database import db_config
 
 job_bp = Blueprint('jobs', __name__, url_prefix='/api')
@@ -185,3 +185,46 @@ def test_jobs():
     for job in jobs:
         job['_id'] = str(job['_id'])
     return jsonify({'jobs': jobs, 'count': len(jobs)}), 200
+
+
+@job_bp.route('/jobs/<job_id>/screening-cleared/export', methods=['GET'])
+@cross_origin()
+@token_required
+@recruiter_required
+@verified_required
+def export_screening_cleared(current_user, job_id):
+    """One-click download of the job's screening-cleared candidates
+    (?format=xlsx default, or csv). Only the job's owner can export."""
+    from bson import ObjectId
+    from flask import Response
+    from services import screening_export_service
+
+    try:
+        job = collections['jobs'].find_one({'_id': ObjectId(job_id)})
+    except Exception:
+        return jsonify({'error': 'Invalid job id'}), 400
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    if str(job.get('created_by')) != str(current_user['_id']):
+        return jsonify({'error': 'You can only export candidates for your own jobs'}), 403
+
+    rows = screening_export_service.fetch_cleared_rows(collections['applications'], job_id)
+
+    export_format = (request.args.get('format') or 'xlsx').strip().lower()
+    if export_format == 'csv':
+        payload = screening_export_service.build_csv(rows)
+        mimetype = 'text/csv; charset=utf-8'
+        filename = screening_export_service.safe_filename(job.get('title'), 'csv')
+    else:
+        payload = screening_export_service.build_xlsx(rows, job.get('title'))
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        filename = screening_export_service.safe_filename(job.get('title'), 'xlsx')
+
+    return Response(
+        payload,
+        mimetype=mimetype,
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'X-Row-Count': str(len(rows)),
+        },
+    )

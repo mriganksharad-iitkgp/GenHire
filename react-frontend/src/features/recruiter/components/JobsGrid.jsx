@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styles from 'features/recruiter/pages/RecruiterDashboard.module.css';
 import Pagination from 'shared/components/ui/Pagination';
 
-const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit, onInviteCandidates }) => {
+const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, onViewDetails, onViewCandidates, onEdit, onInviteCandidates, onExportCleared }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9; // 3x3 grid
   
@@ -67,6 +67,15 @@ const JobsGrid = ({ jobs, getStatusColor, displayStatus, getCandidatesForJob, on
           {onInviteCandidates && (
             <button className={styles.secondaryButton} onClick={() => onInviteCandidates(job)}>
               <i className="fa fa-paper-plane"></i> Invite Candidates
+            </button>
+          )}
+          {onExportCleared && (
+            <button
+              className={styles.secondaryButton}
+              onClick={() => onExportCleared(job)}
+              title="Download the screening-cleared candidates of this job as an Excel sheet"
+            >
+              <i className="fa fa-download"></i> Export Cleared
             </button>
           )}
         </div>

@@ -666,6 +666,13 @@
       "endpoint": "jobs.get_jd_download_url"
     },
     {
+      "rule": "/api/jobs/<job_id>/screening-cleared/export",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.export_screening_cleared"
+    },
+    {
       "rule": "/api/jobs/<job_id>/withdraw",
       "methods": [
         "DELETE"
