@@ -116,10 +116,14 @@ All balance changes go through `wallet_service.py`:
 
 ## Frontend integration
 
-- `react-frontend/src/services/payment/paymentApi.js` — all `/api/payment/*` calls
+- `react-frontend/src/features/payment/api/paymentApi.js` — all `/api/payment/*` calls
   (`getPlans`, `initiatePayment`, `verifyPayment`, `getCurrentSubscription`,
   `getCreditTransactions`, …).
-- `hooks/useRazorpay.js` — loads the Razorpay checkout script and opens the modal.
+- `features/payment/hooks/useRazorpay.js` — loads the Razorpay checkout script and opens the modal.
+
+Plan prices and credit amounts are env-editable
+(`PLAN_<NAME>_PRICE_PAISE` / `PLAN_<NAME>_CREDITS`) and sync into MongoDB on
+every boot.
 - Pages: `/subscription` (recruiter packs), `/candidate/subscription`
   (candidate packs), `/payment/success`, `/payment/cancel`.
 - Credit balances/transactions also surface in the recruiter/candidate

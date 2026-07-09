@@ -11,9 +11,9 @@ their own further hiring rounds.
 
 | Folder | What it is | Stack |
 |---|---|---|
-| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask, Flask-SocketIO, MongoDB (PyMongo), Groq LLM, Google Cloud Speech, Razorpay, Mailgun |
-| [`react-frontend/`](react-frontend/) | The website used by candidates, recruiters, and admins | React 19 (CRA), react-router v7, socket.io-client, CSS Modules |
-| [`secure-browser-kiosk/`](secure-browser-kiosk/) | The **Genhire** desktop app that runs interviews in fullscreen kiosk lockdown | Electron, Google Cloud TTS/STT, electron-builder |
+| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (Groq→Gemini→OpenAI, env-ordered), Google Cloud Speech, Razorpay, Mailgun |
+| [`react-frontend/`](react-frontend/) | The website used by candidates, recruiters, and admins | React 19 (CRA), feature-folder layout (`app/ features/ shared/`), react-router v7, socket.io-client, CSS Modules |
+| [`secure-browser-kiosk/`](secure-browser-kiosk/) | The **Genhire** desktop app that runs interviews in fullscreen kiosk lockdown | Electron, backend-proxied speech (no bundled credentials), electron-builder |
 | [`docs/`](docs/) | **Full documentation** — architecture, per-component overviews and deep dives, API reference, data flows, onboarding | Markdown |
 
 ## How it fits together (30 seconds)
@@ -30,8 +30,9 @@ Electron secure browser ──REST + Socket.IO┘   (runs the actual interview)
    automatically against the job description.
 2. Shortlisted candidates click "Start Interview" — the website deep-links
    into the installed secure browser, which verifies the candidate's face
-   against the identity registered on their very first interview (blocking
-   impersonators), locks the screen, and runs a spoken AI interview while
+   against the **identity card uploaded once on their profile** (a vision LLM
+   scores the match; mismatches block the interview and auto-refund credits),
+   locks the screen, and runs a spoken AI interview while
    streaming proctoring signals (face identity, head pose, gaze tracking,
    tab-switch detection, optional phone camera). Interviews pace themselves:
    30 seconds of silence after a question auto-advances; a 10-second pause
@@ -78,5 +79,7 @@ npm install && npm start              # npm run dist → Windows installer
 | How is the frontend organized? | [docs/frontend/frontend-detailed.md](docs/frontend/frontend-detailed.md) |
 | How does the kiosk lockdown work? | [docs/secure-browser/secure-browser-detailed.md](docs/secure-browser/secure-browser-detailed.md) |
 | What happens end-to-end when a candidate applies/interviews? | [docs/data-flows.md](docs/data-flows.md) |
+| What does running this cost at 100/1k/10k users? | [cost.md](cost.md) |
+| How production-ready are we, honestly? | [docs/production-readiness.md](docs/production-readiness.md) |
 
 Start with the [docs index](docs/README.md).

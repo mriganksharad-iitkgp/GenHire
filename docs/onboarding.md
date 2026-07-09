@@ -130,17 +130,17 @@ links manually.
 | An API endpoint | `python-backend/routes/` → its controller in `controllers/` |
 | Interview questions/evaluation | `python-backend/interview/`, `evaluation_model/rubrics_eval/` |
 | Proctoring | `python-backend/security_check.py`, `utils/gaze_recorder_service.py`, Socket.IO handlers in `app.py` |
-| Face identity verification | `python-backend/services/face_verification_service.py` (+ `register_face` in `app.py`) |
+| Face identity verification | `python-backend/services/face_match_service.py` (LLM ID-card match) + `identity_card_service.py` (+ `register_face` in `routes/interview_routes.py`) |
 | Interview credit refunds / abandon sweeper | `python-backend/services/interview_credit_service.py` |
 | Credits/payments | `python-backend/payment_module/` |
 | Emails | `python-backend/services/email_service.py`, `invite_email_templates.py` |
-| A screen in the website | `react-frontend/src/pages/` (+ `components/`) |
-| A frontend API call | `react-frontend/src/services/` |
+| A screen in the website | `react-frontend/src/features/<domain>/pages/` (+ that feature's `components/`) |
+| A frontend API call | `react-frontend/src/shared/api/client.js` + the feature's `api/` folder |
 | Kiosk behavior | `secure-browser-kiosk/main.js` (system) / `renderer.js` (interview UI) |
 
 ## Gotchas
 
-- **Two interview UIs exist**: `react-frontend/src/pages/Chat.jsx` (browser)
+- **Two interview UIs exist**: `react-frontend/src/features/interview/pages/Chat.jsx` (browser)
   and `secure-browser-kiosk/renderer.js` (kiosk). Interview-flow changes
   usually need to be mirrored in both.
 - **Real interviews charge the recruiter's wallet** at `/api/interviews/start`.

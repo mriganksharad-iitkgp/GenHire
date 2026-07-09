@@ -9,7 +9,7 @@ the reorganization — same pages, same redirects, same data.
 
 ## 1. Auth & session
 - Login as candidate, recruiter, and admin; each lands on its home
-  (`/dashboard`, `/recruiter-dashboard`, `/admin`).
+  (`/dashboard`, `/recruiter/dashboard`, `/admin`).
 - Visiting a wrong-role URL redirects correctly (e.g. candidate → `/admin`
   bounces to candidate home; logged-out user → `/login`).
 - Logout clears the session; expired session redirects to `/login?expired=1`.
@@ -30,9 +30,10 @@ the reorganization — same pages, same redirects, same data.
 - Mobile camera pairing: QR at `/mobile-cam/:sessionId` connects and streams.
 
 ## 5. Recruiter
-- `/recruiter-dashboard` tabs all render (overview, jobs, candidates, activity).
+- `/recruiter/dashboard` tabs all render (overview, jobs, candidates, activity).
 - Job creation modal opens and validates; job edit modal saves.
 - Invite-candidates modal opens; application view + interview report modal render.
+- "Export Cleared" on a job card downloads the screening-cleared XLSX.
 
 ## 6. Admin portal
 - `/admin` overview stats load.

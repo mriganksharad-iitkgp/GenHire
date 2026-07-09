@@ -14,21 +14,23 @@ refresh themselves.
   with multi-CV management (`/profile`), job application pages, practice
   interviews (`/practice`), their application/interview reports, and a
   credit recharge page.
-- **Recruiters** — `/recruiter-dashboard` for posting jobs (with an
+- **Recruiters** — `/recruiter/dashboard` for posting jobs (with an
   "AI generate" option), reviewing applicants with CV scores, opening
   interview reports (transcript, scores, gaze heatmap, candidate identity
-  photo), marking candidates **Screening Cleared** / **Not Cleared**,
+  photo), marking candidates **Screening Cleared** / **Not Cleared** (and
+  exporting the cleared list per job as XLSX/CSV in one click),
   bulk-inviting candidates, plus cost statistics and credit packs.
 - **Admins** — an admin portal under `/admin/*` for verifying recruiters,
   managing users/jobs/applications, and platform-wide cost statistics.
 
 ## How it's wired (the short version)
 
-- **One API layer** — all HTTP calls live in `src/services/` (`api.js`,
-  `adminApi.js`, `inviteApi.js`, `cvService.js`, `payment/paymentApi.js`).
-  Components never call `fetch` with hand-built URLs (the interview page
-  `Chat.jsx` is the one big exception — it talks to the interview endpoints
-  directly).
+- **One HTTP core** — `src/shared/api/client.js` owns `request()` (base URL,
+  bearer token, 401 handling); each feature keeps its endpoint functions in
+  its own `api/` folder (`features/admin/api/adminApi.js`,
+  `features/payment/api/paymentApi.js`, `features/candidate/api/…`, etc.).
+  The interview page `Chat.jsx` still calls its endpoints directly (through
+  the shared base URL) pending its planned decomposition.
 - **Auth** — the backend's JWT is stored per-tab and attached as a
   `Bearer` header to every call. Any 401 logs the user out globally and
   redirects to `/login?expired=1`. Login works with email+password, Google,
@@ -42,17 +44,27 @@ refresh themselves.
   the browser tab; it deep-links into the installed **GenHire Secure
   Browser** desktop app via a `secure-interview://` URL.
 
-## Shape of the code
+## Shape of the code (feature-based since the 2026-07 reorganization)
 
 ```
 react-frontend/src/
-├── App.jsx        # all routes (lazy-loaded pages)
-├── pages/         # one file per screen (+ admin/, candidate/, recruiter/)
-├── components/    # shared UI + candidate/, recruiter/, admin/, common/...
-├── services/      # the API layer + Socket.IO singleton
-├── hooks/         # useAuth, useJobs, useApplications, useRazorpay, ...
-├── contexts/      # CandidateDataContext (app-wide cached data)
-└── utils/         # sessionManager (token storage), helpers
+├── App.jsx            # providers + router only (~18 lines)
+├── app/               # routes.jsx (all lazy routes + ProtectedRoute guards),
+│                      # providers.jsx, NotFound
+├── features/          # one folder per domain, each with pages/ components/
+│   ├── auth/          #   hooks/ api/ as needed
+│   ├── candidate/     # dashboard, profile (incl. identity-card upload), practice
+│   ├── recruiter/     # recruiter dashboard, team, exports, invites
+│   ├── admin/         # admin portal pages + panels
+│   ├── interview/     # Chat (interview engine), lobby, mobile recorder
+│   ├── payment/       # plans, checkout, subscription components
+│   └── landing/
+└── shared/            # cross-feature building blocks
+    ├── api/           # client.js (the one request()), endpoints.js, socket.js
+    ├── components/    # ui/ (Modal, ConfirmDialog, Toast…), layout/, lists/, account/
+    ├── hooks/         # useAuth, useDebounce
+    ├── utils/         # session.js (token storage), format.js, helpers
+    └── constants/
 ```
 
 ## How to run it

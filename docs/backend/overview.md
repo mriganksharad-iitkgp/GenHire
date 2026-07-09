@@ -21,7 +21,7 @@ emails, and manages the credit/payment system.
   every CV against the job and shortlists or rejects the application
   (or holds it as `pending` for manual review when CV-parsing confidence is
   low), emailing the candidate either way.
-- **AI interviews** — an LLM interviewer ("Alex", powered by Groq) asks
+- **AI interviews** — an LLM interviewer ("Alex") asks
   adaptive questions based on the candidate's CV and the job description,
   evaluates every answer, and produces a final report with an interview
   score (70% answer quality + 30% communication quality). Interviews pace
@@ -29,11 +29,18 @@ emails, and manages the credit/payment system.
   pause after the candidate speaks submits the answer. The recruiter's final
   call is **Screening Cleared** or **Screening Not Cleared** — the platform
   screens, it doesn't hire.
-- **Face identity verification** — the candidate's face is enrolled
-  permanently at their first real interview; every later real interview
-  (any company) must match it or is blocked, and the captured photo is
-  shared with the recruiter. Impersonation ("proxy interviewing") is the
-  #1 fraud vector this kills.
+- **Face identity verification** — candidates upload a government/institutional
+  **identity card once** (locked afterwards; only admins can replace it). At
+  every real interview the webcam capture is matched against the ID-card
+  photo by a vision LLM (0–100 similarity, `FACE_MATCH_THRESHOLD`); a
+  mismatch blocks the interview (`identity_blocked`, credits auto-refunded)
+  and the captured photo is shared with the recruiter. Impersonation
+  ("proxy interviewing") is the #1 fraud vector this kills.
+- **One LLM provider chain** — every LLM task (interview questions,
+  evaluation, CV parse/score, face match, JD generation) goes through a
+  single failover chain ordered by `LLM_PROVIDER_PRIORITY`
+  (default `groq,gemini,openai`) with per-provider cooldowns on quota
+  errors — swap providers by editing env, no code changes.
 - **Proctoring** — while the interview runs, the backend analyzes webcam
   frames (face identity + head pose), gaze-tracking data, tab switches, and
   an optional phone camera, producing a proctoring score for the recruiter.
@@ -50,20 +57,31 @@ emails, and manages the credit/payment system.
 - **Emails** — verification, invites, application status changes, interview
   results (via Mailgun).
 
-## Shape of the code
+## Shape of the code (layered since the 2026-07 reorganization)
 
 ```
 python-backend/
-├── app.py            # entry point — Flask app + interview & proctoring routes
-├── routes/           # URL definitions (thin), one file per feature
-├── controllers/      # the actual business logic behind each route
-├── services/         # shared workers: CV scoring, emails, invites, storage...
+├── app.py            # 24-line entry shim (gunicorn app:app / python app.py)
+├── core/             # composition root: factory.py (create_app), bootstrap,
+│                     # extensions (socketio), config, security (JWT secret)
+├── routes/           # URL definitions (thin blueprints), one file per feature
+│                     # incl. interview_routes, identity_routes, system, cost
+├── sockets/          # Socket.IO handlers (proctoring stream, mobile camera)
+├── controllers/      # business logic behind each route (admin/ is a package
+│                     # of domain mixins: users, recruiters, jobs, cost stats…)
+├── services/         # shared workers: llm_fallback_service (THE LLM chain),
+│                     # face_match, identity_card, CV scoring, emails, exports…
+├── repositories/     # MongoDB data access (user/job/application/interview)
+├── schemas/          # Pydantic request schemas (auth exemplar)
+├── jobs/             # background worker lifecycle (CV scoring queue,
+│                     # invite cleanup, credit-refund sweeper)
 ├── middleware/       # JWT auth decorators, validation, rate limiting
 ├── models/           # MongoDB document helpers (no ORM — plain PyMongo)
 ├── config/           # database connection + .env loading
-├── interview/        # the AI interview engine
+├── interview/        # the AI interview engine (+ runtime.py shared state)
 ├── evaluation_model/ # answer & communication evaluators (rubrics)
 ├── payment_module/   # self-contained Razorpay + wallet package
+├── scripts/          # route_manifest safety harness + migrations/admin/smoke
 └── uploads/          # recordings, proctoring artifacts, temp files
 ```
 

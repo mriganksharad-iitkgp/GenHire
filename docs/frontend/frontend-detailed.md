@@ -36,37 +36,46 @@ window event (fired by the API layer on any 401) and redirects to
 | `/login`, `/register`, `/recruiter-signup` | `Login`, `Register`, `RecruiterOnboarding` | public |
 | `/verify-email`, `/forgot-password`, `/reset-password` | email/password flows | public |
 | `/invite/redeem` | `InviteRedeem` — redeem a recruiter invite token | public |
-| `/dashboard` | `Dashboard` (candidate job board + applications) | candidate — inside shared `Layout` |
-| `/profile`, `/practice`, `/job/:jobId`, `/application/:applicationId`, `/team` | candidate pages inside `Layout` | candidate |
-| `/interview/:interviewId` | `Interview` (wrapper around `Chat`) | candidate |
-| `/mobile-cam/:sessionId` | `MobileRecorder` — phone second-camera page (paired via QR code) | candidate's phone |
-| `/recruiter-dashboard` | `RecruiterDashboard` | recruiter |
+| `/dashboard` | `Dashboard` (candidate job board + applications) | authenticated — inside shared `Layout` (`ProtectedRoute allow="any"`) |
+| `/profile`, `/practice`, `/jobs/:jobId`, `/applications/:applicationId`, `/team` | candidate pages inside `Layout` | authenticated |
+| `/interviews/:interviewId` | `Interview` (identity-card gate + wrapper around `Chat`) | candidate |
+| `/mobile-camera/:sessionId` | `MobileRecorder` — phone second-camera page (paired via QR code; hidden when `MOBILE_RECORDING_ENABLED=false`) | candidate's phone |
+| `/recruiter/dashboard` | `RecruiterDashboard` | recruiter (`ProtectedRoute allow="recruiter"`) |
 | `/recruiter/cost-statistics`, `/recruiter/team` | recruiter pages | recruiter |
-| `/subscription`, `/candidate/subscription` | recharge-pack purchase pages | recruiter / candidate |
+| `/recruiter/subscription`, `/candidate/subscription` | recharge-pack purchase pages | recruiter / candidate |
 | `/payment/success`, `/payment/cancel` | post-Razorpay redirect pages | any |
 | `/candidate/cost-statistics` | candidate usage dashboard | candidate |
-| `/admin`, `/admin/overview`, `/admin/candidates(/:id)`, `/admin/recruiters(/:id)`, `/admin/admins`, `/admin/verification`, `/admin/cost-statistics` | admin portal (`pages/admin/*` with `AdminLayout`) | admin |
-| `/admin/old` | legacy `AdminDashboard` | admin |
+| `/admin`, `/admin/overview`, `/admin/candidates(/:id)`, `/admin/recruiters(/:id)`, `/admin/admins`, `/admin/verification`, `/admin/cost-statistics` | admin portal (`features/admin/pages/*` with `AdminLayout`) | admin (`ProtectedRoute allow="admin"`) |
 | `/404`, `*` | `NotFound` | — |
 
-## API layer (`src/services/`)
+Legacy paths (`/recruiter-dashboard`, `/subscription`, `/job/:id`,
+`/application/:id`, `/interview/:id`, `/mobile-cam/:id`) permanently redirect
+to their renamed successors with params and query preserved.
 
-All backend communication is centralized here — components never build URLs
-themselves.
+## API layer (`shared/api/` + per-feature `api/` folders)
+
+All backend communication runs through one HTTP core — components never build
+URLs themselves.
 
 | File | Covers |
 |---|---|
-| `api.js` | Core `request()`/`requestBlob()` helpers + profile, CV details, uploads, jobs (CRUD + `generateJobWithAI`), applications (list, status, interview report, CV view), `startInterview`. The helpers attach the JWT, set JSON headers only for non-FormData bodies, and turn 401s into the global session-expired event. |
-| `adminApi.js` | Every `/api/admin/*` endpoint (users, verification, jobs, applications, CVs, system stats, cost statistics + credit summaries). |
-| `inviteApi.js` | `previewInvites` (multipart: file/text/single), `sendInvites`, `getInviteBatchStatus`, `lookupInvite`, `redeemInvite`. |
-| `cvService.js` | Multi-CV management calls (`/api/cv/*`). |
-| `payment/paymentApi.js` | All `/api/payment/*` calls. |
-| `socket.js` | Singleton Socket.IO connection: `getAppSocket()` / `connectAppSocket()` (auth callback supplies the current JWT) / `disconnectAppSocket()` (on logout). |
+| `shared/api/client.js` | THE `request()`/`requestBlob()`/`authedFetch()` core: base URL resolution, JWT header, JSON headers only for non-FormData bodies, 401 → global session-expired event (opt-out for payment/invite flows). |
+| `shared/api/endpoints.js` | Cross-role endpoints: profile, CV details, uploads, jobs (CRUD + `generateJobWithAI`), applications (list, status, interview report, CV view), `startInterview`. |
+| `shared/api/socket.js` | Singleton Socket.IO connection: `getAppSocket()` / `connectAppSocket()` (auth callback supplies the current JWT) / `disconnectAppSocket()` (on logout). |
+| `features/admin/api/adminApi.js` | Every `/api/admin/*` endpoint incl. identity-card review and cost statistics. |
+| `features/recruiter/api/inviteApi.js` | `previewInvites` (multipart: file/text/single), `sendInvites`, `getInviteBatchStatus`, `lookupInvite`, `redeemInvite`. |
+| `features/recruiter/api/jobExportApi.js` | One-click screening-cleared XLSX/CSV export per job. |
+| `features/candidate/api/cvService.js` | Multi-CV management calls (`/api/cv/*`). |
+| `features/candidate/api/identityCardApi.js` | One-time identity-card upload/status/preview. |
+| `features/auth/api/authApi.js` | Login/register/OAuth/verify/reset (raw-Response contract — these flows branch on status codes). |
+| `features/payment/api/paymentApi.js` | All `/api/payment/*` calls. |
 
-## Session & auth (`src/utils/sessionManager.js`, `hooks/useAuth.js`)
+## Session & auth (`shared/utils/session.js`, `shared/hooks/useAuth.js`, `app/ProtectedRoute.jsx`)
 
 The JWT and user object live in tab-scoped storage managed by
-`sessionManager` (`getToken`, `clearSession`, …). `useAuth` exposes login
+`shared/utils/session` (`getToken`, `clearSession`, …). Routes are guarded
+declaratively by `ProtectedRoute` (`allow="any" | "recruiter" | "admin"`);
+`useAuth` exposes login
 state to components. Login options: email+password, Google OAuth (custom
 button using the `useGoogleLogin` popup flow — chosen over the iframe
 `GoogleLogin` button to bypass cross-origin popup blocking), or Invite ID
@@ -88,12 +97,12 @@ until an admin approves them (`verified_required` on the backend).
 
 | Hook / context | Role |
 |---|---|
-| `contexts/CandidateDataContext.jsx` | App-wide provider caching candidate data (profile, applications) across pages. |
-| `hooks/useApplications.js` | Fetch + manage application lists. |
-| `hooks/useJobs.js` | Job list fetching/filtering. |
-| `hooks/useRazorpay.js` | Loads the Razorpay checkout script and opens the payment modal. |
-| `hooks/useDebounce.js` | Debounced search inputs. |
-| `hooks/candidate/` | Candidate-specific data hooks. |
+| `features/candidate/context/CandidateDataContext.jsx` | App-wide provider caching candidate data (profile, applications) across pages. |
+| `features/candidate/hooks/useApplications.js` | Fetch + manage application lists. |
+| `features/candidate/hooks/useJobs.js` | Job list fetching/filtering. |
+| `features/payment/hooks/useRazorpay.js` | Loads the Razorpay checkout script and opens the payment modal. |
+| `shared/hooks/useDebounce.js` | Debounced search inputs. |
+| `features/candidate/hooks/` | Candidate-specific data hooks (profile, applications). |
 
 ## The interview UI (`pages/Chat.jsx`, ~2,400 lines)
 
@@ -103,13 +112,13 @@ Electron kiosk's own `renderer.js`). Responsibilities:
 1. Starts the session — `POST /api/interviews/start` (or is handed one), and
    for practice mode targets `/api/practice/*` instead. Reads
    `max_questions` / `question_deadline` for progress display and pacing.
-2. Runs the **identity gate** — captures a selfie →
-   `POST /api/interviews/<id>/register-face`, and handles the outcomes:
-   quality problems become "retake photo" toasts, `face_mismatch` shows
-   attempts remaining, `face_mismatch_blocked` parks the candidate on a
-   dedicated "Identity Verification Failed" screen (interview over).
-   A transparency note tells first-time candidates their photo becomes the
-   account's registered identity.
+2. Runs the **identity gate** — the lobby (`Interview.jsx`) first requires an
+   identity card on the profile; then the capture goes to
+   `POST /api/interviews/<id>/register-face`, where a vision LLM scores it
+   against the ID-card photo. Outcomes: quality problems become "retake
+   photo" toasts, `face_mismatch` shows attempts remaining,
+   `face_mismatch_blocked` and `identity_card_required` park the candidate on
+   a dedicated blocked screen (interview over / upload card first).
 3. Opens a Socket.IO connection and streams webcam frames
    (`proctoring_frame`) once per second; listens for `proctoring_alert`.
 4. Plays questions aloud via `POST /api/speech/synthesize` (Google TTS,
@@ -132,30 +141,35 @@ Electron kiosk's own `renderer.js`). Responsibilities:
    `interview_discarded` — no answers were given, credits were refunded,
    and the interview can be retaken.
 
-## Component organization (`src/components/`)
+## Component organization (`shared/components/` + per-feature `components/`)
 
-- **Root-level shared** — `Layout` (navbar + outlet shell), `Navbar`, `Avatar`,
-  `Toast`, `Pagination`, `SkeletonCard`, `ErrorBoundary`, modals
-  (`JobCreationModal` — AI generation from a prompt, an uploaded JD file, or
-  both, with no separate manual-upload step; `JobEditModal`, `JobDetailsModal`,
-  `JDDetailsModal`, `InterviewReportModal`, `ProctoringResultModal`,
-  `PracticeDetailsModal`, `CVSelectionModal` — CV picker reused for applying,
-  practice, and the "Check CV Match Score" flow via `mode`, `CVViewer`,
-  `GazeHeatmapPanel`).
-- **`candidate/`** — CV management (`CVManagement`, `CVList`, `CVSelector`,
-  `CVDetailsForm/Modal`), `ApplicationsList`, `BioForm`, `SidebarProfile`,
-  `subscription/`.
-- **`recruiter/`** — `CandidateCard`, `CandidatesFilters`,
+- **`shared/components/ui/`** — the primitives: `Modal` (the one modal shell
+  every dialog builds on), `ConfirmDialog`, `Toast`, `Pagination`,
+  `SkeletonCard`, `Loading`, `EmptyState`, `ErrorBoundary`.
+- **`shared/components/layout/`** — `Layout` (navbar + outlet shell),
+  `Navbar`, `Avatar`. **`shared/components/lists/`** — application/practice
+  history lists shared by candidate and admin. **`shared/components/account/`**
+  — `DeleteAccountModal`.
+- **`features/recruiter/components/`** — `CandidateCard`, `CandidatesFilters`,
   `InviteCandidatesModal` (bulk invite: paste text / upload CSV/XLSX →
-  preview → send → batch status).
-- **`admin/`** — `AdminLayout`, `UserTable`, detail/confirm modals.
-- **`common/`** — `ConfirmDialog`, `DeleteAccountModal`, `EmptyState`,
-  `Loading`.
-- **`interview/`** — interview sub-components (`InterviewHeader` with the
-  phase-aware timing indicator, …).
-- **`payment/`** — payment UI pieces.
+  preview → send → batch status), `JobCreationModal` (AI generation from a
+  prompt, an uploaded JD file, or both), `JobEditModal`, `JobDetailsModal`,
+  `JDDetailsModal`, jobs grid with the per-job **Export Cleared** button.
+- **`features/candidate/components/`** — CV management (`CVManagement`,
+  `CVList`, `CVSelector`, `CVDetailsForm/Modal`, `CVSelectionModal` — reused
+  for applying, practice, and "Check CV Match Score" via `mode`, `CVViewer`),
+  `ApplicationsList`, `BioForm`, `SidebarProfile`, `IdentityCardUpload`
+  (one-time, locked after upload).
+- **`features/admin/components/`** — `AdminLayout`, `UserTable`,
+  `IdentityCardPanel` (view/replace/reset a candidate's card),
+  detail/confirm modals.
+- **`features/interview/components/`** — `InterviewHeader` (phase-aware
+  timing indicator), `InterviewReportModal`, `ProctoringResultModal`,
+  `PracticeDetailsModal`, `GazeHeatmapPanel`, checklist/loading screens.
+- **`features/payment/components/`** — plan cards, payment history, both
+  role subscription trees.
 
-Application statuses render through `src/utils/applicationStatus.js` —
+Application statuses render through `shared/utils/applicationStatus.js` —
 `normalizeStatus()` folds the legacy `"selected"` value into
 `"screening_cleared"`, and the label maps display it as **"Screening
 Cleared"** (with `"rejected"` shown as **"Screening Not Cleared"** and, on
@@ -167,8 +181,8 @@ recordings. Icons are `lucide-react`.
 
 ## Launching the secure browser
 
-`pages/Profile.jsx` (real interviews) and `pages/Practice.jsx` (practice)
-build a deep link:
+`features/candidate/pages/Profile.jsx` (real interviews) and
+`features/candidate/pages/Practice.jsx` (practice) build a deep link:
 
 ```js
 const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;

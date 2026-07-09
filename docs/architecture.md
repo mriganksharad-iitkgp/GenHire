@@ -44,8 +44,8 @@ GenHire is an AI-powered hiring platform made of **three applications** that tal
 
 ### 1. Frontend → Backend (REST)
 Every page in the React app calls the Flask API over HTTP. All calls go
-through a small set of centralized service files
-(`react-frontend/src/services/`) that:
+through one HTTP core (`react-frontend/src/shared/api/client.js`) used by
+each feature's `api/` module; the client:
 - prefix requests with `REACT_APP_API_BASE` (or `REACT_APP_API_URL` + `/api`),
 - attach the JWT as `Authorization: Bearer <token>`,
 - on a `401` response, clear the session and fire a global
@@ -90,7 +90,7 @@ Flask API directly:
 | Role | Entry point | What they can do |
 |---|---|---|
 | Candidate | `/dashboard`, `/practice`, `/profile` | Browse jobs, upload CVs, apply, take practice + real AI interviews, buy candidate credit packs |
-| Recruiter | `/recruiter-dashboard` | Post jobs (with AI JD generation), review applications and interview reports, mark candidates **Screening Cleared** / **Not Cleared**, invite candidates in bulk, buy recruiter credit packs |
+| Recruiter | `/recruiter/dashboard` | Post jobs (with AI JD generation), review applications and interview reports, mark candidates **Screening Cleared** / **Not Cleared** (one-click XLSX/CSV export of the cleared list per job), invite candidates in bulk, buy recruiter credit packs |
 | Admin | `/admin/*` | Verify recruiters, manage users/jobs/applications, view platform cost statistics |
 | Invite-only candidate | `/invite/redeem` | A "burner" account created by a recruiter invite; logs in with an Invite ID instead of email |
 
