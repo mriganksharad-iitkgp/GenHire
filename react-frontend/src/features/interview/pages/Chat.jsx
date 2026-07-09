@@ -83,6 +83,8 @@ export default function Chat({ interviewId }) {
   // identity) | "verified" | "unverified_system_unavailable" | others.
   const [identityStatus, setIdentityStatus] = useState(null);
   const [identityBlockMessage, setIdentityBlockMessage] = useState("");
+  // Server feature toggle: hides the phone-pairing panel when disabled.
+  const [mobileRecordingEnabled, setMobileRecordingEnabled] = useState(true);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [questionCount, setQuestionCount] = useState(1);
@@ -926,6 +928,7 @@ export default function Chat({ interviewId }) {
         .then((data) => {
           setSessionId(data.session_id);
           sessionIdRef.current = data.session_id;
+          setMobileRecordingEnabled(data.mobile_recording_enabled !== false);
           setSimilarityScore(data.similarity_score);
           setCurrentQuestion(data.initial_questions[0]);
           if (data.question_deadline) setQuestionDeadline(data.question_deadline);
@@ -2061,7 +2064,8 @@ export default function Chat({ interviewId }) {
             marginTop: "8px",
           }}
         >
-          {/* LEFT: QR CODE SECTION */}
+          {/* LEFT: QR CODE SECTION (hidden when mobile recording is disabled) */}
+          {mobileRecordingEnabled && (
           <div
             style={{
               background: "white",
@@ -2095,6 +2099,7 @@ export default function Chat({ interviewId }) {
               <QRCode value={mobileUrl} size={140} />
             </div>
           </div>
+          )}
 
           {/* RIGHT: WEBCAM SECTION */}
           <div
@@ -2110,7 +2115,7 @@ export default function Chat({ interviewId }) {
           >
             <div style={{ fontSize: "28px", marginBottom: "8px" }}>💻</div>
             <h4 style={{ color: "#1e293b", marginBottom: "14px", fontSize: "1.1rem", fontWeight: "600" }}>
-              Step 2: Face Registration
+              {mobileRecordingEnabled ? "Step 2" : "Step 1"}: Face Registration
             </h4>
             <video
               ref={videoRef}

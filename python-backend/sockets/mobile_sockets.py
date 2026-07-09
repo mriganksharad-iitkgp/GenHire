@@ -16,6 +16,10 @@ interviews_collection = collections["interviews"]
 
 @socketio.on("join_mobile_session")
 def handle_mobile_join(data):
+    from core import config as app_config
+
+    if not app_config.mobile_recording_enabled():
+        return
     session_id = (data or {}).get("session_id")
     if not session_id:
         return

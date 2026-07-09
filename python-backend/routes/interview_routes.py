@@ -18,13 +18,15 @@ import threading
 import time
 
 from bson import ObjectId
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 from werkzeug.utils import secure_filename
 
 from config.database import db_config
 from extensions import socketio
 from interview.core.cost_tracker import CostTracker
+from core import config as app_config
 from interview.runtime import (
+    M_RECORDING_FOLDER,
     PROCTORING_FOLDER,
     RECORDING_FOLDER,
     TMP_FOLDER,
@@ -465,6 +467,7 @@ def start_interview(current_user):
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
             "usage_deduction": recruiter_deduction,
+            "mobile_recording_enabled": app_config.mobile_recording_enabled(),
             "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
@@ -1167,6 +1170,12 @@ def upload_recording(current_user, session_id):
 # has no token. The unguessable session_id acts as the capability; we at
 # least require it to reference a real session before accepting a file.
 def upload_mobile_recording(session_id):
+    if not app_config.mobile_recording_enabled():
+        return jsonify({
+            "error": "Mobile recording is disabled on this server.",
+            "error_code": "mobile_recording_disabled",
+        }), 403
+
     session_exists = interviews_collection.find_one(
         {"session_id": session_id}, {"_id": 1}
     ) or collections["practice_sessions"].find_one({"session_id": session_id}, {"_id": 1})
@@ -1183,7 +1192,7 @@ def upload_mobile_recording(session_id):
     if file:
         # Save with a specific suffix to distinguish from webcam
         filename = secure_filename(f"{session_id}_mobile_env.webm")
-        filepath = os.path.join(current_app.config["M_RECORDING_FOLDER"], filename)
+        filepath = os.path.join(M_RECORDING_FOLDER, filename)
         file.save(filepath)
 
         # Update database with mobile recording path

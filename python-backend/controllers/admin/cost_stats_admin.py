@@ -911,8 +911,6 @@ class CostStatsAdmin:
             total_cost = sum(float(category['total_cost_inr']) for category in categories)
             actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
             total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
-            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
-            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
 
             return {
                 'timeline': {
@@ -1380,6 +1378,8 @@ class CostStatsAdmin:
 
             total_count = sum(category['count'] for category in categories)
             total_cost = sum(float(category['total_cost_inr']) for category in categories)
+            actual_cost_values = [category.get('total_actual_cost_inr') for category in categories if category.get('total_actual_cost_inr') is not None]
+            total_actual_cost = sum(float(value or 0.0) for value in actual_cost_values)
 
             return {
                 'timeline': {

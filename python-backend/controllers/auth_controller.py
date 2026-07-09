@@ -737,7 +737,7 @@ class AuthController:
             if user_type == 'candidate':
                 # Delete candidate's applications and practice sessions
                 applications_coll = self.db['applications']
-                practice_coll = self.db.get('practice_sessions')
+                practice_coll = self.db['practice_sessions']
                 applications_coll.delete_many({'student_id': str(user_id)})
                 if practice_coll is not None:
                     practice_coll.delete_many({'user_id': str(user_id)})

@@ -53,3 +53,8 @@ def jobs_disabled() -> bool:
     """Tooling (route manifest, scripts) sets GENHIRE_DISABLE_JOBS=1 so
     importing the app doesn't spawn background worker threads."""
     return os.getenv("GENHIRE_DISABLE_JOBS") == "1"
+
+def mobile_recording_enabled() -> bool:
+    """Feature toggle for the mobile companion camera (QR pairing + upload).
+    MOBILE_RECORDING_ENABLED=false hides the pairing UI and rejects uploads."""
+    return (os.getenv("MOBILE_RECORDING_ENABLED", "true") or "true").strip().lower() == "true"
