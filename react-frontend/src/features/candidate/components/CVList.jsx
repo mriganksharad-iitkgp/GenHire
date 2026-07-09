@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useCandidateData } from 'features/candidate/context/CandidateDataContext';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
 import styles from './CVList.module.css';
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 
 const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
   const { cvs, cvsLoaded, loadCvsCached, invalidateCvs } = useCandidateData();

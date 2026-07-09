@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styles from './CVViewer.module.css';
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 
 const CVViewer = ({ isOpen, onClose, candidate }) => {
   // Handle Escape key to close modal

@@ -152,4 +152,6 @@ class CVService {
   }
 }
 
-export default new CVService();
+const cvService = new CVService();
+
+export default cvService;

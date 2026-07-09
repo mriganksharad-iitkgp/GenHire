@@ -6,8 +6,7 @@ import { toBlobURL } from "@ffmpeg/util";
 import io from "socket.io-client";
 import Avatar from "shared/components/layout/Avatar";
 import QRCode from "react-qr-code";
-import { proctoringConfig } from "features/interview/config/proctoring";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { API_BASE } from "shared/api/client";
 import LoadingScreen, { LOADING_STEPS } from "features/interview/components/LoadingScreen";
 import InterviewHeader from "features/interview/components/InterviewHeader";
@@ -44,7 +43,7 @@ export default function Chat({ interviewId }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const isSubmittingAnswerRef = useRef(false);
-  const [chatContent, setChatContent] = useState({});
+  const [, setChatContent] = useState({}); // write-only: transcript UI renders displayedText
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -62,8 +61,8 @@ export default function Chat({ interviewId }) {
   const [usageDeduction, setUsageDeduction] = useState(null);
   const [similarityScore, setSimilarityScore] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [gazeDirection, setGazeDirection] = useState(null);
-  const [gazeTimes, setGazeTimes] = useState(null);
+  const [, setGazeDirection] = useState(null); // write-only: consumed by the gaze plot upload
+  const [, setGazeTimes] = useState(null);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("idle");
   const [gazeRecorderStatus, setGazeRecorderStatus] = useState("idle"); // idle | calibrating | tracking | submitted | failed
@@ -126,7 +125,7 @@ export default function Chat({ interviewId }) {
 
   // Add state for progressive text display
   const [displayedText, setDisplayedText] = useState("");
-  const [fullQuestionText, setFullQuestionText] = useState("");
+  const [, setFullQuestionText] = useState("");
   const typingIntervalRef = useRef(null); // --- REFS ---
 
   const videoRef = useRef(null);

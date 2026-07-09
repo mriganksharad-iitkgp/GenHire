@@ -5,7 +5,6 @@ import ConfirmModal from "features/admin/components/ConfirmModal";
 import ApplicationDetailModal from "features/admin/components/ApplicationDetailModal";
 import IdentityCardPanel from "features/admin/components/IdentityCardPanel";
 import InterviewReportModal from "features/interview/components/InterviewReportModal";
-import CVDetailsForm from "features/candidate/components/CVDetailsForm";
 import CVDetailsModal from "features/candidate/components/CVDetailsModal";
 import PracticeDetailsModal from "features/interview/components/PracticeDetailsModal";
 import PracticeHistoryList from "shared/components/lists/PracticeHistoryList";
@@ -13,7 +12,7 @@ import ApplicationHistoryList from "shared/components/lists/ApplicationHistoryLi
 import JDDetailsModal from "features/recruiter/components/JDDetailsModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "features/admin/api/adminApi";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { authedFetch, API_BASE } from "shared/api/client";
 
 const CandidateDetail = () => {
@@ -28,8 +27,6 @@ const CandidateDetail = () => {
   const [saving, setSaving] = useState(false);
   
   // Pagination for applications
-  const [appPage, setAppPage] = useState(1);
-  const appsPerPage = 10;
   
   // Delete modal
   const [deleteModal, setDeleteModal] = useState(false);
@@ -49,7 +46,6 @@ const CandidateDetail = () => {
   
   // CV Details Modal (same as candidate sees)
   const [showCVDetailsModal, setShowCVDetailsModal] = useState(false);
-  const [showCVEditModal, setShowCVEditModal] = useState(false);
   
   // Interview Report Modal
   const [reportModal, setReportModal] = useState({ open: false, report: null, cvScore: null, interviewScore: null });
@@ -64,14 +60,6 @@ const CandidateDetail = () => {
   // JD Details Modal for practice sessions
   const [showJdDetailsModal, setShowJdDetailsModal] = useState(false);
   const [selectedJdSession, setSelectedJdSession] = useState(null);
-  
-  // Filters for applications
-  const [appFilters, setAppFilters] = useState({
-    search: "",
-    status: "",
-    sortBy: "applied_at",
-    sortOrder: "desc"
-  });
   
   // Notifications
   const [notification, setNotification] = useState({ show: false, message: "", type: "success" });
@@ -300,25 +288,6 @@ const CandidateDetail = () => {
     }
   };
 
-  // View practice report
-  const handleViewPracticeReport = async (session) => {
-    try {
-      const token = getToken();
-      const response = await authedFetch(`${API_BASE}/admin/practice/${session.session_id}/report`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const report = await response.json();
-        setPracticeReportModal({ open: true, report });
-      } else {
-        showNotification("Failed to load practice report", "error");
-      }
-    } catch (error) {
-      console.error("Error fetching practice report:", error);
-      showNotification("Error loading practice report", "error");
-    }
-  };
-
   // View practice report by session ID (for PracticeHistoryList component)
   const handleViewPracticeReportById = async (sessionId) => {
     try {
@@ -363,40 +332,7 @@ const CandidateDetail = () => {
     setShowJdDetailsModal(true);
   };
 
-  // Filter and sort applications
-  const filteredApps = applications
-    .filter(app => {
-      if (appFilters.search) {
-        const searchLower = appFilters.search.toLowerCase();
-        if (!app.job_title?.toLowerCase().includes(searchLower) && 
-            !app.company?.toLowerCase().includes(searchLower)) {
-          return false;
-        }
-      }
-      if (appFilters.status && app.status !== appFilters.status) {
-        return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      let aVal = a[appFilters.sortBy];
-      let bVal = b[appFilters.sortBy];
-      if (appFilters.sortBy === "applied_at") {
-        aVal = new Date(aVal || 0).getTime();
-        bVal = new Date(bVal || 0).getTime();
-      }
-      if (appFilters.sortOrder === "desc") {
-        return bVal > aVal ? 1 : -1;
-      }
-      return aVal > bVal ? 1 : -1;
-    });
 
-  // Pagination for applications (using filtered apps)
-  const totalAppPages = Math.ceil(filteredApps.length / appsPerPage);
-  const paginatedApps = filteredApps.slice(
-    (appPage - 1) * appsPerPage,
-    appPage * appsPerPage
-  );
 
   // Use effect to fetch practice history
   useEffect(() => {

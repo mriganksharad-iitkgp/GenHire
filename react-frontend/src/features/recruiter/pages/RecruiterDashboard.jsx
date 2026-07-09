@@ -123,7 +123,6 @@ const RecruiterDashboard = () => {
     load: loadJobs,
     create: saveJobPosting,
     update: updateJobPosting,
-    remove: deleteJobPosting,
   } = useJobs(showToast);
   const {
     applications,
@@ -162,78 +161,6 @@ const RecruiterDashboard = () => {
   // provided by useApplications
 
   // provided by useApplications
-
-  // Sample candidate data (keeping some mock data for reference)
-  const [candidates, setCandidates] = useState([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john.doe@email.com",
-      phone: "+1 (555) 123-4567",
-      jobId: 1,
-      jobTitle: "Senior Business Development Manager",
-      appliedDate: "2025-08-05",
-      status: "Interviewed",
-      cvMatchScore: 92,
-      interviewScore: 85,
-      interviewDate: "2025-08-08",
-      experience: "6 years",
-      location: "San Francisco, CA",
-      skills: ["Sales Strategy", "Client Acquisition", "Market Research"],
-      cvUrl: "/uploads/cv/john_doe_cv.pdf",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane.smith@email.com",
-      phone: "+1 (555) 987-6543",
-      jobId: 1,
-      jobTitle: "Senior Business Development Manager",
-      appliedDate: "2025-08-06",
-      status: "Screening Cleared",
-      cvMatchScore: 88,
-      interviewScore: 91,
-      interviewDate: "2025-08-09",
-      experience: "7 years",
-      location: "San Francisco, CA",
-      skills: ["Sales Strategy", "Negotiation", "Team Leadership"],
-      cvUrl: "/uploads/cv/jane_smith_cv.pdf",
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      email: "mike.johnson@email.com",
-      phone: "+1 (555) 456-7890",
-      jobId: 2,
-      jobTitle: "Strategic Partnerships Manager",
-      appliedDate: "2025-08-07",
-      status: "Pending Interview",
-      cvMatchScore: 76,
-      interviewScore: null,
-      interviewDate: null,
-      experience: "4 years",
-      location: "New York, NY",
-      skills: ["Partnership Development", "Contract Negotiation"],
-      cvUrl: "/uploads/cv/mike_johnson_cv.pdf",
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      email: "sarah.wilson@email.com",
-      phone: "+1 (555) 321-0987",
-      jobId: 1,
-      jobTitle: "Senior Business Development Manager",
-      appliedDate: "2025-08-08",
-      status: "Rejected",
-      cvMatchScore: 65,
-      interviewScore: 58,
-      interviewDate: "2025-08-09",
-      experience: "3 years",
-      location: "Los Angeles, CA",
-      skills: ["Sales", "Customer Relations"],
-      cvUrl: "/uploads/cv/sarah_wilson_cv.pdf",
-    },
-  ]);
 
   useEffect(() => {
     // Check URL parameters for active tab
@@ -418,15 +345,6 @@ const RecruiterDashboard = () => {
     setReportData(report);
     setIsProctoringModalOpen(true);
   };
-  // Handle filter changes
-  const handlePositionFilter = (e) => {
-    setSelectedPosition(e.target.value);
-  };
-
-  const handleStatusFilter = (e) => {
-    setSelectedStatus(e.target.value);
-  };
-
   const handleClearFilters = () => {
     setSelectedPosition("");
     setSelectedStatus("");
@@ -474,41 +392,10 @@ const RecruiterDashboard = () => {
   };
 
   // Function to handle candidate actions
-  const handleViewCV = (candidate) => {
-    setSelectedCandidate(candidate);
-    setIsCVViewerOpen(true);
-    showToast(`Opening CV for ${candidate.name}`, "info");
-  };
-
   const handleCloseCVViewer = () => {
     setIsCVViewerOpen(false);
     setSelectedCandidate(null);
   };
-
-  const handleSelectCandidate = (candidate) => {
-    // Mark candidate as having cleared the screening round
-    setCandidates((prev) =>
-      prev.map((c) =>
-        c.id === candidate.id ? { ...c, status: "Screening Cleared" } : c
-      )
-    );
-    showToast(`${candidate.name} has cleared screening!`, "success");
-  };
-
-  const handleRejectCandidate = (candidate) => {
-    // Update candidate status to rejected
-    setCandidates((prev) =>
-      prev.map((c) =>
-        c.id === candidate.id ? { ...c, status: "Rejected" } : c
-      )
-    );
-    showToast(`${candidate.name} has been rejected`, "warning");
-  };
-
-  const handleScheduleInterview = (candidate) => {
-    showToast(`Interview scheduling for ${candidate.name}`, "info");
-  };
-
   // Function to handle job actions
   const handleExportCleared = async (job) => {
     const jobId = job._id || job.id;

@@ -4,7 +4,7 @@ import { getProfile } from 'shared/api/endpoints';
 import { isProfileCvComplete } from 'shared/utils/cvDetails';
 import styles from './CVSelectionModal.module.css';
 
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 const CVSelectionModal = ({ 
   isOpen, 
   onClose, 

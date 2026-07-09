@@ -11,9 +11,8 @@ import IdentityCardUpload from "features/candidate/components/IdentityCardUpload
 import ApplicationsList from "features/candidate/components/ApplicationsList";
 import useCandidateProfile from "features/candidate/hooks/useCandidateProfile";
 import useCandidateApplications from "features/candidate/hooks/useCandidateApplications";
-import { viewApplicationCV } from "shared/api/endpoints";
 import cvService from "features/candidate/api/cvService";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 
 const Profile = () => {
 	const navigate = useNavigate();
@@ -91,7 +90,7 @@ const Profile = () => {
 	}, []);
 
 	// Hooks for profile and applications
-	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, loading: loadingProfile, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
+	const { bio, setBio, profilePhotoUrl, cvPath, cvDetails, uploadingCV, uploadingPhoto, save, uploadCvFile, uploadProfilePhoto, saveCvDetails } = useCandidateProfile(showToast);
 	const { applications, loading: loadingApps, openReport, companies } = useCandidateApplications(showToast);
 	// Note: applications now update live via CandidateDataContext's realtime
 	// subscription (see contexts/CandidateDataContext.jsx) — an interview
@@ -178,53 +177,6 @@ const Profile = () => {
 			console.error('Error saving CV details:', error);
 			showToast('Failed to save CV details. Please try again.', 'error');
 		}
-	};
-
-	// Add helper function to check if an interview is currently live
-	const isInterviewLive = (interview) => {
-		const interviewDate = new Date(interview.date);
-		let hours = 0;
-		let minutes = 0;
-
-		// Parse time properly handling both "10:00 AM" and "10:00" formats
-		if (interview.time.includes("AM") || interview.time.includes("PM")) {
-			// Handle "10:00 AM" format
-			const timeParts = interview.time
-				.replace(/\s/g, "")
-				.match(/(\d+):(\d+)([APM]+)/i);
-			if (timeParts) {
-				hours = parseInt(timeParts[1]);
-				minutes = parseInt(timeParts[2]);
-				// Adjust hours for PM
-				if (timeParts[3].toUpperCase() === "PM" && hours < 12) {
-					hours += 12;
-				}
-				// Adjust for 12 AM
-				if (timeParts[3].toUpperCase() === "AM" && hours === 12) {
-					hours = 0;
-				}
-			}
-		} else {
-			// Handle "10:00" format
-			const [hoursStr, minutesStr] = interview.time.split(":");
-			hours = parseInt(hoursStr);
-			minutes = parseInt(minutesStr);
-		}
-
-		interviewDate.setHours(hours, minutes, 0, 0);
-
-		const now = new Date();
-		const windowStart = new Date(interviewDate.getTime() - 30 * 60000); // 30 minutes before
-		const windowEnd = new Date(interviewDate.getTime() + 30 * 60000); // 30 minutes after
-
-		return now >= windowStart && now <= windowEnd;
-	};
-
-	// Add helper function to get live interviews for an application
-	const getLiveInterviews = (application) => {
-		return application.interviews.filter((interview) =>
-			isInterviewLive(interview)
-		);
 	};
 
 	// Get unique companies and locations for filter dropdowns

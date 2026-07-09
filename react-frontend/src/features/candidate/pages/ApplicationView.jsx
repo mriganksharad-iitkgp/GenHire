@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import styles from "./ApplicationView.module.css";
 import "./darkModeOverride.css";
 import "./emergency-fixes.css";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 
 const ApplicationView = () => {

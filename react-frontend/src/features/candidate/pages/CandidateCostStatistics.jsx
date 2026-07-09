@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
 import styles from "features/recruiter/pages/RecruiterCostStatistics.module.css";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 import {
   addMonths,
@@ -103,10 +103,6 @@ const CandidateCostStatistics = () => {
     0,
     Number(plan.plan_credits_remaining ?? 0) || 0,
   );
-  const freeCreditsRemaining = Math.max(
-    0,
-    Number(plan.free_credits_remaining ?? 0) || 0,
-  );
   const planMonthlyCredits = Math.max(0, Number(plan.plan_credits_allocated ?? creditsAllocated ?? 0));
   const displayedMonthlyCredits = planMonthlyCredits;
   const usagePercentage =
@@ -114,14 +110,6 @@ const CandidateCostStatistics = () => {
       ? Math.min(100, Math.round((creditsUsed / creditsAllocated) * 100))
       : 0;
   const isNearLimit = usagePercentage >= 80;
-  const expiresAt = plan.expires_at;
-  const daysUntilExpiry = (() => {
-    if (!expiresAt) return null;
-    const expDate = new Date(expiresAt);
-    const now = new Date();
-    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  })();
 
   const monthlySeries = useMemo(() => {
     const series = safeData.monthlyUsage || [];

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
 import styles from "./RecruiterCostStatistics.module.css";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 import {
   addMonths,
@@ -111,7 +111,6 @@ const RecruiterCostStatistics = () => {
   const signupBonusCredits = Number(plan.signup_bonus_credits ?? 100);
   const signupBonusGranted = Boolean(plan.signup_bonus_granted);
   const planCreditsRemaining = interviewsRemaining;
-  const freeCreditsRemaining = 0;
   const planName = plan.name || "Recruiter Wallet";
   const displayedMonthlyInterviews = interviewsAllowed;
   const usagePercentage =
@@ -119,16 +118,7 @@ const RecruiterCostStatistics = () => {
       ? Math.min(100, Math.round((interviewsUsed / interviewsAllowed) * 100))
       : 0;
   const isNearLimit = interviewsAllowed > 0 && interviewsRemaining <= Math.max(100, Math.ceil(interviewsAllowed * 0.1));
-  const expiresAt = plan.expires_at;
 
-  // Calculate days until expiry
-  const daysUntilExpiry = (() => {
-    if (!expiresAt) return null;
-    const expDate = new Date(expiresAt);
-    const now = new Date();
-    const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  })();
 
   // Usage history (source data)
   const usageHistory = useMemo(

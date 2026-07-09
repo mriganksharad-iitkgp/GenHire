@@ -1,6 +1,6 @@
 import React from 'react';
 import styles from 'features/recruiter/pages/RecruiterDashboard.module.css';
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { normalizeStatus, statusLabel, applicationStatusLabel } from "shared/utils/applicationStatus";
 
 const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {

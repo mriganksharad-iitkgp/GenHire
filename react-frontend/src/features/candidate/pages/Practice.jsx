@@ -10,7 +10,7 @@ import PracticeDetailsModal from "features/interview/components/PracticeDetailsM
 import JDDetailsModal from "features/recruiter/components/JDDetailsModal";
 import { PRACTICE_ROLE_OPTIONS } from "shared/constants/jobTaxonomy";
 import styles from "./Practice.module.css";
-import { getToken, getUser, clearSession, isLoggedIn } from "shared/utils/session";
+import { getToken } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 
 const Practice = () => {
@@ -335,7 +335,7 @@ const Practice = () => {
   const [selectedCvDetails, setSelectedCvDetails] = useState(null);
   const [showPracticeDetailsModal, setShowPracticeDetailsModal] =
     useState(false);
-  const [selectedPracticeSession, setSelectedPracticeSession] = useState(null);
+  const [selectedPracticeSession] = useState(null);
 
   // Handle viewing CV for practice session
   const handleViewPracticeCV = async (session) => {

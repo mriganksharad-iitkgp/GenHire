@@ -12,7 +12,7 @@ import { authedFetch } from "shared/api/client";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
-	const { jobs: cachedJobs, loadJobsCached, invalidateJobs, applications: cachedApplications, loadApplicationsCached, invalidateApplications } = useCandidateData();
+	const { loadJobsCached, loadApplicationsCached, invalidateApplications } = useCandidateData();
 	const [searchQuery, setSearchQuery] = useState("");
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 	const normalizedSearchQuery = String(deferredSearchQuery ?? "").trim();
@@ -411,13 +411,6 @@ const Dashboard = () => {
 		}
 	};
 
-	// Cancel pending withdrawal
-	const cancelPendingWithdrawal = (jobId) => {
-		if (pendingWithdrawal === jobId) {
-			setPendingWithdrawal(null);
-			showToast('Withdrawal cancelled', 'info');
-		}
-	};
 
 	// Check authentication when component mounts
 

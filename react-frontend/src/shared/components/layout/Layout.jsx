@@ -3,7 +3,7 @@ import { Navigate, useNavigate, Outlet } from "react-router-dom";
 import Navbar from "./Navbar";
 import styles from "./Layout.module.css";
 import axios from "axios";
-import { getToken, getUser, clearSession } from "shared/utils/session";
+import { getToken, clearSession } from "shared/utils/session";
 
 const Layout = () => {
 	const navigate = useNavigate();

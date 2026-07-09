@@ -24,6 +24,8 @@
     "start": "react-scripts start",
     "build": "cross-env CI=false react-scripts build",
     "test": "react-scripts test",
+    "lint": "eslint src --ext .js,.jsx",
+    "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -32,10 +34,10 @@
       "react-app/jest"
     ],
     "rules": {
-      "no-unused-vars": "off",
-      "react-hooks/exhaustive-deps": "off",
-      "jsx-a11y/anchor-is-valid": "off",
-      "import/no-anonymous-default-export": "off"
+      "no-unused-vars": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      "jsx-a11y/anchor-is-valid": "warn",
+      "import/no-anonymous-default-export": "warn"
     }
   },
   "browserslist": {
