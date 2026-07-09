@@ -42,8 +42,10 @@ class GoogleSpeechService:
                 logger.info("Google Speech Service credentials not found. Speech features will be disabled.")
                 self.speech_client = None
                 self.tts_client = None
+                self._credentials = None
                 return
 
+            self._credentials = credentials
             self.speech_client = speech.SpeechClient(credentials=credentials)
             self.tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
             self.cost_tracker = CostTracker()
@@ -52,6 +54,15 @@ class GoogleSpeechService:
             logger.warning(f"Failed to initialize Google Speech Service (features disabled): {e}")
             self.speech_client = None
             self.tts_client = None
+            self._credentials = None
+
+
+    def get_scoped_credentials(self, scopes):
+        """Service-account credentials re-scoped for token minting (see the
+        /api/speech/token broker); None when speech is unconfigured."""
+        if getattr(self, "_credentials", None) is None:
+            return None
+        return self._credentials.with_scopes(list(scopes))
 
     def _estimate_audio_duration(self, audio_content, encoding, sample_rate_hertz):
         """Estimate audio duration in seconds."""

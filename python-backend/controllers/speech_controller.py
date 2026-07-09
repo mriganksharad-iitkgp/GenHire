@@ -86,3 +86,27 @@ class SpeechController:
         except Exception as e:
             logger.error(f"Error in synthesize_text endpoint: {e}")
             return jsonify({"error": str(e)}), 500
+
+    def issue_speech_access_token(self):
+        """Mint a short-lived Google OAuth access token for the kiosk's
+        streaming speech recognizer. Replaces shipping the service-account
+        private key inside the installer: the kiosk exchanges its (already
+        authenticated) session for a ~1h token scoped to Cloud Platform.
+        """
+        try:
+            from google.auth.transport.requests import Request
+
+            credentials = self.speech_service.get_scoped_credentials(
+                ["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            if credentials is None:
+                return jsonify({"error": "Speech credentials are not configured on the server"}), 503
+            credentials.refresh(Request())
+            return jsonify({
+                "access_token": credentials.token,
+                "expires_at": credentials.expiry.isoformat() + "Z" if credentials.expiry else None,
+                "project_id": getattr(credentials, "project_id", None),
+            })
+        except Exception as e:
+            logger.error(f"Failed to mint speech access token: {e}")
+            return jsonify({"error": "Failed to issue speech access token"}), 500

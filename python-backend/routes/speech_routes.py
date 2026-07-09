@@ -21,3 +21,10 @@ def transcribe(current_user):
 def synthesize(current_user):
     """Endpoint for Text-to-Speech synthesis."""
     return speech_controller.synthesize_text()
+
+
+@speech_bp.route("/token", methods=["POST"])
+@token_required
+def speech_token(current_user):
+    """Short-lived Google access token for the kiosk's streaming STT."""
+    return speech_controller.issue_speech_access_token()

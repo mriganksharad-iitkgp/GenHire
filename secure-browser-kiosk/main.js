@@ -3,32 +3,66 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-// Add Google Cloud Speech APIs
-const textToSpeech = require('@google-cloud/text-to-speech');
+// Google Cloud Speech access — NO bundled service-account key.
+// TTS goes through the GenHire backend proxy (/api/speech/synthesize) and
+// streaming STT authenticates with a short-lived access token minted by the
+// backend (/api/speech/token), both using the interview session's JWT that
+// arrives via the secure-interview:// deep link.
 const speech = require('@google-cloud/speech');
-
-// Initialize Google Cloud Clients using credentials.json
-// In production (installed), electron-builder places extraResources at process.resourcesPath
-// In development (npm start), it lives next to main.js
-const credentialsPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'credentials.json')
-    : path.join(__dirname, 'credentials.json');
-let ttsClient = null;
-let sttClient = null;
-
-try {
-    if (fs.existsSync(credentialsPath)) {
-        ttsClient = new textToSpeech.TextToSpeechClient({ keyFilename: credentialsPath });
-        sttClient = new speech.SpeechClient({ keyFilename: credentialsPath });
-        console.log("✅ Google Cloud API clients initialized");
-    } else {
-        console.warn("⚠️ credentials.json not found! Google Cloud Speech APIs will fail.");
-    }
-} catch (err) {
-    console.error("❌ Failed to initialize Google Cloud APIs:", err.message);
-}
+const grpc = require('@grpc/grpc-js');
+const { OAuth2Client } = require('google-auth-library');
 
 let recognizeStream = null;
+
+// Captured from the deep link's initData (same payload the renderer parses).
+let backendSession = { apiUrl: null, token: null };
+// Cached short-lived Google access token for streaming STT.
+let speechAccessToken = { token: null, expiresAt: 0 };
+
+function captureBackendSession(initData) {
+    try {
+        const payload = JSON.parse(Buffer.from(initData, 'base64').toString('utf-8'));
+        if (payload && payload.apiUrl && payload.token) {
+            backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token };
+            speechAccessToken = { token: null, expiresAt: 0 }; // new session, new token
+        }
+    } catch (e) {
+        console.warn('Could not parse deep-link session payload:', e.message);
+    }
+}
+
+async function getSpeechAccessToken() {
+    if (!backendSession.apiUrl || !backendSession.token) {
+        throw new Error('No backend session — launch the app from the GenHire dashboard.');
+    }
+    // Reuse the cached token until 2 minutes before expiry.
+    if (speechAccessToken.token && Date.now() < speechAccessToken.expiresAt - 120000) {
+        return speechAccessToken.token;
+    }
+    const response = await fetch(`${backendSession.apiUrl}/api/speech/token`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${backendSession.token}` },
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Speech token request failed (${response.status})`);
+    }
+    const data = await response.json();
+    const expiresAt = data.expires_at ? Date.parse(data.expires_at) : Date.now() + 45 * 60 * 1000;
+    speechAccessToken = { token: data.access_token, expiresAt };
+    return speechAccessToken.token;
+}
+
+async function createSttClient() {
+    const accessToken = await getSpeechAccessToken();
+    const authClient = new OAuth2Client();
+    authClient.setCredentials({ access_token: accessToken });
+    const sslCreds = grpc.credentials.combineChannelCredentials(
+        grpc.credentials.createSsl(),
+        grpc.credentials.createFromGoogleCredential(authClient),
+    );
+    return new speech.SpeechClient({ sslCreds });
+}
 
 let KIOSK_HTTP_PORT = 0; // Set to 0 to auto-assign a free port to prevent EADDRINUSE
 
@@ -57,6 +91,9 @@ function handleDeepLink(url) {
     try {
         const urlObj = new URL(url);
         const initData = urlObj.searchParams.get('initData');
+        if (initData) {
+            captureBackendSession(initData);
+        }
         if (initData && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('init-from-deeplink', initData);
         }
@@ -118,36 +155,47 @@ ipcMain.handle('get-display-info', () => {
 // GOOGLE CLOUD TEXT-TO-SPEECH (TTS) HANDLERS
 // ==========================================
 ipcMain.handle('synthesize-speech', async (event, text) => {
-    if (!ttsClient) throw new Error("Google Cloud TTS client not initialized.");
+    if (!backendSession.apiUrl || !backendSession.token) {
+        throw new Error('No backend session — launch the app from the GenHire dashboard.');
+    }
 
     // Voice fallback chain: Journey (most natural) -> Neural2 -> Standard
-    const voices = [
-        { languageCode: 'en-US', name: 'en-US-Journey-F' },
-        { languageCode: 'en-US', name: 'en-US-Neural2-C' },
-        { languageCode: 'en-US', name: 'en-US-Standard-C' },
-    ];
+    const voices = ['en-US-Journey-F', 'en-US-Neural2-C', 'en-US-Standard-C'];
 
-    for (const voice of voices) {
+    for (const voiceName of voices) {
         try {
-            const [response] = await ttsClient.synthesizeSpeech({
-                input: { text },
-                voice,
-                audioConfig: { audioEncoding: 'MP3' },
+            const response = await fetch(`${backendSession.apiUrl}/api/speech/synthesize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${backendSession.token}`,
+                },
+                body: JSON.stringify({ text, voice_name: voiceName, language_code: 'en-US' }),
             });
-            return response.audioContent.toString('base64');
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.error || `HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.audio_base64) return data.audio_base64;
+            throw new Error('Empty audio response');
         } catch (err) {
-            console.warn(`TTS voice ${voice.name} failed: ${err.message}`);
+            console.warn(`TTS voice ${voiceName} failed: ${err.message}`);
         }
     }
-    throw new Error("All TTS voices failed — check Google Cloud credentials and quota.");
+    throw new Error('All TTS voices failed — check the backend speech service.');
 });
 
 // ==========================================
 // GOOGLE CLOUD SPEECH-TO-TEXT (STT) HANDLERS
 // ==========================================
-ipcMain.on('start-stt-stream', (event) => {
-    if (!sttClient) {
-        console.error("STT Client not initialized.");
+ipcMain.on('start-stt-stream', async (event) => {
+    let sttClient;
+    try {
+        sttClient = await createSttClient();
+    } catch (err) {
+        console.error('STT client init failed:', err.message);
+        event.sender.send('stt-error', err.message);
         return;
     }
 

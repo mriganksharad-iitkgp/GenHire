@@ -28,12 +28,6 @@
     "asar": true,
     "compression": "maximum",
     "forceCodeSigning": false,
-    "extraResources": [
-      {
-        "from": "credentials.json",
-        "to": "credentials.json"
-      }
-    ],
     "win": {
       "target": "nsis",
       "icon": "build/genhire_logo.ico"
@@ -80,6 +74,8 @@
   "dependencies": {
     "@google-cloud/speech": "^7.3.0",
     "@google-cloud/text-to-speech": "^6.4.0",
-    "electron-localshortcut": "^3.2.1"
+    "@grpc/grpc-js": "^1.14.4",
+    "electron-localshortcut": "^3.2.1",
+    "google-auth-library": "^10.9.0"
   }
 }

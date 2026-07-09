@@ -56,19 +56,38 @@ class PaymentConfig:
         os.getenv("RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS", "50")
     )
 
-    # Recharge pack configuration
-    # Prices in paise (1 INR = 100 paise)
+    # Recharge pack configuration — every plan's price and credit amount is
+    # env-editable (PLAN_<NAME>_PRICE_PAISE / PLAN_<NAME>_CREDITS). Prices are
+    # in paise (1 INR = 100 paise). plan_service syncs these into MongoDB on
+    # every boot, so an env change + restart updates the live plans.
+
+    @staticmethod
+    def _env_int(name: str, default: int) -> int:
+        try:
+            return int(os.getenv(name, str(default)))
+        except (TypeError, ValueError):
+            return default
+
+    _CANDIDATE_PRO_PRICE = int(os.getenv("PLAN_CANDIDATE_PRO_PRICE_PAISE", "49900"))
+    _CANDIDATE_PRO_CREDITS = int(os.getenv("PLAN_CANDIDATE_PRO_CREDITS", "500"))
+    _CANDIDATE_MAX_PRICE = int(os.getenv("PLAN_CANDIDATE_MAX_PRICE_PAISE", "99900"))
+    _CANDIDATE_MAX_CREDITS = int(os.getenv("PLAN_CANDIDATE_MAX_CREDITS", "1000"))
+    _RECRUITER_PRO_PRICE = int(os.getenv("PLAN_RECRUITER_PRO_PRICE_PAISE", "499900"))
+    _RECRUITER_PRO_CREDITS = int(os.getenv("PLAN_RECRUITER_PRO_CREDITS", "5000"))
+    _RECRUITER_MAX_PRICE = int(os.getenv("PLAN_RECRUITER_MAX_PRICE_PAISE", "999900"))
+    _RECRUITER_MAX_CREDITS = int(os.getenv("PLAN_RECRUITER_MAX_CREDITS", "10000"))
+
     DEFAULT_PLANS: Dict[str, Dict[str, Any]] = {
         "candidate_pro": {
             "name": "Candidate Pro",
             "slug": "candidate-pro",
-            "description": "Recharge pack with 500 non-expiring candidate credits",
-            "price_paise": 49900,
-            "credits_allocated": 500,
+            "description": f"Recharge pack with {_CANDIDATE_PRO_CREDITS:,} non-expiring candidate credits",
+            "price_paise": _CANDIDATE_PRO_PRICE,
+            "credits_allocated": _CANDIDATE_PRO_CREDITS,
             "validity_days": 36500,
             "audience": "candidate",
             "features": [
-                "500 non-expiring credits",
+                f"{_CANDIDATE_PRO_CREDITS:,} non-expiring credits",
                 "Practice interviews",
                 "Wallet recharge support",
             ],
@@ -79,13 +98,13 @@ class PaymentConfig:
         "candidate_max": {
             "name": "Candidate Max",
             "slug": "candidate-max",
-            "description": "Recharge pack with 1,000 non-expiring candidate credits",
-            "price_paise": 99900,
-            "credits_allocated": 1000,
+            "description": f"Recharge pack with {_CANDIDATE_MAX_CREDITS:,} non-expiring candidate credits",
+            "price_paise": _CANDIDATE_MAX_PRICE,
+            "credits_allocated": _CANDIDATE_MAX_CREDITS,
             "validity_days": 36500,
             "audience": "candidate",
             "features": [
-                "1,000 non-expiring credits",
+                f"{_CANDIDATE_MAX_CREDITS:,} non-expiring credits",
                 "Practice interviews",
                 "Wallet recharge support",
             ],
@@ -95,13 +114,13 @@ class PaymentConfig:
         "recruiter_pro": {
             "name": "Recruiter Pro",
             "slug": "recruiter-pro",
-            "description": "Recharge pack with 5,000 non-expiring recruiter credits",
-            "price_paise": 499900,  # ₹4,999.00
-            "credits_allocated": 5000,
+            "description": f"Recharge pack with {_RECRUITER_PRO_CREDITS:,} non-expiring recruiter credits",
+            "price_paise": _RECRUITER_PRO_PRICE,
+            "credits_allocated": _RECRUITER_PRO_CREDITS,
             "validity_days": 36500,
             "audience": "recruiter",
             "features": [
-                "5,000 non-expiring credits",
+                f"{_RECRUITER_PRO_CREDITS:,} non-expiring credits",
                 "AI JD generation",
                 "Real interview wallet deductions",
             ],
@@ -112,13 +131,13 @@ class PaymentConfig:
         "recruiter_max": {
             "name": "Recruiter Max",
             "slug": "recruiter-max",
-            "description": "Recharge pack with 10,000 non-expiring recruiter credits",
-            "price_paise": 999900,  # ₹9,999.00
-            "credits_allocated": 10000,
+            "description": f"Recharge pack with {_RECRUITER_MAX_CREDITS:,} non-expiring recruiter credits",
+            "price_paise": _RECRUITER_MAX_PRICE,
+            "credits_allocated": _RECRUITER_MAX_CREDITS,
             "validity_days": 36500,
             "audience": "recruiter",
             "features": [
-                "10,000 non-expiring credits",
+                f"{_RECRUITER_MAX_CREDITS:,} non-expiring credits",
                 "AI JD generation",
                 "Real interview wallet deductions",
             ],

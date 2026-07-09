@@ -974,6 +974,13 @@
       "endpoint": "speech.synthesize"
     },
     {
+      "rule": "/api/speech/token",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "speech.speech_token"
+    },
+    {
       "rule": "/api/speech/transcribe",
       "methods": [
         "POST"
