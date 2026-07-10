@@ -299,37 +299,21 @@ class CostStatsHelpers:
         question_tokens = self._interview_token_breakdown(doc).get('question_tokens') or 0
         return int(question_tokens) if question_tokens > 0 else None
 
+    # Cap on any derived speech duration: no single interview is billed as
+    # more than 2 hours of audio. Timestamp-difference fallbacks were removed
+    # entirely — wall-clock gaps (a session finalized days later by a sweeper)
+    # are NOT audio time and used to produce absurd figures like 853,904 "STT
+    # seconds" (₹28k/session) for practice rows with empty transcripts.
+    MAX_DERIVED_STT_SECONDS = 2 * 60 * 60
+
     def _derived_stt_seconds(self, doc):
-        # Per requested accounting rule, STT uses answer tokens converted to seconds.
+        # STT seconds are derived only from actual spoken content: answer
+        # tokens converted at ~0.4s/token (≈150 wpm). With no transcript there
+        # is nothing real to derive — return None so the caller falls back to
+        # the small fixed assumption instead of inventing a number.
         answer_tokens = self._interview_token_breakdown(doc).get('answer_tokens') or 0
         if answer_tokens > 0:
-            return float(answer_tokens) * 0.4
-
-        created_at = self._parse_datetime_value(doc.get('created_at') if isinstance(doc, dict) else None)
-        completed_at = self._parse_datetime_value(doc.get('completed_at') if isinstance(doc, dict) else None)
-        updated_at = self._parse_datetime_value(doc.get('updated_at') if isinstance(doc, dict) else None)
-
-        if isinstance(created_at, datetime.datetime) and isinstance(completed_at, datetime.datetime):
-            return max(0.0, (completed_at - created_at).total_seconds())
-
-        if isinstance(created_at, datetime.datetime) and isinstance(updated_at, datetime.datetime):
-            return max(0.0, (updated_at - created_at).total_seconds())
-
-        first_ts = None
-        last_ts = None
-        for pair in self._qa_pairs(doc):
-            if not isinstance(pair, dict):
-                continue
-            ts = self._parse_datetime_value(pair.get('timestamp'))
-            if ts is None:
-                continue
-            if first_ts is None or ts < first_ts:
-                first_ts = ts
-            if last_ts is None or ts > last_ts:
-                last_ts = ts
-
-        if first_ts and last_ts:
-            return max(0.0, (last_ts - first_ts).total_seconds())
+            return min(float(answer_tokens) * 0.4, float(self.MAX_DERIVED_STT_SECONDS))
 
         return None
 
@@ -530,6 +514,25 @@ class CostStatsHelpers:
         interview_stats = self._interview_token_breakdown(doc)
         return (interview_stats.get('qa_total_tokens') or 0) > 0
 
+    def _resolve_line_model(self, doc, cfg):
+        """Prefer the model actually recorded on the document (usage events,
+        usage summaries) over the flat assumption model — the assumption is
+        only the last resort for docs that never logged what served them."""
+        from interview.core.cost_tracker import CostTracker
+
+        candidates = []
+        if isinstance(doc, dict):
+            candidates.extend([doc.get('model'), doc.get('llm_model')])
+            for nested_key in ('usage', 'usage_summary', 'metadata'):
+                nested = doc.get(nested_key)
+                if isinstance(nested, dict):
+                    candidates.extend([nested.get('model'), nested.get('llm_model')])
+
+        for name in candidates:
+            if isinstance(name, str) and name.strip() in CostTracker.PRICING:
+                return name.strip()
+        return cfg['model']
+
     def _build_token_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
         source_meta = source_meta or {}
 
@@ -588,7 +591,8 @@ class CostStatsHelpers:
         prompt_tokens = int(prompt_tokens if prompt_tokens is not None else cfg['prompt_tokens'])
         completion_tokens = int(completion_tokens if completion_tokens is not None else cfg['completion_tokens'])
 
-        rates = pricing.get(cfg['model'], {})
+        line_model = self._resolve_line_model(doc, cfg)
+        rates = pricing.get(line_model, {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
 
@@ -598,7 +602,7 @@ class CostStatsHelpers:
         actual_llm_usd = None
         if prompt_source == 'actual' or completion_source == 'actual':
             actual_llm_usd = calculate_cost(
-                cfg['model'],
+                line_model,
                 {
                     'prompt_tokens': prompt_tokens,
                     'completion_tokens': completion_tokens,
@@ -624,7 +628,7 @@ class CostStatsHelpers:
             'action_type': action_type,
             'title': title,
             'timestamp': self._safe_iso(timestamp),
-            'model': cfg['model'],
+            'model': line_model,
             'usage_source': usage_source,
             'prompt_tokens': prompt_tokens,
             'completion_tokens': completion_tokens,
@@ -752,8 +756,12 @@ class CostStatsHelpers:
         completion_tokens = int(completion_tokens if completion_tokens is not None else cfg['completion_tokens'])
         stt_seconds = float(stt_seconds if stt_seconds is not None else cfg['stt_seconds'])
         tts_characters = int(tts_characters if tts_characters is not None else cfg['tts_characters'])
+        # Guard against pathological stored values (old docs that recorded
+        # wall-clock durations as audio seconds).
+        stt_seconds = min(stt_seconds, float(self.MAX_DERIVED_STT_SECONDS))
 
-        rates = pricing.get(cfg['model'], {})
+        line_model = self._resolve_line_model(doc, cfg)
+        rates = pricing.get(line_model, {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
         stt_rate_per_15s = pricing.get('gcp_stt', {}).get('default', 0.006)
@@ -789,12 +797,22 @@ class CostStatsHelpers:
 
         usage_source = 'actual' if 'actual' in [prompt_source, completion_source, stt_source, tts_source] else 'assumed'
 
+        # Face-match similarity (ID card vs interview capture, 0-100) written
+        # by the background identity scorer — advisory only, never blocking.
+        identity_block = doc.get('identity_verification') if isinstance(doc, dict) else None
+        face_match_score = (
+            self._extract_numeric((identity_block or {}).get('score'))
+            if isinstance(identity_block, dict)
+            else None
+        )
+
         return {
             'id': str(source_id or doc.get('_id') or ''),
             'action_type': action_type,
             'title': title,
             'timestamp': self._safe_iso(timestamp),
-            'model': cfg['model'],
+            'model': line_model,
+            'face_match_score': face_match_score,
             'usage_source': usage_source,
             'prompt_tokens': prompt_tokens,
             'completion_tokens': completion_tokens,
@@ -818,26 +836,32 @@ class CostStatsHelpers:
         }
 
     def _action_assumptions(self):
+        # Fallback assumptions used ONLY when a document carries no real usage
+        # and nothing can be derived from its transcript. All LLM work runs
+        # through the provider chain with OpenAI gpt-4o-mini primary
+        # (LLM_PROVIDER_PRIORITY), so every action is assumed/priced at
+        # gpt-4o-mini rates. Values are deliberately modest — a typical
+        # 15-minute session — not worst-case.
         return {
             'cv_scoring': {
-                'model': 'gemini-1.5-flash-latest',
+                'model': 'gpt-4o-mini',
                 'prompt_tokens': 1800,
                 'completion_tokens': 600,
             },
             'ai_jd_generation': {
-                'model': 'llama-3.3-70b-versatile',
+                'model': 'gpt-4o-mini',
                 'prompt_tokens': 1500,
                 'completion_tokens': 1200,
             },
             'ai_interview': {
-                'model': 'gpt-4o',
+                'model': 'gpt-4o-mini',
                 'prompt_tokens': 4200,
                 'completion_tokens': 2100,
-                'stt_seconds': 900,
-                'tts_characters': 22000,
+                'stt_seconds': 900,       # 15 min of candidate speech
+                'tts_characters': 8000,   # ~10 spoken questions
             },
             'evaluation': {
-                'model': 'gpt-5-mini',
+                'model': 'gpt-4o-mini',
                 'prompt_tokens': 1500,
                 'completion_tokens': 1000,
             },

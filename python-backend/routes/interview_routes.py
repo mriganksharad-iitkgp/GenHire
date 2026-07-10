@@ -769,13 +769,22 @@ def end_interview(current_user, session_id):
         # Note: Proctoring score is currently hardcoded at 90%
         # Future: Will be calculated based on gaze metrics and infractions
 
-    # Derive actual media usage from the transcript/session timing
+    # Derive actual media usage from the transcript. STT time must reflect the
+    # candidate's SPOKEN answers, never wall-clock session duration — stale
+    # sessions finalized hours/days later used to record absurd audio totals
+    # (hundreds of thousands of "seconds") and blow up the cost statistics.
     tts_characters = sum(
         len((item.get("text") or "").strip())
         for item in interview_transcript
         if item.get("role") == "assistant"
     )
-    stt_seconds = max(0.0, float(interview_duration or 0.0))
+    answer_chars = sum(
+        len((item.get("text") or "").strip())
+        for item in interview_transcript
+        if item.get("role") == "user"
+    )
+    # ~4 chars/token, ~0.4 s of speech per token (≈150 wpm), capped at 2 h.
+    stt_seconds = min((answer_chars / 4.0) * 0.4, 7200.0)
 
     usage_summary = CostTracker().end_session(
         session_id,
@@ -785,7 +794,7 @@ def end_interview(current_user, session_id):
             "total_completion_tokens": 0,
             "total_stt_seconds": stt_seconds,
             "total_tts_characters": int(tts_characters or 0),
-            "model": "llama-3.3-70b-versatile",
+            "model": "gpt-4o-mini",
         },
     )
 
@@ -991,7 +1000,7 @@ def end_interview(current_user, session_id):
                 action_type="ai_interview",
                 actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 stt_seconds=stt_seconds,
                 tts_characters=int(tts_characters or 0),
                 usage_source="actual",
@@ -1012,7 +1021,7 @@ def end_interview(current_user, session_id):
                 action_type="ai_interview_evaluation",
                 actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 usage_source="assumed",
                 source={
                     "type": "application",

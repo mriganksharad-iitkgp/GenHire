@@ -18,10 +18,6 @@ import {
   getCandidateUsageLines,
   getRecruiterUsageSummary,
   getRecruiterUsageLines,
-  getCandidateCreditSummary,
-  getCandidateCreditLines,
-  getRecruiterCreditSummary,
-  getRecruiterCreditLines,
 } from 'features/admin/api/adminApi';
 
 const formatInrNumber = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -153,11 +149,6 @@ const formatMoney = (value) => formatInrNumber(value);
 const formatOptionalMoney = (value) => (
   value === null || value === undefined ? '-' : formatInrNumber(value)
 );
-const formatCredits = (value) => {
-  const numericValue = Number(value);
-  if (Number.isNaN(numericValue)) return '0';
-  return String(Math.trunc(numericValue));
-};
 
 const planIncomingPalette = ['#8b5cf6', '#7c3aed', '#0ea5e9', '#0284c7', '#16a34a', '#15803d'];
 
@@ -202,16 +193,6 @@ const CostStatistics = () => {
   const [recruiterLineLoading, setRecruiterLineLoading] = useState({});
   const [candidateLineError, setCandidateLineError] = useState({});
   const [recruiterLineError, setRecruiterLineError] = useState({});
-  const [candidateCreditRows, setCandidateCreditRows] = useState([]);
-  const [recruiterCreditRows, setRecruiterCreditRows] = useState([]);
-  const [expandedCandidateCredits, setExpandedCandidateCredits] = useState({});
-  const [expandedRecruiterCredits, setExpandedRecruiterCredits] = useState({});
-  const [candidateCreditLines, setCandidateCreditLines] = useState({});
-  const [recruiterCreditLines, setRecruiterCreditLines] = useState({});
-  const [candidateCreditLineLoading, setCandidateCreditLineLoading] = useState({});
-  const [recruiterCreditLineLoading, setRecruiterCreditLineLoading] = useState({});
-  const [candidateCreditLineError, setCandidateCreditLineError] = useState({});
-  const [recruiterCreditLineError, setRecruiterCreditLineError] = useState({});
 
   const endDate = formatDateInput(todayDate);
 
@@ -226,12 +207,10 @@ const CostStatistics = () => {
           end_date: endDate,
         };
 
-        const [costStatsResult, candidateUsageResult, recruiterUsageResult, candidateCreditResult, recruiterCreditResult] = await Promise.allSettled([
+        const [costStatsResult, candidateUsageResult, recruiterUsageResult] = await Promise.allSettled([
           getCostStatistics(queryParams),
           getCandidateUsageSummary(queryParams),
           getRecruiterUsageSummary(queryParams),
-          getCandidateCreditSummary(queryParams),
-          getRecruiterCreditSummary(queryParams),
         ]);
 
         if (costStatsResult.status !== 'fulfilled') {
@@ -241,14 +220,10 @@ const CostStatistics = () => {
         setCostData(costStatsResult.value);
         setCandidateUsageRows(candidateUsageResult.status === 'fulfilled' ? (candidateUsageResult.value?.rows || []) : []);
         setRecruiterUsageRows(recruiterUsageResult.status === 'fulfilled' ? (recruiterUsageResult.value?.rows || []) : []);
-        setCandidateCreditRows(candidateCreditResult.status === 'fulfilled' ? (candidateCreditResult.value?.rows || []) : []);
-        setRecruiterCreditRows(recruiterCreditResult.status === 'fulfilled' ? (recruiterCreditResult.value?.rows || []) : []);
 
         const usageFetchErrors = [];
         if (candidateUsageResult.status === 'rejected') usageFetchErrors.push('candidate usage');
         if (recruiterUsageResult.status === 'rejected') usageFetchErrors.push('recruiter usage');
-        if (candidateCreditResult.status === 'rejected') usageFetchErrors.push('candidate credits');
-        if (recruiterCreditResult.status === 'rejected') usageFetchErrors.push('recruiter credits');
         if (usageFetchErrors.length > 0) {
           setError(`Loaded core cost statistics, but ${usageFetchErrors.join(' and ')} data is currently unavailable (backend may need restart/deploy).`);
         }
@@ -260,21 +235,11 @@ const CostStatistics = () => {
         setRecruiterLineLoading({});
         setCandidateLineError({});
         setRecruiterLineError({});
-        setExpandedCandidateCredits({});
-        setExpandedRecruiterCredits({});
-        setCandidateCreditLines({});
-        setRecruiterCreditLines({});
-        setCandidateCreditLineLoading({});
-        setRecruiterCreditLineLoading({});
-        setCandidateCreditLineError({});
-        setRecruiterCreditLineError({});
       } catch (fetchError) {
         setError(fetchError.message || 'Failed to fetch admin cost statistics.');
         setCostData(null);
         setCandidateUsageRows([]);
         setRecruiterUsageRows([]);
-        setCandidateCreditRows([]);
-        setRecruiterCreditRows([]);
       } finally {
         setLoading(false);
       }
@@ -550,58 +515,15 @@ const CostStatistics = () => {
     }
   };
 
-  const toggleCandidateCreditExpand = async (candidateId) => {
-    const nextExpanded = !expandedCandidateCredits[candidateId];
-    setExpandedCandidateCredits((previous) => ({ ...previous, [candidateId]: nextExpanded }));
-    if (!nextExpanded || candidateCreditLines[candidateId] || candidateCreditLineLoading[candidateId]) return;
-
-    try {
-      setCandidateCreditLineLoading((previous) => ({ ...previous, [candidateId]: true }));
-      setCandidateCreditLineError((previous) => ({ ...previous, [candidateId]: null }));
-      const response = await getCandidateCreditLines(candidateId, {
-        start_date: startDate,
-        end_date: endDate,
-      });
-      setCandidateCreditLines((previous) => ({ ...previous, [candidateId]: response }));
-    } catch (lineError) {
-      setCandidateCreditLineError((previous) => ({
-        ...previous,
-        [candidateId]: lineError.message || 'Failed to fetch candidate credit lines.',
-      }));
-    } finally {
-      setCandidateCreditLineLoading((previous) => ({ ...previous, [candidateId]: false }));
-    }
-  };
-
-  const toggleRecruiterCreditExpand = async (recruiterId) => {
-    const nextExpanded = !expandedRecruiterCredits[recruiterId];
-    setExpandedRecruiterCredits((previous) => ({ ...previous, [recruiterId]: nextExpanded }));
-    if (!nextExpanded || recruiterCreditLines[recruiterId] || recruiterCreditLineLoading[recruiterId]) return;
-
-    try {
-      setRecruiterCreditLineLoading((previous) => ({ ...previous, [recruiterId]: true }));
-      setRecruiterCreditLineError((previous) => ({ ...previous, [recruiterId]: null }));
-      const response = await getRecruiterCreditLines(recruiterId, {
-        start_date: startDate,
-        end_date: endDate,
-      });
-      setRecruiterCreditLines((previous) => ({ ...previous, [recruiterId]: response }));
-    } catch (lineError) {
-      setRecruiterCreditLineError((previous) => ({
-        ...previous,
-        [recruiterId]: lineError.message || 'Failed to fetch recruiter credit lines.',
-      }));
-    } finally {
-      setRecruiterCreditLineLoading((previous) => ({ ...previous, [recruiterId]: false }));
-    }
-  };
-
   const renderUsageCategories = (categories = []) => (
     <div className={styles.usageLineWrap}>
       {categories.map((category) => (
         (() => {
           const showSpeechColumns = ['ai_interview', 'practice_interview'].includes(category.key);
-          const emptyColSpan = showSpeechColumns ? 9 : 7;
+          // Face-match similarity (ID card vs interview capture) is scored in
+          // the background for real interviews only — advisory, never blocking.
+          const showFaceMatch = category.key === 'ai_interview';
+          const emptyColSpan = 7 + (showSpeechColumns ? 2 : 0) + (showFaceMatch ? 1 : 0);
 
           return (
             <div key={category.key} className={styles.usageCategoryCard}>
@@ -620,8 +542,9 @@ const CostStatistics = () => {
                       <th>Model</th>
                       <th>Prompt Tokens</th>
                       <th>Completion Tokens</th>
-                      {showSpeechColumns && <th>STT (sec, answer-token derived)</th>}
-                      {showSpeechColumns && <th>TTS (question-token proxy)</th>}
+                      {showSpeechColumns && <th>STT (sec, spoken answers)</th>}
+                      {showSpeechColumns && <th>TTS (chars)</th>}
+                      {showFaceMatch && <th>Face Match (ID vs capture)</th>}
                       <th>Formula</th>
                       <th>Calculated Cost</th>
                       <th>Actual Cost</th>
@@ -637,6 +560,9 @@ const CostStatistics = () => {
                         <td>{line.completion_tokens || 0}</td>
                         {showSpeechColumns && <td>{truncateTo2Decimals(line.stt_seconds)}</td>}
                         {showSpeechColumns && <td>{line.tts_characters || 0}</td>}
+                        {showFaceMatch && (
+                          <td>{typeof line.face_match_score === 'number' ? `${Math.round(line.face_match_score)}%` : '-'}</td>
+                        )}
                         <td>{line.formula}</td>
                         <td>{formatMoney(line.calculated_cost_inr ?? line.cost_inr)}</td>
                         <td>{formatOptionalMoney(line.actual_cost_inr)}</td>
@@ -657,53 +583,12 @@ const CostStatistics = () => {
     </div>
   );
 
-  const renderCreditCategories = (categories = []) => {
-    const deductionCategory = categories.find((category) => category.key === 'deductions');
-    const rows = deductionCategory?.lines || [];
-
-    return (
-      <div className={styles.usageCategoryCard}>
-        <div className={styles.usageCategoryHeader}>
-          <strong>Recent Credit Activity</strong>
-          <span>Real wallet transactions only. No synthetic or estimated rows.</span>
-        </div>
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Activity Type</th>
-                <th>Credits Deducted</th>
-                <th>Remaining Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((line) => (
-                <tr key={`credit-${line.id}-${line.timestamp || 'na'}`}>
-                  <td>{line.timestamp ? new Date(line.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
-                  <td>{line.type}</td>
-                  <td>{formatCredits(line.amount_inr)}</td>
-                  <td>{formatCredits(line.balance_after)}</td>
-                </tr>
-              ))}
-              {!rows.length && (
-                <tr>
-                  <td colSpan={4} className={styles.emptyCell}>No credit activity in selected timeline.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <AdminLayout activeTab="cost-statistics">
       <div className={styles.wrapper}>
         <div className={styles.headerBlock}>
           <h1>Admin Cost Statistics</h1>
-          <p>Select a timeline and review complete cost, incoming money, and profitability.</p>
+          <p>Select a timeline and review complete cost (₹), incoming money, and profitability. Credit balances and usage moved to the separate Credit Statistics page.</p>
         </div>
 
         <section className={styles.card}>
@@ -815,23 +700,35 @@ const CostStatistics = () => {
             </section>
 
             <section className={styles.card}>
-              <h2>Infrastructure Cost</h2>
+              <h2>Infrastructure & Provider Cost</h2>
+              <p className={styles.subText}>
+                Monthly actuals entered via env (INFRA_MONTHLY_*_INR) from each provider's billing console — GCP (Cloud Run, Build, Storage, Artifact Registry, Speech), OpenAI, Gemini, Groq — pro-rated over the selected timeline. Zero entries are hidden.
+              </p>
               <div className={styles.kpiGrid}>
                 <div className={styles.kpiCard}>
-                  <h3>Cloudflare (Monthly Assumption)</h3>
+                  <h3>Cloudflare (Monthly)</h3>
                   <p>{formatMoney(infraCosts?.cloudflare?.monthly_assumption_inr)}</p>
                   <small>Pro-rated: {formatMoney(infraCosts?.cloudflare?.prorated_cost_inr)}</small>
                   <small>Derived GPU share: {formatMoney(infraCosts?.cloudflare?.gpu_component_inr)}</small>
                 </div>
                 <div className={styles.kpiCard}>
-                  <h3>MongoDB (Monthly Assumption)</h3>
+                  <h3>MongoDB (Monthly)</h3>
                   <p>{formatMoney(infraCosts?.mongodb?.monthly_assumption_inr)}</p>
                   <small>Pro-rated: {formatMoney(infraCosts?.mongodb?.prorated_cost_inr)}</small>
                 </div>
+                {['gcp', 'openai', 'gemini', 'groq'].map((providerKey) => (
+                  infraCosts?.[providerKey] ? (
+                    <div key={providerKey} className={styles.kpiCard}>
+                      <h3>{infraCosts[providerKey].label || providerKey.toUpperCase()} (Monthly)</h3>
+                      <p>{formatMoney(infraCosts[providerKey].monthly_assumption_inr)}</p>
+                      <small>Pro-rated: {formatMoney(infraCosts[providerKey].prorated_cost_inr)}</small>
+                    </div>
+                  ) : null
+                ))}
                 <div className={styles.kpiCard}>
                   <h3>Total Infrastructure Cost</h3>
                   <p>{formatMoney(infraCosts?.total_infrastructure_cost_inr)}</p>
-                  <small>Cloudflare + MongoDB</small>
+                  <small>All entries above, pro-rated for the timeline</small>
                 </div>
               </div>
             </section>
@@ -902,7 +799,7 @@ const CostStatistics = () => {
 
             <section className={styles.card}>
               <h2>Actual Usage by Candidate</h2>
-              <p className={styles.subText}>Per-candidate practice interview usage with count, average, total, and row-level transparency. STT is shown as answer-token-derived seconds, and TTS uses question-token proxy.</p>
+              <p className={styles.subText}>Per-candidate practice interview usage with count, average, total, and row-level transparency. STT seconds come from real measured audio when logged, otherwise derived from the candidate's spoken answers (never wall-clock time); TTS uses spoken-question characters.</p>
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
                   <thead>
@@ -1028,7 +925,7 @@ const CostStatistics = () => {
                             <td colSpan={16} className={styles.expandPanelCell}>
                               {recruiterLineLoading[row.recruiter_id] && <div className={styles.inlineStatus}>Loading recruiter rows...</div>}
                               {recruiterLineError[row.recruiter_id] && <div className={styles.inlineError}>{recruiterLineError[row.recruiter_id]}</div>}
-                              {!recruiterLineLoading[row.recruiter_id] && !recruiterLineError[row.recruiter_id] && renderCreditCategories(recruiterCreditLines[row.recruiter_id]?.categories || [])}
+                              {!recruiterLineLoading[row.recruiter_id] && !recruiterLineError[row.recruiter_id] && renderUsageCategories(recruiterUsageLines[row.recruiter_id]?.categories || [])}
                             </td>
                           </tr>
                         )}
@@ -1077,122 +974,6 @@ const CostStatistics = () => {
                   <p className={profitability?.profit_net_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_net_inr)}</p>
                   <small>Margin: {profitability?.margin_net_pct || 0}%</small>
                 </div>
-              </div>
-            </section>
-
-            <section className={styles.card}>
-              <h2>Credit Usage by Candidate</h2>
-              <p className={styles.subText}>Per-candidate credit balance, recharge history, and usage for the selected timeline.</p>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Expand</th>
-                      <th>Candidate</th>
-                      <th>Current Balance</th>
-                      <th>Last Recharge Date</th>
-                      <th>Last Recharge Plan</th>
-                      <th>Total Credit Usage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {candidateCreditRows.map((row) => (
-                      <React.Fragment key={row.candidate_id}>
-                        <tr>
-                          <td>
-                            <button
-                              type="button"
-                              className={styles.expandBtn}
-                              onClick={() => toggleCandidateCreditExpand(row.candidate_id)}
-                            >
-                              {expandedCandidateCredits[row.candidate_id] ? 'Hide' : 'Show'}
-                            </button>
-                          </td>
-                          <td>
-                            <div>{row.name}</div>
-                            <small>{row.email}</small>
-                          </td>
-                          <td>{formatCredits(row.current_balance_inr)}</td>
-                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN') : '-'}</td>
-                          <td>{row.last_recharge_plan || '-'}</td>
-                          <td>{formatCredits(row.total_usage_inr)}</td>
-                        </tr>
-                        {expandedCandidateCredits[row.candidate_id] && (
-                          <tr>
-                            <td colSpan={6} className={styles.expandPanelCell}>
-                              {candidateCreditLineLoading[row.candidate_id] && <div className={styles.inlineStatus}>Loading candidate credit lines...</div>}
-                              {candidateCreditLineError[row.candidate_id] && <div className={styles.inlineError}>{candidateCreditLineError[row.candidate_id]}</div>}
-                              {!candidateCreditLineLoading[row.candidate_id] && !candidateCreditLineError[row.candidate_id] && renderCreditCategories(candidateCreditLines[row.candidate_id]?.categories || [])}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    {!candidateCreditRows.length && (
-                      <tr>
-                        <td colSpan={6} className={styles.emptyCell}>No candidate credit rows for selected timeline.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className={styles.card}>
-              <h2>Credit Usage by Recruiter</h2>
-              <p className={styles.subText}>Per-recruiter credit balance, recharge history, and usage for the selected timeline.</p>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Expand</th>
-                      <th>Recruiter</th>
-                      <th>Current Balance</th>
-                      <th>Last Recharge Date</th>
-                      <th>Last Recharge Plan</th>
-                      <th>Total Credit Usage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recruiterCreditRows.map((row) => (
-                      <React.Fragment key={row.recruiter_id}>
-                        <tr>
-                          <td>
-                            <button
-                              type="button"
-                              className={styles.expandBtn}
-                              onClick={() => toggleRecruiterCreditExpand(row.recruiter_id)}
-                            >
-                              {expandedRecruiterCredits[row.recruiter_id] ? 'Hide' : 'Show'}
-                            </button>
-                          </td>
-                          <td>
-                            <div>{row.name}</div>
-                            <small>{row.email}</small>
-                          </td>
-                          <td>{formatCredits(row.current_balance_inr)}</td>
-                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN') : '-'}</td>
-                          <td>{row.last_recharge_plan || '-'}</td>
-                          <td>{formatCredits(row.total_usage_inr)}</td>
-                        </tr>
-                        {expandedRecruiterCredits[row.recruiter_id] && (
-                          <tr>
-                            <td colSpan={6} className={styles.expandPanelCell}>
-                              {recruiterCreditLineLoading[row.recruiter_id] && <div className={styles.inlineStatus}>Loading recruiter credit lines...</div>}
-                              {recruiterCreditLineError[row.recruiter_id] && <div className={styles.inlineError}>{recruiterCreditLineError[row.recruiter_id]}</div>}
-                              {!recruiterCreditLineLoading[row.recruiter_id] && !recruiterCreditLineError[row.recruiter_id] && renderCreditCategories(recruiterCreditLines[row.recruiter_id]?.categories || [])}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    {!recruiterCreditRows.length && (
-                      <tr>
-                        <td colSpan={6} className={styles.emptyCell}>No recruiter credit rows for selected timeline.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
               </div>
             </section>
 

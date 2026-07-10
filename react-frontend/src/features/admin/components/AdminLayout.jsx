@@ -18,6 +18,7 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
     if (path.includes("/admin/recruiters")) return "recruiters";
     if (path.includes("/admin/admins")) return "admins";
     if (path.includes("/admin/verification")) return "verification";
+    if (path.includes("/admin/credit-statistics")) return "credit-statistics";
     if (path.includes("/admin/cost-statistics")) return "cost-statistics";
     if (path.includes("/admin/jobs")) return "jobs";
     return "overview";
@@ -116,6 +117,18 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="12" y1="1" x2="12" y2="23"></line>
           <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+      ),
+    },
+    {
+      id: "credit-statistics",
+      label: "Credit Statistics",
+      path: "/admin/credit-statistics",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <ellipse cx="12" cy="6" rx="8" ry="3"></ellipse>
+          <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"></path>
+          <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"></path>
         </svg>
       ),
     },

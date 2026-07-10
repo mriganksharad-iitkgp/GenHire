@@ -1,7 +1,19 @@
 """Cost statistics: platform cost overview plus per-candidate/per-recruiter usage summaries and line items."""
 
 import datetime
+import os
+
 from bson import ObjectId
+
+
+def _env_monthly_inr(name, default):
+    """Monthly INR figure from env — lets the owner keep real billing numbers
+    (GCP invoice, OpenAI/Gemini/Groq spend, Cloudflare, MongoDB Atlas) current
+    without a code change: update the env var, restart, done."""
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
 
 
 class CostStatsAdmin:
@@ -140,37 +152,24 @@ class CostStatsAdmin:
             pricing = CostTracker.PRICING
             inr_per_usd = 83.0
 
-            # User-provided assumptions
+            # Monthly infrastructure/provider actuals — env-driven so the
+            # owner can mirror real invoices (GCP billing console, OpenAI
+            # usage dashboard, Google AI Studio billing, Groq console) here.
+            # Zero means "not incurred / not entered yet" and the entry is
+            # hidden from the admin UI.
             monthly_infra_assumptions = {
-                "cloudflare": 5000.0,
-                "mongodb": 3000.0,
+                "cloudflare": _env_monthly_inr("INFRA_MONTHLY_CLOUDFLARE_INR", 5000.0),
+                "mongodb": _env_monthly_inr("INFRA_MONTHLY_MONGODB_INR", 3000.0),
+                "gcp": _env_monthly_inr("INFRA_MONTHLY_GCP_INR", 0.0),
+                "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 0.0),
+                "gemini": _env_monthly_inr("INFRA_MONTHLY_GEMINI_INR", 0.0),
+                "groq": _env_monthly_inr("INFRA_MONTHLY_GROQ_INR", 0.0),
             }
             cloudflare_gpu_ratio = 245.0 / (245.0 + 100.0)
 
-            action_assumptions = {
-                "cv_scoring": {
-                    "model": "gemini-1.5-flash-latest",
-                    "prompt_tokens": 1800,
-                    "completion_tokens": 600,
-                },
-                "ai_jd_generation": {
-                    "model": "llama-3.3-70b-versatile",
-                    "prompt_tokens": 1500,
-                    "completion_tokens": 1200,
-                },
-                "ai_interview": {
-                    "model": "gpt-4o",
-                    "prompt_tokens": 4200,
-                    "completion_tokens": 2100,
-                    "stt_seconds": 900,
-                    "tts_characters": 22000,
-                },
-                "evaluation": {
-                    "model": "gpt-5-mini",
-                    "prompt_tokens": 1500,
-                    "completion_tokens": 1000,
-                },
-            }
+            # Single source of truth for fallback assumptions (gpt-4o-mini
+            # across the board) — see CostStatsHelpers._action_assumptions.
+            action_assumptions = self._action_assumptions()
 
             def _aggregate_line_item(key, title, model, formula, lines):
                 total = sum(float(line.get('cost_inr', 0.0) or 0.0) for line in lines)
@@ -431,8 +430,34 @@ class CostStatsAdmin:
                     "prorated_cost_inr": _round_money(mongodb_prorated),
                 },
             }
+
+            # External provider actuals (env-entered monthly figures mirroring
+            # real invoices): GCP (Cloud Run/Build/Storage/Artifact Registry
+            # etc.) and the three LLM providers. Zero entries are omitted.
+            external_provider_labels = {
+                "gcp": "Google Cloud Platform (Cloud Run, Build, Storage, Artifact Registry, Speech)",
+                "openai": "OpenAI API",
+                "gemini": "Google Gemini API",
+                "groq": "Groq API",
+            }
+            external_prorated_total = 0.0
+            for provider_key, provider_label in external_provider_labels.items():
+                monthly_value = monthly_infra_assumptions.get(provider_key, 0.0)
+                if monthly_value <= 0:
+                    continue
+                provider_prorated = _monthly_cost_for_window(
+                    monthly_value, period_start, period_end
+                )
+                external_prorated_total += provider_prorated
+                infrastructure_costs[provider_key] = {
+                    "label": provider_label,
+                    "monthly_assumption_inr": _round_money(monthly_value),
+                    "prorated_cost_inr": _round_money(provider_prorated),
+                    "note": f"Env-entered actual (INFRA_MONTHLY_{provider_key.upper()}_INR) from the provider's billing console.",
+                }
+
             total_infrastructure_cost_inr = _round_money(
-                cloudflare_total_prorated + mongodb_prorated
+                cloudflare_total_prorated + mongodb_prorated + external_prorated_total
             )
             total_cost_inr = _round_money(
                 total_ai_cost_inr + total_infrastructure_cost_inr

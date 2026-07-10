@@ -72,6 +72,8 @@ class CostTracker:
         # gemini-1.5-flash was retired by Google; gemini-2.5-flash is the
         # current fallback model (see session_manager._create_fallback_llm).
         "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+        # Chain's Gemini default (LLM_GEMINI_MODEL) — flash-lite pricing.
+        "gemini-flash-lite-latest": {"input": 0.075, "output": 0.30},
         "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
         # Google Cloud Speech-to-Text (per minute, assumed $0.024/min)
         "google-stt": {"price_per_minute": 0.024},
@@ -163,13 +165,16 @@ class CostTracker:
     def _calculate_llm_cost(
         self, model: str, prompt_tokens: int, completion_tokens: int
     ) -> float:
-        model_key = "gpt-4o"
+        # Unrecognized models are priced as gpt-4o-mini — the chain's primary
+        # (LLM_PROVIDER_PRIORITY=openai,...) — so estimates track what the
+        # platform actually runs on.
+        model_key = "gpt-4o-mini"
         for key in self.PRICING:
             if key in model.lower() and not any(s in key for s in ["stt", "tts"]):
                 model_key = key
                 break
 
-        rates = self.PRICING.get(model_key, self.PRICING["gpt-4o"])
+        rates = self.PRICING.get(model_key, self.PRICING["gpt-4o-mini"])
         input_cost = (prompt_tokens / 1_000_000) * rates["input"]
         output_cost = (completion_tokens / 1_000_000) * rates["output"]
         
@@ -329,7 +334,7 @@ class CostTracker:
         completion_tokens: int = 0,
         stt_seconds: float = 0.0,
         tts_characters: int = 0,
-        llm_model: str = "llama-3.3-70b-versatile",
+        llm_model: str = "gpt-4o-mini",
     ) -> Dict:
         llm_cost = self._calculate_llm_cost(
             llm_model,
@@ -404,7 +409,7 @@ class CostTracker:
                     tts_characters=int(
                         fallback_data.get("total_tts_characters", 0) or 0
                     ),
-                    llm_model=fallback_data.get("model", "llama-3.3-70b-versatile"),
+                    llm_model=fallback_data.get("model", "gpt-4o-mini"),
                 )
 
             if clear_events and session_key in self.session_totals:

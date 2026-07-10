@@ -49,6 +49,7 @@ const CandidateDetail = React.lazy(() => import("features/admin/pages/CandidateD
 const RecruiterDetail = React.lazy(() => import("features/admin/pages/RecruiterDetail"));
 const Verification = React.lazy(() => import("features/admin/pages/Verification"));
 const CostStatistics = React.lazy(() => import("features/admin/pages/CostStatistics"));
+const CreditStatistics = React.lazy(() => import("features/admin/pages/CreditStatistics"));
 
 // Recruiter pages
 const RecruiterCostStatistics = React.lazy(() => import("features/recruiter/pages/RecruiterCostStatistics"));
@@ -104,6 +105,7 @@ export default function AppRoutes() {
         <Route path="/admin/admins" element={admin(<ManageAdmins />)} />
         <Route path="/admin/verification" element={admin(<Verification />)} />
         <Route path="/admin/cost-statistics" element={admin(<CostStatistics />)} />
+        <Route path="/admin/credit-statistics" element={admin(<CreditStatistics />)} />
 
         {/* Role dashboards & stats */}
         <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />

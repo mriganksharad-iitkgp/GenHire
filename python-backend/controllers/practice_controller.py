@@ -720,17 +720,24 @@ class PracticeController:
                 f"Built transcript with {len(transcript)} messages from interview_data"
             )
 
-            created_at = session.get("created_at")
             completed_at = datetime.utcnow()
-            stt_seconds = 0.0
-            if isinstance(created_at, datetime):
-                stt_seconds = max(0.0, (completed_at - created_at).total_seconds())
 
+            # STT time must reflect the candidate's SPOKEN answers, never
+            # wall-clock session duration — a practice tab left open (or a
+            # session finalized later) used to record days' worth of "audio
+            # seconds" and produce ₹28k/session rows in the cost statistics.
             tts_characters = sum(
                 len(((item.get("text") or item.get("content") or "")).strip())
                 for item in transcript
                 if item.get("role") == "assistant"
             )
+            answer_chars = sum(
+                len(((item.get("text") or item.get("content") or "")).strip())
+                for item in transcript
+                if item.get("role") == "user"
+            )
+            # ~4 chars/token, ~0.4 s of speech per token (≈150 wpm), 2 h cap.
+            stt_seconds = min((answer_chars / 4.0) * 0.4, 7200.0)
 
             usage_summary = CostTracker().end_session(
                 session_id,
@@ -740,9 +747,14 @@ class PracticeController:
                     "total_completion_tokens": 0,
                     "total_stt_seconds": stt_seconds,
                     "total_tts_characters": int(tts_characters or 0),
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "gpt-4o-mini",
                 },
             )
+
+            # Prefer the tracker's real measured totals (populated by actual
+            # STT/TTS calls during the session) over the transcript estimate.
+            stt_seconds = float(usage_summary.get("total_stt_seconds") or stt_seconds)
+            tts_characters = int(usage_summary.get("total_tts_characters") or tts_characters or 0)
 
             usage_deduction = session.get("usage_deduction")
             if not usage_deduction:
@@ -846,7 +858,7 @@ class PracticeController:
                 action_type="practice_interview",
                 actor_type="candidate",
                 actor_id=user_id,
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 stt_seconds=stt_seconds,
                 tts_characters=int(tts_characters or 0),
                 usage_source="actual",
@@ -864,7 +876,7 @@ class PracticeController:
                     action_type="practice_interview_evaluation",
                     actor_type="candidate",
                     actor_id=user_id,
-                    model="gpt-5-mini",
+                    model="gpt-4o-mini",
                     usage_source="assumed",
                     source={
                         "type": "practice_session",

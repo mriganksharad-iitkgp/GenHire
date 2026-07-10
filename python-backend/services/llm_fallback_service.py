@@ -79,7 +79,9 @@ def is_quota_error(error: Exception) -> bool:
 # ---------------------------------------------------------------------------
 
 _ALIASES = {"gemini": "google", "google": "google", "openai": "openai", "groq": "groq"}
-_DEFAULT_PRIORITY = ["groq", "google", "openai"]
+# Owner-chosen default (2026-07-11): OpenAI gpt-4o-mini first, then Gemini,
+# then Groq — env LLM_PROVIDER_PRIORITY still overrides.
+_DEFAULT_PRIORITY = ["openai", "google", "groq"]
 
 PROVIDER_SPECS = {
     "google": {"key_env": "GOOGLE_API_KEY", "model_env": "LLM_GEMINI_MODEL",
