@@ -5,7 +5,24 @@ import { getToken } from "shared/utils/session";
 
 // Human-readable rendering of the identity_verification verdict set by
 // /register-face (see face_verification_service.py on the backend).
+// Since the score-only flow, the live capture is similarity-scored against
+// the candidate's uploaded ID card in the background and never blocks the
+// interview — "scored" entries are rendered dynamically from the score.
 const IDENTITY_DISPLAY = {
+  score_pending: {
+    label: "Face Match Pending",
+    color: "#1e40af",
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    note: "The face capture is still being compared with the candidate's ID card in the background. Check back shortly.",
+  },
+  score_unavailable: {
+    label: "Face Match Unavailable",
+    color: "#9a3412",
+    background: "#fff7ed",
+    border: "#fed7aa",
+    note: "The similarity score could not be computed for this session (scoring service unavailable or ID card unreadable). The captured photo is shown for manual review.",
+  },
   verified: {
     label: "Identity Verified",
     color: "#166534",
@@ -389,7 +406,38 @@ export default function InterviewReportModal({
                   <div style={{ marginBottom: 18 }}>
                     <SectionTitle>🪪 Candidate Identity</SectionTitle>
                     {(() => {
+                      const scorePct =
+                        typeof identity.score === "number"
+                          ? Math.round(identity.score)
+                          : null;
+                      // "scored" is rendered dynamically: green when the model
+                      // judged the capture to match the ID card, amber when not.
+                      const scoredDisplay =
+                        identity.status === "scored"
+                          ? identity.matched === false
+                            ? {
+                                label:
+                                  scorePct !== null
+                                    ? `Face Match ${scorePct}% — Below Threshold`
+                                    : "Face Match — Below Threshold",
+                                color: "#991b1b",
+                                background: "#fef2f2",
+                                border: "#fecdd3",
+                                note: "The interview face capture scored below the similarity threshold against the candidate's ID card. This is advisory only — the interview was not blocked. Review the photos below.",
+                              }
+                            : {
+                                label:
+                                  scorePct !== null
+                                    ? `Face Match ${scorePct}%`
+                                    : "Face Match Scored",
+                                color: "#166534",
+                                background: "#f0fdf4",
+                                border: "#bbf7d0",
+                                note: "Similarity between the interview face capture and the candidate's uploaded ID card, scored automatically in the background.",
+                              }
+                          : null;
                       const display =
+                        scoredDisplay ||
                         IDENTITY_DISPLAY[identity.status] || {
                           label: "Identity Status Unknown",
                           color: "#475569",
@@ -423,8 +471,16 @@ export default function InterviewReportModal({
                             >
                               {display.label}
                             </span>
-                            {typeof identity.distance === "number" &&
+                            {typeof identity.score === "number" &&
                               typeof identity.threshold === "number" && (
+                                <span style={{ color: "#5f6b7a", fontSize: 12 }}>
+                                  similarity {Math.round(identity.score)}% (threshold{" "}
+                                  {Math.round(identity.threshold)}%)
+                                </span>
+                              )}
+                            {typeof identity.distance === "number" &&
+                              typeof identity.threshold === "number" &&
+                              typeof identity.score !== "number" && (
                                 <span style={{ color: "#5f6b7a", fontSize: 12 }}>
                                   match distance {identity.distance.toFixed(3)} (threshold{" "}
                                   {identity.threshold.toFixed(3)})

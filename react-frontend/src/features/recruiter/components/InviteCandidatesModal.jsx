@@ -9,8 +9,14 @@ const TABS = {
   BULK: "bulk",
 };
 
+// Recruiter-chosen access window: both the magic link and the Invite ID +
+// password login stop working after this many days (re-inviting refreshes it).
+const VALIDITY_OPTIONS = [3, 7, 14, 30];
+const DEFAULT_VALIDITY_DAYS = 7;
+
 const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   const [inviteType, setInviteType] = useState("apply");
+  const [validityDays, setValidityDays] = useState(DEFAULT_VALIDITY_DAYS);
   const [tab, setTab] = useState(TABS.FILE);
 
   const [file, setFile] = useState(null);
@@ -21,6 +27,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [copiedLink, setCopiedLink] = useState("");
   const pollRef = useRef(null);
 
   const stopPolling = () => {
@@ -40,6 +47,8 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
       setResult(null);
       setTab(TABS.FILE);
       setInviteType("apply");
+      setValidityDays(DEFAULT_VALIDITY_DAYS);
+      setCopiedLink("");
     }
   }, [isOpen]);
 
@@ -96,6 +105,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
         emails: preview.valid,
         invite_type: inviteType,
         source: sourceForCurrentTab,
+        validity_days: validityDays,
       });
       setResult({ ...started, totals: { sent: 0, skipped: 0, failed: 0 } });
 
@@ -168,6 +178,26 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                 <strong>Invite to interview</strong>
                 <span>Pre-shortlisted; candidate skips review and moves to interview.</span>
               </button>
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Access valid for</div>
+            <select
+              className={styles.input}
+              value={validityDays}
+              onChange={(e) => setValidityDays(Number(e.target.value))}
+              disabled={isSending || !!result}
+              aria-label="Invite access validity in days"
+            >
+              {VALIDITY_OPTIONS.map((days) => (
+                <option key={days} value={days}>
+                  {days} days{days === DEFAULT_VALIDITY_DAYS ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            <div className={styles.helperText}>
+              The invite link and login stop working after this window. Re-sending an invite refreshes it.
             </div>
           </div>
 
@@ -311,14 +341,33 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
               )}
               {(result.failed?.length || 0) > 0 && (
                 <div className={styles.detailsBlock}>
-                  <strong>Failed:</strong>
+                  <strong>Failed (email could not be delivered):</strong>
                   <ul>
                     {result.failed.map((row, idx) => (
                       <li key={idx}>
                         {row.email} &mdash; {row.error}
+                        {row.invite_url && (
+                          <button
+                            type="button"
+                            className={styles.secondary}
+                            style={{ marginLeft: 8, padding: "2px 10px", fontSize: 12 }}
+                            onClick={() => {
+                              navigator.clipboard
+                                .writeText(row.invite_url)
+                                .then(() => setCopiedLink(row.invite_url))
+                                .catch(() => {});
+                            }}
+                            title="The invite was created — copy its magic link and share it with the candidate yourself."
+                          >
+                            {copiedLink === row.invite_url ? "✓ Copied" : "Copy invite link"}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
+                  <div className={styles.helperText}>
+                    Invites marked failed were still created — copy the link to share it manually.
+                  </div>
                 </div>
               )}
             </div>

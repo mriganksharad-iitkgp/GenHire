@@ -102,6 +102,7 @@ const RecruiterDashboard = () => {
   });
   const [selectedPosition, setSelectedPosition] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedAccountType, setSelectedAccountType] = useState("");
   const [minCvScore, setMinCvScore] = useState("");
   const [minInterviewScore, setMinInterviewScore] = useState("");
   const [minProctoringScore, setMinProctoringScore] = useState("");
@@ -247,8 +248,18 @@ const RecruiterDashboard = () => {
     let filtered = applications;
 
     if (selectedPosition) {
+      // Value is the job id (a title like "Software Engineer" can exist for
+      // several locations, so the filter must identify the exact job).
       filtered = filtered.filter(
-        (app) => app.job_details?.title === selectedPosition
+        (app) => String(app.job_id) === String(selectedPosition)
+      );
+    }
+
+    if (selectedAccountType) {
+      // "invited" = burner accounts the recruiter created via invites;
+      // "direct" = candidates who registered and applied themselves.
+      filtered = filtered.filter(
+        (app) => (app.candidate_account_type || "direct") === selectedAccountType
       );
     }
 
@@ -292,6 +303,12 @@ const RecruiterDashboard = () => {
       const bv = typeof b[field] === "number" ? b[field] : -Infinity;
       return bv - av;
     };
+    // Ascending variant: missing scores sink to the end either way.
+    const byScoreAsc = (field) => (a, b) => {
+      const av = typeof a[field] === "number" ? a[field] : Infinity;
+      const bv = typeof b[field] === "number" ? b[field] : Infinity;
+      return av - bv;
+    };
 
     const sorted = [...filtered];
     switch (sortBy) {
@@ -301,14 +318,26 @@ const RecruiterDashboard = () => {
       case "cv_score":
         sorted.sort(byScoreDesc("cv_score"));
         break;
+      case "cv_score_asc":
+        sorted.sort(byScoreAsc("cv_score"));
+        break;
       case "interview_score":
         sorted.sort(byScoreDesc("interview_score"));
+        break;
+      case "interview_score_asc":
+        sorted.sort(byScoreAsc("interview_score"));
         break;
       case "proctoring_score":
         sorted.sort(byScoreDesc("proctoring_score"));
         break;
+      case "proctoring_score_asc":
+        sorted.sort(byScoreAsc("proctoring_score"));
+        break;
       case "combined_score":
         sorted.sort(byScoreDesc("combined_score"));
+        break;
+      case "combined_score_asc":
+        sorted.sort(byScoreAsc("combined_score"));
         break;
       case "newest":
       default:
@@ -348,6 +377,7 @@ const RecruiterDashboard = () => {
   const handleClearFilters = () => {
     setSelectedPosition("");
     setSelectedStatus("");
+    setSelectedAccountType("");
     setMinCvScore("");
     setMinInterviewScore("");
     setMinProctoringScore("");
@@ -796,8 +826,10 @@ const RecruiterDashboard = () => {
               jobPostings={jobPostings}
               selectedPosition={selectedPosition}
               selectedStatus={selectedStatus}
+              selectedAccountType={selectedAccountType}
               onPositionChange={(v) => setSelectedPosition(v)}
               onStatusChange={(v) => setSelectedStatus(v)}
+              onAccountTypeChange={(v) => setSelectedAccountType(v)}
               onClear={handleClearFilters}
               minCvScore={minCvScore}
               onMinCvScoreChange={setMinCvScore}

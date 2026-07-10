@@ -3,7 +3,7 @@ import styles from 'features/recruiter/pages/RecruiterDashboard.module.css';
 import { getToken } from "shared/utils/session";
 import { normalizeStatus, statusLabel, applicationStatusLabel } from "shared/utils/applicationStatus";
 
-const CandidateCard = ({ application, displayStatus, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
+const CandidateCard = ({ application, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const cvScorePct = (typeof application.cv_score === 'number')
     ? Math.round(application.cv_score)
     : (typeof application.similarity_score === 'number' ? Math.round(application.similarity_score * 100) : null);
@@ -44,23 +44,36 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
 
   const availableStatuses = getAvailableStatusOptions(normalizeStatus(application.status));
 
-  // Identity verification summary written by /register-face — tells the
-  // recruiter whether the person on camera matched the account's registered
-  // face before this interview.
+  // Identity summary written by /register-face — the live capture is
+  // similarity-scored against the candidate's uploaded ID card in the
+  // background (score-only, never blocking) and the score is shown here so
+  // the recruiter can judge who actually sat the interview.
   const identity = application.identity_verification;
   const identityChip = (() => {
     if (!identity || !identity.status) return null;
+    const score = typeof identity.score === 'number' ? Math.round(identity.score) : null;
+    const scoreText = score !== null ? `Face match ${score}%` : null;
     switch (identity.status) {
+      case 'scored':
+        if (score === null) return { text: 'Face match scored', className: styles.identityChipPending };
+        return identity.matched === false
+          ? { text: `⚠ ${scoreText}`, className: styles.identityChipMismatch }
+          : { text: `✓ ${scoreText}`, className: styles.identityChipMatch };
+      case 'score_pending':
+        return { text: '🪪 Face match pending…', className: styles.identityChipPending };
+      case 'score_unavailable':
+      case 'unverified_system_unavailable':
+        return { text: 'Face match unavailable', className: styles.identityChipUnknown };
+      // Legacy statuses written before scoring became background-only:
       case 'verified':
-        return { text: '✓ ID Verified', color: '#166534', background: '#f0fdf4', border: '#bbf7d0' };
+        return { text: scoreText ? `✓ ${scoreText}` : '✓ ID Verified', className: styles.identityChipMatch };
       case 'registered_new':
-        return { text: '🪪 ID Registered (1st interview)', color: '#1e40af', background: '#eff6ff', border: '#bfdbfe' };
+        return { text: '🪪 ID Registered (1st interview)', className: styles.identityChipPending };
       case 'mismatch':
       case 'mismatch_blocked':
-        return { text: '⚠ ID Mismatch', color: '#991b1b', background: '#fef2f2', border: '#fecdd3' };
+        return { text: scoreText ? `⚠ ${scoreText}` : '⚠ ID Mismatch', className: styles.identityChipMismatch };
       case 'unverified_monitor':
-      case 'unverified_system_unavailable':
-        return { text: 'ID Unverified', color: '#9a3412', background: '#fff7ed', border: '#fed7aa' };
+        return { text: scoreText ? `⚠ ${scoreText}` : 'ID Unverified', className: styles.identityChipUnknown };
       default:
         return null;
     }
@@ -77,6 +90,14 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           <p>{application.student_email}</p>
           <p>{application.student_profile?.phone || 'No phone provided'}</p>
           <span className={styles.jobBadge}>{application.job_title}</span>
+          {application.candidate_account_type === 'invited' && (
+            <span
+              className={styles.invitedBadge}
+              title="This candidate was invited by you — their account was created through a recruiter invite."
+            >
+              ✉ Invited
+            </span>
+          )}
         </div>
       </div>
 
@@ -97,17 +118,8 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
           <div className={styles.scoreItem}>
             <span className={styles.scoreLabel}>Identity</span>
             <span
-              style={{
-                color: identityChip.color,
-                background: identityChip.background,
-                border: `1px solid ${identityChip.border}`,
-                borderRadius: 12,
-                padding: '2px 10px',
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-              }}
-              title="Face verification result from the pre-interview identity check"
+              className={`${styles.identityChip} ${identityChip.className}`}
+              title="Similarity between the interview face capture and the candidate's uploaded ID card (advisory — it never blocks the interview)"
             >
               {identityChip.text}
             </span>
@@ -115,28 +127,34 @@ const CandidateCard = ({ application, displayStatus, updateApplicationStatus, vi
         )}
         {cvScorePct !== null && (
           <div className={styles.scoreItem}>
-            <span className={styles.scoreLabel}>CV Score</span>
+            <div className={styles.scoreLabelRow}>
+              <span className={styles.scoreLabel}>CV Score</span>
+              <span className={styles.scoreValue}>{cvScorePct}%</span>
+            </div>
             <div className={styles.scoreBar}>
               <div className={styles.scoreFill} style={{ width: `${cvScorePct}%`, background: '#4a90e2' }} />
-              <span className={styles.scoreText}>{cvScorePct}%</span>
             </div>
           </div>
         )}
         {interviewScorePct !== null && (
           <div className={styles.scoreItem}>
-            <span className={styles.scoreLabel}>Interview</span>
+            <div className={styles.scoreLabelRow}>
+              <span className={styles.scoreLabel}>Interview</span>
+              <span className={styles.scoreValue}>{interviewScorePct}%</span>
+            </div>
             <div className={styles.scoreBar}>
               <div className={styles.scoreFill} style={{ width: `${interviewScorePct}%`, background: '#27ae60' }} />
-              <span className={styles.scoreText}>{interviewScorePct}%</span>
             </div>
           </div>
         )}
         {proctoringScorePct !== null && (
           <div className={styles.scoreItem}>
-            <span className={styles.scoreLabel}>Proctoring</span>
+            <div className={styles.scoreLabelRow}>
+              <span className={styles.scoreLabel}>Proctoring</span>
+              <span className={styles.scoreValue}>{proctoringScorePct}%</span>
+            </div>
             <div className={styles.scoreBar}>
               <div className={styles.scoreFill} style={{ width: `${proctoringScorePct}%`, background: '#8e44ad' }} />
-              <span className={styles.scoreText}>{proctoringScorePct}%</span>
             </div>
           </div>
         )}

@@ -12,17 +12,31 @@ const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest First' },
   { value: 'oldest', label: 'Oldest First' },
   { value: 'cv_score', label: 'CV Score (High to Low)' },
+  { value: 'cv_score_asc', label: 'CV Score (Low to High)' },
   { value: 'interview_score', label: 'Interview Score (High to Low)' },
+  { value: 'interview_score_asc', label: 'Interview Score (Low to High)' },
   { value: 'proctoring_score', label: 'Proctoring Score (High to Low)' },
+  { value: 'proctoring_score_asc', label: 'Proctoring Score (Low to High)' },
   { value: 'combined_score', label: 'Combined Score (High to Low)' },
+  { value: 'combined_score_asc', label: 'Combined Score (Low to High)' },
 ];
+
+// A job title can be posted several times for different locations, so the
+// position filter identifies the exact job (value = job id) and labels it
+// "Title — Location".
+const jobOptionLabel = (job) => {
+  const title = job.title || 'Untitled role';
+  return job.location ? `${title} — ${job.location}` : title;
+};
 
 const CandidatesFilters = ({
   jobPostings,
   selectedPosition,
   selectedStatus,
+  selectedAccountType,
   onPositionChange,
   onStatusChange,
+  onAccountTypeChange,
   onClear,
   minCvScore,
   onMinCvScoreChange,
@@ -34,7 +48,12 @@ const CandidatesFilters = ({
   onSortByChange,
 }) => {
   const hasActiveFilters =
-    selectedPosition || selectedStatus || minCvScore || minInterviewScore || minProctoringScore;
+    selectedPosition ||
+    selectedStatus ||
+    selectedAccountType ||
+    minCvScore ||
+    minInterviewScore ||
+    minProctoringScore;
 
   return (
     <div className={styles.candidateFilters}>
@@ -42,10 +61,14 @@ const CandidatesFilters = ({
         className={styles.filterSelect}
         value={selectedPosition}
         onChange={(e) => onPositionChange(e.target.value)}
+        aria-label="Filter by job role and location"
+        title="Filter by job role and location"
       >
         <option value="">All Job Roles</option>
         {jobPostings.map((job, idx) => (
-          <option key={job._id || job.id || `jobopt-${idx}`} value={job.title}>{job.title}</option>
+          <option key={job._id || job.id || `jobopt-${idx}`} value={job._id || job.id}>
+            {jobOptionLabel(job)}
+          </option>
         ))}
       </select>
       <select
@@ -60,6 +83,17 @@ const CandidatesFilters = ({
         <option value="Interviewed">Interviewed</option>
         <option value="screening_cleared">Screening Cleared</option>
         <option value="Rejected">Screening Not Cleared</option>
+      </select>
+      <select
+        className={styles.filterSelect}
+        value={selectedAccountType}
+        onChange={(e) => onAccountTypeChange(e.target.value)}
+        aria-label="Filter by candidate source"
+        title="Direct applicants vs candidates you invited"
+      >
+        <option value="">All Candidates</option>
+        <option value="direct">Direct Applicants</option>
+        <option value="invited">Invited Candidates</option>
       </select>
       <select
         className={styles.filterSelect}

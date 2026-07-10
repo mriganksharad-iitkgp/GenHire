@@ -39,10 +39,10 @@ export async function previewInvites(jobId, { file, text, single } = {}) {
   });
 }
 
-export async function sendInvites(jobId, { emails, invite_type, source = "manual" }) {
+export async function sendInvites(jobId, { emails, invite_type, source = "manual", validity_days }) {
   return jsonRequest(`/recruiter/jobs/${jobId}/invites`, {
     method: "POST",
-    body: { emails, invite_type, source },
+    body: { emails, invite_type, source, validity_days },
   });
 }
 

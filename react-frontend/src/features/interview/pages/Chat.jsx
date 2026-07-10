@@ -685,22 +685,9 @@ export default function Chat({ interviewId }) {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        // Identity permanently blocked — the captured face repeatedly failed
-        // to match this account's registered identity.
-        if (result.error_code === "face_mismatch_blocked") {
-          setIdentityBlockMessage(
-            result.error ||
-              "Face verification failed repeatedly — this interview attempt has been locked.",
-          );
-          setInterviewStatus("identity_blocked");
-          if (document.fullscreenElement) {
-            document.exitFullscreen().catch(() => {});
-          }
-          stopCamera();
-          return;
-        }
         // No identity card on file — the candidate must upload one in their
-        // profile before any real interview can start.
+        // profile before any real interview can start (it's the reference
+        // the background similarity scoring compares against).
         if (result.error_code === "identity_card_required") {
           setIdentityBlockMessage(
             result.error ||
@@ -711,17 +698,6 @@ export default function Chat({ interviewId }) {
             document.exitFullscreen().catch(() => {});
           }
           stopCamera();
-          return;
-        }
-        // Mismatch with attempts left — keep the candidate on this screen.
-        if (result.error_code === "face_mismatch") {
-          const attemptsNote =
-            typeof result.attempts_remaining === "number"
-              ? ` Attempts remaining: ${result.attempts_remaining}.`
-              : "";
-          showToast(
-            `${result.error || "The captured face does not match the identity registered on this account."}${attemptsNote}`,
-          );
           return;
         }
         // Capture-quality problems (no face / multiple faces / bad image).
@@ -736,11 +712,10 @@ export default function Chat({ interviewId }) {
         throw new Error(result.error || result.message || "Face registration failed.");
       }
 
+      // Identity similarity vs the ID card is scored in the background and
+      // never blocks the interview — no mismatch handling needed here.
       const identityInfo = result.identity || {};
       setIdentityStatus(identityInfo.status || null);
-      if (identityInfo.status === "verified") {
-        showToast("Identity verified against your ID card ✓", "success");
-      }
 
       console.log(
         "✅ Face registered successfully, starting live proctoring...",
@@ -2354,7 +2329,7 @@ export default function Chat({ interviewId }) {
         <p style={{ color: "#64748b", fontSize: "1rem", marginBottom: "28px", textAlign: "center", maxWidth: "520px", lineHeight: "1.6" }}>
           Your camera, microphone, and tracking systems are verified.
         </p>
-        {(identityStatus === "verified" || identityStatus === "registered_new") && (
+        {identityStatus === "score_pending" && (
           <p
             style={{
               color: "#166534",
@@ -2367,9 +2342,7 @@ export default function Chat({ interviewId }) {
               marginBottom: "12px",
             }}
           >
-            {identityStatus === "verified"
-              ? "🪪 Identity verified — face matched your registered account identity."
-              : "🪪 Face registered — this photo is now your account's verified identity."}
+            🪪 Face captured — it will be compared with your ID card in the background.
           </p>
         )}
         <div style={{ textAlign: "center", marginTop: "20px" }}>
