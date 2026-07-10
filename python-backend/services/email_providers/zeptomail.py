@@ -34,6 +34,7 @@ class ZeptoMailProvider(EmailProvider):
         reply_to: Optional[str] = None,
     ) -> bool:
         if not self.api_key or not (from_email or self.default_from_email):
+            self.last_error = "zeptomail credentials or from-address not configured"
             print("[email:zeptomail] credentials or from-address not configured; cannot send")
             return False
 
@@ -65,13 +66,16 @@ class ZeptoMailProvider(EmailProvider):
                 timeout=15,
             )
         except Exception as e:
+            self.last_error = f"zeptomail transport error: {e}"
             print(f"[email:zeptomail] transport error: {e}")
             return False
 
         if response.status_code in (200, 201):
+            self.last_error = None
             print(f"[email:zeptomail] sent to {to_email}")
             return True
 
+        self.last_error = f"zeptomail {response.status_code}: {response.text[:300]}"
         print(
             f"[email:zeptomail] failed ({response.status_code}): {response.text[:500]}"
         )

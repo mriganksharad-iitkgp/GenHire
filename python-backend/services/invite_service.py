@@ -4,8 +4,11 @@ Responsibilities:
   - Parse CSV/XLSX/manual/bulk-paste email lists from recruiter input.
   - Generate unique usernames and temporary passwords for burner accounts.
   - Hash and verify magic-link tokens (sha256 + INVITE_TOKEN_SECRET pepper).
-  - Branch invite creation across new email / existing temp / regular candidate /
-    non-candidate (recruiter or admin) cases.
+  - Mint (or refresh) one burner account per (email, job) — EVERY invited
+    email gets its own burner, even when a real candidate/recruiter/admin
+    account already exists for it. Burners never mix with real accounts.
+  - Stamp recruiter-chosen access validity (`access_expires_at`) on burners;
+    magic-link tokens share the same expiry window.
   - Insert application skeletons (status='shortlisted' for interview invites).
   - Insert audit `invite_batches` documents.
 
@@ -155,6 +158,8 @@ class InviteService:
     INVITE_ID_PREFIX = "inv_"
     APPLICATION_STATUS_INTERVIEW = "shortlisted"
     APPLICATION_STATUS_APPLY = "pending"
+    MIN_VALIDITY_DAYS = 1
+    MAX_VALIDITY_DAYS = 60
 
     def __init__(self, db_collections: Dict[str, Any]):
         self.users = db_collections["users"]
@@ -175,11 +180,21 @@ class InviteService:
 
     # ----- helpers ---------------------------------------------------------
 
-    def _ttl_minutes(self) -> int:
+    def resolve_validity_days(self, requested: Any = None) -> int:
+        """Clamp the recruiter-chosen invite validity (in days). Falls back to
+        INVITE_DEFAULT_VALIDITY_DAYS (7) when nothing valid was requested.
+        Both the burner account's login access and the magic-link token expire
+        at the end of this window."""
         try:
-            return max(1, int(os.getenv("INVITE_MAGIC_LINK_TTL_MIN", "30")))
+            default = int(os.getenv("INVITE_DEFAULT_VALIDITY_DAYS", "7"))
         except ValueError:
-            return 30
+            default = 7
+        default = min(max(default, self.MIN_VALIDITY_DAYS), self.MAX_VALIDITY_DAYS)
+        try:
+            days = int(requested)
+        except (TypeError, ValueError):
+            return default
+        return min(max(days, self.MIN_VALIDITY_DAYS), self.MAX_VALIDITY_DAYS)
 
     def _generate_unique_invite_id(self) -> str:
         for _ in range(8):
@@ -274,8 +289,10 @@ class InviteService:
         invite_type: str,
         recruiter_id: str,
         batch_id: Optional[ObjectId],
+        expires_at: _dt.datetime,
     ) -> Tuple[str, ObjectId]:
-        ttl = self._ttl_minutes()
+        """Magic-link token valid for the whole recruiter-chosen access window
+        (one-time consumption still applies — see consume_token)."""
         raw = secrets.token_urlsafe(32)
         token_hash = hash_invite_token(raw)
         now = self._now()
@@ -288,26 +305,13 @@ class InviteService:
             "recruiter_id": recruiter_id,
             "batch_id": batch_id,
             "created_at": now,
-            "expires_at": now + _dt.timedelta(minutes=ttl),
+            "expires_at": expires_at,
             "consumed_at": None,
         }
         result = self.invite_tokens.insert_one(doc)
         return raw, result.inserted_id
 
     # ----- single-row branching -------------------------------------------
-
-    def _find_real_account_for_email(self, normalized_email: str) -> Optional[Dict[str, Any]]:
-        """Return a non-invite-only user matching this email (regular candidate,
-        recruiter, or admin), or None. Invite-only burner accounts are ignored
-        so multiple Invite IDs can coexist for the same email."""
-        return self.users.find_one(
-            {
-                "$and": [
-                    {"$or": [{"email_lower": normalized_email}, {"email": normalized_email}]},
-                    {"is_invite_only": {"$ne": True}},
-                ]
-            }
-        )
 
     def _find_burner_account_invited_to_job(
         self, normalized_email: str, job_id_str: str
@@ -318,11 +322,11 @@ class InviteService:
 
         Without this check, re-uploading the same candidate list for the same
         job (an accidental double-submit, or a deliberate re-send) would mint
-        an entirely new burner account + invite_id + temp password + "you're
-        invited" email every single time, since burner accounts are otherwise
-        allowed to multiply per email by design (see _find_real_account_for_email).
+        an entirely new burner account + invite_id every single time, since
+        burner accounts are otherwise allowed to multiply per email by design.
         This scopes that dedup to (email, job) so an email can still receive
-        separate burner invites across *different* jobs.
+        separate burner invites across *different* jobs. A dedupe hit is
+        REFRESHED (new temp password + token + expiry), not silently reused.
         """
         return self.users.find_one(
             {
@@ -340,20 +344,24 @@ class InviteService:
         email: str,
         invite_type: str,
         batch_id: Optional[ObjectId],
+        validity_days: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Process a single email row. Returns a dict the controller uses
         to drive the email-send step.
 
-        Behavior:
-          - If the email belongs to a real (non-invite) recruiter/admin → skip.
-          - If the email belongs to a real candidate → silent attach (no temp).
-          - Otherwise → always mint a fresh burner temp account with its own
-            unique invite_id. An email may hold any number of invite IDs.
+        Behavior — burners never mix with real accounts:
+          - Already a burner for this exact (email, job) → REFRESH it: new
+            temp password, fresh magic-link token, extended access window.
+          - Otherwise → mint a fresh burner account with its own unique
+            invite_id — even when the email also belongs to a real candidate,
+            recruiter, or admin account. An email may hold any number of
+            invite IDs.
         """
         recruiter_company = recruiter.get("company_name") or "GenHire"
         job_id_str = str(job["_id"])
         recruiter_id_str = str(recruiter.get("_id"))
         normalized = normalize_email(email)
+        days = self.resolve_validity_days(validity_days)
 
         result: Dict[str, Any] = {
             "email": normalized,
@@ -366,50 +374,37 @@ class InviteService:
             "recruiter_company": recruiter_company,
             "job_id": job_id_str,
             "invite_type": invite_type,
+            "validity_days": days,
+            "valid_until": None,
         }
 
         if not is_valid_email(normalized):
             result["reason"] = "invalid_email"
             return result
 
-        real_account = self._find_real_account_for_email(normalized)
-
-        if real_account is not None:
-            user_type = str(real_account.get("user_type", "candidate")).lower()
-            if user_type != "candidate":
-                # Recruiter or admin email → skip silently.
-                result["reason"] = "non_candidate_account"
-                return result
-
-            # Real candidate → silent attach, no token, no password change.
-            user_id = real_account["_id"]
-            self.users.update_one(
-                {"_id": user_id},
-                {
-                    "$addToSet": {"invited_by_recruiter_ids": recruiter_id_str},
-                    "$set": {"updated_at": self._now()},
-                },
-            )
-            app_id, _ = self._ensure_existing_application(
-                user_id=user_id,
-                user_doc=real_account,
-                job=job,
-                invite_type=invite_type,
-                batch_id=batch_id,
-            )
-            result.update(
-                action="attached_to_existing_account",
-                application_id=str(app_id),
-            )
-            return result
+        now = self._now()
+        access_expires_at = now + _dt.timedelta(days=days)
 
         # An email may already have been invited to this exact job before via
         # a burner account (re-uploaded list, accidental double-submit, or a
-        # deliberate re-send) — reuse that account/application instead of
-        # minting a duplicate one with a brand new password.
+        # deliberate re-send) — refresh that account instead of minting a
+        # duplicate: new temp password, fresh magic link, extended expiry.
         existing_burner = self._find_burner_account_invited_to_job(normalized, job_id_str)
         if existing_burner is not None:
             user_id = existing_burner["_id"]
+            temp_password = generate_temp_password()
+            self.users.update_one(
+                {"_id": user_id},
+                {
+                    "$set": {
+                        "password": generate_password_hash(temp_password),
+                        "temp_password_set_at": now,
+                        "access_expires_at": access_expires_at,
+                        "updated_at": now,
+                    },
+                    "$addToSet": {"invited_by_recruiter_ids": recruiter_id_str},
+                },
+            )
             app_id, _ = self._ensure_existing_application(
                 user_id=user_id,
                 user_doc=existing_burner,
@@ -417,18 +412,30 @@ class InviteService:
                 invite_type=invite_type,
                 batch_id=batch_id,
             )
+            raw_token, _ = self._insert_invite_token(
+                user_id=user_id,
+                application_id=app_id,
+                job_id=job_id_str,
+                invite_type=invite_type,
+                recruiter_id=recruiter_id_str,
+                batch_id=batch_id,
+                expires_at=access_expires_at,
+            )
             result.update(
-                action="attached_to_existing_account",
+                action="refreshed",
+                invite_id=existing_burner.get("invite_id"),
+                temp_password=temp_password,
+                raw_token=raw_token,
                 application_id=str(app_id),
+                valid_until=access_expires_at,
             )
             return result
 
-        # No real or previously-invited-to-this-job account exists — mint a
-        # fresh burner account with its own invite_id. Each invite gets its
-        # own ID, so an email may have many across *different* jobs.
+        # First invite of this email for this job — mint a fresh burner
+        # account with its own invite_id. Each invite gets its own ID, so an
+        # email may have many across *different* jobs.
         invite_id = self._generate_unique_invite_id()
         temp_password = generate_temp_password()
-        now = self._now()
         user_doc = {
             "name": "",
             "email": normalized,
@@ -449,6 +456,7 @@ class InviteService:
             "invited_job_ids": [job_id_str],
             "invited_by_recruiter_ids": [recruiter_id_str],
             "temp_password_set_at": now,
+            "access_expires_at": access_expires_at,
             "last_redeemed_at": None,
             "created_at": now,
             "updated_at": now,
@@ -480,6 +488,7 @@ class InviteService:
             invite_type=invite_type,
             recruiter_id=recruiter_id_str,
             batch_id=batch_id,
+            expires_at=access_expires_at,
         )
         result.update(
             action="created",
@@ -487,6 +496,7 @@ class InviteService:
             temp_password=temp_password,
             raw_token=raw_token,
             application_id=str(app_id),
+            valid_until=access_expires_at,
         )
         return result
 
@@ -500,6 +510,7 @@ class InviteService:
         emails: List[str],
         invite_type: str,
         source: str = "manual",
+        validity_days: Optional[int] = None,
     ) -> Tuple[ObjectId, List[Dict[str, Any]]]:
         """Process a batch and return (batch_id, per-row results).
 
@@ -510,12 +521,14 @@ class InviteService:
         if invite_type not in ("apply", "interview"):
             raise ValueError("invite_type must be 'apply' or 'interview'")
 
+        days = self.resolve_validity_days(validity_days)
         now = self._now()
         batch_doc = {
             "recruiter_id": str(recruiter.get("_id")),
             "job_id": str(job["_id"]),
             "invite_type": invite_type,
             "source": source,
+            "validity_days": days,
             "total": len(emails),
             "sent_count": 0,
             "skipped_count": 0,
@@ -535,6 +548,7 @@ class InviteService:
                     email=email,
                     invite_type=invite_type,
                     batch_id=batch_id,
+                    validity_days=days,
                 )
             except Exception as e:
                 row = {
@@ -548,6 +562,8 @@ class InviteService:
                     "recruiter_company": recruiter.get("company_name") or "GenHire",
                     "job_id": str(job["_id"]),
                     "invite_type": invite_type,
+                    "validity_days": days,
+                    "valid_until": None,
                 }
             results.append(row)
         return batch_id, results

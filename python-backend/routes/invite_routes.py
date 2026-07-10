@@ -65,6 +65,7 @@ def send_invites(current_user, job_id):
     emails = body.get("emails") or []
     invite_type = (body.get("invite_type") or "apply").strip().lower()
     source = (body.get("source") or "manual").strip().lower()
+    validity_days = body.get("validity_days")
 
     if not isinstance(emails, list):
         return jsonify({"error": "emails must be a list"}), 400
@@ -75,6 +76,7 @@ def send_invites(current_user, job_id):
         emails=emails,
         invite_type=invite_type,
         source=source,
+        validity_days=validity_days,
     )
     return jsonify(response), status_code
 

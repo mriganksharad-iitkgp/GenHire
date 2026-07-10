@@ -11,6 +11,11 @@ class EmailProvider(ABC):
 
     name: str = "base"
 
+    # Human-readable reason for the most recent failed send (provider response
+    # body / transport error). Cleared on success. Callers surface this to the
+    # recruiter instead of a generic "email_send_failed".
+    last_error: Optional[str] = None
+
     @abstractmethod
     def send(
         self,

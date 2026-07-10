@@ -7,7 +7,6 @@ from typing import Optional
 from services.email_providers import get_email_provider
 from services.invite_email_templates import (
     render_apply_invite,
-    render_existing_user_invite,
     render_interview_invite,
 )
 
@@ -20,6 +19,11 @@ class EmailService:
     def send_email(self, to_email, subject, html_content, text_content=None):
         """Send an email via the configured provider."""
         return bool(self.provider.send(to_email, subject, html_content, text_content))
+
+    def last_error(self) -> Optional[str]:
+        """Human-readable reason for the most recent failed send on this
+        provider instance (e.g. the ZeptoMail/Mailgun response body), or None."""
+        return getattr(self.provider, "last_error", None)
 
     def _render_auth_email(
         self,
@@ -824,11 +828,10 @@ class EmailService:
 
     # --- Invite system emails ----------------------------------------------
 
-    def _invite_redeem_link(self, raw_token: str) -> str:
+    def invite_redeem_link(self, raw_token: str) -> str:
+        """Public magic-link builder — also used by the invite controller to
+        hand a shareable link back to the recruiter when the email fails."""
         return f"{self.frontend_url}/invite/redeem?token={raw_token}"
-
-    def _job_link(self, job_id: str) -> str:
-        return f"{self.frontend_url}/job/{job_id}"
 
     def _login_link(self, next_path: Optional[str] = None) -> str:
         if next_path:
@@ -843,16 +846,18 @@ class EmailService:
         invite_id: str,
         temp_password: str,
         raw_token: str,
-        ttl_minutes: int,
+        valid_until=None,
+        validity_days: Optional[int] = None,
     ) -> bool:
-        magic_link = self._invite_redeem_link(raw_token)
+        magic_link = self.invite_redeem_link(raw_token)
         subject, html, text = render_apply_invite(
             recruiter_company=recruiter_company,
             job_title=job_title,
             magic_link=magic_link,
             invite_id=invite_id,
             temp_password=temp_password,
-            ttl_minutes=ttl_minutes,
+            valid_until=valid_until,
+            validity_days=validity_days,
         )
         return self.send_email(to_email, subject, html, text)
 
@@ -864,32 +869,17 @@ class EmailService:
         invite_id: str,
         temp_password: str,
         raw_token: str,
-        ttl_minutes: int,
+        valid_until=None,
+        validity_days: Optional[int] = None,
     ) -> bool:
-        magic_link = self._invite_redeem_link(raw_token)
+        magic_link = self.invite_redeem_link(raw_token)
         subject, html, text = render_interview_invite(
             recruiter_company=recruiter_company,
             job_title=job_title,
             magic_link=magic_link,
             invite_id=invite_id,
             temp_password=temp_password,
-            ttl_minutes=ttl_minutes,
-        )
-        return self.send_email(to_email, subject, html, text)
-
-    def send_existing_user_invite_email(
-        self,
-        to_email: str,
-        recruiter_company: str,
-        job_title: str,
-        job_id: str,
-        invite_type: str,
-    ) -> bool:
-        job_link = self._job_link(job_id)
-        subject, html, text = render_existing_user_invite(
-            recruiter_company=recruiter_company,
-            job_title=job_title,
-            job_link=job_link,
-            invite_type=invite_type,
+            valid_until=valid_until,
+            validity_days=validity_days,
         )
         return self.send_email(to_email, subject, html, text)

@@ -33,16 +33,13 @@ _DEEPFACE_STATE = {"checked": False, "available": False}
 
 
 def get_mode() -> str:
-    """enforce (block on mismatch) | monitor (record only) | off (skip checks)."""
+    """off (skip identity checks entirely) | enforce/monitor (both mean
+    score-only now: the live capture is similarity-scored against the ID card
+    in the background and NEVER blocks the interview — the score is surfaced
+    to the recruiter instead). Both non-off values are kept for env
+    compatibility."""
     mode = (os.getenv("FACE_VERIFICATION_MODE", "enforce") or "enforce").strip().lower()
     return mode if mode in ("enforce", "monitor", "off") else "enforce"
-
-
-def get_max_attempts() -> int:
-    try:
-        return max(1, int(os.getenv("FACE_VERIFY_MAX_ATTEMPTS", "3")))
-    except ValueError:
-        return 3
 
 
 def deepface_available() -> bool:

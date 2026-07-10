@@ -229,6 +229,17 @@ class AuthController:
         # Block invite-only (burner) accounts from claiming recruiter or admin roles.
         if user.get('is_invite_only') and user_type in ('recruiter', 'admin'):
             return {'error': 'Invalid email or password'}, 401
+
+        # Burner accounts expire at the recruiter-set access window.
+        from middleware.auth_middleware import (
+            INVITE_ACCESS_EXPIRED_MESSAGE,
+            is_invite_access_expired,
+        )
+        if is_invite_access_expired(user):
+            return {
+                'error': INVITE_ACCESS_EXPIRED_MESSAGE,
+                'error_code': 'invite_access_expired',
+            }, 401
         
         # Check if user type matches
         stored_user_type = user.get('user_type', 'candidate')

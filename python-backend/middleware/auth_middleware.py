@@ -1,3 +1,4 @@
+import datetime
 from functools import wraps
 from flask import request, jsonify
 import jwt as pyjwt
@@ -19,10 +20,27 @@ _AUTH_PROJECTION = {
     "is_verified": 1,
     "is_invite_only": 1,
     "invite_id_lower": 1,
+    "access_expires_at": 1,  # burner (invite-only) access window
     "permissions": 1,
     "cv_details": 1,   # needed by interview start route
     "is_active": 1,
 }
+
+INVITE_ACCESS_EXPIRED_MESSAGE = (
+    "This invite access has expired. Ask the recruiter to re-send your invite."
+)
+
+
+def is_invite_access_expired(user) -> bool:
+    """Burner (invite-only) accounts carry a recruiter-set `access_expires_at`;
+    past that instant the candidate can no longer authenticate. The account and
+    any completed interview results remain intact for the recruiter."""
+    if not user or not user.get("is_invite_only"):
+        return False
+    expires_at = user.get("access_expires_at")
+    if not expires_at:
+        return False  # legacy burner without a window (migration backfills this)
+    return expires_at < datetime.datetime.utcnow()
 
 
 def decode_user_from_token(token):
@@ -50,6 +68,9 @@ def decode_user_from_token(token):
 
         if not current_user:
             return None, 'User not found!'
+
+        if is_invite_access_expired(current_user):
+            return None, INVITE_ACCESS_EXPIRED_MESSAGE
 
         return current_user, None
     except pyjwt.ExpiredSignatureError:

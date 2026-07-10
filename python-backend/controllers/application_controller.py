@@ -563,12 +563,31 @@ class ApplicationController:
                 "application_id": {"$in": app_ids_str},
                 "status": "completed"
             }).sort("updated_at", -1))
-            
+
             interviews_by_app = {}
             for interview in all_interviews:
                 app_id = str(interview["application_id"])
                 if app_id not in interviews_by_app:
                     interviews_by_app[app_id] = interview
+
+            # BULK FETCH candidate account types so the recruiter UI can show
+            # burner (recruiter-invited) results separately from direct
+            # applicants and filter on it.
+            student_oids = []
+            for app in applications:
+                sid = str(app.get("student_id") or "")
+                if len(sid) == 24:
+                    try:
+                        student_oids.append(ObjectId(sid))
+                    except Exception:
+                        pass
+            invited_student_ids = {
+                str(u["_id"])
+                for u in self.users_collection.find(
+                    {"_id": {"$in": student_oids}, "is_invite_only": True},
+                    {"_id": 1},
+                )
+            }
 
             # Convert ObjectId to string and add job details
             for app in applications:
@@ -583,6 +602,12 @@ class ApplicationController:
                     app["cv_score"] = 85.0
                 if "interview_score" not in app:
                     app["interview_score"] = None
+
+                app["candidate_account_type"] = (
+                    "invited"
+                    if str(app.get("student_id") or "") in invited_student_ids
+                    else "direct"
+                )
 
                 job = jobs_by_id.get(str(app.get("job_id")))
                 if job:
@@ -873,10 +898,15 @@ class ApplicationController:
             payload["identity_verification"] = {
                 "status": identity.get("status"),
                 "verified": identity.get("verified"),
+                "matched": identity.get("matched"),
+                "score": identity.get("score"),
+                "model": identity.get("model"),
+                "match_reason": identity.get("match_reason"),
                 "distance": identity.get("distance"),
                 "threshold": identity.get("threshold"),
                 "attempts": identity.get("attempts"),
                 "checked_at": identity.get("checked_at"),
+                "scored_at": identity.get("scored_at"),
                 "has_captured_image": bool(identity.get("captured_image_file_id")),
                 "has_reference_image": bool(identity.get("reference_image_file_id")),
             }

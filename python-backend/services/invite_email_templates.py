@@ -93,15 +93,18 @@ LINK_FALLBACK_STYLE = (
 )
 
 
-def _humanize_minutes(minutes: int) -> str:
-    if minutes <= 0:
-        return "shortly"
-    if minutes < 60:
-        return f"{minutes} minutes"
-    hours = minutes / 60
-    if hours == int(hours):
-        return f"{int(hours)} hours"
-    return f"{hours:.1f} hours"
+def _humanize_validity(valid_until, validity_days) -> str:
+    """'7 days (until 18 Jul 2026)' — recruiter-chosen access window that both
+    the magic link and the Invite ID + password login honour."""
+    parts = []
+    if validity_days:
+        parts.append(f"{int(validity_days)} day{'s' if int(validity_days) != 1 else ''}")
+    if valid_until is not None:
+        try:
+            parts.append(f"until {valid_until.strftime('%d %b %Y')} (UTC)")
+        except AttributeError:
+            parts.append(f"until {valid_until}")
+    return " — ".join(parts) if parts else "a limited time"
 
 
 def _shell(header_eyebrow: str, header_title: str, body_html: str) -> str:
@@ -166,12 +169,13 @@ def render_apply_invite(
     magic_link: str,
     invite_id: str,
     temp_password: str,
-    ttl_minutes: int,
+    valid_until=None,
+    validity_days=None,
     **_kwargs,
 ):
     company = escape(recruiter_company or "A hiring team")
     title = escape(job_title or "an open role")
-    ttl = _humanize_minutes(ttl_minutes)
+    validity = _humanize_validity(valid_until, validity_days)
 
     subject = f"{recruiter_company or 'GenHire'} would love your application for {job_title}"
 
@@ -187,7 +191,7 @@ def render_apply_invite(
             <div style="margin-top:6px;"><strong>Password:</strong> <span style="font-family:Consolas,'Courier New',monospace;">{escape(temp_password)}</span></div>
             <div style="font-size:13px;color:{MUTED};margin-top:8px;">You can also sign in directly at the login page with these credentials. The Invite ID is unique to this invitation, so the same email can hold multiple Invite IDs.</div>
         </div>
-        <p style="{NOTE_STYLE}">The magic link above expires in <strong>{ttl}</strong>. After it expires, you can still log in with the Invite ID and password above.</p>
+        <p style="{NOTE_STYLE}">This invite &mdash; both the magic link and the Invite ID + password login &mdash; is valid for <strong>{escape(validity)}</strong>. After that, ask the hiring team to re-send your invite.</p>
         <p style="{NOTE_STYLE}">If you weren't expecting this email, you can safely ignore it.</p>
     """
     html = _shell("You're invited to apply", f"Apply for {job_title or 'this role'}", body_html)
@@ -204,7 +208,7 @@ Your sign-in credentials:
   Invite ID: {invite_id}
   Password:  {temp_password}
 
-The magic link above expires in {ttl}. After it expires, you can still log in with the Invite ID and password above.
+This invite -- both the magic link and the Invite ID + password login -- is valid for {validity}. After that, ask the hiring team to re-send your invite.
 
 If you weren't expecting this email, you can safely ignore it.
 
@@ -221,12 +225,13 @@ def render_interview_invite(
     magic_link: str,
     invite_id: str,
     temp_password: str,
-    ttl_minutes: int,
+    valid_until=None,
+    validity_days=None,
     **_kwargs,
 ):
     company = escape(recruiter_company or "A hiring team")
     title = escape(job_title or "an open role")
-    ttl = _humanize_minutes(ttl_minutes)
+    validity = _humanize_validity(valid_until, validity_days)
 
     subject = f"You're pre-shortlisted for {job_title} at {recruiter_company or 'GenHire'}"
 
@@ -242,7 +247,7 @@ def render_interview_invite(
             <div style="margin-top:6px;"><strong>Password:</strong> <span style="font-family:Consolas,'Courier New',monospace;">{escape(temp_password)}</span></div>
             <div style="font-size:13px;color:{MUTED};margin-top:8px;">You can also sign in directly at the login page with these credentials. The Invite ID is unique to this invitation, so the same email can hold multiple Invite IDs.</div>
         </div>
-        <p style="{NOTE_STYLE}">The magic link above expires in <strong>{ttl}</strong>. After it expires, you can still log in with the Invite ID and password above.</p>
+        <p style="{NOTE_STYLE}">This invite &mdash; both the magic link and the Invite ID + password login &mdash; is valid for <strong>{escape(validity)}</strong>. After that, ask the hiring team to re-send your invite.</p>
         <p style="{NOTE_STYLE}">If you weren't expecting this email, you can safely ignore it.</p>
     """
     html = _shell("You're invited to interview", f"Interview for {job_title or 'this role'}", body_html)
@@ -259,63 +264,9 @@ Your sign-in credentials:
   Invite ID: {invite_id}
   Password:  {temp_password}
 
-The magic link above expires in {ttl}. After it expires, you can still log in with the Invite ID and password above.
+This invite -- both the magic link and the Invite ID + password login -- is valid for {validity}. After that, ask the hiring team to re-send your invite.
 
 If you weren't expecting this email, you can safely ignore it.
-
-(c) {datetime.now().year} GenHire. All rights reserved.
-""".strip()
-
-    return subject, html, text
-
-
-def render_existing_user_invite(
-    *,
-    recruiter_company: str,
-    job_title: str,
-    job_link: str,
-    invite_type: str,
-    **_kwargs,
-):
-    company = escape(recruiter_company or "A hiring team")
-    title = escape(job_title or "an open role")
-    is_interview = invite_type == "interview"
-
-    if is_interview:
-        subject = f"You're pre-shortlisted for {job_title} at {recruiter_company or 'GenHire'}"
-        eyebrow = "You're invited to interview"
-        intro = (
-            f"<p style=\"margin:0 0 14px 0;\"><strong>{company}</strong> has pre-shortlisted you for an interview for "
-            f"<strong>{title}</strong>. The role is now waiting for you in your existing GenHire account.</p>"
-        )
-    else:
-        subject = f"{recruiter_company or 'GenHire'} would love your application for {job_title}"
-        eyebrow = "You're invited to apply"
-        intro = (
-            f"<p style=\"margin:0 0 14px 0;\"><strong>{company}</strong> is hiring for <strong>{title}</strong> and thinks "
-            f"you might be a great fit. The role is waiting for you in your existing GenHire account.</p>"
-        )
-
-    body_html = f"""
-        <p style="margin:0 0 14px 0;">Hi there,</p>
-        {intro}
-        {_button(job_link, "View Job")}
-        <p style="margin:0;color:{MUTED};font-size:13px;">Or paste this link into your browser:</p>
-        <p style="{LINK_FALLBACK_STYLE}"><a href="{escape(job_link)}" style="color:{PRIMARY};">{escape(job_link)}</a></p>
-        <p style="{NOTE_STYLE}">If you're not signed in, you'll be asked to log in with your existing GenHire credentials first.</p>
-        <p style="{NOTE_STYLE}">If you weren't expecting this email, you can safely ignore it.</p>
-    """
-    html = _shell(eyebrow, f"{'Interview for' if is_interview else 'Apply for'} {job_title or 'this role'}", body_html)
-
-    text = f"""
-Hi there,
-
-{recruiter_company or 'A hiring team'} {"has pre-shortlisted you for an interview for" if is_interview else "is hiring for"} {job_title or 'an open role'}.
-
-Open the job:
-{job_link}
-
-If you're not signed in, you'll be asked to log in with your existing GenHire credentials first.
 
 (c) {datetime.now().year} GenHire. All rights reserved.
 """.strip()

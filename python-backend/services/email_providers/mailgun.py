@@ -38,6 +38,7 @@ class MailgunProvider(EmailProvider):
         reply_to: Optional[str] = None,
     ) -> bool:
         if not self.api_key or not self.domain:
+            self.last_error = "mailgun credentials not configured"
             print("[email:mailgun] credentials not configured; cannot send")
             return False
 
@@ -60,13 +61,16 @@ class MailgunProvider(EmailProvider):
                 timeout=15,
             )
         except Exception as e:
+            self.last_error = f"mailgun transport error: {e}"
             print(f"[email:mailgun] transport error: {e}")
             return False
 
         if response.status_code == 200:
+            self.last_error = None
             print(f"[email:mailgun] sent to {to_email}")
             return True
 
+        self.last_error = f"mailgun {response.status_code}: {response.text[:300]}"
         print(
             f"[email:mailgun] failed ({response.status_code}): {response.text[:300]}"
         )

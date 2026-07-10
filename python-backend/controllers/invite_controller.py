@@ -70,6 +70,7 @@ class InviteController:
         emails: List[str],
         invite_type: str,
         source: str = "manual",
+        validity_days: Optional[int] = None,
     ):
         if invite_type not in ("apply", "interview"):
             return {"error": "invite_type must be 'apply' or 'interview'"}, 400
@@ -98,8 +99,6 @@ class InviteController:
                 "duplicates": buckets["duplicates"],
             }, 400
 
-        ttl_minutes = self.invite_service._ttl_minutes()
-
         # The DB-row half (bulk_invite) is plain Mongo writes — fast even at
         # 2000 rows — so it stays synchronous. Only the email-sending half
         # (one blocking provider call per row) moves to a background thread;
@@ -111,6 +110,7 @@ class InviteController:
             emails=valid_emails,
             invite_type=invite_type,
             source=source,
+            validity_days=validity_days,
         )
 
         recruiter_company = recruiter.get("company_name") or "GenHire"
@@ -142,7 +142,7 @@ class InviteController:
 
         threading.Thread(
             target=self._dispatch_invite_emails,
-            args=(batch_id, rows_to_email, recruiter_company, job_title, ttl_minutes, pre_skipped, pre_failed),
+            args=(batch_id, rows_to_email, recruiter_company, job_title, pre_skipped, pre_failed),
             daemon=True,
         ).start()
 
@@ -159,7 +159,6 @@ class InviteController:
         rows: List[Dict[str, Any]],
         recruiter_company: str,
         job_title: str,
-        ttl_minutes: int,
         pre_skipped: List[Dict[str, Any]],
         pre_failed: List[Dict[str, Any]],
     ) -> None:
@@ -178,34 +177,24 @@ class InviteController:
             invite_type = row["invite_type"]
             email_ok = False
             try:
-                if action == "created":
-                    if invite_type == "interview":
-                        email_ok = self.email_service.send_invite_interview_email(
-                            to_email=row["email"],
-                            recruiter_company=recruiter_company,
-                            job_title=job_title,
-                            invite_id=row["invite_id"],
-                            temp_password=row["temp_password"],
-                            raw_token=row["raw_token"],
-                            ttl_minutes=ttl_minutes,
-                        )
-                    else:
-                        email_ok = self.email_service.send_invite_apply_email(
-                            to_email=row["email"],
-                            recruiter_company=recruiter_company,
-                            job_title=job_title,
-                            invite_id=row["invite_id"],
-                            temp_password=row["temp_password"],
-                            raw_token=row["raw_token"],
-                            ttl_minutes=ttl_minutes,
-                        )
-                elif action == "attached_to_existing_account":
-                    email_ok = self.email_service.send_existing_user_invite_email(
+                # "created" and "refreshed" both carry full fresh credentials
+                # (new burner vs re-invite of the same email+job) — the invitee
+                # gets the same credentials email either way.
+                if action in ("created", "refreshed"):
+                    send_fn = (
+                        self.email_service.send_invite_interview_email
+                        if invite_type == "interview"
+                        else self.email_service.send_invite_apply_email
+                    )
+                    email_ok = send_fn(
                         to_email=row["email"],
                         recruiter_company=recruiter_company,
                         job_title=job_title,
-                        job_id=row["job_id"],
-                        invite_type=invite_type,
+                        invite_id=row["invite_id"],
+                        temp_password=row["temp_password"],
+                        raw_token=row["raw_token"],
+                        valid_until=row.get("valid_until"),
+                        validity_days=row.get("validity_days"),
                     )
             except Exception as e:
                 email_ok = False
@@ -220,9 +209,22 @@ class InviteController:
                     }
                 )
             else:
-                failed.append(
-                    {"email": row["email"], "error": row.get("reason") or "email_send_failed"}
-                )
+                # Surface the real provider error instead of a generic marker,
+                # and keep the magic link so the recruiter can share it
+                # manually — a failed email must never strand a created burner.
+                failure = {
+                    "email": row["email"],
+                    "error": (
+                        row.get("reason")
+                        or self.email_service.last_error()
+                        or "email_send_failed"
+                    ),
+                }
+                if row.get("raw_token"):
+                    failure["invite_url"] = self.email_service.invite_redeem_link(
+                        row["raw_token"]
+                    )
+                failed.append(failure)
 
             try:
                 self.invite_service.finalize_batch(

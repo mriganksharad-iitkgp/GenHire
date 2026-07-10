@@ -225,8 +225,11 @@ def start_interview(current_user):
         return jsonify({"error": "CV not found for this application. Please re-apply with your CV before starting the interview."}), 400
 
     # --- Identity-card check (before charging credits) ---
-    # Real interviews verify the candidate's face against their uploaded ID at
-    # register-face time; without a card on file the interview cannot start.
+    # Real interviews similarity-score the candidate's face against their
+    # uploaded ID in the background at register-face time (score-only, never
+    # blocking); without a card on file there is nothing to score against, so
+    # the interview cannot start. Applies to every account type, including
+    # recruiter-invited (burner) candidates.
     if face_service.get_mode() != "off":
         id_holder = users_collection.find_one(
             {"_id": current_user["_id"]}, {"identity_card": 1}
@@ -1273,11 +1276,81 @@ def _identity_summary(identity, session_id):
     return {
         "status": identity.get("status"),
         "verified": identity.get("verified"),
+        "matched": identity.get("matched"),
+        "score": identity.get("score"),
         "distance": identity.get("distance"),
         "threshold": identity.get("threshold"),
         "session_id": session_id,
         "checked_at": identity.get("checked_at"),
+        "scored_at": identity.get("scored_at"),
     }
+
+
+def _score_identity_async(interview_id, application_id, card_file_id, capture_bytes, session_id):
+    """Background LLM face-similarity scoring (daemon thread).
+
+    Compares the live capture against the uploaded identity card and stores
+    the similarity score on the interview + application for the recruiter.
+    Deliberately NEVER blocks or fails the interview — identity is advisory
+    (score-only) for every account type; the recruiter judges from the score.
+    """
+    try:
+        card_bytes = None
+        card_content_type = None
+        try:
+            card_bytes, card_content_type = identity_card_service.load_identity_card(
+                db, card_file_id
+            )
+        except Exception as exc:
+            print(f"[identity-score] failed to load identity card {card_file_id}: {exc}")
+
+        verdict = (
+            face_match_service.compare_faces(card_bytes, card_content_type, capture_bytes)
+            if card_bytes
+            else {
+                "available": False,
+                "matched": None,
+                "score": None,
+                "threshold": face_match_service.get_threshold(),
+                "model": face_match_service.get_model(),
+                "reason": "identity card unreadable",
+            }
+        )
+
+        now = datetime.datetime.utcnow()
+        available = bool(verdict.get("available"))
+        patch = {
+            "identity_verification.status": "scored" if available else "score_unavailable",
+            "identity_verification.verified": bool(verdict.get("matched")) if available else None,
+            "identity_verification.matched": verdict.get("matched"),
+            "identity_verification.score": verdict.get("score"),
+            "identity_verification.threshold": verdict.get("threshold"),
+            "identity_verification.model": verdict.get("model"),
+            "identity_verification.match_reason": verdict.get("reason"),
+            "identity_verification.scored_at": now,
+            "updated_at": now,
+        }
+        interviews_collection.update_one({"_id": interview_id}, {"$set": patch})
+
+        if application_id:
+            try:
+                refreshed = interviews_collection.find_one(
+                    {"_id": interview_id}, {"identity_verification": 1}
+                ) or {}
+                identity = refreshed.get("identity_verification") or {}
+                applications_collection.update_one(
+                    {"_id": ObjectId(str(application_id))},
+                    {
+                        "$set": {
+                            "identity_verification": _identity_summary(identity, session_id),
+                            "updated_at": now,
+                        }
+                    },
+                )
+            except Exception as exc:
+                print(f"[identity-score] failed to copy summary to application {application_id}: {exc}")
+    except Exception as exc:
+        print(f"[identity-score] scoring failed for session {session_id}: {exc}")
 
 
 @interview_bp.route("/api/interviews/<session_id>/register-face", methods=["POST"])
@@ -1286,13 +1359,13 @@ def register_face(current_user, session_id):
     """
     Capture the candidate's face before the interview starts.
 
-    Real interviews enforce account-level identity: the first-ever real
-    interview enrolls the capture as the account's canonical face; every later
-    real interview must DeepFace-match that canonical photo (across any job /
-    company) or the interview is blocked after a few attempts. The capture and
-    verdict are stored on the interview + application so the recruiter can see
-    exactly who sat the interview. Practice interviews only capture (for live
-    proctoring) — they never enroll and never block.
+    Real interviews are similarity-scored (LLM) against the account's uploaded
+    identity card IN THE BACKGROUND — the interview always proceeds
+    immediately, nobody is ever blocked on a mismatch, and the score is
+    surfaced to the recruiter on the candidate card and reports. The capture
+    and score are stored on the interview + application so the recruiter can
+    see exactly who sat the interview. Practice interviews only capture (for
+    live proctoring) — they never score against the ID card and never block.
     """
     data = request.get_json()
     if not data or "image" not in data:
@@ -1364,17 +1437,14 @@ def register_face(current_user, session_id):
                 {"$set": {"identity_verification": identity, "updated_at": now}},
             )
         else:
-            prior = interview_doc.get("identity_verification") or {}
-            attempts = int(prior.get("attempts") or 0)
-            max_attempts = face_service.get_max_attempts()
-
             if mode == "off":
-                identity.update({"status": "skipped", "verified": None, "attempts": attempts})
+                identity.update({"status": "skipped", "verified": None})
             else:
-                # The uploaded identity card is the reference identity: the
-                # live capture must match the face on the card (LLM-scored)
-                # before the interview can start. No enrollment happens here
-                # anymore -- the card itself is the one-time enrollment.
+                # The uploaded identity card is the reference identity. The
+                # live capture is similarity-scored against it by an LLM in
+                # the BACKGROUND (see _score_identity_async) — the interview
+                # always proceeds immediately for every account type, and the
+                # recruiter judges from the score. No blocking, no attempts.
                 card_doc = users_collection.find_one(
                     {"_id": current_user["_id"]}, {"identity_card": 1}
                 ) or {}
@@ -1391,141 +1461,33 @@ def register_face(current_user, session_id):
                         403,
                     )
 
-                identity["method"] = "llm_id_card_match"
-                identity["reference_image_file_id"] = card_file_id
-
-                card_bytes = None
-                card_content_type = None
-                try:
-                    card_bytes, card_content_type = identity_card_service.load_identity_card(
-                        db, card_file_id
-                    )
-                except Exception as exc:
-                    print(f"Failed to load identity card {card_file_id}: {exc}")
-
-                verdict = (
-                    face_match_service.compare_faces(
-                        card_bytes, card_content_type, decoded_image
-                    )
-                    if card_bytes
-                    else {
-                        "available": False,
-                        "matched": None,
+                captured_id = face_service.store_face_image(
+                    db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
+                )
+                identity.update(
+                    {
+                        "method": "llm_id_card_match",
+                        "reference_image_file_id": card_file_id,
+                        "captured_image_file_id": captured_id,
+                        "status": "score_pending",
+                        "verified": None,
                         "score": None,
                         "threshold": face_match_service.get_threshold(),
-                        "model": face_match_service.get_model(),
-                        "reason": None,
                     }
                 )
-                identity["model"] = verdict.get("model")
+                threading.Thread(
+                    target=_score_identity_async,
+                    args=(
+                        interview_doc["_id"],
+                        interview_doc.get("application_id"),
+                        card_file_id,
+                        decoded_image,
+                        session_id,
+                    ),
+                    daemon=True,
+                ).start()
 
-                if not verdict.get("available"):
-                    # LLM/provider down or card unreadable: fail open so a
-                    # server-side dependency problem cannot lock candidates
-                    # out, but record the gap honestly for the recruiter.
-                    captured_id = face_service.store_face_image(
-                        db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
-                    )
-                    identity.update(
-                        {
-                            "status": "unverified_system_unavailable",
-                            "verified": None,
-                            "attempts": attempts,
-                            "captured_image_file_id": captured_id,
-                        }
-                    )
-                elif verdict["matched"]:
-                    captured_id = face_service.store_face_image(
-                        db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
-                    )
-                    identity.update(
-                        {
-                            "status": "verified",
-                            "verified": True,
-                            "score": verdict["score"],
-                            "threshold": verdict["threshold"],
-                            "match_reason": verdict.get("reason"),
-                            "attempts": attempts,
-                            "captured_image_file_id": captured_id,
-                        }
-                    )
-                else:
-                    attempts += 1
-                    identity.update(
-                        {
-                            "verified": False,
-                            "score": verdict["score"],
-                            "threshold": verdict["threshold"],
-                            "match_reason": verdict.get("reason"),
-                            "attempts": attempts,
-                        }
-                    )
-                    blocked = mode == "enforce" and attempts >= max_attempts
-
-                    if mode == "monitor":
-                        # Record the mismatch but let the interview proceed.
-                        captured_id = face_service.store_face_image(
-                            db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture"
-                        )
-                        identity["status"] = "unverified_monitor"
-                        identity["captured_image_file_id"] = captured_id
-                    else:
-                        if blocked:
-                            evidence_id = face_service.store_face_image(
-                                db,
-                                decoded_image,
-                                user_id=user_id,
-                                session_id=session_id,
-                                purpose="mismatch_evidence",
-                            )
-                            identity["status"] = "mismatch_blocked"
-                            identity["captured_image_file_id"] = evidence_id
-                        else:
-                            identity["status"] = "mismatch"
-
-                        update_fields = {"identity_verification": identity, "updated_at": now}
-                        if blocked:
-                            update_fields["status"] = "identity_blocked"
-                        interviews_collection.update_one(
-                            {"_id": interview_doc["_id"]}, {"$set": update_fields}
-                        )
-                        if interview_doc.get("application_id"):
-                            try:
-                                applications_collection.update_one(
-                                    {"_id": ObjectId(interview_doc["application_id"])},
-                                    {
-                                        "$set": {
-                                            "identity_verification": _identity_summary(identity, session_id),
-                                            "updated_at": now,
-                                        }
-                                    },
-                                )
-                            except Exception:
-                                pass
-
-                        if blocked:
-                            return (
-                                jsonify(
-                                    {
-                                        "error": "Face verification failed repeatedly -- this interview attempt has been locked because your face does not match the identity card on your account.",
-                                        "error_code": "face_mismatch_blocked",
-                                        "attempts_remaining": 0,
-                                    }
-                                ),
-                                403,
-                            )
-                        return (
-                            jsonify(
-                                {
-                                    "error": "Your face does not match the identity card on your account. Make sure you are the account owner, face the camera directly in good lighting, and try again.",
-                                    "error_code": "face_mismatch",
-                                    "attempts_remaining": max(0, max_attempts - attempts),
-                                }
-                            ),
-                            403,
-                        )
-
-            # Allowed real-interview paths: persist verdict and activate session
+            # Persist identity state and activate the session
             interviews_collection.update_one(
                 {"_id": interview_doc["_id"]},
                 {"$set": {"identity_verification": identity, "status": "active", "updated_at": now}},
@@ -1555,17 +1517,10 @@ def register_face(current_user, session_id):
         }
 
         status = identity.get("status")
-        if status == "registered_new":
-            message = "Face registered successfully — this photo is now the verified identity for your account."
-        elif status == "verified":
-            message = "Identity verified successfully."
-        else:
-            message = "Face captured successfully."
-
         return (
             jsonify(
                 {
-                    "message": message,
+                    "message": "Face captured successfully.",
                     "identity": {
                         "status": status,
                         "verified": identity.get("verified"),
