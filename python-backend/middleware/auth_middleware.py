@@ -20,6 +20,7 @@ _AUTH_PROJECTION = {
     "is_verified": 1,
     "is_invite_only": 1,
     "invite_id_lower": 1,
+    "invited_job_ids": 1,    # burner job scoping (jobs list/detail)
     "access_expires_at": 1,  # burner (invite-only) access window
     "permissions": 1,
     "cv_details": 1,   # needed by interview start route

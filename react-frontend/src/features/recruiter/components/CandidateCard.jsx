@@ -7,6 +7,9 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
   const cvScorePct = (typeof application.cv_score === 'number')
     ? Math.round(application.cv_score)
     : (typeof application.similarity_score === 'number' ? Math.round(application.similarity_score * 100) : null);
+  // Pre-shortlisted invitees skip CV scoring — the recruiter already selected
+  // them, so the score is deliberately N/A rather than a computed number.
+  const cvScoreWaived = Boolean(application.cv_score_waived) && cvScorePct === null;
   const interviewScorePct = (typeof application.interview_score === 'number')
     ? Math.round(application.interview_score)
     : null;
@@ -125,7 +128,17 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
             </span>
           </div>
         )}
-        {cvScorePct !== null && (
+        {cvScoreWaived ? (
+          <div className={styles.scoreItem}>
+            <span className={styles.scoreLabel}>CV Score</span>
+            <span
+              className={`${styles.identityChip} ${styles.identityChipPending}`}
+              title="CV scoring was skipped — you pre-shortlisted this candidate via an interview invite, so you decide based on the interview."
+            >
+              N/A — pre-shortlisted
+            </span>
+          </div>
+        ) : cvScorePct !== null && (
           <div className={styles.scoreItem}>
             <div className={styles.scoreLabelRow}>
               <span className={styles.scoreLabel}>CV Score</span>

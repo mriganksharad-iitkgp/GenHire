@@ -22,8 +22,10 @@ def get_jobs(current_user):
     search_query = str(request.args.get('query') or request.args.get('search') or '').strip()
     user_type = current_user.get('user_type', 'candidate')
     user_id = str(current_user['_id'])
-    
-    result, status_code = job_controller.get_jobs(user_type, user_id, search_query)
+
+    result, status_code = job_controller.get_jobs(
+        user_type, user_id, search_query, user_doc=current_user
+    )
     return jsonify(result), status_code
 
 @job_bp.route('/jobs', methods=['POST'])
@@ -117,7 +119,17 @@ def get_job_details(current_user, job_id):
     """Get details for a single job"""
     user_type = current_user.get('user_type', 'candidate')
     user_id = str(current_user['_id'])
-    
+
+    # Burner (invite-only) candidates can only open the job(s) they were
+    # invited to — mirrors the jobs-list scoping and the apply-time guard.
+    if current_user.get('is_invite_only'):
+        invited_ids = [str(j) for j in (current_user.get('invited_job_ids') or [])]
+        if str(job_id) not in invited_ids:
+            return jsonify({
+                'error': 'This account can only view jobs you were invited to.',
+                'error_code': 'invite_only_scope',
+            }), 403
+
     result, status_code = job_controller.get_job_details(job_id, user_type, user_id)
     return jsonify(result), status_code
 

@@ -284,6 +284,19 @@ class ApplicationController:
             "status_reason": new_status_reason,
         }
 
+        # Pre-shortlisted (recruiter interview invite) candidates skip CV
+        # scoring entirely: the recruiter already selected them, so the score
+        # is shown as N/A and the recruiter decides after the interview. The
+        # CV itself is still required — the interview engine asks from it.
+        if was_auto_shortlisted:
+            candidate_fields.update(
+                {
+                    "processing_status": "completed",
+                    "cv_score_waived": True,
+                    "cv_score_calculated_at": datetime.datetime.utcnow(),
+                }
+            )
+
         if is_invite_skeleton:
             # Update the skeleton in place rather than insert a duplicate row.
             self.applications_collection.update_one(
@@ -319,35 +332,41 @@ class ApplicationController:
                 {"_id": ObjectId(job_id)}, {"$inc": {"applicants": 1}}
             )
 
-        # Enqueue CV scoring task for background processing
-        logger.info(f"Enqueueing CV scoring task for application {application_id}")
+        if was_auto_shortlisted:
+            # No scoring queue for pre-shortlisted invitees — score stays N/A.
+            logger.info(
+                f"Skipping CV scoring for pre-shortlisted invite application {application_id}"
+            )
+        else:
+            # Enqueue CV scoring task for background processing
+            logger.info(f"Enqueueing CV scoring task for application {application_id}")
 
-        cv_data = {
-            "cv_text": cv_text,
-            "cv_details": cv_details,
-            "cv_source": cv_source,
-            "parsing_confidence": (
-                (selected_cv or {}).get("metadata", {}).get("parsing_confidence", "high")
-                if selected_cv
-                else "high"
-            ),
-        }
+            cv_data = {
+                "cv_text": cv_text,
+                "cv_details": cv_details,
+                "cv_source": cv_source,
+                "parsing_confidence": (
+                    (selected_cv or {}).get("metadata", {}).get("parsing_confidence", "high")
+                    if selected_cv
+                    else "high"
+                ),
+            }
 
-        jd_data = {
-            "jd_text": jd_text,
-            "job": job,
-            "job_id": job_id,
-            "minimum_cv_score": job.get("minimum_cv_score", 50.0),
-        }
+            jd_data = {
+                "jd_text": jd_text,
+                "job": job,
+                "job_id": job_id,
+                "minimum_cv_score": job.get("minimum_cv_score", 50.0),
+            }
 
-        # Queue the scoring task (non-blocking)
-        self.background_processor.enqueue_cv_scoring(
-            application_id=application_id,
-            cv_data=cv_data,
-            jd_data=jd_data,
-            db_collections=self.db_collections,
-            cv_scoring_service=self.cv_scoring_service,
-        )
+            # Queue the scoring task (non-blocking)
+            self.background_processor.enqueue_cv_scoring(
+                application_id=application_id,
+                cv_data=cv_data,
+                jd_data=jd_data,
+                db_collections=self.db_collections,
+                cv_scoring_service=self.cv_scoring_service,
+            )
 
         # Push the new applicant to the recruiter's dashboard live, so they
         # don't need to refresh to see it appear.
@@ -469,6 +488,7 @@ class ApplicationController:
                 if (
                     app.get("cv_score") is None
                     and app.get("processing_status") == "completed"
+                    and not app.get("cv_score_waived")
                 ):
                     app["cv_score"] = 85.0  # fallback placeholder for legacy data
                 # Expose processing_status for frontend
@@ -598,7 +618,9 @@ class ApplicationController:
                     app["applied_at"] = app["applied_at"].isoformat()
                 if isinstance(app.get("updated_at"), datetime.datetime):
                     app["updated_at"] = app["updated_at"].isoformat()
-                if app.get("cv_score") is None:
+                # Pre-shortlisted invitees keep cv_score = None on purpose
+                # (shown as N/A) — the recruiter already selected them.
+                if app.get("cv_score") is None and not app.get("cv_score_waived"):
                     app["cv_score"] = 85.0
                 if "interview_score" not in app:
                     app["interview_score"] = None
@@ -806,7 +828,7 @@ class ApplicationController:
             app_doc["applied_at"] = app_doc["applied_at"].isoformat()
         if isinstance(app_doc.get("updated_at"), datetime.datetime):
             app_doc["updated_at"] = app_doc["updated_at"].isoformat()
-        if app_doc.get("cv_score") is None:
+        if app_doc.get("cv_score") is None and not app_doc.get("cv_score_waived"):
             app_doc["cv_score"] = 85.0
         if "interview_score" not in app_doc:
             app_doc["interview_score"] = None

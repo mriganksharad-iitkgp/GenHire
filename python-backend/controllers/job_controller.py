@@ -75,7 +75,7 @@ class JobController:
             ]
         }
 
-    def get_jobs(self, user_type, user_id, search_query=''):
+    def get_jobs(self, user_type, user_id, search_query='', user_doc=None):
         """Retrieve jobs based on user type and permissions"""
         search_filter = self._job_search_filter(search_query)
         if user_type == 'recruiter':
@@ -130,11 +130,30 @@ class JobController:
 
             return jobs, 200
         else:
+            # Burner (invite-only) candidates are scoped to the job(s) they
+            # were invited to — they never browse the open job board.
+            if user_doc and user_doc.get('is_invite_only'):
+                invited_ids = []
+                for j in (user_doc.get('invited_job_ids') or []):
+                    try:
+                        invited_ids.append(ObjectId(str(j)))
+                    except Exception:
+                        continue
+                query = {'_id': {'$in': invited_ids}}
+                if search_filter:
+                    query = {'$and': [query, search_filter]}
+                jobs = list(self.jobs_collection.find(query))
+                for job in jobs:
+                    job['_id'] = str(job['_id'])
+                    # Remove sensitive recruiter info (same as public listing)
+                    job.pop('created_by', None)
+                return jobs, 200
+
             # For candidates: Show active jobs + jobs they have applied to
             # Get job IDs that the user has applied to
             user_applications = list(self.applications_collection.find({'student_id': user_id}))
             applied_job_ids = [app['job_id'] for app in user_applications]
-            
+
             # Build query: active jobs (not created by system) OR jobs user has applied to
             query = {
                 '$or': [
