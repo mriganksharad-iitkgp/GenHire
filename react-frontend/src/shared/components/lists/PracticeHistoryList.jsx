@@ -135,7 +135,7 @@ const PracticeHistoryList = ({
                 </div>
                 <div className={styles.metaItem}>
                   <i className="fa fa-calendar"></i>
-                  <span>Completed {new Date(session.created_at).toLocaleDateString()}</span>
+                  <span>Completed {new Date(session.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                 </div>
               </div>
               <div className={styles.tagsRow}>

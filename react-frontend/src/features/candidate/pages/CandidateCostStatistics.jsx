@@ -177,7 +177,7 @@ const CandidateCostStatistics = () => {
       .split("-")
       .map(Number);
     const date = new Date(year, (month || 1) - 1, 1);
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       month: "short",
       year: "2-digit",
     });

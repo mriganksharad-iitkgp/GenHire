@@ -134,7 +134,7 @@ const CandidateDetail = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       year: "numeric",
       month: "short",
       day: "numeric",

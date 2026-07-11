@@ -114,7 +114,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
         <div className={styles.scoreItem}>
           <span className={styles.scoreLabel}>Applied</span>
           <span className={styles.scoreText}>
-            {new Date(application.applied_at).toLocaleDateString()}
+            {new Date(application.applied_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
           </span>
         </div>
         {identityChip && (
@@ -174,7 +174,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
       </div>
 
       <div className={styles.candidateMeta}>
-        <p><i className="fa fa-calendar" aria-hidden="true"></i> Applied: {new Date(application.applied_at).toLocaleDateString()}</p>
+        <p><i className="fa fa-calendar" aria-hidden="true"></i> Applied: {new Date(application.applied_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
         <p><i className="fa fa-briefcase" aria-hidden="true"></i> {application.student_profile?.experience || 'No experience listed'}</p>
         <p><i className="fa fa-map-marker" aria-hidden="true"></i> {application.student_profile?.location || 'No location provided'}</p>
       </div>

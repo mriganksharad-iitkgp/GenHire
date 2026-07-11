@@ -95,7 +95,7 @@ const UpgradePlanModal = ({
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       month: "short",
       day: "numeric",
       year: "numeric",

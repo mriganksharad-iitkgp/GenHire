@@ -18,7 +18,7 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 	const formatDate = (dateString) => {
 		if (!dateString) return 'Not specified';
 		try {
-			return new Date(dateString).toLocaleDateString('en-US', {
+			return new Date(dateString).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata',
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric'

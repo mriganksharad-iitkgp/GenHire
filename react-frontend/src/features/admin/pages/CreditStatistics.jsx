@@ -7,6 +7,7 @@ import {
   getRecruiterCreditSummary,
   getRecruiterCreditLines,
 } from 'features/admin/api/adminApi';
+import { nowInIST } from 'shared/utils/format';
 
 // Credits are whole numbers everywhere in GenHire — never money. This page is
 // deliberately separate from Cost Statistics (₹) so the two never blur.
@@ -24,11 +25,11 @@ const formatDateInput = (date) => {
 };
 
 const CreditStatistics = () => {
-  const todayDate = useMemo(() => new Date(), []);
+  // Timeline defaults to the CURRENT MONTH in Indian time (IST).
+  const todayDate = useMemo(() => nowInIST(), []);
   const defaultStartDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return formatDateInput(date);
+    const ist = nowInIST();
+    return formatDateInput(new Date(ist.getFullYear(), ist.getMonth(), 1));
   }, []);
 
   const [startDate, setStartDate] = useState(defaultStartDate);
@@ -278,7 +279,7 @@ const CreditStatistics = () => {
                             <small>{row.email}</small>
                           </td>
                           <td>{formatCredits(row.current_balance_inr)}</td>
-                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN') : '-'}</td>
+                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                           <td>{row.last_recharge_plan || '-'}</td>
                           <td>{formatCredits(row.total_usage_inr)}</td>
                         </tr>
@@ -336,7 +337,7 @@ const CreditStatistics = () => {
                             <small>{row.email}</small>
                           </td>
                           <td>{formatCredits(row.current_balance_inr)}</td>
-                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN') : '-'}</td>
+                          <td>{row.last_recharge_date ? new Date(row.last_recharge_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                           <td>{row.last_recharge_plan || '-'}</td>
                           <td>{formatCredits(row.total_usage_inr)}</td>
                         </tr>

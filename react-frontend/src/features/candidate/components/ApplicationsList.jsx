@@ -246,7 +246,7 @@ export default function ApplicationsList({
                     )}
                     <div className={styles.metaItem}>
                       <i className="fa fa-calendar" />
-                      <span>Applied {new Date(app.appliedDate).toLocaleDateString()}</span>
+                      <span>Applied {new Date(app.appliedDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                     </div>
                   </div>
                   {(app.department || app.jobType) && (

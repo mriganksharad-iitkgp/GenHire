@@ -34,7 +34,7 @@ const RecentActivity = ({ applications }) => (
               {(app.student_name || app.candidate_name)} applied for {app.job_title}
             </p>
             <p className={styles.activityTime}>
-              {app.applied_at ? new Date(app.applied_at).toLocaleDateString() : 'Recently'}
+              {app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'Recently'}
             </p>
           </div>
           <span className={`${styles.activityStatus} ${

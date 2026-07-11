@@ -126,7 +126,7 @@ const JDDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIcon }) 
                 <div className={styles.infoContent}>
                   <span className={styles.infoLabel}>Practice Date</span>
                   <span className={styles.infoValue}>
-                    {new Date(session.created_at).toLocaleDateString('en-US', {
+                    {new Date(session.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata',
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric'

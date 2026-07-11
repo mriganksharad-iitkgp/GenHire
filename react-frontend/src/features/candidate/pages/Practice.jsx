@@ -674,7 +674,7 @@ const Practice = () => {
                                     Completed{" "}
                                     {new Date(
                                       session.created_at,
-                                    ).toLocaleDateString()}
+                                    ).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                                   </span>
                                 </div>
                               </div>

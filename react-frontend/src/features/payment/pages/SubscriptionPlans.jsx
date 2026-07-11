@@ -187,7 +187,7 @@ const CreditTransactions = ({ items }) => {
         <tbody>
           {items.map((tx) => (
             <tr key={tx.id}>
-              <td>{tx.created_at ? new Date(tx.created_at).toLocaleString() : "-"}</td>
+              <td>{tx.created_at ? new Date(tx.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : "-"}</td>
               <td>{tx.transaction_type || "-"}</td>
               <td>{Number(tx.delta_credits || 0) > 0 ? `+${tx.delta_credits}` : tx.delta_credits}</td>
               <td>{tx.balance_after ?? 0}</td>

@@ -68,7 +68,7 @@ const PracticeDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIc
                 <div className={styles.infoContent}>
                   <span className={styles.infoLabel}>Date & Time</span>
                   <span className={styles.infoValue}>
-                    {new Date(session.created_at).toLocaleString('en-US', {
+                    {new Date(session.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata',
                       dateStyle: 'medium',
                       timeStyle: 'short'
                     })}

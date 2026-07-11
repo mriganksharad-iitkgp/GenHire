@@ -74,7 +74,7 @@ const JobDetails = () => {
 	const formatDate = (dateString) => {
 		if (!dateString) return 'Not specified';
 		try {
-			return new Date(dateString).toLocaleDateString('en-US', {
+			return new Date(dateString).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata',
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric'
@@ -865,7 +865,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									</button>
 									{hasApplied && appliedAt && (
 										<p style={{ color: '#2f4ca3', fontWeight: 600, margin: '6px 0 0' }}>
-											Applied on {new Date(appliedAt).toLocaleDateString()}
+											Applied on {new Date(appliedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
 										</p>
 									)}
 									<p>or</p>

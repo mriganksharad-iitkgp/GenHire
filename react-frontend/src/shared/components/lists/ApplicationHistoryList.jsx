@@ -68,7 +68,7 @@ const ApplicationHistoryList = ({
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString();
+    return new Date(dateStr).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
   const getStatusClass = (status) => {

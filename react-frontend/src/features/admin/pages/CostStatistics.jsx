@@ -19,6 +19,7 @@ import {
   getRecruiterUsageSummary,
   getRecruiterUsageLines,
 } from 'features/admin/api/adminApi';
+import { nowInIST } from 'shared/utils/format';
 
 const formatInrNumber = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatInrCompact = (value) => {
@@ -172,11 +173,11 @@ const downloadCsv = (filename, rows) => {
 };
 
 const CostStatistics = () => {
-  const todayDate = useMemo(() => new Date(), []);
+  // Timeline defaults to the CURRENT MONTH in Indian time (IST).
+  const todayDate = useMemo(() => nowInIST(), []);
   const defaultStartDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return formatDateInput(date);
+    const ist = nowInIST();
+    return formatDateInput(new Date(ist.getFullYear(), ist.getMonth(), 1));
   }, []);
 
   const [startDate, setStartDate] = useState(defaultStartDate);
@@ -395,10 +396,14 @@ const CostStatistics = () => {
     });
 
     rows.push(['AI Costs', 'Total AI Cost', '', '', '', '', costData?.cost_statistics?.total_ai_cost_inr || 0, '']);
-    rows.push(['Infrastructure', 'Cloudflare Monthly Assumption', infraCosts?.cloudflare?.monthly_assumption_inr || 0, '', '', '', '', '']);
-    rows.push(['Infrastructure', 'Cloudflare Pro-rated', infraCosts?.cloudflare?.prorated_cost_inr || 0, '', '', '', '', '']);
-    rows.push(['Infrastructure', 'MongoDB Monthly Assumption', infraCosts?.mongodb?.monthly_assumption_inr || 0, '', '', '', '', '']);
-    rows.push(['Infrastructure', 'MongoDB Pro-rated', infraCosts?.mongodb?.prorated_cost_inr || 0, '', '', '', '', '']);
+    Object.entries(infraCosts || {}).forEach(([infraKey, entry]) => {
+      if (infraKey === 'total_infrastructure_cost_inr' || !entry || typeof entry !== 'object') return;
+      rows.push(['Infrastructure', `${entry.label || infraKey} Monthly`, entry.monthly_assumption_inr || 0, '', '', '', '', '']);
+      rows.push(['Infrastructure', `${entry.label || infraKey} Pro-rated`, entry.prorated_cost_inr || 0, '', '', '', '', '']);
+      (entry.breakdown || []).forEach((item) => {
+        rows.push(['Infrastructure', `  ${entry.label || infraKey} — ${item.label} Monthly`, item.monthly_assumption_inr || 0, '', '', '', '', '']);
+      });
+    });
     rows.push(['Infrastructure', 'Total Infrastructure Cost', infraCosts?.total_infrastructure_cost_inr || 0, '', '', '', '', '']);
 
     (incoming?.candidate?.plans || []).forEach((plan) => {
@@ -702,29 +707,25 @@ const CostStatistics = () => {
             <section className={styles.card}>
               <h2>Infrastructure & Provider Cost</h2>
               <p className={styles.subText}>
-                Monthly actuals entered via env (INFRA_MONTHLY_*_INR) from each provider's billing console — GCP (Cloud Run, Build, Storage, Artifact Registry, Speech), OpenAI, Gemini, Groq — pro-rated over the selected timeline. Zero entries are hidden.
+                Monthly figures (env-entered placeholders for now, pro-rated over the selected timeline). Automatic fetch of actual spend from GCP Billing and provider usage APIs is planned.
               </p>
               <div className={styles.kpiGrid}>
-                <div className={styles.kpiCard}>
-                  <h3>Cloudflare (Monthly)</h3>
-                  <p>{formatMoney(infraCosts?.cloudflare?.monthly_assumption_inr)}</p>
-                  <small>Pro-rated: {formatMoney(infraCosts?.cloudflare?.prorated_cost_inr)}</small>
-                  <small>Derived GPU share: {formatMoney(infraCosts?.cloudflare?.gpu_component_inr)}</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>MongoDB (Monthly)</h3>
-                  <p>{formatMoney(infraCosts?.mongodb?.monthly_assumption_inr)}</p>
-                  <small>Pro-rated: {formatMoney(infraCosts?.mongodb?.prorated_cost_inr)}</small>
-                </div>
-                {['gcp', 'openai', 'gemini', 'groq'].map((providerKey) => (
-                  infraCosts?.[providerKey] ? (
-                    <div key={providerKey} className={styles.kpiCard}>
-                      <h3>{infraCosts[providerKey].label || providerKey.toUpperCase()} (Monthly)</h3>
-                      <p>{formatMoney(infraCosts[providerKey].monthly_assumption_inr)}</p>
-                      <small>Pro-rated: {formatMoney(infraCosts[providerKey].prorated_cost_inr)}</small>
+                {['gcp', 'vercel', 'mongodb', 'openai', 'gemini', 'groq', 'cloudflare'].map((infraKey) => {
+                  const entry = infraCosts?.[infraKey];
+                  if (!entry) return null;
+                  return (
+                    <div key={infraKey} className={styles.kpiCard}>
+                      <h3>{entry.label || infraKey.toUpperCase()} (Monthly)</h3>
+                      <p>{formatMoney(entry.monthly_assumption_inr)}</p>
+                      <small>Pro-rated: {formatMoney(entry.prorated_cost_inr)}</small>
+                      {(entry.breakdown || []).map((item) => (
+                        <small key={item.key}>
+                          {item.label}: {formatMoney(item.monthly_assumption_inr)}
+                        </small>
+                      ))}
                     </div>
-                  ) : null
-                ))}
+                  );
+                })}
                 <div className={styles.kpiCard}>
                   <h3>Total Infrastructure Cost</h3>
                   <p>{formatMoney(infraCosts?.total_infrastructure_cost_inr)}</p>

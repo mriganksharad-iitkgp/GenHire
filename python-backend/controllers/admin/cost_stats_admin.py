@@ -152,20 +152,27 @@ class CostStatsAdmin:
             pricing = CostTracker.PRICING
             inr_per_usd = 83.0
 
-            # Monthly infrastructure/provider actuals — env-driven so the
-            # owner can mirror real invoices (GCP billing console, OpenAI
-            # usage dashboard, Google AI Studio billing, Groq console) here.
-            # Zero means "not incurred / not entered yet" and the entry is
-            # hidden from the admin UI.
+            # Monthly infrastructure/provider figures — env-driven placeholder
+            # values for now (owner updates them from each billing console);
+            # automatic fetch from GCP Billing/provider APIs is a planned
+            # feature. GCP is itemized per service.
+            gcp_service_assumptions = {
+                "cloud_run": ("Cloud Run", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_RUN_INR", 500.0)),
+                "cloud_build": ("Cloud Build", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_BUILD_INR", 100.0)),
+                "cloud_storage": ("Cloud Storage", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_STORAGE_INR", 100.0)),
+                "artifact_registry": ("Artifact Registry", _env_monthly_inr("INFRA_MONTHLY_GCP_ARTIFACT_REGISTRY_INR", 100.0)),
+                "other": ("Other GCP services", _env_monthly_inr("INFRA_MONTHLY_GCP_OTHER_INR", 0.0)),
+            }
             monthly_infra_assumptions = {
-                "cloudflare": _env_monthly_inr("INFRA_MONTHLY_CLOUDFLARE_INR", 5000.0),
+                "gcp": sum(value for _, value in gcp_service_assumptions.values()),
+                "vercel": _env_monthly_inr("INFRA_MONTHLY_VERCEL_INR", 0.0),
                 "mongodb": _env_monthly_inr("INFRA_MONTHLY_MONGODB_INR", 3000.0),
-                "gcp": _env_monthly_inr("INFRA_MONTHLY_GCP_INR", 0.0),
-                "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 0.0),
+                "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 500.0),
                 "gemini": _env_monthly_inr("INFRA_MONTHLY_GEMINI_INR", 0.0),
                 "groq": _env_monthly_inr("INFRA_MONTHLY_GROQ_INR", 0.0),
+                # Legacy — only shown if a value is still configured.
+                "cloudflare": _env_monthly_inr("INFRA_MONTHLY_CLOUDFLARE_INR", 0.0),
             }
-            cloudflare_gpu_ratio = 245.0 / (245.0 + 100.0)
 
             # Single source of truth for fallback assumptions (gpt-4o-mini
             # across the board) — see CostStatsHelpers._action_assumptions.
@@ -404,61 +411,53 @@ class CostStatsAdmin:
             practice_interview_count = len(practice_lines)
             practice_evaluation_count = len(practice_eval_lines)
 
-            cloudflare_total_prorated = _monthly_cost_for_window(monthly_infra_assumptions['cloudflare'], period_start, period_end)
-            cloudflare_gpu_prorated = cloudflare_total_prorated * cloudflare_gpu_ratio
-            cloudflare_base_prorated = (
-                cloudflare_total_prorated - cloudflare_gpu_prorated
-            )
-            mongodb_prorated = _monthly_cost_for_window(
-                monthly_infra_assumptions["mongodb"], period_start, period_end
-            )
-
-            infrastructure_costs = {
-                "cloudflare": {
-                    "monthly_assumption_inr": _round_money(
-                        monthly_infra_assumptions["cloudflare"]
+            # Fixed display set (owner-chosen): GCP itemized + Vercel +
+            # MongoDB + the three LLM provider keys. Values are env-entered
+            # placeholders until automatic billing fetch is implemented; every
+            # requested entry is always returned (even at 0) so the admin UI
+            # shows the full structure. Legacy Cloudflare appears only if
+            # still configured.
+            gcp_breakdown = []
+            for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
+                gcp_breakdown.append({
+                    "key": service_key,
+                    "label": service_label,
+                    "monthly_assumption_inr": _round_money(service_monthly),
+                    "prorated_cost_inr": _round_money(
+                        _monthly_cost_for_window(service_monthly, period_start, period_end)
                     ),
-                    "prorated_cost_inr": _round_money(cloudflare_total_prorated),
-                    "gpu_component_inr": _round_money(cloudflare_gpu_prorated),
-                    "base_component_inr": _round_money(cloudflare_base_prorated),
-                    "note": "GPU share is a derived component inside Cloudflare cost (not added separately).",
-                },
-                "mongodb": {
-                    "monthly_assumption_inr": _round_money(
-                        monthly_infra_assumptions["mongodb"]
-                    ),
-                    "prorated_cost_inr": _round_money(mongodb_prorated),
-                },
-            }
+                })
 
-            # External provider actuals (env-entered monthly figures mirroring
-            # real invoices): GCP (Cloud Run/Build/Storage/Artifact Registry
-            # etc.) and the three LLM providers. Zero entries are omitted.
-            external_provider_labels = {
-                "gcp": "Google Cloud Platform (Cloud Run, Build, Storage, Artifact Registry, Speech)",
+            infra_labels = {
+                "gcp": "Google Cloud Platform",
+                "vercel": "Vercel",
+                "mongodb": "MongoDB Atlas",
                 "openai": "OpenAI API",
                 "gemini": "Google Gemini API",
                 "groq": "Groq API",
+                "cloudflare": "Cloudflare (legacy)",
             }
-            external_prorated_total = 0.0
-            for provider_key, provider_label in external_provider_labels.items():
-                monthly_value = monthly_infra_assumptions.get(provider_key, 0.0)
-                if monthly_value <= 0:
+            infrastructure_costs = {}
+            total_infra_prorated = 0.0
+            for infra_key, infra_label in infra_labels.items():
+                monthly_value = monthly_infra_assumptions.get(infra_key, 0.0)
+                if infra_key == "cloudflare" and monthly_value <= 0:
                     continue
-                provider_prorated = _monthly_cost_for_window(
+                prorated_value = _monthly_cost_for_window(
                     monthly_value, period_start, period_end
                 )
-                external_prorated_total += provider_prorated
-                infrastructure_costs[provider_key] = {
-                    "label": provider_label,
+                total_infra_prorated += prorated_value
+                entry = {
+                    "label": infra_label,
                     "monthly_assumption_inr": _round_money(monthly_value),
-                    "prorated_cost_inr": _round_money(provider_prorated),
-                    "note": f"Env-entered actual (INFRA_MONTHLY_{provider_key.upper()}_INR) from the provider's billing console.",
+                    "prorated_cost_inr": _round_money(prorated_value),
+                    "note": "Env-entered placeholder — automatic billing fetch planned.",
                 }
+                if infra_key == "gcp":
+                    entry["breakdown"] = gcp_breakdown
+                infrastructure_costs[infra_key] = entry
 
-            total_infrastructure_cost_inr = _round_money(
-                cloudflare_total_prorated + mongodb_prorated + external_prorated_total
-            )
+            total_infrastructure_cost_inr = _round_money(total_infra_prorated)
             total_cost_inr = _round_money(
                 total_ai_cost_inr + total_infrastructure_cost_inr
             )

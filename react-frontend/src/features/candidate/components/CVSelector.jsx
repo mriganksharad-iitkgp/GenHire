@@ -52,7 +52,7 @@ const CVSelector = ({ onSelect, selectedCvId = null, showLabel = true }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata',
       month: 'short',
       day: 'numeric',
       year: 'numeric'

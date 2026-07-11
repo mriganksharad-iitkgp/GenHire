@@ -943,7 +943,7 @@ const Dashboard = () => {
 																<span className={styles.jobDate}>
 																	<i className="fa fa-calendar"></i>{" "}
 																	Posted:{" "}
-																	{job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
+																	{job.created_at ? new Date(job.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}
 																</span>
 															</div>
 
@@ -1027,7 +1027,7 @@ const Dashboard = () => {
 																	<i className="fa fa-money"></i> {job.salary}
 																</span>
 																<span className={styles.jobDate}>
-																	<i className="fa fa-calendar"></i> Posted: {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
+																	<i className="fa fa-calendar"></i> Posted: {job.created_at ? new Date(job.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}
 																</span>
 															</div>
 

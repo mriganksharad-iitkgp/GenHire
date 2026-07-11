@@ -79,7 +79,7 @@ const IdentityCardUpload = ({ showToast }) => {
         )}
         <p className={styles.lockedNote}>
           <span className={styles.lockIcon} aria-hidden="true">🔒</span>
-          Uploaded{status.uploaded_at ? ` on ${new Date(status.uploaded_at).toLocaleDateString()}` : ""}.
+          Uploaded{status.uploaded_at ? ` on ${new Date(status.uploaded_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}` : ""}.
           Your identity card is verified against your face before every
           interview and can only be changed by an administrator.
         </p>

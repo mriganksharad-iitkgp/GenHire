@@ -120,10 +120,9 @@ const ApplicationView = () => {
 			fetchApplication();
 	}, [applicationId, navigate]);
 
-	// Format date for display
+	// Format date for display (IST, dd/mm/yyyy convention site-wide)
 	const formatDate = (dateString) => {
-		const options = { year: "numeric", month: "long", day: "numeric" };
-		return new Date(dateString).toLocaleDateString(undefined, options);
+		return new Date(dateString).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
 	};
 
 	// Check if interview is upcoming or past

@@ -56,7 +56,7 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
           <p><strong>Manual Infractions:</strong></p>
           <ul>
             {(report.manual_infractions || []).map((infraction, index) => (
-              <li key={index}>{infraction.type} at {new Date(infraction.timestamp).toLocaleString()}</li>
+              <li key={index}>{infraction.type} at {new Date(infraction.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</li>
             ))}
              {(report.manual_infractions || []).length === 0 && <p>No manual infractions recorded.</p>}
           </ul>
@@ -103,7 +103,7 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                           {voiceInfractions.map((inf, i) => (
                             <li key={i}>
                               <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                             </li>
                           ))}
                         </ul>
@@ -121,7 +121,7 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                           {objectInfractions.map((inf, i) => (
                             <li key={i}>
                               <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                             </li>
                           ))}
                         </ul>
@@ -146,7 +146,7 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
                           {gazeInfractions.slice(0, 5).map((inf, i) => (
                             <li key={i}>
                               <span className={styles.infractionType}>{inf.type.replace(/_/g, ' ')}</span>
-                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString()}</span>
+                              <span className={styles.infractionTime}>{new Date(inf.timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                             </li>
                           ))}
                           {gazeInfractions.length > 5 && (
