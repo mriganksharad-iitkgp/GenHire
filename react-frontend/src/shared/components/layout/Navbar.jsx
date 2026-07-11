@@ -5,7 +5,7 @@ import { UpgradeButton } from "features/payment/components/recruiter-subscriptio
 import { CandidatePlanButton } from "features/payment/components/candidate-subscription";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { getProfile } from "shared/api/endpoints";
-import { getToken, clearSession } from "shared/utils/session";
+import { getToken, getUser, clearSession } from "shared/utils/session";
 
 const Navbar = ({ userType = "candidate" }) => {
   const navigate = useNavigate();
@@ -16,6 +16,19 @@ const Navbar = ({ userType = "candidate" }) => {
   const { profile, profilePhotoUrl, loadProfileCached, clearAllCaches } = useCandidateData();
 
   const userName = profile?.name || "User";
+
+  // Burner (invite-only) candidates are scoped to the job they were
+  // invited to — Practice, Cost Statistics, Team, and credit purchase are
+  // general candidate features the backend now rejects for them, so hide
+  // the links entirely instead of surfacing a 403 on click.
+  const cachedUser = (() => {
+    try {
+      return getUser();
+    } catch (_) {
+      return null;
+    }
+  })();
+  const isInviteOnly = !!(cachedUser && (cachedUser.is_invite_only || cachedUser.isInviteOnly));
 
   useEffect(() => {
     // Load user data
@@ -129,30 +142,36 @@ const Navbar = ({ userType = "candidate" }) => {
               >
                 My Applications
               </Link>
-              <Link
-                to="/practice"
-                className={`${styles.navLink} ${
-                  location.pathname === "/practice" ? styles.active : ""
-                }`}
-              >
-                Practice
-              </Link>
-              <Link
-                to="/candidate/cost-statistics"
-                className={`${styles.navLink} ${
-                  location.pathname === "/candidate/cost-statistics" ? styles.active : ""
-                }`}
-              >
-                Cost Statistics
-              </Link>
-              <Link
-                to="/team"
-                className={`${styles.navLink} ${
-                  location.pathname === "/team" ? styles.active : ""
-                }`}
-              >
-                Team
-              </Link>
+              {!isInviteOnly && (
+                <Link
+                  to="/practice"
+                  className={`${styles.navLink} ${
+                    location.pathname === "/practice" ? styles.active : ""
+                  }`}
+                >
+                  Practice
+                </Link>
+              )}
+              {!isInviteOnly && (
+                <Link
+                  to="/candidate/cost-statistics"
+                  className={`${styles.navLink} ${
+                    location.pathname === "/candidate/cost-statistics" ? styles.active : ""
+                  }`}
+                >
+                  Cost Statistics
+                </Link>
+              )}
+              {!isInviteOnly && (
+                <Link
+                  to="/team"
+                  className={`${styles.navLink} ${
+                    location.pathname === "/team" ? styles.active : ""
+                  }`}
+                >
+                  Team
+                </Link>
+              )}
             </>
           )}
         </nav>
@@ -160,7 +179,7 @@ const Navbar = ({ userType = "candidate" }) => {
         <div className={styles.navActions}>
           {/* Upgrade Button for Recruiters */}
           {userType === "recruiter" && <UpgradeButton />}
-          {userType !== "recruiter" && <CandidatePlanButton />}
+          {userType !== "recruiter" && !isInviteOnly && <CandidatePlanButton />}
 
           <div className={styles.userDropdown} ref={userMenuRef}>
             <button
@@ -279,9 +298,9 @@ const Navbar = ({ userType = "candidate" }) => {
             <>
               <Link to="/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Open Positions</Link>
               <Link to="/profile#applications" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>My Applications</Link>
-              <Link to="/practice" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Practice</Link>
-              <Link to="/candidate/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>
-              <Link to="/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>
+              {!isInviteOnly && <Link to="/practice" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Practice</Link>}
+              {!isInviteOnly && <Link to="/candidate/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>}
+              {!isInviteOnly && <Link to="/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>}
               <div className={styles.mobileDivider}></div>
               <Link to="/profile#bio" className={styles.mobileNavLink} onClick={() => {
                 setMobileMenuOpen(false);

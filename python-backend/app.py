@@ -7,12 +7,51 @@ as the stable target for both deployment commands:
     python app.py                 (local dev server with reloader)
 """
 
+import contextlib
+import io
+import os
+
 import core.bootstrap  # noqa: F401  side effects: UTF-8 stdout, TF/glog silencing
 
 from core.extensions import socketio
 from core.factory import create_app
 
-app = create_app()
+# `python app.py` with the Werkzeug auto-reloader always runs this module
+# TWICE per process generation: once as a disposable "watcher" process (which
+# builds a throwaway Flask app — connecting to Mongo, registering blueprints,
+# running the wallet bootstrap, printing every boot log — then hands off to a
+# reloaded subprocess and never serves) and once for real in that subprocess
+# (WERKZEUG_RUN_MAIN=true). gunicorn workers (__name__ != "__main__") are
+# unaffected either way. create_app() itself can't be skipped in the watcher
+# pass — socketio.run() unconditionally dereferences socketio.server.eio
+# (set by socketio.init_app() inside create_app()) before it even checks
+# whether a reloader is in play, so a stub Flask() app would crash on the
+# very first call. Instead:
+#   - stdout/stderr are silenced so the watcher's boot logs don't print
+#     twice per restart;
+#   - GENHIRE_DISABLE_JOBS is forced on for the duration of that call so the
+#     three background daemons (CV-scoring queue, invite cleanup, refund
+#     sweeper) start ONLY in the real subprocess — otherwise the watcher's
+#     copies would run against the live DB for the dev server's whole
+#     lifetime, duplicating every scheduled sweep/cleanup alongside the
+#     subprocess's real ones.
+_is_disposable_reloader_watcher = (
+    __name__ == "__main__" and os.environ.get("WERKZEUG_RUN_MAIN") != "true"
+)
+
+if _is_disposable_reloader_watcher:
+    _prior_jobs_disabled = os.environ.get("GENHIRE_DISABLE_JOBS")
+    os.environ["GENHIRE_DISABLE_JOBS"] = "1"
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            app = create_app()
+    finally:
+        if _prior_jobs_disabled is None:
+            os.environ.pop("GENHIRE_DISABLE_JOBS", None)
+        else:
+            os.environ["GENHIRE_DISABLE_JOBS"] = _prior_jobs_disabled
+else:
+    app = create_app()
 
 if __name__ == "__main__":
     from jobs import runner as jobs_runner

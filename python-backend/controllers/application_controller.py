@@ -619,8 +619,16 @@ class ApplicationController:
                 if isinstance(app.get("updated_at"), datetime.datetime):
                     app["updated_at"] = app["updated_at"].isoformat()
                 # Pre-shortlisted invitees keep cv_score = None on purpose
-                # (shown as N/A) — the recruiter already selected them.
-                if app.get("cv_score") is None and not app.get("cv_score_waived"):
+                # (shown as N/A) — the recruiter already selected them. An
+                # invite skeleton the candidate hasn't submitted yet (visible
+                # immediately for interview-type invites) must NOT get the
+                # legacy-data fallback either, or the recruiter sees a fake
+                # score before the candidate has done anything.
+                if (
+                    app.get("cv_score") is None
+                    and not app.get("cv_score_waived")
+                    and app.get("processing_status") != "awaiting_candidate"
+                ):
                     app["cv_score"] = 85.0
                 if "interview_score" not in app:
                     app["interview_score"] = None
@@ -828,7 +836,11 @@ class ApplicationController:
             app_doc["applied_at"] = app_doc["applied_at"].isoformat()
         if isinstance(app_doc.get("updated_at"), datetime.datetime):
             app_doc["updated_at"] = app_doc["updated_at"].isoformat()
-        if app_doc.get("cv_score") is None and not app_doc.get("cv_score_waived"):
+        if (
+            app_doc.get("cv_score") is None
+            and not app_doc.get("cv_score_waived")
+            and app_doc.get("processing_status") != "awaiting_candidate"
+        ):
             app_doc["cv_score"] = 85.0
         if "interview_score" not in app_doc:
             app_doc["interview_score"] = None

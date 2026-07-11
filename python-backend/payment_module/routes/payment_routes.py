@@ -154,6 +154,15 @@ def initiate_payment(current_user):
     """
     if _payment_controller is None:
         return jsonify({"success": False, "error": "Payment service not configured"}), 503
+    # Burner (invite-only) accounts are sponsored by the recruiter who
+    # invited them and never pay for anything themselves — credit purchase
+    # is out of scope for them.
+    if current_user.get("is_invite_only"):
+        return jsonify({
+            "success": False,
+            "error": "Credit purchase is not available on invite-only accounts.",
+            "error_code": "invite_only_scope",
+        }), 403
     response, status_code = _payment_controller.initiate_payment(current_user)
     return jsonify(response), status_code
 

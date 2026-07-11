@@ -463,7 +463,14 @@ class WalletService:
     def bootstrap_signup_bonus_for_all_users(self, users_collection) -> Tuple[int, int]:
         granted = 0
         skipped = 0
-        for user in users_collection.find({}, {"_id": 1, "user_type": 1, "email": 1, "email_lower": 1}):
+        # Invite-only (burner) accounts are excluded: they're sponsored by the
+        # recruiter who invited them (real interview credits are debited from
+        # the recruiter's wallet, not theirs), so a signup bonus is never
+        # earned. This also prevents a burner from silently occupying its
+        # email's one-time bonus slot in email_signup_registry and denying
+        # the real person their bonus if they later register for real.
+        query = {"is_invite_only": {"$ne": True}}
+        for user in users_collection.find(query, {"_id": 1, "user_type": 1, "email": 1, "email_lower": 1}):
             owner_id = str(user.get("_id"))
             raw_user_type = str(user.get("user_type") or "candidate").strip().lower()
             audience = "candidate" if raw_user_type in {"candidate", "student"} else "recruiter"

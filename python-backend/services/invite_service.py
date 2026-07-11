@@ -439,7 +439,15 @@ class InviteService:
         user_doc = {
             "name": "",
             "email": normalized,
-            "email_lower": normalized,
+            # Deliberately NOT setting email_lower here. `users` has a unique
+            # sparse index on email_lower scoped to real accounts (see
+            # config/database.py) — burners are meant to be excluded from it
+            # by leaving the field absent, so the SAME email can hold burner
+            # accounts across multiple jobs, and so inviting an email that
+            # already has a real candidate/recruiter/admin account (or a
+            # burner for a different job) never throws a duplicate-key error.
+            # `_find_burner_account_invited_to_job` and `find_by_email` both
+            # already fall back to the plain (non-unique) `email` field.
             "invite_id": invite_id,
             "invite_id_lower": invite_id.lower(),
             "password": generate_password_hash(temp_password),

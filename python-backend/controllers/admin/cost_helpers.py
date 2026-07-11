@@ -653,6 +653,7 @@ class CostStatsHelpers:
         source_meta = source_meta or {}
 
         from interview.core.cost_tracker import CostTracker
+        from interview.core.pricing import PRICING as SPEECH_PRICING
         pricing = CostTracker.PRICING
         inr_per_usd = 83.0
 
@@ -764,8 +765,13 @@ class CostStatsHelpers:
         rates = pricing.get(line_model, {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
-        stt_rate_per_15s = pricing.get('gcp_stt', {}).get('default', 0.006)
-        tts_rates = pricing.get('gcp_tts', {})
+        # STT/TTS rates come from interview.core.pricing — the SAME dict
+        # speech_cost_tracker.py reads from when billing a live interview —
+        # not CostTracker.PRICING (LLM-only; it has no gcp_stt/gcp_tts keys,
+        # so this used to silently fall back to a hardcoded default that only
+        # matched by coincidence).
+        stt_rate_per_15s = SPEECH_PRICING.get('gcp_stt', {}).get('default', 0.006)
+        tts_rates = SPEECH_PRICING.get('gcp_tts', {})
         tts_voice_type = str(doc.get('tts_voice_type') or 'standard').lower()
         tts_rate = tts_rates.get(tts_voice_type, tts_rates.get('standard', 0.000004))
 

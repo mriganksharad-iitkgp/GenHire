@@ -310,8 +310,14 @@ class CostStatsAdmin:
                         )
                     )
 
+            # Only sessions that actually finished are charged/costed here —
+            # matching the real-interview line's status filter above.
+            # Without this, abandoned/still-active sessions (no real token
+            # usage) fell back to the full assumed baseline cost per session,
+            # inflating the practice-cost total for sessions that never
+            # really ran.
             practice_query = _build_date_range_query(
-                {'is_practice': True},
+                {'is_practice': True, 'status': 'completed'},
                 ['created_at', 'updated_at', 'completed_at'],
                 period_start,
                 period_end,
@@ -716,7 +722,6 @@ class CostStatsAdmin:
                         "completion": action_assumptions["evaluation"]["completion_tokens"],
                     },
                     "monthly_infrastructure_assumptions_inr": monthly_infra_assumptions,
-                    "cloudflare_gpu_ratio": round(cloudflare_gpu_ratio, 4),
                 },
             }, 200
 
@@ -735,7 +740,14 @@ class CostStatsAdmin:
 
             assumptions = self._action_assumptions()
 
-            candidate_docs = list(self.users_collection.find({'user_type': 'candidate'}, {'name': 1, 'email': 1}))
+            # Burner (invite-only) candidates are excluded — they're blocked
+            # from Practice mode (sponsored accounts are scoped to their
+            # invited interview only), so they'd otherwise show up as
+            # permanent zero-activity rows in this practice-usage report.
+            candidate_docs = list(self.users_collection.find(
+                {'user_type': 'candidate', 'is_invite_only': {'$ne': True}},
+                {'name': 1, 'email': 1},
+            ))
             candidate_map = {str(doc['_id']): doc for doc in candidate_docs}
             summary_map = {
                 candidate_id: {
@@ -753,8 +765,12 @@ class CostStatsAdmin:
             }
 
             candidate_ids = list(candidate_map.keys())
+            # Only completed sessions are costed (matches the platform-wide
+            # cost line above) — abandoned/still-active sessions have no
+            # real token usage and would otherwise fall back to a full
+            # assumed baseline cost, inflating this candidate's total.
             practice_query = self._build_date_range_query(
-                {'is_practice': True, 'user_id': {'$in': candidate_ids}},
+                {'is_practice': True, 'status': 'completed', 'user_id': {'$in': candidate_ids}},
                 ['created_at', 'updated_at', 'completed_at'],
                 period_start,
                 period_end,

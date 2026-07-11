@@ -89,7 +89,15 @@ class CreditAdmin:
         transaction_collection = wallet_service.transaction_collection
         recharge_types = list(wallet_service.RECHARGE_TRANSACTION_TYPES)
 
-        user_docs = list(self.users_collection.find({'user_type': audience}, {'name': 1, 'email': 1}))
+        # Burner (invite-only) accounts are excluded: they're sponsored by
+        # the recruiter who invited them (real interviews debit the
+        # recruiter's wallet, not theirs) and are now blocked from Practice
+        # and credit purchase, so they never have credit activity — showing
+        # them here would just be permanent zero-balance noise.
+        user_docs = list(self.users_collection.find(
+            {'user_type': audience, 'is_invite_only': {'$ne': True}},
+            {'name': 1, 'email': 1},
+        ))
         rows = []
 
         for user in user_docs:

@@ -27,6 +27,15 @@ def start_practice_interview(current_user):
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
     if user_type not in ['candidate', 'student']:
         return jsonify({'error': 'Unauthorized. Only candidates can use practice mode.'}), 403
+
+    # Burner (invite-only) accounts are scoped to the interview they were
+    # sponsored for — practice mode is a general candidate feature unrelated
+    # to any specific recruiter invite, so it stays out of scope for them.
+    if current_user.get('is_invite_only'):
+        return jsonify({
+            'error': 'Practice mode is not available on invite-only accounts. This account is scoped to the interview you were invited to.',
+            'error_code': 'invite_only_scope',
+        }), 403
     
     # Get files and data from request
     jd_file = request.files.get('jd')  # Optional for custom practice
