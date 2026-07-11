@@ -73,13 +73,18 @@ const MobileRecorder = () => {
       }
     });
 
+    const videoElement = videoRef.current;
     return () => {
       newSocket.disconnect();
-      // Cleanup stream
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      // Cleanup stream (captured element, not the live ref, per hooks rules)
+      if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach((track) => track.stop());
       }
     };
+    // uploadRecording is stable per-mount (assigned as the recorder's onstop
+    // inside this same effect); re-running the socket setup on its identity
+    // would reconnect mid-recording.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   const uploadRecording = async () => {

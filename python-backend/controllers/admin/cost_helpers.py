@@ -537,8 +537,9 @@ class CostStatsHelpers:
         source_meta = source_meta or {}
 
         from interview.core.cost_tracker import CostTracker, calculate_cost
+        from controllers.admin.cost_stats_admin import _env_inr_per_usd
         pricing = CostTracker.PRICING
-        inr_per_usd = 83.0
+        inr_per_usd = _env_inr_per_usd()
 
         prompt_tokens, prompt_source = self._extract_usage_metric(
             doc,
@@ -654,8 +655,9 @@ class CostStatsHelpers:
 
         from interview.core.cost_tracker import CostTracker
         from interview.core.pricing import PRICING as SPEECH_PRICING
+        from controllers.admin.cost_stats_admin import _env_inr_per_usd
         pricing = CostTracker.PRICING
-        inr_per_usd = 83.0
+        inr_per_usd = _env_inr_per_usd()
 
         prompt_tokens, prompt_source = self._extract_usage_metric(
             doc,
@@ -872,6 +874,206 @@ class CostStatsHelpers:
                 'completion_tokens': 1000,
             },
         }
+
+    def _llm_pricing_reference(self):
+        """Static reference table for the admin UI: the current provider
+        chain order/models with official per-1M-token pricing and free-tier
+        notices, plus GCP speech pricing. This mirrors LLM_PROVIDER_PRIORITY
+        for display only — it does not read the env, so update it by hand if
+        the chain order or models change (env files + this list together)."""
+        return {
+            'chain_env_var': 'LLM_PROVIDER_PRIORITY',
+            'providers': [
+                {
+                    'provider': 'OpenAI',
+                    'model': 'gpt-4o-mini',
+                    'role': 'primary',
+                    'input_usd_per_1m_tokens': 0.15,
+                    'output_usd_per_1m_tokens': 0.60,
+                    'tier_note': 'Key is valid but currently has ZERO quota (429 insufficient_quota on every call) — no real spend accrues until billing credit is added at platform.openai.com.',
+                },
+                {
+                    'provider': 'Google Gemini',
+                    'model': 'gemini-flash-lite-latest',
+                    'role': 'secondary fallback',
+                    'input_usd_per_1m_tokens': 0.075,
+                    'output_usd_per_1m_tokens': 0.30,
+                    'tier_note': 'Free tier — this Google Cloud project has zero paid quota on gemini-2.x-flash models; only the flash-lite family works without enabling billing.',
+                },
+                {
+                    'provider': 'Groq',
+                    'model': 'llama-3.3-70b-versatile',
+                    'role': 'tertiary fallback (answers most traffic while OpenAI has no quota)',
+                    'input_usd_per_1m_tokens': 0.59,
+                    'output_usd_per_1m_tokens': 0.79,
+                    'tier_note': 'Free tier — rate-limited rather than metered; no card on file, so usage costs nothing until Groq introduces billing.',
+                },
+            ],
+            'face_match_vision_models': [
+                {'provider': 'OpenAI', 'model': 'gpt-4o-mini'},
+                {'provider': 'Google Gemini', 'model': 'gemini-flash-lite-latest'},
+                {'provider': 'Groq', 'model': 'meta-llama/llama-4-scout-17b-16e-instruct'},
+            ],
+            'speech': {
+                'stt': {
+                    'provider': 'Google Cloud Speech-to-Text',
+                    'billing_unit': 'per 15 seconds (rounded up)',
+                    'usd_per_unit': 0.006,
+                    'usd_per_minute_equivalent': 0.024,
+                },
+                'tts_standard': {
+                    'provider': 'Google Cloud Text-to-Speech (Standard)',
+                    'billing_unit': 'per character',
+                    'usd_per_unit': 0.000004,
+                    'usd_per_1m_chars_equivalent': 4.00,
+                },
+                'tts_neural': {
+                    'provider': 'Google Cloud Text-to-Speech (Neural2)',
+                    'billing_unit': 'per character',
+                    'usd_per_unit': 0.000016,
+                    'usd_per_1m_chars_equivalent': 16.00,
+                },
+            },
+            'note': (
+                'Every AI cost line below is priced at gpt-4o-mini rates regardless of which '
+                'provider actually answered the call — the provider chain is a same-shape '
+                'fallback (whichever leg responds returns the same prompt/completion token '
+                'counts) and per-call logs do not record which leg served each request, so '
+                'gpt-4o-mini (the configured primary) is used as the flat pricing reference. '
+                'Real spend is usually lower in practice since the Gemini and Groq legs are '
+                'currently free-tier.'
+            ),
+        }
+
+    def _infra_plan_reference(self):
+        """Static reference table for the admin UI: what each infra provider
+        plan/tier includes, shown alongside the env-entered monthly cost
+        placeholders so the admin knows what they're paying (or not paying)
+        for."""
+        return {
+            'vercel': {
+                'plan': 'Hobby (Free)',
+                'monthly_price_usd': 0,
+                'benefits': [
+                    '100 GB-hours of Serverless Function execution / month',
+                    '100 GB bandwidth (Fast Data Transfer) / month',
+                    'Automatic HTTPS + global CDN on every deploy',
+                    'Unlimited preview deployments on every push',
+                    'Intended for personal/non-commercial use — upgrade to Pro ($20/user/mo) once usage or team size grows.',
+                ],
+            },
+            'gcp': {
+                'project': 'hr-tech-2026',
+                'billing_console_note': 'Actual current-month spend by service is on the GCP Billing Console → Reports page for this project (Time range: Current month).',
+                'services_billed': [
+                    {
+                        'service': 'Cloud Run',
+                        'what_for': 'Flask/Socket.IO backend hosting (gunicorn + eventlet worker)',
+                        'free_tier': '2M requests, 360,000 GB-seconds, 180,000 vCPU-seconds / month free, then pay-as-you-go',
+                    },
+                    {
+                        'service': 'Artifact Registry',
+                        'what_for': 'Docker image storage for each Cloud Run deploy',
+                        'free_tier': '0.5 GB storage free, then ~$0.10/GB-month — usually the largest GCP line since old image layers accumulate',
+                    },
+                    {
+                        'service': 'Cloud Build',
+                        'what_for': 'CI build of the backend Docker image on every deploy',
+                        'free_tier': '120 build-minutes/day free',
+                    },
+                    {
+                        'service': 'Cloud Storage',
+                        'what_for': 'CVs, JDs, interview/mobile recordings, gaze artifacts',
+                        'free_tier': '5 GB-month Always Free (US regions only) — this project runs outside the US, so it is billed from the first byte',
+                    },
+                ],
+            },
+            'zeptomail': {
+                'plan': 'Pay-as-you-go credits',
+                'credit_price_inr': 150,
+                'emails_per_credit': 10000,
+                'credit_validity_months': 6,
+                'assumed_emails_per_month': 30000,
+                'assumed_monthly_cost_inr': 450,
+                'benefits': [
+                    '1 credit = Rs.150 = 10,000 transactional emails',
+                    'Credits stay valid for 6 months from purchase',
+                    'Assumed volume: 30,000 emails/month = 3 credits = Rs.450/month',
+                    'Covers all platform email: invites, verification, password reset, notifications',
+                ],
+            },
+        }
+
+    def _cost_methodology_reference(self):
+        """Plain-English explanation of each AI cost category's formula, for
+        the admin UI so the admin knows exactly how each number was derived
+        without reading the code."""
+        return [
+            {
+                'key': 'cv_scoring',
+                'title': 'CV Score Calculation',
+                'explanation': (
+                    "When a candidate's CV is scored against a job description, the CV text + "
+                    "JD text form the prompt and the structured score breakdown returned is the "
+                    "completion. Cost = (prompt tokens ÷ 1,000,000 × input rate) + (completion "
+                    "tokens ÷ 1,000,000 × output rate), converted to INR. Real token counts "
+                    "logged by the LLM call are used when available (\"actual\"); otherwise "
+                    "tokens are estimated from the CV/JD text length (\"assumed\")."
+                ),
+            },
+            {
+                'key': 'ai_jd_generation',
+                'title': 'AI Job Description Generation',
+                'explanation': (
+                    'Recruiter-entered job basics (title, department, requirements, etc.) form '
+                    'the prompt; the generated description/skills/responsibilities/benefits form '
+                    'the completion. Same per-token formula as CV scoring.'
+                ),
+            },
+            {
+                'key': 'ai_interview',
+                'title': 'AI Interview (real + practice)',
+                'explanation': (
+                    'Three billed components per interview: (1) LLM tokens for question '
+                    'generation across the whole session — prompt tokens accumulate as '
+                    'conversation history grows turn over turn; (2) Speech-to-Text on every '
+                    'candidate spoken answer, billed in 15-second blocks '
+                    '(ceil(seconds ÷ 15) × per-block rate); (3) Text-to-Speech on every '
+                    'interviewer question read aloud, billed per character. '
+                    'Total = LLM cost + STT cost + TTS cost, converted to INR. Real measured '
+                    'audio seconds/characters are used when logged by the interview session; '
+                    'otherwise they are derived from the actual transcript (answer length at '
+                    '~150 words/min for STT, question text length for TTS) — never invented '
+                    'from wall-clock session duration, and capped at 2 hours per session as a '
+                    'sanity guard.'
+                ),
+            },
+            {
+                'key': 'ai_interview_evaluation',
+                'title': 'AI Interview / Practice Evaluation',
+                'explanation': (
+                    'After an interview or practice session completes, the full Q&A transcript '
+                    'is sent as the prompt and the structured evaluation (scores + feedback) '
+                    'returned is the completion. Same per-token formula as CV scoring.'
+                ),
+            },
+            {
+                'key': 'infrastructure',
+                'title': 'Infrastructure & Provider Cost (GCP, Vercel, MongoDB, ZeptoMail, LLM providers)',
+                'explanation': (
+                    'GCP and OpenAI fetch REAL spend for the selected timeline when their billing '
+                    'integrations are configured (GCP Billing BigQuery export / OpenAI Costs API — '
+                    'each card shows its source). All other providers — and the fallback for those '
+                    'two — use monthly figures entered from each provider\'s billing console '
+                    '(env-configurable — see docs/costfetch.md), pro-rated over the selected '
+                    'timeline: prorated = (monthly figure ÷ 30) × days in the selected range. '
+                    'ZeptoMail is priced from credits: 1 credit = Rs.150 = 10,000 emails (valid '
+                    '6 months); assumed 30,000 emails/month = Rs.450/month. None of these are '
+                    'derived from the AI usage above — infra cost accrues independent of how many '
+                    'interviews/CVs were processed.'
+                ),
+            },
+        ]
 
     def _find_matching_user_id(self, user_id_map, raw_user_id):
         if raw_user_id is None:

@@ -16,6 +16,16 @@ def _env_monthly_inr(name, default):
         return float(default)
 
 
+def _env_inr_per_usd():
+    """USD→INR conversion rate for cost displays (env INR_PER_USD, default 83).
+    Shared by CostStatsAdmin and CostStatsHelpers so every page converts at
+    the same rate."""
+    try:
+        return float(os.getenv("INR_PER_USD", "83"))
+    except (TypeError, ValueError):
+        return 83.0
+
+
 class CostStatsAdmin:
     def get_cost_statistics(
         self, current_user, period="month", start_date=None, end_date=None
@@ -150,12 +160,14 @@ class CostStatsAdmin:
             plans_by_id = {plan_doc.get("_id"): plan_doc for plan_doc in plans_list}
 
             pricing = CostTracker.PRICING
-            inr_per_usd = 83.0
+            inr_per_usd = _env_inr_per_usd()
 
-            # Monthly infrastructure/provider figures — env-driven placeholder
-            # values for now (owner updates them from each billing console);
-            # automatic fetch from GCP Billing/provider APIs is a planned
-            # feature. GCP is itemized per service.
+            # Monthly infrastructure/provider figures. GCP and OpenAI are
+            # fetched live when their billing integrations are configured
+            # (GCP_BILLING_EXPORT_BQ_TABLE / OPENAI_ADMIN_API_KEY — see
+            # docs/costfetch.md); the env figures below are the fallback for
+            # them and the primary source for the rest (owner updates those
+            # from each billing console). GCP is itemized per service.
             gcp_service_assumptions = {
                 "cloud_run": ("Cloud Run", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_RUN_INR", 500.0)),
                 "cloud_build": ("Cloud Build", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_BUILD_INR", 100.0)),
@@ -167,6 +179,10 @@ class CostStatsAdmin:
                 "gcp": sum(value for _, value in gcp_service_assumptions.values()),
                 "vercel": _env_monthly_inr("INFRA_MONTHLY_VERCEL_INR", 0.0),
                 "mongodb": _env_monthly_inr("INFRA_MONTHLY_MONGODB_INR", 3000.0),
+                # ZeptoMail transactional email: 1 credit = Rs.150 = 10,000
+                # emails (valid 6 months); assumed 30,000 emails/month =
+                # 3 credits = Rs.450/month.
+                "zeptomail": _env_monthly_inr("INFRA_MONTHLY_ZEPTOMAIL_INR", 450.0),
                 "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 500.0),
                 "gemini": _env_monthly_inr("INFRA_MONTHLY_GEMINI_INR", 0.0),
                 "groq": _env_monthly_inr("INFRA_MONTHLY_GROQ_INR", 0.0),
@@ -418,26 +434,63 @@ class CostStatsAdmin:
             practice_evaluation_count = len(practice_eval_lines)
 
             # Fixed display set (owner-chosen): GCP itemized + Vercel +
-            # MongoDB + the three LLM provider keys. Values are env-entered
-            # placeholders until automatic billing fetch is implemented; every
-            # requested entry is always returned (even at 0) so the admin UI
-            # shows the full structure. Legacy Cloudflare appears only if
-            # still configured.
+            # MongoDB + ZeptoMail + the three LLM provider keys. GCP and
+            # OpenAI use REAL billing data for the selected window when their
+            # integrations are configured (usage_source: 'billing_export' /
+            # 'costs_api'); everything else — and the fallback for those two —
+            # is the env-entered monthly figure pro-rated over the window
+            # (usage_source: 'env_placeholder'). Every requested entry is
+            # always returned (even at 0) so the admin UI shows the full
+            # structure. Legacy Cloudflare appears only if still configured.
+            from services.gcp_billing_service import (
+                fetch_gcp_service_costs,
+                fetch_gcp_current_month_outstanding,
+            )
+            from services.openai_billing_service import (
+                fetch_openai_costs_usd,
+                get_openai_credit_balance_usd,
+            )
+
+            def _to_inr(amount, currency):
+                if currency == "USD":
+                    return amount * inr_per_usd
+                return amount  # billing account currency is INR
+
+            gcp_actual = fetch_gcp_service_costs(period_start, period_end)
+            gcp_outstanding = fetch_gcp_current_month_outstanding() if gcp_actual else None
+
             gcp_breakdown = []
-            for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
-                gcp_breakdown.append({
-                    "key": service_key,
-                    "label": service_label,
-                    "monthly_assumption_inr": _round_money(service_monthly),
-                    "prorated_cost_inr": _round_money(
-                        _monthly_cost_for_window(service_monthly, period_start, period_end)
-                    ),
-                })
+            if gcp_actual:
+                gcp_currency = gcp_actual.get("currency", "INR")
+                for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
+                    actual_inr = _to_inr(gcp_actual["services"].get(service_key, 0.0), gcp_currency)
+                    gcp_breakdown.append({
+                        "key": service_key,
+                        "label": service_label,
+                        "monthly_assumption_inr": _round_money(service_monthly),
+                        "prorated_cost_inr": _round_money(actual_inr),
+                    })
+                gcp_window_total = _to_inr(gcp_actual["total"], gcp_currency)
+            else:
+                for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
+                    gcp_breakdown.append({
+                        "key": service_key,
+                        "label": service_label,
+                        "monthly_assumption_inr": _round_money(service_monthly),
+                        "prorated_cost_inr": _round_money(
+                            _monthly_cost_for_window(service_monthly, period_start, period_end)
+                        ),
+                    })
+                gcp_window_total = None
+
+            openai_actual_usd = fetch_openai_costs_usd(period_start, period_end)
+            openai_balance_usd = get_openai_credit_balance_usd()
 
             infra_labels = {
                 "gcp": "Google Cloud Platform",
                 "vercel": "Vercel",
                 "mongodb": "MongoDB Atlas",
+                "zeptomail": "ZeptoMail (transactional email)",
                 "openai": "OpenAI API",
                 "gemini": "Google Gemini API",
                 "groq": "Groq API",
@@ -449,18 +502,50 @@ class CostStatsAdmin:
                 monthly_value = monthly_infra_assumptions.get(infra_key, 0.0)
                 if infra_key == "cloudflare" and monthly_value <= 0:
                     continue
-                prorated_value = _monthly_cost_for_window(
-                    monthly_value, period_start, period_end
-                )
-                total_infra_prorated += prorated_value
+
+                if infra_key == "gcp" and gcp_window_total is not None:
+                    window_value = gcp_window_total
+                    usage_source = "billing_export"
+                    note = "Actual spend from the GCP Billing BigQuery export for the selected timeline."
+                elif infra_key == "openai" and openai_actual_usd is not None:
+                    window_value = openai_actual_usd * inr_per_usd
+                    usage_source = "costs_api"
+                    note = "Actual spend from the OpenAI Organization Costs API for the selected timeline."
+                else:
+                    window_value = _monthly_cost_for_window(
+                        monthly_value, period_start, period_end
+                    )
+                    usage_source = "env_placeholder"
+                    note = "Env-entered monthly figure pro-rated over the timeline — see docs/costfetch.md to automate."
+
+                total_infra_prorated += window_value
                 entry = {
                     "label": infra_label,
                     "monthly_assumption_inr": _round_money(monthly_value),
-                    "prorated_cost_inr": _round_money(prorated_value),
-                    "note": "Env-entered placeholder — automatic billing fetch planned.",
+                    "prorated_cost_inr": _round_money(window_value),
+                    "usage_source": usage_source,
+                    "note": note,
                 }
                 if infra_key == "gcp":
                     entry["breakdown"] = gcp_breakdown
+                    if gcp_outstanding is not None:
+                        entry["outstanding_current_month_inr"] = _round_money(
+                            _to_inr(gcp_outstanding["amount"], gcp_outstanding["currency"])
+                        )
+                        entry["outstanding_invoice_month"] = gcp_outstanding["invoice_month"]
+                if infra_key == "openai":
+                    if openai_balance_usd is not None:
+                        entry["credit_balance_usd"] = _round_money(openai_balance_usd)
+                        entry["credit_balance_inr"] = _round_money(openai_balance_usd * inr_per_usd)
+                        entry["credit_balance_note"] = (
+                            "Manually mirrored from platform.openai.com (OPENAI_CREDIT_BALANCE_USD) — "
+                            "OpenAI exposes no official balance API."
+                        )
+                if infra_key == "zeptomail":
+                    entry["pricing_note"] = (
+                        "1 credit = Rs.150 = 10,000 emails (valid 6 months); assumed 30,000 emails/month "
+                        "= 3 credits = Rs.450/month."
+                    )
                 infrastructure_costs[infra_key] = entry
 
             total_infrastructure_cost_inr = _round_money(total_infra_prorated)
@@ -723,6 +808,9 @@ class CostStatsAdmin:
                     },
                     "monthly_infrastructure_assumptions_inr": monthly_infra_assumptions,
                 },
+                "cost_methodology": self._cost_methodology_reference(),
+                "llm_pricing_reference": self._llm_pricing_reference(),
+                "infra_plan_reference": self._infra_plan_reference(),
             }, 200
 
         except Exception as e:

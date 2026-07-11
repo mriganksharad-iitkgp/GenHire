@@ -13,6 +13,7 @@ import useCandidateProfile from "features/candidate/hooks/useCandidateProfile";
 import useCandidateApplications from "features/candidate/hooks/useCandidateApplications";
 import cvService from "features/candidate/api/cvService";
 import { getToken } from "shared/utils/session";
+import { KIOSK_DOWNLOAD_URL } from "shared/constants/appLinks";
 
 const Profile = () => {
 	const navigate = useNavigate();
@@ -203,7 +204,7 @@ const Profile = () => {
 
 	const triggerDownload = () => {
 		const link = document.createElement('a');
-		link.href = 'https://storage.googleapis.com/genhire-downloads/Genhire.exe';
+		link.href = KIOSK_DOWNLOAD_URL;
 		link.download = 'Genhire.exe';
 		document.body.appendChild(link);
 		link.click();

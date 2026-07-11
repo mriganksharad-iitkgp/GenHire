@@ -300,6 +300,55 @@
   margin-bottom: 8px;
 }
 
+.methodologyList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.methodologyItem {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.methodologyItem h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.methodologyItem p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.subsectionTitle {
+  margin: 16px 0 10px;
+  font-size: 15px;
+  color: #334155;
+}
+
+.benefitsList {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sourceActual {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.sourcePlaceholder {
+  color: #b45309;
+}
+
 @media (max-width: 768px) {
   .wrapper {
     padding: 14px;

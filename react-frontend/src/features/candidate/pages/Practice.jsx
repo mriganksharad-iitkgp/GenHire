@@ -11,6 +11,7 @@ import JDDetailsModal from "features/recruiter/components/JDDetailsModal";
 import { PRACTICE_ROLE_OPTIONS } from "shared/constants/jobTaxonomy";
 import styles from "./Practice.module.css";
 import { getToken } from "shared/utils/session";
+import { KIOSK_DOWNLOAD_URL } from "shared/constants/appLinks";
 import { authedFetch } from "shared/api/client";
 
 const Practice = () => {
@@ -283,7 +284,7 @@ const Practice = () => {
       const timeoutId = setTimeout(() => {
         if (document.hasFocus()) {
           const link = document.createElement('a');
-          link.href = 'https://storage.googleapis.com/genhire-downloads/Genhire.exe';
+          link.href = KIOSK_DOWNLOAD_URL;
           link.download = 'Genhire.exe';
           document.body.appendChild(link);
           link.click();
@@ -853,7 +854,7 @@ const Practice = () => {
             <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
               <button onClick={() => {
                 const link = document.createElement('a');
-                link.href = 'https://storage.googleapis.com/genhire-downloads/Genhire.exe';
+                link.href = KIOSK_DOWNLOAD_URL;
                 link.download = 'Genhire.exe';
                 document.body.appendChild(link);
                 link.click();

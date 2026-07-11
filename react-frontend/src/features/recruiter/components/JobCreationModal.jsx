@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { generateJobWithAI } from 'shared/api/endpoints';
 import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import styles from './JobCreationModal.module.css';
@@ -195,13 +195,50 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   
-  const dropdownRefs = {
-    department: useRef(null),
-    location: useRef(null),
-    experience: useRef(null),
-    salary: useRef(null),
-    skills: useRef(null)
-  };
+  const departmentDropdownRef = useRef(null);
+  const locationDropdownRef = useRef(null);
+  const experienceDropdownRef = useRef(null);
+  const salaryDropdownRef = useRef(null);
+  const skillsDropdownRef = useRef(null);
+  const dropdownRefs = useMemo(() => ({
+    department: departmentDropdownRef,
+    location: locationDropdownRef,
+    experience: experienceDropdownRef,
+    salary: salaryDropdownRef,
+    skills: skillsDropdownRef
+  }), []);
+
+  const resetForm = useCallback(() => {
+    setJobData({
+      title: '',
+      department: '',
+      location: '',
+      type: 'Full-time',
+      experience: '',
+      salary: '',
+      deadline: getDefaultDeadline(),
+      skills: [],
+      description: '',
+      responsibilities: '',
+      requirements: '',
+      benefits: '',
+      status: 'draft',
+      minimum_cv_score: 50,
+      proctoring_config: DEFAULT_PROCTORING_CONFIG
+    });
+    setSkillInput('');
+    setFilteredSuggestions([]);
+    setActiveDropdown(null);
+    setShowTemplates(false);
+    setJdFile(null);
+    setAiPrompt('');
+    setAiError('');
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [resetForm, onClose]);
 
   // Auto-suggestion filtering
   useEffect(() => {
@@ -229,7 +266,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [dropdownRefs]);
 
   // Handle AI generation — from a text prompt, an uploaded JD file (parsed
   // and structured by AI), or both.
@@ -389,7 +426,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen]);
+  }, [isOpen, handleCancel]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -452,38 +489,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     setJdFile(null);
     const fileInput = document.getElementById('jd-file-input');
     if (fileInput) fileInput.value = '';
-  };
-
-  const resetForm = () => {
-    setJobData({
-      title: '',
-      department: '',
-      location: '',
-      type: 'Full-time',
-      experience: '',
-      salary: '',
-      deadline: getDefaultDeadline(),
-      skills: [],
-      description: '',
-      responsibilities: '',
-      requirements: '',
-      benefits: '',
-      status: 'draft',
-      minimum_cv_score: 50,
-      proctoring_config: DEFAULT_PROCTORING_CONFIG
-    });
-    setSkillInput('');
-    setFilteredSuggestions([]);
-    setActiveDropdown(null);
-    setShowTemplates(false);
-    setJdFile(null);
-    setAiPrompt('');
-    setAiError('');
-  };
-
-  const handleCancel = () => {
-    resetForm();
-    onClose();
   };
 
   // Dropdown component for suggestions

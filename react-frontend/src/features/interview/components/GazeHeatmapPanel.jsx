@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './GazeHeatmapPanel.module.css';
 
 const GRID = 36;
@@ -129,7 +129,7 @@ function GazeHeatmapPanel({ analysis, pointsPath, apiUrl }) {
   const [points, setPoints] = useState(null);
   const [loadState, setLoadState] = useState('idle');
 
-  const regions = analysis?.suspiciousRegions || [];
+  const regions = useMemo(() => analysis?.suspiciousRegions || [], [analysis]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;

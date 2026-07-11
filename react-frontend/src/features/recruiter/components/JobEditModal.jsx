@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
 import styles from './JobEditModal.module.css';
@@ -104,14 +104,20 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   
-  const dropdownRefs = {
-    department: useRef(null),
-    location: useRef(null),
-    experience: useRef(null),
-    salary: useRef(null),
-    skills: useRef(null),
-    status: useRef(null)
-  };
+  const departmentDropdownRef = useRef(null);
+  const locationDropdownRef = useRef(null);
+  const experienceDropdownRef = useRef(null);
+  const salaryDropdownRef = useRef(null);
+  const skillsDropdownRef = useRef(null);
+  const statusDropdownRef = useRef(null);
+  const dropdownRefs = useMemo(() => ({
+    department: departmentDropdownRef,
+    location: locationDropdownRef,
+    experience: experienceDropdownRef,
+    salary: salaryDropdownRef,
+    skills: skillsDropdownRef,
+    status: statusDropdownRef
+  }), []);
 
   // Initialize job data when modal opens or initialJobData changes
   useEffect(() => {
@@ -168,7 +174,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [dropdownRefs]);
 
   // Handle skill addition
   const addSkill = (skill) => {

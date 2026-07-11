@@ -78,6 +78,9 @@ const Dashboard = () => {
 		}, 5000);
 
 		return () => clearInterval(interval);
+		// loadApplications is stable per-mount; the poll should only re-arm when
+		// the applications list changes, not when the function identity would.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [applications]);
 
 	const loadJobs = async (force = false) => {
@@ -122,6 +125,9 @@ const Dashboard = () => {
 		}
 		loadJobs();
 		loadApplications();
+		// Intentionally mount-only (plus navigate): initial data load happens
+		// once; refreshes go through the cached loaders' own force paths.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [navigate]);
 
 	const loadApplications = async (force = false) => {

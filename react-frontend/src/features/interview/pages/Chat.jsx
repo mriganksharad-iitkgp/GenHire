@@ -836,6 +836,9 @@ export default function Chat({ interviewId }) {
     } catch (error) {
       console.error("Error accessing webcam:", error);
     }
+    // stopCamera intentionally omitted: including it would re-create this
+    // callback (and restart the webcam pipeline) whenever its identity moves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startLiveProctoring, uploadRecording]);
 
   // --- INTERVIEW LIFECYCLE MANAGEMENT ---
@@ -1010,6 +1013,10 @@ export default function Chat({ interviewId }) {
         1: { response: currentQuestion },
       });
     }
+    // stopCamera intentionally omitted: this lifecycle effect must fire on
+    // status transitions only — reacting to stopCamera's identity would
+    // re-trigger the camera handoff mid-interview.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     interviewStatus,
     isRecordingVideo,
@@ -1204,6 +1211,9 @@ export default function Chat({ interviewId }) {
         socketRef.current.disconnect();
       }
     }
+    // stopCamera + location.state fields intentionally omitted: end-interview
+    // must not re-create on camera-fn identity or navigation-state churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     interviewStatus,
     uploadStatus,
@@ -1298,6 +1308,9 @@ export default function Chat({ interviewId }) {
         isSubmittingAnswerRef.current = false;
       }
     },
+    // speakResponse intentionally omitted: it is stable per-mount and adding
+    // it would re-create onSend (and its onstop mirror) on every TTS change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       currentQuestion,
       interviewStatus,
@@ -1399,7 +1412,10 @@ export default function Chat({ interviewId }) {
     };
     // isRecording is a dep so the interval re-captures a fresh stopRecording
     // closure once recording actually starts (its internal guard reads the
-    // isRecording value from its creation render).
+    // isRecording value from its creation render). stopRecording itself is
+    // intentionally omitted — re-arming the silence timer on its identity
+    // would reset the countdown mid-answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimerRunning, isRecording, interviewStatus]);
 
   // Replace your entire SpeechRecognition useEffect with this final version
@@ -1589,6 +1605,9 @@ export default function Chat({ interviewId }) {
         mediaRecorderRef.current.stop();
       }
     };
+    // showToast intentionally omitted: the mic recorder must initialize once
+    // per status transition, not re-init when the toast helper re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewStatus]);
 
   const startRecording = useCallback(() => {

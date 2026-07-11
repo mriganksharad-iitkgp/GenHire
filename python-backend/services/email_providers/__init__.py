@@ -11,6 +11,20 @@ _PROVIDERS = {
     "noop": NoopEmailProvider,
 }
 
+# EmailService() is constructed fresh per-controller (auth/invite/admin/application/
+# interview routes each build their own, so provider instances never share mutable
+# state like last_error across concurrent requests). That means get_email_provider()
+# runs several times per boot and once per request thereafter — print the
+# provider-active/fallback notice only the first time so logs don't repeat it on
+# every controller construction.
+_logged_messages = set()
+
+
+def _log_once(message: str) -> None:
+    if message not in _logged_messages:
+        _logged_messages.add(message)
+        print(message)
+
 
 def _strict_email_config() -> bool:
     configured = (os.getenv("EMAIL_FAIL_FAST") or "").strip().lower()
@@ -37,22 +51,22 @@ def get_email_provider() -> EmailProvider:
         )
         if _strict_email_config():
             raise RuntimeError(message)
-        print(f"{message}; falling back to noop")
+        _log_once(f"{message}; falling back to noop")
         return NoopEmailProvider()
 
     provider = provider_cls()
     if provider.healthcheck():
-        print(f"[email] provider active: {provider.name}")
+        _log_once(f"[email] provider active: {provider.name}")
         return provider
 
     message = f"[email] provider {name!r} configured but credentials are missing"
     if name == "noop":
-        print("[email] provider active: noop")
+        _log_once("[email] provider active: noop")
         return provider
     if _strict_email_config():
         raise RuntimeError(message)
 
-    print(f"{message}; falling back to noop for development")
+    _log_once(f"{message}; falling back to noop for development")
     return NoopEmailProvider()
 
 

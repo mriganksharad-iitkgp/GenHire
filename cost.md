@@ -16,7 +16,7 @@
 | Object storage | CVs, JDs, interview + mobile recordings, gaze artifacts | Google Cloud Storage |
 | Speech | STT (interview answers), TTS (interviewer voice) | Google Cloud Speech / TTS |
 | LLM chain | Interview Q-gen + evaluation, CV parse/score, face match, JD gen | **Groq (primary) → Gemini → OpenAI** (`LLM_PROVIDER_PRIORITY`) |
-| Email | Verification, invites, notifications | Mailgun |
+| Email | Verification, invites, notifications | ZeptoMail (primary; Mailgun sandbox fallback) |
 | Payments | Recharge packs | Razorpay (2% of transaction value — a revenue cost, excluded from infra totals) |
 | Kiosk | Electron desktop app | one-time build, no runtime cost |
 
@@ -59,7 +59,8 @@ days. Practice ≈ half of the above and no recordings.
 | GCS standard storage | $0.020 / GB-month |
 | Cloud Run | $0.000024 / vCPU-s + $0.0000025 / GiB-s (1 vCPU / 1 GiB config) |
 | MongoDB Atlas | M0 free → M10 $57/mo → M30 ~$390/mo → M50 ~$1,550/mo |
-| Mailgun | Foundation $35/mo (50k emails) → Growth $90/mo (100k) |
+| ZeptoMail | 1 credit = ₹150 = 10,000 emails (valid 6 mo); assumed 30k emails/mo = ₹450/mo |
+| Mailgun (fallback) | Foundation $35/mo (50k emails) → Growth $90/mo (100k) |
 | Vercel | Hobby $0 → Pro $20/user/mo |
 | Razorpay | ~2 % of payment value (excluded from totals) |
 
@@ -89,7 +90,7 @@ days. Practice ≈ half of the above and no recordings.
 | Cloud Run (mostly 1 warm instance) | $25 | ₹2,100 |
 | MongoDB Atlas (M10) | $57 | ₹4,800 |
 | GCS (~110 GB steady incl. recordings @ 90-day retention) | $5 | ₹420 |
-| Mailgun (Foundation) | $35 | ₹2,940 |
+| ZeptoMail (~1,800 emails/mo → 1 credit lasts months; ₹450/mo at the 30k assumption) | $5 | ₹450 |
 | Vercel (Pro, 1 seat) | $20 | ₹1,680 |
 | Sentry / misc | $0–10 | ₹0–840 |
 | **Total** | **≈ $335 / mo** | **≈ ₹28,000 / mo** |
@@ -103,7 +104,7 @@ days. Practice ≈ half of the above and no recordings.
 | Cloud Run (2–4 instances at peak) | $150 | ₹12,600 |
 | MongoDB Atlas (M30) | $390 | ₹32,800 |
 | GCS (~1.1 TB steady) | $40 | ₹3,400 |
-| Mailgun (Growth) | $90 | ₹7,600 |
+| ZeptoMail (~18k emails/mo ≈ 2 credits) | $4 | ₹300 |
 | Vercel Pro | $20 | ₹1,680 |
 | **Total** | **≈ $2,600 / mo** | **≈ ₹2.2 L / mo** |
 
@@ -116,7 +117,7 @@ days. Practice ≈ half of the above and no recordings.
 | Cloud Run (10–20 instances; needs the multi-worker fix, §6) | $1,200 | ₹1.0 L |
 | MongoDB Atlas (M50 + backups) | $1,800 | ₹1.5 L |
 | GCS (~11 TB steady) | $400 | ₹33,600 |
-| Email (dedicated IP tier) | $400 | ₹33,600 |
+| ZeptoMail (~180k emails/mo ≈ 18 credits) | $32 | ₹2,700 |
 | Vercel Pro (team) | $60 | ₹5,000 |
 | **Total** | **≈ $23,000 / mo** | **≈ ₹19.3 L / mo** |
 

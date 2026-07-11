@@ -30,22 +30,20 @@ const Navbar = ({ userType = "candidate" }) => {
   })();
   const isInviteOnly = !!(cachedUser && (cachedUser.is_invite_only || cachedUser.isInviteOnly));
 
+  // Load user data (profile photo and name) once on mount
   useEffect(() => {
-    // Load user data
+    const loadUserData = async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+
+        await loadProfileCached(false, getProfile);
+      } catch (error) {
+        console.error("Error loading user data in navbar:", error);
+      }
+    };
     loadUserData();
-  }, []);
-
-  // Load user data (profile photo and name)
-  const loadUserData = async () => {
-    try {
-      const token = getToken();
-      if (!token) return;
-
-      await loadProfileCached(false, getProfile);
-    } catch (error) {
-      console.error("Error loading user data in navbar:", error);
-    }
-  };
+  }, [loadProfileCached]);
 
   // Handle logout
   const handleLogout = () => {
