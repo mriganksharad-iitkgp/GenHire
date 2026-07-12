@@ -18,10 +18,18 @@ dev credentials rather than creating your own where possible):
 
 - **Groq** (`GROQ_API_KEY`) — required, or interviews can't generate questions.
 - **Google Cloud** — OAuth client id (login) + a service account with
-  Speech-to-Text/Text-to-Speech (speech + kiosk) and optionally Cloud Storage.
-- **Mailgun** — only if you need real emails; otherwise set
-  `REQUIRE_EMAIL_VERIFICATION=false` and skip it.
+  Speech-to-Text/Text-to-Speech AND **Cloud Storage (now mandatory — the
+  backend refuses to boot without a bucket; every persistent artifact lives
+  in GCS, there is no local-disk storage)**.
+- **ZeptoMail / Mailgun** — only if you need real emails; otherwise set
+  `EMAIL_PROVIDER=noop` and `REQUIRE_EMAIL_VERIFICATION=false` and skip it.
 - **Razorpay** test keys (`rzp_test_...`) — only for payment work.
+
+**Dev vs production data is fully isolated** (since 2026-07-12): development
+uses the personal-account Atlas cluster + the `genhireuploads` GCS bucket;
+production uses a dedicated company-account Atlas cluster + the
+`genhire-uploads-prod` bucket (both set per env file — never point a local
+run at the production values in `.env.production`).
 
 ## 1. Backend (`python-backend/`)
 
@@ -40,10 +48,13 @@ MONGODB_URI=mongodb://localhost:27017/
 DATABASE_NAME=hrtech
 JWT_SECRET_KEY=<random string>       # python -c "import secrets; print(secrets.token_hex(32))"
 FLASK_SECRET_KEY=<random string>
-REQUIRE_EMAIL_VERIFICATION=false     # skip Mailgun in dev
+REQUIRE_EMAIL_VERIFICATION=false     # skip real email in dev
+EMAIL_PROVIDER=noop                  # no real sends in dev unless you need them
 FLASK_ENV=development
 GROQ_API_KEY=<key>                   # needed for interviews
 GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com   # needed for Google login
+GCS_BUCKET_NAME=<dev bucket>         # MANDATORY — boot fails without GCS
+GOOGLE_APPLICATION_CREDENTIALS=gcs-service-account.json
 ```
 
 Run it:
@@ -111,7 +122,10 @@ links manually.
 2. Create an admin (`python create_super_admin.py`), log in, go to
    `/admin/verification`, approve the recruiter.
 3. As the recruiter: post a job (try the AI-generate button — costs 10
-   credits from the 100-credit signup bonus).
+   credits from the 100-credit signup bonus; if you upload a JD PDF while
+   generating, candidates can download that exact file from the job page).
+   Bulk-inviting candidates costs **1 credit per candidate** (charged
+   upfront; failed emails are auto-refunded).
 4. As the candidate: upload a CV on `/profile`, apply to the job from
    `/dashboard`. Watch the background worker score the CV
    (application flips to shortlisted/rejected) and the recruiter dashboard

@@ -186,6 +186,14 @@ def generate_signed_url(gcs_path, expiration_minutes=60):
         raise
 
 
+def download_file(gcs_path):
+    """Download an object's bytes (used to proxy small artifacts — gaze
+    JSON/plots — through the API so browsers don't need bucket CORS)."""
+    bucket = _get_bucket()
+    blob = bucket.blob(gcs_path)
+    return blob.download_as_bytes()
+
+
 def delete_file(gcs_path):
     """
     Delete a file from GCS.

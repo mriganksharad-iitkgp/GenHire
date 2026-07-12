@@ -235,13 +235,25 @@ class FileController:
         accepted only as legacy read-compat for records written before GCS
         became mandatory."""
         if file_path.startswith('gs://'):
+            # Scope to OUR bucket only — a crafted gs://other-bucket/... path
+            # must never reach objects in a bucket this app doesn't own.
+            own_bucket = os.getenv('GCS_BUCKET_NAME') or ''
+            uri_bucket = file_path[len('gs://'):].split('/', 1)[0]
+            if not own_bucket or uri_bucket != own_bucket:
+                return {'error': 'Unauthorized storage path'}, 403
             gcs_path = gcs_service.gcs_path_from_uri(file_path)
             if not gcs_path:
                 return {'error': 'Invalid storage path'}, 400
+            # Proxy the bytes instead of redirecting to a signed URL: these
+            # artifacts are fetched with fetch()/XHR, and a cross-origin
+            # redirect to storage.googleapis.com would need bucket-level CORS
+            # config to work. Files here are small (gaze JSON, plot PNGs).
             try:
-                from flask import redirect
-                signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
-                return redirect(signed_url)
+                import io
+                import mimetypes
+                blob_bytes = gcs_service.download_file(gcs_path)
+                mimetype = mimetypes.guess_type(gcs_path)[0] or 'application/octet-stream'
+                return send_file(io.BytesIO(blob_bytes), mimetype=mimetype)
             except Exception:
                 return {'error': 'File not found in cloud storage'}, 404
 

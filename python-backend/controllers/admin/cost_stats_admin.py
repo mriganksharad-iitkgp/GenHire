@@ -170,6 +170,9 @@ class CostStatsAdmin:
                 "cloud_build": ("Cloud Build", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_BUILD_INR", 0.0)),
                 "cloud_storage": ("Cloud Storage", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_STORAGE_INR", 0.0)),
                 "artifact_registry": ("Artifact Registry", _env_monthly_inr("INFRA_MONTHLY_GCP_ARTIFACT_REGISTRY_INR", 0.0)),
+                "compute_engine": ("Compute Engine", _env_monthly_inr("INFRA_MONTHLY_GCP_COMPUTE_ENGINE_INR", 0.0)),
+                "vm_manager": ("VM Manager", _env_monthly_inr("INFRA_MONTHLY_GCP_VM_MANAGER_INR", 0.0)),
+                "networking": ("Networking", _env_monthly_inr("INFRA_MONTHLY_GCP_NETWORKING_INR", 0.0)),
                 "other": ("Other GCP services", _env_monthly_inr("INFRA_MONTHLY_GCP_OTHER_INR", 0.0)),
             }
             infra_estimates = {

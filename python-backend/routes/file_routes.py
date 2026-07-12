@@ -13,7 +13,8 @@ file_controller = FileController(collections)
 
 @file_bp.route('/upload', methods=['POST'])
 @cross_origin()
-def upload_files():
+@token_required
+def upload_files(current_user):
     """Handle JD and CV file uploads"""
     if "jd" not in request.files or "cv" not in request.files:
         return jsonify({"error": "Both JD and CV files are required"}), 400
@@ -54,8 +55,10 @@ def upload_photo(current_user):
 
 @file_bp.route('/view-file', methods=['GET'])
 @cross_origin()
-def view_file():
-    """View a file from the server by given file path"""
+@token_required
+def view_file(current_user):
+    """View a stored artifact (gaze plots/JSON etc.) by its stored path.
+    Auth required — accepts ?token= for <img> tags that can't send headers."""
     file_path = request.args.get("path")
     if not file_path:
         return jsonify({"error": "Missing 'path' query parameter"}), 400

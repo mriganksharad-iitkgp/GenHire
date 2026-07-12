@@ -54,6 +54,9 @@ _SERVICE_KEY_MAP = {
     "Cloud Build": "cloud_build",
     "Cloud Storage": "cloud_storage",
     "Artifact Registry": "artifact_registry",
+    "Compute Engine": "compute_engine",
+    "VM Manager": "vm_manager",
+    "Networking": "networking",
 }
 
 
@@ -149,7 +152,19 @@ def fetch_gcp_service_costs(start_dt, end_dt):
         logger.error("gcp_billing: range query failed: %s", e)
         return None
 
-    services = {"cloud_run": 0.0, "cloud_build": 0.0, "cloud_storage": 0.0, "artifact_registry": 0.0, "other": 0.0}
+    # A freshly enabled export sits EMPTY for up to ~48h (and never backfills
+    # days before enablement). An empty result would render as a misleading
+    # "actual Rs.0" — treat it as not-ready and let the caller fall back to
+    # the env-entered console figures until real rows land.
+    if not rows:
+        logger.info("gcp_billing: export table has no rows for this window yet; falling back to env estimates")
+        return None
+
+    services = {
+        "cloud_run": 0.0, "cloud_build": 0.0, "cloud_storage": 0.0,
+        "artifact_registry": 0.0, "compute_engine": 0.0, "vm_manager": 0.0,
+        "networking": 0.0, "other": 0.0,
+    }
     currency = "INR"
     for row in rows:
         key = _SERVICE_KEY_MAP.get(row.service, "other")

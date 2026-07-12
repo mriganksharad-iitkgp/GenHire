@@ -11,7 +11,7 @@ their own further hiring rounds.
 
 | Folder | What it is | Stack |
 |---|---|---|
-| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (Groq→Gemini→OpenAI, env-ordered), Google Cloud Speech, Razorpay, Mailgun |
+| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (OpenAI→Gemini→Groq, env-ordered), Google Cloud Speech, Google Cloud Storage (mandatory — all artifacts), Razorpay, ZeptoMail/Mailgun |
 | [`react-frontend/`](react-frontend/) | The website used by candidates, recruiters, and admins | React 19 (CRA), feature-folder layout (`app/ features/ shared/`), react-router v7, socket.io-client, CSS Modules |
 | [`secure-browser-kiosk/`](secure-browser-kiosk/) | The **Genhire** desktop app that runs interviews in fullscreen kiosk lockdown | Electron, backend-proxied speech (no bundled credentials), electron-builder |
 | [`docs/`](docs/) | **Full documentation** — architecture, per-component overviews and deep dives, API reference, data flows, onboarding | Markdown |
@@ -20,8 +20,8 @@ their own further hiring rounds.
 
 ```
 React website ──REST + Socket.IO──►  Flask backend (port 5000) ──► MongoDB
-      │                                   ▲            └─► Groq LLM, Google Speech,
-      │ secure-interview:// deep link     │                Razorpay, Mailgun, GCS
+      │                                   ▲            └─► LLM chain, Google Speech,
+      │ secure-interview:// deep link     │                Razorpay, ZeptoMail, GCS
       ▼                                   │
 Electron secure browser ──REST + Socket.IO┘   (runs the actual interview)
 ```
@@ -29,11 +29,14 @@ Electron secure browser ──REST + Socket.IO┘   (runs the actual interview)
 1. A recruiter posts a job; candidates apply and their CVs are AI-scored
    automatically against the job description.
 2. Shortlisted candidates click "Start Interview" — the website deep-links
-   into the installed secure browser, which verifies the candidate's face
-   against the **identity card uploaded once on their profile** (a vision LLM
-   scores the match; mismatches block the interview and auto-refund credits),
-   locks the screen, and runs a spoken AI interview while
-   streaming proctoring signals (face identity, head pose, gaze tracking,
+   into the installed secure browser. Recruiters can also **bulk-invite
+   candidates by email** (1 credit per candidate, auto-refunded if the email
+   fails): each invitee gets a magic link that logs them straight in on a
+   scoped burner account. The kiosk captures the candidate's face and scores
+   it against the **identity card uploaded once on their profile** in the
+   background (a vision LLM similarity score shown to the recruiter — it
+   never blocks the interview), locks the screen, and runs a spoken AI
+   interview while streaming proctoring signals (head pose, gaze tracking,
    tab-switch detection, optional phone camera). Interviews pace themselves:
    30 seconds of silence after a question auto-advances; a 10-second pause
    after the candidate stops speaking submits the answer.
@@ -44,7 +47,11 @@ Electron secure browser ──REST + Socket.IO┘   (runs the actual interview)
    dashboard updates throughout.
 4. Everything billable runs on a credit wallet, topped up via Razorpay.
    Interviews are charged when they start and automatically **refunded** if
-   they end with zero answers (crash, abandonment, identity block).
+   they end with zero answers (crash or abandonment). All recordings, gaze
+   artifacts, CVs, and JDs live in Google Cloud Storage only (separate
+   dev/prod buckets — nothing is stored on local disk), and an admin cost
+   dashboard tracks actual spend per provider (GCP billing export, OpenAI
+   Costs API, per-send email log).
 
 ## Quick start
 

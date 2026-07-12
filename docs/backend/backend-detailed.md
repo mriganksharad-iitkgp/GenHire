@@ -147,18 +147,28 @@ Defined in `python-backend/.env.example`. The important ones:
 | `SIGNUP_BONUS_CREDITS`, `CANDIDATE_PRACTICE_CREDITS`, `CANDIDATE_PRACTICE_PROCTORED_CREDITS`, `RECRUITER_AI_JD_CREDITS`, `RECRUITER_REAL_INTERVIEW_CREDITS`, `RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS` | Credit pricing (defaults 100 / 30 / 50 / 10 / 30 / 50) |
 | `FACE_VERIFICATION_MODE`, `FACE_VERIFY_MAX_ATTEMPTS` | Face identity gate: `enforce` (default) / `monitor` / `off`; mismatch attempts before blocking (default 3) |
 | `INTERVIEW_ABANDON_TTL_MINUTES`, `INTERVIEW_REFUND_SWEEP_INTERVAL_MINUTES` | Refund sweeper: how long an "active" session may idle before it's treated as abandoned (default 120), and sweep frequency (default 15) |
-| `UPLOAD_FOLDER` | Local storage root for recordings/proctoring artifacts (default `uploads/`) |
+| `GCS_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` | Cloud Storage — **mandatory**, the app refuses to boot without it |
+| `RECRUITER_INVITE_CREDITS_PER_CANDIDATE` | Bulk-invite price (default 1 credit/candidate; failed emails auto-refund) |
+| `ZEPTOMAIL_PER_EMAIL_COST_INR` | Per-email price for the admin cost page's usage-based email line (default 0.015) |
+| `GCP_BILLING_EXPORT_BQ_TABLE`, `OPENAI_ADMIN_API_KEY` | Real billing fetch for the admin cost page |
 | `REDIS_URL` | Optional shared rate-limit storage |
 | `SENTRY_DSN` | Optional error tracking |
 | `FORCE_HTTPS` | Enable HTTPS redirect + HSTS via Talisman in production |
 
-## File storage layout
+## File storage layout (GCS-only — no persistent local disk)
 
-- `uploads/proctoring/` — gaze plots and GazeRecorder payloads (`gaze_recorder/` subfolder)
-- `uploads/recordings/` — webcam interview recordings (`<session>-<user>.webm`)
-- `uploads/mobile_recordings/` — phone-camera environment recordings
-- `uploads/tmp/` — temporary CV/JD `.txt` files fed to the interview document pipeline
-- CV PDFs — GridFS (`GET /api/files/<gridfs_id>`) and/or Google Cloud Storage via `gcs_service.py`
+Every persistent artifact lives in the environment's GCS bucket (dev:
+`genhireuploads`, prod: `genhire-uploads-prod`); local paths under the OS
+temp dir (`genhire_staging/`) are transient staging only, deleted right
+after upload:
+
+- `cvs/<user>/`, `photos/<user>/`, `jds/<recruiter>/` — CVs, profile photos, recruiter-uploaded JD PDFs
+- `recordings/` — webcam interview recordings (`<session>-<user>.webm`)
+- `mobile_recordings/` — phone-camera environment recordings
+- `proctoring/` — gaze plots; `proctoring/gaze_recorder/` — GazeRecorder JSON payloads
+- Artifacts are served through `GET /api/view-file` (auth required; proxies
+  bytes from GCS, scoped to the app's own bucket) or signed URLs (CVs/JDs)
+- Legacy GridFS CVs remain readable (`GET /api/files/<gridfs_id>`)
 
 ## Deployment: Cloud Run and keeping it warm
 

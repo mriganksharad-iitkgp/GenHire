@@ -33,11 +33,16 @@ def flask_secret_key() -> str:
 
 
 def allowed_origins() -> list:
-    """Origins allowed to call this API / hold a Socket.IO connection to it."""
+    """Origins allowed to call this API / hold a Socket.IO connection to it.
+
+    Trailing slashes are stripped: a browser's Origin header is always
+    scheme://host[:port] with NO trailing slash, so an env value like
+    "https://genhire.in/" would otherwise never match and silently break
+    CORS in production."""
     return [
-        o.strip()
+        o.strip().rstrip("/")
         for o in os.getenv("CORS_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000").split(",")
-        if o.strip()
+        if o.strip().rstrip("/")
     ]
 
 
@@ -46,7 +51,9 @@ def force_https() -> bool:
 
 
 def redis_url() -> str:
-    return os.getenv("REDIS_URL", "memory://")
+    # `or` (not a getenv default) so REDIS_URL= (set but empty) still means
+    # "no Redis" rather than an empty connection string.
+    return os.getenv("REDIS_URL") or "memory://"
 
 
 def jobs_disabled() -> bool:

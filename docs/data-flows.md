@@ -68,7 +68,7 @@ happened.
    • checks + debits the RECRUITER's wallet
      (idempotency_key "real-interview:<application_id>", or ":r<n>" after a
      refund — retries never double-charge, and refunded attempts re-charge)
-   • writes CV + JD text to uploads/tmp/*.txt
+   • writes CV + JD text to transient staging .txt files (OS temp dir)
    • InterviewSessionManager.create_session() → session_id +
      hardcoded first question (context builds in a background thread)
    • inserts the `interviews` document (status: active,

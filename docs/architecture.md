@@ -23,7 +23,7 @@ GenHire is an AI-powered hiring platform made of **three applications** that tal
   ┌─────────────────────►│      Flask Backend        │◄──► Groq (LLM interviews)
   │                      │      (port 5000)          │◄──► Google Cloud Speech (STT/TTS)
   │  WebSocket           │                           │◄──► Razorpay (payments)
-  │  (Socket.IO)         │  - 10 route blueprints    │◄──► Mailgun (emails)
+  │  (Socket.IO)         │  - 10 route blueprints    │◄──► ZeptoMail (emails)
   │ ┌───────────────────►│  - payment_module         │◄──► Google Cloud Storage (CV files)
   │ │                    │  - interview engine       │◄──► GazeRecorder (eye tracking)
   │ │                    │  - proctoring (MediaPipe/ │
@@ -81,7 +81,7 @@ Flask API directly:
 - **Groq** — LLM that generates interview questions and evaluates answers.
 - **Google Cloud Speech** — speech-to-text and text-to-speech (backend `/api/speech/*`; the kiosk also has its own direct Google Cloud clients).
 - **Razorpay** — payment gateway for credit recharge packs (checkout + webhook).
-- **Mailgun** — transactional email (verification, invites, status updates, interview results).
+- **ZeptoMail** (Mailgun sandbox fallback) — transactional email (verification, invites, status updates, interview results); every send is logged for usage-based cost tracking.
 - **Google Cloud Storage / GridFS** — CV file storage.
 - **GazeRecorder (app.gazerecorder.com)** — third-party browser eye-tracking used for the gaze heatmap proctoring signal.
 

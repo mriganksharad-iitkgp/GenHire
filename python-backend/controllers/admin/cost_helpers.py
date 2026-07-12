@@ -983,8 +983,23 @@ class CostStatsHelpers:
                     },
                     {
                         'service': 'Cloud Storage',
-                        'what_for': 'CVs, JDs, interview/mobile recordings, gaze artifacts',
+                        'what_for': 'CVs, JDs, interview/mobile recordings, gaze artifacts (GCS is the ONLY persistent store — no local disk)',
                         'free_tier': '5 GB-month Always Free (US regions only) — this project runs outside the US, so it is billed from the first byte',
+                    },
+                    {
+                        'service': 'Compute Engine',
+                        'what_for': 'Virtual machines (e.g. the optional GPU proctoring server)',
+                        'free_tier': '1 e2-micro VM/month Always Free (US regions only) — VMs in other regions bill per-second from boot',
+                    },
+                    {
+                        'service': 'VM Manager',
+                        'what_for': 'OS patch/config management for Compute Engine VMs',
+                        'free_tier': 'Free for the first 100 VMs per project (sustained-use credits usually net this line to Rs.0)',
+                    },
+                    {
+                        'service': 'Networking',
+                        'what_for': 'VPC data transfer / egress for all GCP services above',
+                        'free_tier': '200 GB-months of standard-tier North America egress free; promotional credits usually net this line to Rs.0',
                     },
                 ],
             },

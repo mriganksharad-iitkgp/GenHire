@@ -1,6 +1,7 @@
 import React from 'react';
 import GazeHeatmapPanel from './GazeHeatmapPanel';
 import styles from './ProctoringResultModal.module.css';
+import { getToken } from 'shared/utils/session';
 
 const PROCTORING_FEATURES = [
   { key: 'voice_detection', label: 'Voice Activity Detection', icon: '🎤', color: '#8b5cf6' },
@@ -23,8 +24,11 @@ const ProctoringResultModal = ({ isOpen, onClose, report }) => {
 
   const infractions = report.manual_infractions || [];
 
-  // Backend file paths
-  const gazePlotUrl = report.gaze_plot_path ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}` : null;
+  // Backend file paths — view-file requires auth; <img> can't send headers,
+  // so the JWT rides as a query param (the backend decorator accepts ?token=).
+  const gazePlotUrl = report.gaze_plot_path
+    ? `${API_URL}/api/view-file?path=${encodeURIComponent(report.gaze_plot_path)}&token=${encodeURIComponent(getToken() || '')}`
+    : null;
 
   // Categorize infractions
   const objectInfractions = infractions.filter(i => ['phone_detected', 'multiple_people', 'object_detected'].includes(i.type));

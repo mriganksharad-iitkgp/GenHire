@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './GazeHeatmapPanel.module.css';
+import { getToken } from 'shared/utils/session';
 
 const GRID = 36;
 
@@ -170,7 +171,7 @@ function GazeHeatmapPanel({ analysis, pointsPath, apiUrl }) {
     let cancelled = false;
     setLoadState('loading');
     const url = `${apiUrl}/api/view-file?path=${encodeURIComponent(pointsPath)}`;
-    fetch(url)
+    fetch(url, { headers: { Authorization: `Bearer ${getToken() || ''}` } })
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();

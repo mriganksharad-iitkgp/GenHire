@@ -38,13 +38,20 @@ it possible.
 ## 1. GCP — Billing Export to BigQuery (recommended path) — ✅ IMPLEMENTED
 
 **Status: the backend integration is live** in
-`python-backend/services/gcp_billing_service.py`. Once the console-side setup
-below is done and `GCP_BILLING_EXPORT_BQ_TABLE` is set in the env, the admin
-cost page automatically switches the GCP card from env placeholders to real
-per-service spend for the selected timeline (source badge: "GCP Billing export
-(actual)"), plus the current invoice month's accrued total shown as
-"Outstanding". Until then it falls back to the `INFRA_MONTHLY_GCP_*` env
-figures.
+`python-backend/services/gcp_billing_service.py` and the console-side setup is
+DONE (export enabled 2026-07-12 into dataset `billing_export`, europe-west1).
+The admin cost page automatically switches the GCP card from env estimates to
+real per-service spend for the selected timeline (source badge: "Actual — GCP
+Billing export"), itemized as Cloud Run / Cloud Build / Cloud Storage /
+Artifact Registry / Compute Engine / VM Manager / Networking / other, plus the
+current invoice month's accrued total shown as "Outstanding".
+
+**Empty-export behavior**: a freshly enabled export sits empty for up to ~48h
+and NEVER backfills days before enablement. While the table has no rows for
+the queried window the page deliberately falls back to the
+`INFRA_MONTHLY_GCP_*` env estimates (captured from the console Reports page)
+instead of showing a misleading "actual ₹0" — it flips to real data on its own
+once rows land.
 
 GCP does **not** have a simple "give me cost for date range X–Y" REST endpoint for
 ad-hoc queries. The supported mechanism is **Cloud Billing Export**: GCP writes a row
