@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import styles from "./AdminLayout.module.css";
 import * as adminApi from "features/admin/api/adminApi";
 import { clearSession } from "shared/utils/session";
@@ -250,5 +250,22 @@ const AdminLayout = ({ children, activeTab: externalActiveTab }) => {
     </div>
   );
 };
+
+// Persistent-layout route wrapper: the sidebar/header mount ONCE and stay put
+// while tab switches only swap the routed content via <Outlet/> — no more
+// full-panel remount (and refetch of the pending-verification badge) on every
+// tab change. The inner Suspense keeps the sidebar visible while a
+// lazy-loaded tab chunk downloads on first visit.
+export const AdminLayoutOutlet = () => (
+  <AdminLayout>
+    <Suspense
+      fallback={
+        <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>
+      }
+    >
+      <Outlet />
+    </Suspense>
+  </AdminLayout>
+);
 
 export default AdminLayout;

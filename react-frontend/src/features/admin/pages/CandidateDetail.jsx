@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AdminLayout from "features/admin/components/AdminLayout";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import ApplicationDetailModal from "features/admin/components/ApplicationDetailModal";
 import IdentityCardPanel from "features/admin/components/IdentityCardPanel";
@@ -343,18 +342,18 @@ const CandidateDetail = () => {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <>
         <div className={styles.loadingContainer}>
           <div className={styles.spinner}></div>
           <p>Loading candidate details...</p>
         </div>
-      </AdminLayout>
+      </>
     );
   }
 
   if (!candidate) {
     return (
-      <AdminLayout>
+      <>
         <div className={styles.pageContainer}>
           <div className={styles.emptyState}>
             <div className={styles.emptyStateIcon}>
@@ -368,12 +367,12 @@ const CandidateDetail = () => {
             <p>The candidate you're looking for doesn't exist or has been deleted.</p>
           </div>
         </div>
-      </AdminLayout>
+      </>
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <div className={styles.pageContainer}>
         {/* Notification */}
         {notification.show && (
@@ -1222,7 +1221,7 @@ const CandidateDetail = () => {
           interviewScore={practiceReportModal.report?.interview_score}
         />
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

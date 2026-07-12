@@ -228,6 +228,20 @@ def create_app():
     collections = db_config.get_collections()
     users_collection = collections["users"]
 
+    # GCS is REQUIRED (owner decision): every persistent artifact — CVs, JDs,
+    # ID cards, interview/mobile recordings, gaze artifacts — lives in Cloud
+    # Storage only; there is no local-disk fallback. Failing here at boot is
+    # deliberate: a misconfigured deployment must not come up and silently
+    # lose uploads.
+    from services import gcs_service
+    if not gcs_service.is_gcs_configured():
+        raise RuntimeError(
+            "Google Cloud Storage is not configured (GCS_BUCKET_NAME + "
+            "GOOGLE_APPLICATION_CREDENTIALS/GCS_SERVICE_ACCOUNT_KEY). "
+            "GCS is mandatory — all uploads are stored there, with no local fallback."
+        )
+    print("[OK] GCS storage configured (mandatory, no local fallback)")
+
     if PAYMENT_MODULE_AVAILABLE and WalletService:
         try:
             granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(

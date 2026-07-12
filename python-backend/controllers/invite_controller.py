@@ -11,12 +11,15 @@ import datetime
 import logging
 import os
 import threading
+import uuid
 from typing import Any, Dict, List, Optional
 
 import jwt as pyjwt
 from bson import ObjectId
 
 from core.security import get_jwt_secret
+from payment_module.config.settings import PaymentConfig
+from payment_module.services.wallet_service import WalletService
 from services.email_service import EmailService
 from services.invite_service import (
     InviteService,
@@ -35,6 +38,7 @@ class InviteController:
         self.applications = db_collections["applications"]
         self.invite_service = InviteService(db_collections)
         self.email_service = EmailService()
+        self.wallet_service = WalletService(self.users.database)
 
     # ----- recruiter-facing -----------------------------------------------
 
@@ -99,6 +103,46 @@ class InviteController:
                 "duplicates": buckets["duplicates"],
             }, 400
 
+        # Bulk invites cost credits: 1 credit per candidate (env-configurable
+        # via RECRUITER_INVITE_CREDITS_PER_CANDIDATE). Charged upfront for the
+        # whole batch BEFORE any burner is created, so an under-funded wallet
+        # fails cleanly with nothing half-done. Rows that never produce a
+        # successful email (skipped, failed) are auto-refunded per-row later.
+        # Admins invite free; only recruiter accounts are charged.
+        per_invite_credits = int(PaymentConfig.RECRUITER_INVITE_CREDITS_PER_CANDIDATE)
+        total_credits = per_invite_credits * len(valid_emails)
+        charge_id = str(uuid.uuid4())
+        charged = recruiter.get("user_type") == "recruiter" and total_credits > 0
+        if charged:
+            deduction = self.wallet_service.debit_wallet(
+                owner_id=recruiter_id,
+                audience="recruiter",
+                credits=total_credits,
+                transaction_type="candidate_invite",
+                reference_type="invite_batch",
+                reference_id=charge_id,
+                metadata={
+                    "job_id": str(job.get("_id")),
+                    "job_title": job.get("title", ""),
+                    "invite_type": invite_type,
+                    "candidate_count": len(valid_emails),
+                    "credits_per_candidate": per_invite_credits,
+                },
+                idempotency_key=f"invite-charge:{charge_id}",
+            )
+            if not deduction.get("success"):
+                return {
+                    "error": (
+                        f"Insufficient credits: inviting {len(valid_emails)} candidate(s) "
+                        f"costs {total_credits} credit(s), but only "
+                        f"{int(deduction.get('credits_remaining', 0) or 0)} remain. "
+                        "Recharge your wallet and try again."
+                    ),
+                    "error_code": deduction.get("error_code", "insufficient_credits"),
+                    "credits_required": total_credits,
+                    "credits_remaining": int(deduction.get("credits_remaining", 0) or 0),
+                }, 402
+
         # The DB-row half (bulk_invite) is plain Mongo writes — fast even at
         # 2000 rows — so it stays synchronous. Only the email-sending half
         # (one blocking provider call per row) moves to a background thread;
@@ -112,6 +156,20 @@ class InviteController:
             source=source,
             validity_days=validity_days,
         )
+
+        if charged:
+            # Stamp the charge onto the batch doc for auditability.
+            try:
+                self.invite_service.invite_batches.update_one(
+                    {"_id": batch_id},
+                    {"$set": {
+                        "credits_charged": total_credits,
+                        "credits_per_candidate": per_invite_credits,
+                        "charge_id": charge_id,
+                    }},
+                )
+            except Exception:
+                logger.warning("Failed to stamp credit charge on invite batch", exc_info=True)
 
         recruiter_company = recruiter.get("company_name") or "GenHire"
         job_title = job.get("title", "")
@@ -130,6 +188,17 @@ class InviteController:
         ]
         rows_to_email = [r for r in rows if r["action"] not in ("skipped", "failed")]
 
+        # Refund rows that will never get an email (only successful sends are
+        # charged — owner decision). Per-row idempotency keys make retries safe.
+        refund_ctx = {
+            "enabled": charged,
+            "recruiter_id": recruiter_id,
+            "per_invite_credits": per_invite_credits,
+            "batch_id": str(batch_id),
+        }
+        for row in pre_skipped + pre_failed:
+            self._refund_invite_row(refund_ctx, row["email"], reason="not_emailed")
+
         self.invite_service.finalize_batch(
             batch_id=batch_id,
             sent_count=0,
@@ -142,7 +211,7 @@ class InviteController:
 
         threading.Thread(
             target=self._dispatch_invite_emails,
-            args=(batch_id, rows_to_email, recruiter_company, job_title, pre_skipped, pre_failed),
+            args=(batch_id, rows_to_email, recruiter_company, job_title, pre_skipped, pre_failed, refund_ctx),
             daemon=True,
         ).start()
 
@@ -150,8 +219,30 @@ class InviteController:
             "batch_id": str(batch_id),
             "status": "processing",
             "total": len(rows),
+            "credits_charged": total_credits if charged else 0,
+            "credits_per_candidate": per_invite_credits if charged else 0,
             "message": "Invites are being sent in the background — poll the batch status endpoint for progress.",
         }, 202
+
+    def _refund_invite_row(self, refund_ctx: Dict[str, Any], email: str, reason: str) -> None:
+        """Refund one candidate's invite credit(s) — used for every row that
+        does not end in a successfully sent email. Idempotent per
+        (batch, email), so batch-progress retries can't double-refund."""
+        if not refund_ctx.get("enabled"):
+            return
+        try:
+            self.wallet_service.credit_wallet(
+                owner_id=refund_ctx["recruiter_id"],
+                audience="recruiter",
+                credits=int(refund_ctx["per_invite_credits"]),
+                transaction_type="candidate_invite_refund",
+                reference_type="invite_batch",
+                reference_id=refund_ctx["batch_id"],
+                metadata={"email": email, "reason": reason},
+                idempotency_key=f"invite-refund:{refund_ctx['batch_id']}:{email}",
+            )
+        except Exception:
+            logger.warning("Invite credit refund failed for %s", email, exc_info=True)
 
     def _dispatch_invite_emails(
         self,
@@ -161,6 +252,7 @@ class InviteController:
         job_title: str,
         pre_skipped: List[Dict[str, Any]],
         pre_failed: List[Dict[str, Any]],
+        refund_ctx: Dict[str, Any],
     ) -> None:
         """
         Runs on a background thread — sends one invite email per row and
@@ -224,6 +316,9 @@ class InviteController:
                     failure["invite_url"] = self.email_service.invite_redeem_link(
                         row["raw_token"]
                     )
+                # Only successful sends are charged — refund this row's credit.
+                self._refund_invite_row(refund_ctx, row["email"], reason="email_send_failed")
+                failure["credit_refunded"] = bool(refund_ctx.get("enabled"))
                 failed.append(failure)
 
             try:
@@ -275,6 +370,8 @@ class InviteController:
                 "skipped": batch.get("skipped_count", 0),
                 "failed": batch.get("failed_count", 0),
             },
+            "credits_charged": batch.get("credits_charged", 0),
+            "credits_per_candidate": batch.get("credits_per_candidate", 0),
             # Kept as two separate lists (rather than one merged "failures")
             # to match the shape the frontend's send-summary detail view
             # already renders (skipped reasons vs. failed errors).

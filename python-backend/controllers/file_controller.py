@@ -230,10 +230,24 @@ class FileController:
         return user.get('profile_photo')
         
     def serve_file(self, file_path):
-        """Serve file with security checks"""
+        """Serve a stored artifact. Everything new lives in GCS (gs:// URIs →
+        redirect to a short-lived signed URL); plain paths under uploads/ are
+        accepted only as legacy read-compat for records written before GCS
+        became mandatory."""
+        if file_path.startswith('gs://'):
+            gcs_path = gcs_service.gcs_path_from_uri(file_path)
+            if not gcs_path:
+                return {'error': 'Invalid storage path'}, 400
+            try:
+                from flask import redirect
+                signed_url = gcs_service.generate_signed_url(gcs_path, expiration_minutes=60)
+                return redirect(signed_url)
+            except Exception:
+                return {'error': 'File not found in cloud storage'}, 404
+
         base_dir = os.path.abspath(os.path.join(os.getcwd(), "uploads"))
         abs_file_path = os.path.abspath(file_path)
-        
+
         if not abs_file_path.startswith(base_dir):
             return {'error': 'Unauthorized file path'}, 403
 

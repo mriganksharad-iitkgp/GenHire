@@ -993,12 +993,10 @@ class CostStatsHelpers:
                 'credit_price_inr': 150,
                 'emails_per_credit': 10000,
                 'credit_validity_months': 6,
-                'assumed_emails_per_month': 30000,
-                'assumed_monthly_cost_inr': 450,
                 'benefits': [
-                    '1 credit = Rs.150 = 10,000 transactional emails',
+                    '1 credit = Rs.150 = 10,000 transactional emails (Rs.0.015/email)',
                     'Credits stay valid for 6 months from purchase',
-                    'Assumed volume: 30,000 emails/month = 3 credits = Rs.450/month',
+                    'Cost shown is ACTUAL: every outbound email is logged and priced per-send for the selected timeline',
                     'Covers all platform email: invites, verification, password reset, notifications',
                 ],
             },
@@ -1061,16 +1059,16 @@ class CostStatsHelpers:
                 'key': 'infrastructure',
                 'title': 'Infrastructure & Provider Cost (GCP, Vercel, MongoDB, ZeptoMail, LLM providers)',
                 'explanation': (
-                    'GCP and OpenAI fetch REAL spend for the selected timeline when their billing '
-                    'integrations are configured (GCP Billing BigQuery export / OpenAI Costs API — '
-                    'each card shows its source). All other providers — and the fallback for those '
-                    'two — use monthly figures entered from each provider\'s billing console '
-                    '(env-configurable — see docs/costfetch.md), pro-rated over the selected '
-                    'timeline: prorated = (monthly figure ÷ 30) × days in the selected range. '
-                    'ZeptoMail is priced from credits: 1 credit = Rs.150 = 10,000 emails (valid '
-                    '6 months); assumed 30,000 emails/month = Rs.450/month. None of these are '
-                    'derived from the AI usage above — infra cost accrues independent of how many '
-                    'interviews/CVs were processed.'
+                    'Nothing here is a monthly subscription — every figure is for the selected '
+                    'timeline. GCP and OpenAI fetch REAL spend when their billing integrations are '
+                    'configured (GCP Billing BigQuery export / OpenAI Costs API — each card shows '
+                    'its source). ZeptoMail is actual usage: every outbound email is logged, and '
+                    'cost = successful sends in the timeline × per-email price (1 credit = Rs.150 '
+                    '= 10,000 emails, i.e. Rs.0.015/email by default). Providers with no billing '
+                    'API (Vercel, MongoDB, Gemini, Groq — all currently Rs.0 on free tiers) show a '
+                    'flat env-entered estimate as-is. None of these are derived from the AI usage '
+                    'above — infra cost accrues independent of how many interviews/CVs were '
+                    'processed.'
                 ),
             },
         ]

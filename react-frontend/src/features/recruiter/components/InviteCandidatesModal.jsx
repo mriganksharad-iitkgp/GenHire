@@ -126,7 +126,14 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
       }, BATCH_POLL_INTERVAL_MS);
     } catch (e) {
       setIsSending(false);
-      setError(e.message || "Failed to send invites");
+      if (e?.data?.error_code === "insufficient_credits") {
+        setError(
+          e.data.error ||
+            `Insufficient credits: ${e.data.credits_required} needed, ${e.data.credits_remaining} remaining. Recharge your wallet and try again.`,
+        );
+      } else {
+        setError(e.message || "Failed to send invites");
+      }
     }
   };
 
@@ -156,6 +163,14 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                 : `Sending invites… (${(result.totals?.sent || 0) + (result.totals?.skipped || 0) + (result.totals?.failed || 0)}/${result.total || "?"})`}
               &nbsp;
               {result.totals?.sent || 0} sent &middot; {result.totals?.skipped || 0} skipped &middot; {result.totals?.failed || 0} failed.
+              {result.credits_charged > 0 && (
+                <>
+                  &nbsp;{result.credits_charged} credit{result.credits_charged === 1 ? "" : "s"} charged
+                  {(result.totals?.skipped || 0) + (result.totals?.failed || 0) > 0 &&
+                    ` (${((result.totals?.skipped || 0) + (result.totals?.failed || 0)) * (result.credits_per_candidate || 1)} refunded for undelivered emails)`}
+                  .
+                </>
+              )}
             </div>
           )}
 
@@ -254,6 +269,12 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
               {preview && (
                 <div className={styles.section}>
                   <div className={styles.sectionLabel}>Preview</div>
+                  {preview.valid.length > 0 && (
+                    <div className={styles.helperText}>
+                      Sending will deduct <strong>{preview.valid.length} credit{preview.valid.length === 1 ? "" : "s"}</strong> (1
+                      per candidate) from your wallet. Credits for invites whose email fails to send are refunded automatically.
+                    </div>
+                  )}
                   <div className={styles.previewBox}>
                     <div className={styles.previewSummary}>
                       <span className={`${styles.chip} ${styles.chipValid}`}>
@@ -393,8 +414,11 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                   className={styles.primary}
                   onClick={handleSend}
                   disabled={isSending || preview.valid.length === 0}
+                  title="1 credit is deducted per invited candidate; credits for failed emails are refunded automatically."
                 >
-                  {isSending ? "Sending..." : `Send ${preview.valid.length} invite${preview.valid.length === 1 ? "" : "s"}`}
+                  {isSending
+                    ? "Sending..."
+                    : `Send ${preview.valid.length} invite${preview.valid.length === 1 ? "" : "s"} (${preview.valid.length} credit${preview.valid.length === 1 ? "" : "s"})`}
                 </button>
               )}
             </>

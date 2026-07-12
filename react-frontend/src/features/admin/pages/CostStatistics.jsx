@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import AdminLayout from 'features/admin/components/AdminLayout';
 import styles from './CostStatistics.module.css';
 import {
   Chart as ChartJS,
@@ -401,10 +400,18 @@ const CostStatistics = () => {
     rows.push(['AI Costs', 'Total AI Cost', '', '', '', '', costData?.cost_statistics?.total_ai_cost_inr || 0, '']);
     Object.entries(infraCosts || {}).forEach(([infraKey, entry]) => {
       if (infraKey === 'total_infrastructure_cost_inr' || !entry || typeof entry !== 'object') return;
-      rows.push(['Infrastructure', `${entry.label || infraKey} Monthly`, entry.monthly_assumption_inr || 0, '', '', '', '', '']);
-      rows.push(['Infrastructure', `${entry.label || infraKey} Pro-rated`, entry.prorated_cost_inr || 0, '', '', '', '', '']);
+      rows.push([
+        'Infrastructure',
+        entry.label || infraKey,
+        entry.cost_inr || 0,
+        entry.usage_source || '',
+        entry.emails_sent !== undefined ? `${entry.emails_sent} emails sent` : '',
+        entry.outstanding_current_month_inr !== undefined ? `Outstanding: ${entry.outstanding_current_month_inr}` : '',
+        '',
+        entry.note || '',
+      ]);
       (entry.breakdown || []).forEach((item) => {
-        rows.push(['Infrastructure', `  ${entry.label || infraKey} — ${item.label} Monthly`, item.monthly_assumption_inr || 0, '', '', '', '', '']);
+        rows.push(['Infrastructure', `  ${entry.label || infraKey} — ${item.label}`, item.cost_inr || 0, '', '', '', '', '']);
       });
     });
     rows.push(['Infrastructure', 'Total Infrastructure Cost', infraCosts?.total_infrastructure_cost_inr || 0, '', '', '', '', '']);
@@ -592,7 +599,7 @@ const CostStatistics = () => {
   );
 
   return (
-    <AdminLayout activeTab="cost-statistics">
+    <>
       <div className={styles.wrapper}>
         <div className={styles.headerBlock}>
           <h1>Admin Cost Statistics</h1>
@@ -705,121 +712,126 @@ const CostStatistics = () => {
                 </table>
               </div>
               <div className={styles.totalLine}>Total AI Cost: <strong>{formatMoney(costData?.cost_statistics?.total_ai_cost_inr)}</strong></div>
-            </section>
 
-            {costMethodology.length > 0 && (
-              <section className={styles.card}>
-                <h2>How These Numbers Are Calculated</h2>
-                <p className={styles.subText}>Plain-English methodology for each cost category above, so every figure on this page is traceable to a formula.</p>
-                <div className={styles.methodologyList}>
-                  {costMethodology.map((item) => (
-                    <div key={item.key} className={styles.methodologyItem}>
-                      <h3>{item.title}</h3>
-                      <p>{item.explanation}</p>
+              {costMethodology.length > 0 && (
+                <details className={styles.knowMore}>
+                  <summary>How are these numbers calculated? Click to know more</summary>
+                  <div className={styles.knowMoreBody}>
+                    <p className={styles.subText}>Plain-English methodology for each cost category, so every figure on this page is traceable to a formula.</p>
+                    <div className={styles.methodologyList}>
+                      {costMethodology.map((item) => (
+                        <div key={item.key} className={styles.methodologyItem}>
+                          <h3>{item.title}</h3>
+                          <p>{item.explanation}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {llmPricingReference && (
-              <section className={styles.card}>
-                <h2>AI Model & Speech Pricing Reference</h2>
-                <p className={styles.subText}>
-                  Live provider fallback chain (<code>{llmPricingReference.chain_env_var}</code>) and the official per-1M-token rates used to price every AI cost line above.
-                </p>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Provider</th>
-                        <th>Model</th>
-                        <th>Role in chain</th>
-                        <th>Input $/1M tokens</th>
-                        <th>Output $/1M tokens</th>
-                        <th>Tier notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {llmPricingReference.providers.map((provider) => (
-                        <tr key={provider.provider}>
-                          <td>{provider.provider}</td>
-                          <td>{provider.model}</td>
-                          <td>{provider.role}</td>
-                          <td>${provider.input_usd_per_1m_tokens.toFixed(3)}</td>
-                          <td>${provider.output_usd_per_1m_tokens.toFixed(3)}</td>
-                          <td>{provider.tier_note}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className={styles.subText}>{llmPricingReference.note}</p>
-
-                <h3 className={styles.subsectionTitle}>Face Match (Identity Verification) Vision Models</h3>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr><th>Provider</th><th>Model</th></tr>
-                    </thead>
-                    <tbody>
-                      {llmPricingReference.face_match_vision_models.map((model) => (
-                        <tr key={model.provider}>
-                          <td>{model.provider}</td>
-                          <td>{model.model}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <h3 className={styles.subsectionTitle}>Speech Pricing (Google Cloud)</h3>
-                <div className={styles.kpiGrid}>
-                  <div className={styles.kpiCard}>
-                    <h3>Speech-to-Text</h3>
-                    <p>${llmPricingReference.speech.stt.usd_per_minute_equivalent.toFixed(3)}/min</p>
-                    <small>{llmPricingReference.speech.stt.billing_unit} — ${llmPricingReference.speech.stt.usd_per_unit}/unit</small>
                   </div>
-                  <div className={styles.kpiCard}>
-                    <h3>Text-to-Speech (Standard)</h3>
-                    <p>${llmPricingReference.speech.tts_standard.usd_per_1m_chars_equivalent.toFixed(2)}/1M chars</p>
-                    <small>{llmPricingReference.speech.tts_standard.billing_unit}</small>
+                </details>
+              )}
+
+              {llmPricingReference && (
+                <details className={styles.knowMore}>
+                  <summary>AI model & speech pricing reference — click to know more</summary>
+                  <div className={styles.knowMoreBody}>
+                    <p className={styles.subText}>
+                      Live provider fallback chain (<code>{llmPricingReference.chain_env_var}</code>) and the official per-1M-token rates used to price every AI cost line above.
+                    </p>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th>Provider</th>
+                            <th>Model</th>
+                            <th>Role in chain</th>
+                            <th>Input $/1M tokens</th>
+                            <th>Output $/1M tokens</th>
+                            <th>Tier notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {llmPricingReference.providers.map((provider) => (
+                            <tr key={provider.provider}>
+                              <td>{provider.provider}</td>
+                              <td>{provider.model}</td>
+                              <td>{provider.role}</td>
+                              <td>${provider.input_usd_per_1m_tokens.toFixed(3)}</td>
+                              <td>${provider.output_usd_per_1m_tokens.toFixed(3)}</td>
+                              <td>{provider.tier_note}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className={styles.subText}>{llmPricingReference.note}</p>
+
+                    <h3 className={styles.subsectionTitle}>Face Match (Identity Verification) Vision Models</h3>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr><th>Provider</th><th>Model</th></tr>
+                        </thead>
+                        <tbody>
+                          {llmPricingReference.face_match_vision_models.map((model) => (
+                            <tr key={model.provider}>
+                              <td>{model.provider}</td>
+                              <td>{model.model}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <h3 className={styles.subsectionTitle}>Speech Pricing (Google Cloud)</h3>
+                    <div className={styles.kpiGrid}>
+                      <div className={styles.kpiCard}>
+                        <h3>Speech-to-Text</h3>
+                        <p>${llmPricingReference.speech.stt.usd_per_minute_equivalent.toFixed(3)}/min</p>
+                        <small>{llmPricingReference.speech.stt.billing_unit} — ${llmPricingReference.speech.stt.usd_per_unit}/unit</small>
+                      </div>
+                      <div className={styles.kpiCard}>
+                        <h3>Text-to-Speech (Standard)</h3>
+                        <p>${llmPricingReference.speech.tts_standard.usd_per_1m_chars_equivalent.toFixed(2)}/1M chars</p>
+                        <small>{llmPricingReference.speech.tts_standard.billing_unit}</small>
+                      </div>
+                      <div className={styles.kpiCard}>
+                        <h3>Text-to-Speech (Neural2)</h3>
+                        <p>${llmPricingReference.speech.tts_neural.usd_per_1m_chars_equivalent.toFixed(2)}/1M chars</p>
+                        <small>{llmPricingReference.speech.tts_neural.billing_unit}</small>
+                      </div>
+                    </div>
                   </div>
-                  <div className={styles.kpiCard}>
-                    <h3>Text-to-Speech (Neural2)</h3>
-                    <p>${llmPricingReference.speech.tts_neural.usd_per_1m_chars_equivalent.toFixed(2)}/1M chars</p>
-                    <small>{llmPricingReference.speech.tts_neural.billing_unit}</small>
-                  </div>
-                </div>
-              </section>
-            )}
+                </details>
+              )}
+            </section>
 
             <section className={styles.card}>
               <h2>Infrastructure & Provider Cost</h2>
               <p className={styles.subText}>
-                GCP and OpenAI show <strong>actual fetched spend</strong> for the selected timeline when their billing integrations are configured (each card shows its source); other providers use env-entered monthly figures pro-rated over the timeline. See <code>docs/costfetch.md</code> for setup.
+                Cost for the selected timeline. GCP, OpenAI, and ZeptoMail are <strong>actual fetched/logged spend</strong>; providers with no billing API show a flat env-entered estimate (each card shows its source).
               </p>
               <div className={styles.kpiGrid}>
                 {['gcp', 'vercel', 'mongodb', 'zeptomail', 'openai', 'gemini', 'groq', 'cloudflare'].map((infraKey) => {
                   const entry = infraCosts?.[infraKey];
                   if (!entry) return null;
-                  const isActual = entry.usage_source && entry.usage_source !== 'env_placeholder';
+                  const isActual = ['billing_export', 'costs_api', 'email_log'].includes(entry.usage_source);
                   return (
                     <div key={infraKey} className={styles.kpiCard}>
-                      <h3>{entry.label || infraKey.toUpperCase()} (Monthly)</h3>
-                      <p>{formatMoney(entry.monthly_assumption_inr)}</p>
-                      <small>
-                        {isActual ? 'Actual (timeline): ' : 'Pro-rated: '}
-                        {formatMoney(entry.prorated_cost_inr)}
-                      </small>
+                      <h3>{entry.label || infraKey.toUpperCase()}</h3>
+                      <p>{formatMoney(entry.cost_inr)}</p>
                       {entry.usage_source && (
                         <small className={isActual ? styles.sourceActual : styles.sourcePlaceholder}>
-                          Source: {entry.usage_source === 'billing_export'
-                            ? 'GCP Billing export (actual)'
+                          {entry.usage_source === 'billing_export'
+                            ? 'Actual — GCP Billing export'
                             : entry.usage_source === 'costs_api'
-                              ? 'OpenAI Costs API (actual)'
-                              : 'env placeholder'}
+                              ? 'Actual — OpenAI Costs API'
+                              : entry.usage_source === 'email_log'
+                                ? 'Actual — logged email sends'
+                                : 'Estimate — env-entered'}
                         </small>
+                      )}
+                      {entry.emails_sent !== undefined && (
+                        <small>{entry.emails_sent} email{entry.emails_sent === 1 ? '' : 's'} sent in timeline</small>
                       )}
                       {entry.outstanding_current_month_inr !== undefined && (
                         <small>
@@ -831,10 +843,9 @@ const CostStatistics = () => {
                           Credit balance: {formatMoney(entry.credit_balance_inr)} (${entry.credit_balance_usd}) — manually mirrored
                         </small>
                       )}
-                      {entry.pricing_note && <small>{entry.pricing_note}</small>}
                       {(entry.breakdown || []).map((item) => (
                         <small key={item.key}>
-                          {item.label}: {formatMoney(item.prorated_cost_inr)}
+                          {item.label}: {formatMoney(item.cost_inr)}
                         </small>
                       ))}
                     </div>
@@ -846,50 +857,66 @@ const CostStatistics = () => {
                   <small>All entries above, for the selected timeline</small>
                 </div>
               </div>
-            </section>
 
-            {infraPlanReference && (
-              <section className={styles.card}>
-                <h2>Provider Plans & Free-Tier Benefits</h2>
-                <p className={styles.subText}>What each infrastructure provider plan includes — context for why the monthly figures above are what they are.</p>
-                <div className={styles.vizGrid}>
-                  <div className={styles.chartCard}>
-                    <h3>Vercel — {infraPlanReference.vercel.plan} (${infraPlanReference.vercel.monthly_price_usd}/mo)</h3>
-                    <ul className={styles.benefitsList}>
-                      {infraPlanReference.vercel.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
-                    </ul>
+              <details className={styles.knowMore}>
+                <summary>How is each provider figure derived? Plans & free tiers — click to know more</summary>
+                <div className={styles.knowMoreBody}>
+                  <div className={styles.methodologyList}>
+                    {['gcp', 'vercel', 'mongodb', 'zeptomail', 'openai', 'gemini', 'groq'].map((infraKey) => {
+                      const entry = infraCosts?.[infraKey];
+                      if (!entry || !(entry.note || entry.pricing_note || entry.credit_balance_note)) return null;
+                      return (
+                        <div key={infraKey} className={styles.methodologyItem}>
+                          <h3>{entry.label}</h3>
+                          <p>{entry.pricing_note || entry.note}</p>
+                          {entry.pricing_note && entry.note && <p>{entry.note}</p>}
+                          {entry.credit_balance_note && <p>{entry.credit_balance_note}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
-                  {infraPlanReference.zeptomail && (
-                    <div className={styles.chartCard}>
-                      <h3>ZeptoMail — {infraPlanReference.zeptomail.plan} (₹{infraPlanReference.zeptomail.assumed_monthly_cost_inr}/mo assumed)</h3>
-                      <ul className={styles.benefitsList}>
-                        {infraPlanReference.zeptomail.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
-                      </ul>
+
+                  {infraPlanReference && (
+                    <div className={styles.vizGrid}>
+                      <div className={styles.chartCard}>
+                        <h3>Vercel — {infraPlanReference.vercel.plan} (${infraPlanReference.vercel.monthly_price_usd})</h3>
+                        <ul className={styles.benefitsList}>
+                          {infraPlanReference.vercel.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
+                        </ul>
+                      </div>
+                      {infraPlanReference.zeptomail && (
+                        <div className={styles.chartCard}>
+                          <h3>ZeptoMail — {infraPlanReference.zeptomail.plan}</h3>
+                          <ul className={styles.benefitsList}>
+                            {infraPlanReference.zeptomail.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      <div className={styles.chartCard}>
+                        <h3>GCP — Project {infraPlanReference.gcp.project}</h3>
+                        <p className={styles.subText}>{infraPlanReference.gcp.billing_console_note}</p>
+                        <div className={styles.tableWrap}>
+                          <table className={styles.table}>
+                            <thead>
+                              <tr><th>Service</th><th>What it's for</th><th>Free tier</th></tr>
+                            </thead>
+                            <tbody>
+                              {infraPlanReference.gcp.services_billed.map((service) => (
+                                <tr key={service.service}>
+                                  <td>{service.service}</td>
+                                  <td>{service.what_for}</td>
+                                  <td>{service.free_tier}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  <div className={styles.chartCard}>
-                    <h3>GCP — Project {infraPlanReference.gcp.project}</h3>
-                    <p className={styles.subText}>{infraPlanReference.gcp.billing_console_note}</p>
-                    <div className={styles.tableWrap}>
-                      <table className={styles.table}>
-                        <thead>
-                          <tr><th>Service</th><th>What it's for</th><th>Free tier</th></tr>
-                        </thead>
-                        <tbody>
-                          {infraPlanReference.gcp.services_billed.map((service) => (
-                            <tr key={service.service}>
-                              <td>{service.service}</td>
-                              <td>{service.what_for}</td>
-                              <td>{service.free_tier}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
                 </div>
-              </section>
-            )}
+              </details>
+            </section>
 
             <section className={styles.card}>
               <h2>Incoming Money - Candidates</h2>
@@ -952,6 +979,42 @@ const CostStatistics = () => {
               <div className={styles.totalLine}>
                 Recruiter Incoming Total: <strong>{formatMoney(incoming?.recruiter?.total_incoming_inr)}</strong>
                 <span className={styles.totalMeta}>Migration payments: {incoming?.recruiter?.migration_payment_count || 0}</span>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <h2>Net Incoming & Profitability</h2>
+              <div className={styles.kpiGrid}>
+                <div className={styles.kpiCard}>
+                  <h3>Total Incoming</h3>
+                  <p>{formatMoney(incoming?.total_incoming_inr)}</p>
+                  <small>Candidate + Recruiter succeeded payments</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Refund Adjustments</h3>
+                  <p>{formatMoney(incoming?.refund_adjustments?.total_refunded_inr)}</p>
+                  <small>Refund events: {incoming?.refund_adjustments?.refund_events_count || 0}</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Net Incoming (After Refunds)</h3>
+                  <p>{formatMoney(incoming?.net_incoming_after_refunds_inr)}</p>
+                  <small>Gross incoming - refunds</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Total Cost (AI + Infra)</h3>
+                  <p>{formatMoney(costData?.cost_statistics?.total_cost_inr)}</p>
+                  <small>Selected timeline total cost</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Gross)</h3>
+                  <p className={profitability?.profit_gross_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_gross_inr)}</p>
+                  <small>Margin: {profitability?.margin_gross_pct || 0}%</small>
+                </div>
+                <div className={styles.kpiCard}>
+                  <h3>Profit (Net)</h3>
+                  <p className={profitability?.profit_net_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_net_inr)}</p>
+                  <small>Margin: {profitability?.margin_net_pct || 0}%</small>
+                </div>
               </div>
             </section>
 
@@ -1099,46 +1162,10 @@ const CostStatistics = () => {
               </div>
             </section>
 
-            <section className={styles.card}>
-              <h2>Net Incoming & Profitability</h2>
-              <div className={styles.kpiGrid}>
-                <div className={styles.kpiCard}>
-                  <h3>Total Incoming</h3>
-                  <p>{formatMoney(incoming?.total_incoming_inr)}</p>
-                  <small>Candidate + Recruiter succeeded payments</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>Refund Adjustments</h3>
-                  <p>{formatMoney(incoming?.refund_adjustments?.total_refunded_inr)}</p>
-                  <small>Refund events: {incoming?.refund_adjustments?.refund_events_count || 0}</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>Net Incoming (After Refunds)</h3>
-                  <p>{formatMoney(incoming?.net_incoming_after_refunds_inr)}</p>
-                  <small>Gross incoming - refunds</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>Total Cost (AI + Infra)</h3>
-                  <p>{formatMoney(costData?.cost_statistics?.total_cost_inr)}</p>
-                  <small>Selected timeline total cost</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>Profit (Gross)</h3>
-                  <p className={profitability?.profit_gross_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_gross_inr)}</p>
-                  <small>Margin: {profitability?.margin_gross_pct || 0}%</small>
-                </div>
-                <div className={styles.kpiCard}>
-                  <h3>Profit (Net)</h3>
-                  <p className={profitability?.profit_net_inr >= 0 ? styles.positive : styles.negative}>{formatMoney(profitability?.profit_net_inr)}</p>
-                  <small>Margin: {profitability?.margin_net_pct || 0}%</small>
-                </div>
-              </div>
-            </section>
-
           </>
         )}
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

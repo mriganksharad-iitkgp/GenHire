@@ -55,6 +55,12 @@ class PaymentConfig:
     RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS = int(
         os.getenv("RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS", "50")
     )
+    # Bulk candidate invites (magic link): 1 credit per candidate invited.
+    # Charged upfront for the whole batch; rows whose email fails to send are
+    # auto-refunded (the invite/link still exists for manual sharing).
+    RECRUITER_INVITE_CREDITS_PER_CANDIDATE = int(
+        os.getenv("RECRUITER_INVITE_CREDITS_PER_CANDIDATE", "1")
+    )
 
     # Recharge pack configuration — every plan's price and credit amount is
     # env-editable (PLAN_<NAME>_PRICE_PAISE / PLAN_<NAME>_CREDITS). Prices are

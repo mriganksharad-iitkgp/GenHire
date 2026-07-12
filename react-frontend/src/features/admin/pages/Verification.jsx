@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import AdminLayout from "features/admin/components/AdminLayout";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "features/admin/api/adminApi";
@@ -81,7 +80,7 @@ const Verification = () => {
   };
 
   return (
-    <AdminLayout>
+    <>
       <div className={styles.pageContainer}>
         {/* Notification */}
         {notification.show && (
@@ -264,7 +263,7 @@ const Verification = () => {
           </div>
         </ConfirmModal>
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

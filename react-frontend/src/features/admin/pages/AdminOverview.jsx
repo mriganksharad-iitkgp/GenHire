@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import AdminLayout from "features/admin/components/AdminLayout";
 import styles from "./AdminPages.module.css";
 import * as adminApi from "features/admin/api/adminApi";
 
@@ -31,17 +30,17 @@ const AdminOverview = () => {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <>
         <div className={styles.loadingContainer}>
           <div className={styles.spinner}></div>
           <p>Loading dashboard...</p>
         </div>
-      </AdminLayout>
+      </>
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <div className={styles.pageContainer}>
         <div className={styles.pageHeader}>
           <h1>Dashboard Overview</h1>
@@ -195,7 +194,7 @@ const AdminOverview = () => {
           </div>
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

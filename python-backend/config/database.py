@@ -128,6 +128,16 @@ class DatabaseConfig:
             )
         except Exception as e:
             print(f"Warning: failed to ensure applications indexes: {e}")
+
+        try:
+            # Outbound email audit log (see EmailService._log_send) — the
+            # admin cost page counts successful sends per timeline window.
+            email_log = self.db['email_log']
+            email_log.create_index(
+                [('sent_at', 1), ('success', 1)], name='idx_email_log_sent_at_success'
+            )
+        except Exception as e:
+            print(f"Warning: failed to ensure email_log indexes: {e}")
     
     def get_db(self):
         """Get database instance, connecting if needed"""

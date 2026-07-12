@@ -66,6 +66,11 @@ class CreditAdmin:
             )
         if tx_type == "ai_jd_generation":
             return "AI JD Generation"
+        if tx_type == "candidate_invite":
+            count = int((tx.get("metadata") or {}).get("candidate_count", 0) or 0)
+            return f"Candidate Invites ({count} invited)" if count else "Candidate Invites"
+        if tx_type == "candidate_invite_refund":
+            return "Candidate Invite Refund (email failed)"
         if tx_type == "migration_recharge":
             return "Migration Recharge"
         return str(tx_type or "activity").replace("_", " ").title()

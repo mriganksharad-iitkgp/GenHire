@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import AdminLayout from 'features/admin/components/AdminLayout';
 import styles from './CostStatistics.module.css';
 import {
   getCandidateCreditSummary,
@@ -187,7 +186,7 @@ const CreditStatistics = () => {
   };
 
   return (
-    <AdminLayout activeTab="credit-statistics">
+    <>
       <div className={styles.wrapper}>
         <div className={styles.headerBlock}>
           <h1>Admin Credit Statistics</h1>
@@ -364,7 +363,7 @@ const CreditStatistics = () => {
           </>
         )}
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

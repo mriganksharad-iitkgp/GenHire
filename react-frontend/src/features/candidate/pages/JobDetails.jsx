@@ -492,7 +492,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									className={styles.saveButton}
 									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
-									<i className="fa fa-file-pdf-o"></i> Download JD
+									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
 								</button>
 							</>
 						) : (
@@ -525,7 +525,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									className={styles.saveButton}
 									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
-									<i className="fa fa-file-pdf-o"></i> Download JD
+									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
 								</button>
 								<button className={styles.saveButton}>
 									<i className="fa fa-bookmark-o"></i> Save

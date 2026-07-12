@@ -111,12 +111,6 @@ class CostStatsAdmin:
                 )
                 return collection.count_documents(query)
 
-            def _monthly_cost_for_window(monthly_cost, start_dt, end_dt):
-                if not monthly_cost:
-                    return 0.0
-                total_days = max(1, (end_dt - start_dt).days)
-                return (monthly_cost / 30.0) * total_days
-
             def _llm_cost_usd(
                 pricing_map, model_key, prompt_tokens, completion_tokens, action_count
             ):
@@ -162,33 +156,38 @@ class CostStatsAdmin:
             pricing = CostTracker.PRICING
             inr_per_usd = _env_inr_per_usd()
 
-            # Monthly infrastructure/provider figures. GCP and OpenAI are
-            # fetched live when their billing integrations are configured
+            # Infrastructure/provider figures. Nothing here is a monthly
+            # subscription: GCP and OpenAI are fetched live for the selected
+            # window when their billing integrations are configured
             # (GCP_BILLING_EXPORT_BQ_TABLE / OPENAI_ADMIN_API_KEY — see
-            # docs/costfetch.md); the env figures below are the fallback for
-            # them and the primary source for the rest (owner updates those
-            # from each billing console). GCP is itemized per service.
-            gcp_service_assumptions = {
-                "cloud_run": ("Cloud Run", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_RUN_INR", 500.0)),
-                "cloud_build": ("Cloud Build", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_BUILD_INR", 100.0)),
-                "cloud_storage": ("Cloud Storage", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_STORAGE_INR", 100.0)),
-                "artifact_registry": ("Artifact Registry", _env_monthly_inr("INFRA_MONTHLY_GCP_ARTIFACT_REGISTRY_INR", 100.0)),
+            # docs/costfetch.md), ZeptoMail is derived from the email_log
+            # (successful sends × per-email price), and the rest are flat
+            # env-entered estimates shown as-is for the window (no pro-rating).
+            # GCP is itemized per service; the env figures below are its
+            # fallback when the BigQuery export is unreachable.
+            gcp_service_estimates = {
+                "cloud_run": ("Cloud Run", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_RUN_INR", 0.0)),
+                "cloud_build": ("Cloud Build", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_BUILD_INR", 0.0)),
+                "cloud_storage": ("Cloud Storage", _env_monthly_inr("INFRA_MONTHLY_GCP_CLOUD_STORAGE_INR", 0.0)),
+                "artifact_registry": ("Artifact Registry", _env_monthly_inr("INFRA_MONTHLY_GCP_ARTIFACT_REGISTRY_INR", 0.0)),
                 "other": ("Other GCP services", _env_monthly_inr("INFRA_MONTHLY_GCP_OTHER_INR", 0.0)),
             }
-            monthly_infra_assumptions = {
-                "gcp": sum(value for _, value in gcp_service_assumptions.values()),
+            infra_estimates = {
+                "gcp": sum(value for _, value in gcp_service_estimates.values()),
                 "vercel": _env_monthly_inr("INFRA_MONTHLY_VERCEL_INR", 0.0),
-                "mongodb": _env_monthly_inr("INFRA_MONTHLY_MONGODB_INR", 3000.0),
-                # ZeptoMail transactional email: 1 credit = Rs.150 = 10,000
-                # emails (valid 6 months); assumed 30,000 emails/month =
-                # 3 credits = Rs.450/month.
-                "zeptomail": _env_monthly_inr("INFRA_MONTHLY_ZEPTOMAIL_INR", 450.0),
-                "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 500.0),
+                "mongodb": _env_monthly_inr("INFRA_MONTHLY_MONGODB_INR", 0.0),
+                "openai": _env_monthly_inr("INFRA_MONTHLY_OPENAI_INR", 0.0),
                 "gemini": _env_monthly_inr("INFRA_MONTHLY_GEMINI_INR", 0.0),
                 "groq": _env_monthly_inr("INFRA_MONTHLY_GROQ_INR", 0.0),
                 # Legacy — only shown if a value is still configured.
                 "cloudflare": _env_monthly_inr("INFRA_MONTHLY_CLOUDFLARE_INR", 0.0),
             }
+            # ZeptoMail: pay-per-email from the send log — 1 credit = Rs.150 =
+            # 10,000 emails, so Rs.0.015 per email by default.
+            try:
+                zeptomail_per_email_inr = float(os.getenv("ZEPTOMAIL_PER_EMAIL_COST_INR", "0.015"))
+            except (TypeError, ValueError):
+                zeptomail_per_email_inr = 0.015
 
             # Single source of truth for fallback assumptions (gpt-4o-mini
             # across the board) — see CostStatsHelpers._action_assumptions.
@@ -226,7 +225,7 @@ class CostStatsAdmin:
                     self._build_token_cost_line(
                         app,
                         'cv_scoring',
-                        'Total CV Score Calculation Cost',
+                        'CV Score Calculation Cost',
                         action_assumptions['cv_scoring'],
                         ['cv_score_calculated_at', 'updated_at', 'created_at'],
                         source_meta={
@@ -249,7 +248,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             event,
                             'ai_jd_generation',
-                            'Total AI JD Generation Cost',
+                            'AI JD Generation Cost',
                             action_assumptions['ai_jd_generation'],
                             ['occurred_at', 'created_at'],
                             source_meta=event.get('source') or {},
@@ -268,7 +267,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             job,
                             'ai_jd_generation',
-                            'Total AI JD Generation Cost',
+                            'AI JD Generation Cost',
                             action_assumptions['ai_jd_generation'],
                             ['updated_at', 'created_at'],
                             source_meta={
@@ -298,7 +297,7 @@ class CostStatsAdmin:
                     self._build_interview_cost_line(
                         app_with_context,
                         'ai_interview',
-                        'Total AI Interview Cost',
+                        'AI Interview Cost',
                         action_assumptions['ai_interview'],
                         ['completed_at', 'updated_at', 'created_at'],
                         source_meta={
@@ -315,7 +314,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             app_with_eval_context,
                             'ai_interview_evaluation',
-                            'Total AI Interview Evaluation Cost',
+                            'AI Interview Evaluation Cost',
                             action_assumptions['evaluation'],
                             ['completed_at', 'updated_at', 'created_at'],
                             source_meta={
@@ -373,28 +372,28 @@ class CostStatsAdmin:
 
             cv_item = _aggregate_line_item(
                 'cv_scoring',
-                'Total CV Score Calculation Cost',
+                'CV Score Calculation Cost',
                 action_assumptions['cv_scoring']['model'],
                 'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
                 cv_lines,
             )
             jd_item = _aggregate_line_item(
                 'ai_jd_generation',
-                'Total AI JD Generation Cost',
+                'AI JD Generation Cost',
                 action_assumptions['ai_jd_generation']['model'],
                 'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
                 jd_lines,
             )
             interview_item = _aggregate_line_item(
                 'ai_interview',
-                'Total AI Interview Cost',
+                'AI Interview Cost',
                 action_assumptions['ai_interview']['model'],
                 'count × [LLM token cost + STT(sec/60×rate) + TTS(chars/1M×rate)] × INR conversion',
                 interview_lines,
             )
             interview_eval_item = _aggregate_line_item(
                 'ai_interview_evaluation',
-                'Total AI Interview Evaluation Cost',
+                'AI Interview Evaluation Cost',
                 action_assumptions['evaluation']['model'],
                 'count × ((prompt/1M × input_rate) + (completion/1M × output_rate)) × INR conversion',
                 interview_eval_lines,
@@ -462,29 +461,36 @@ class CostStatsAdmin:
             gcp_breakdown = []
             if gcp_actual:
                 gcp_currency = gcp_actual.get("currency", "INR")
-                for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
+                for service_key, (service_label, _estimate) in gcp_service_estimates.items():
                     actual_inr = _to_inr(gcp_actual["services"].get(service_key, 0.0), gcp_currency)
                     gcp_breakdown.append({
                         "key": service_key,
                         "label": service_label,
-                        "monthly_assumption_inr": _round_money(service_monthly),
-                        "prorated_cost_inr": _round_money(actual_inr),
+                        "cost_inr": _round_money(actual_inr),
                     })
                 gcp_window_total = _to_inr(gcp_actual["total"], gcp_currency)
             else:
-                for service_key, (service_label, service_monthly) in gcp_service_assumptions.items():
+                # Fallback: flat env-entered estimates shown as-is (these are
+                # NOT subscriptions, so no per-day scaling is meaningful).
+                for service_key, (service_label, service_estimate) in gcp_service_estimates.items():
                     gcp_breakdown.append({
                         "key": service_key,
                         "label": service_label,
-                        "monthly_assumption_inr": _round_money(service_monthly),
-                        "prorated_cost_inr": _round_money(
-                            _monthly_cost_for_window(service_monthly, period_start, period_end)
-                        ),
+                        "cost_inr": _round_money(service_estimate),
                     })
                 gcp_window_total = None
 
             openai_actual_usd = fetch_openai_costs_usd(period_start, period_end)
             openai_balance_usd = get_openai_credit_balance_usd()
+
+            # ZeptoMail: actual usage from the email send log for the window.
+            try:
+                emails_sent_in_window = db["email_log"].count_documents({
+                    "sent_at": {"$gte": period_start, "$lte": period_end},
+                    "success": True,
+                })
+            except Exception:
+                emails_sent_in_window = 0
 
             infra_labels = {
                 "gcp": "Google Cloud Platform",
@@ -497,10 +503,10 @@ class CostStatsAdmin:
                 "cloudflare": "Cloudflare (legacy)",
             }
             infrastructure_costs = {}
-            total_infra_prorated = 0.0
+            total_infra_window = 0.0
             for infra_key, infra_label in infra_labels.items():
-                monthly_value = monthly_infra_assumptions.get(infra_key, 0.0)
-                if infra_key == "cloudflare" and monthly_value <= 0:
+                estimate_value = infra_estimates.get(infra_key, 0.0)
+                if infra_key == "cloudflare" and estimate_value <= 0:
                     continue
 
                 if infra_key == "gcp" and gcp_window_total is not None:
@@ -511,18 +517,22 @@ class CostStatsAdmin:
                     window_value = openai_actual_usd * inr_per_usd
                     usage_source = "costs_api"
                     note = "Actual spend from the OpenAI Organization Costs API for the selected timeline."
-                else:
-                    window_value = _monthly_cost_for_window(
-                        monthly_value, period_start, period_end
+                elif infra_key == "zeptomail":
+                    window_value = emails_sent_in_window * zeptomail_per_email_inr
+                    usage_source = "email_log"
+                    note = (
+                        f"{emails_sent_in_window} email(s) actually sent in the selected timeline × "
+                        f"Rs.{zeptomail_per_email_inr} per email (1 credit = Rs.150 = 10,000 emails)."
                     )
-                    usage_source = "env_placeholder"
-                    note = "Env-entered monthly figure pro-rated over the timeline — see docs/costfetch.md to automate."
+                else:
+                    window_value = estimate_value
+                    usage_source = "env_estimate"
+                    note = "Flat env-entered estimate (no billing API for this provider) — shown as-is for the timeline."
 
-                total_infra_prorated += window_value
+                total_infra_window += window_value
                 entry = {
                     "label": infra_label,
-                    "monthly_assumption_inr": _round_money(monthly_value),
-                    "prorated_cost_inr": _round_money(window_value),
+                    "cost_inr": _round_money(window_value),
                     "usage_source": usage_source,
                     "note": note,
                 }
@@ -542,13 +552,15 @@ class CostStatsAdmin:
                             "OpenAI exposes no official balance API."
                         )
                 if infra_key == "zeptomail":
+                    entry["emails_sent"] = int(emails_sent_in_window)
+                    entry["per_email_cost_inr"] = zeptomail_per_email_inr
                     entry["pricing_note"] = (
-                        "1 credit = Rs.150 = 10,000 emails (valid 6 months); assumed 30,000 emails/month "
-                        "= 3 credits = Rs.450/month."
+                        "Pay-per-email from the send log: 1 credit = Rs.150 = 10,000 emails "
+                        f"(Rs.{zeptomail_per_email_inr}/email); credits stay valid 6 months."
                     )
                 infrastructure_costs[infra_key] = entry
 
-            total_infrastructure_cost_inr = _round_money(total_infra_prorated)
+            total_infrastructure_cost_inr = _round_money(total_infra_window)
             total_cost_inr = _round_money(
                 total_ai_cost_inr + total_infrastructure_cost_inr
             )
@@ -806,7 +818,8 @@ class CostStatsAdmin:
                         "prompt": action_assumptions["evaluation"]["prompt_tokens"],
                         "completion": action_assumptions["evaluation"]["completion_tokens"],
                     },
-                    "monthly_infrastructure_assumptions_inr": monthly_infra_assumptions,
+                    "zeptomail_per_email_cost_inr": zeptomail_per_email_inr,
+                    "infrastructure_env_estimates_inr": infra_estimates,
                 },
                 "cost_methodology": self._cost_methodology_reference(),
                 "llm_pricing_reference": self._llm_pricing_reference(),
@@ -1139,7 +1152,7 @@ class CostStatsAdmin:
                     jd_line = self._build_token_cost_line(
                         event,
                         'ai_jd_generation',
-                        'Total AI JD Generation Cost',
+                        'AI JD Generation Cost',
                         assumptions['ai_jd_generation'],
                         ['occurred_at', 'created_at'],
                         source_meta=event.get('source') or {},
@@ -1167,7 +1180,7 @@ class CostStatsAdmin:
                     jd_line = self._build_token_cost_line(
                         job,
                         'ai_jd_generation',
-                        'Total AI JD Generation Cost',
+                        'AI JD Generation Cost',
                         assumptions['ai_jd_generation'],
                         ['updated_at', 'created_at'],
                         source_meta={
@@ -1194,7 +1207,7 @@ class CostStatsAdmin:
                 cv_line = self._build_token_cost_line(
                     app,
                     'cv_scoring',
-                    'Total CV Score Calculation Cost',
+                    'CV Score Calculation Cost',
                     assumptions['cv_scoring'],
                     ['cv_score_calculated_at', 'updated_at', 'created_at'],
                     source_meta={
@@ -1233,7 +1246,7 @@ class CostStatsAdmin:
                 interview_line = self._build_interview_cost_line(
                     app_with_context,
                     'ai_interview',
-                    'Total Real Interview Cost',
+                    'Real Interview Cost',
                     assumptions['ai_interview'],
                     ['completed_at', 'updated_at', 'created_at'],
                     source_meta={
@@ -1251,7 +1264,7 @@ class CostStatsAdmin:
                     eval_line = self._build_token_cost_line(
                         app_with_eval_context,
                         'ai_interview_evaluation',
-                        'Total Real Interview Evaluation Cost',
+                        'Real Interview Evaluation Cost',
                         assumptions['evaluation'],
                         ['completed_at', 'updated_at', 'created_at'],
                         source_meta={
@@ -1374,7 +1387,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             event,
                             'ai_jd_generation',
-                            'Total AI JD Generation Cost',
+                            'AI JD Generation Cost',
                             assumptions['ai_jd_generation'],
                             ['occurred_at', 'created_at'],
                             source_meta=event.get('source') or {},
@@ -1398,7 +1411,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             job,
                             'ai_jd_generation',
-                            'Total AI JD Generation Cost',
+                            'AI JD Generation Cost',
                             assumptions['ai_jd_generation'],
                             ['updated_at', 'created_at'],
                             source_meta={
@@ -1428,7 +1441,7 @@ class CostStatsAdmin:
                     self._build_token_cost_line(
                         app,
                         'cv_scoring',
-                        'Total CV Score Calculation Cost',
+                        'CV Score Calculation Cost',
                         assumptions['cv_scoring'],
                         ['cv_score_calculated_at', 'updated_at', 'created_at'],
                         source_meta={
@@ -1460,7 +1473,7 @@ class CostStatsAdmin:
                     self._build_interview_cost_line(
                         app_with_context,
                         'ai_interview',
-                        'Total Real Interview Cost',
+                        'Real Interview Cost',
                         assumptions['ai_interview'],
                         ['completed_at', 'updated_at', 'created_at'],
                         source_meta={
@@ -1477,7 +1490,7 @@ class CostStatsAdmin:
                         self._build_token_cost_line(
                             app_with_eval_context,
                             'ai_interview_evaluation',
-                            'Total Real Interview Evaluation Cost',
+                            'Real Interview Evaluation Cost',
                             assumptions['evaluation'],
                             ['completed_at', 'updated_at', 'created_at'],
                             source_meta={
@@ -1489,10 +1502,10 @@ class CostStatsAdmin:
                     )
 
             raw_categories = [
-                self._line_category_summary('ai_interview', 'Total Real Interview Cost', interview_lines),
-                self._line_category_summary('ai_interview_evaluation', 'Total Real Interview Evaluation Cost', interview_eval_lines),
-                self._line_category_summary('ai_jd_generation', 'Total AI JD Generation Cost', jd_lines),
-                self._line_category_summary('cv_scoring', 'Total CV Score Calculation Cost', cv_lines),
+                self._line_category_summary('ai_interview', 'Real Interview Cost', interview_lines),
+                self._line_category_summary('ai_interview_evaluation', 'Real Interview Evaluation Cost', interview_eval_lines),
+                self._line_category_summary('ai_jd_generation', 'AI JD Generation Cost', jd_lines),
+                self._line_category_summary('cv_scoring', 'CV Score Calculation Cost', cv_lines),
             ]
 
             categories = []

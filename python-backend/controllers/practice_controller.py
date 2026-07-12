@@ -34,7 +34,10 @@ class PracticeController:
 
     def __init__(self, collections):
         self.collections = collections
-        self.upload_folder = "uploads/practice"
+        # Transient staging only (prompt .txt files the interview engine reads
+        # during a session) — rooted in the OS temp dir, never the app tree.
+        import tempfile
+        self.upload_folder = os.path.join(tempfile.gettempdir(), "genhire_staging", "practice")
         self.cv_folder = os.path.join(self.upload_folder, "cv")
         self.jd_folder = os.path.join(self.upload_folder, "jd")
 

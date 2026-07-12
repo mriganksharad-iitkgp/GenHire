@@ -826,11 +826,30 @@ def end_interview(current_user, session_id):
             plt.legend()
 
             gaze_plot_filename = f"gaze_plot_{session_id}_{uuid.uuid4().hex[:6]}.png"
-            # Ensure folder exists
+            # Staged locally only long enough to upload to GCS — the plot is
+            # served back via /api/view-file, which redirects gs:// paths to a
+            # signed URL. Best-effort: a plot-upload failure must never fail
+            # end-interview (scores/refunds finalize below), so on failure the
+            # plot is simply absent from the report.
             os.makedirs(PROCTORING_FOLDER, exist_ok=True)
-            gaze_plot_path = os.path.join(PROCTORING_FOLDER, gaze_plot_filename)
-            plt.savefig(gaze_plot_path)
+            staging_plot_path = os.path.join(PROCTORING_FOLDER, gaze_plot_filename)
+            plt.savefig(staging_plot_path)
             plt.close()
+            try:
+                from services import gcs_service
+                gaze_plot_path = gcs_service.upload_from_path(
+                    staging_plot_path,
+                    f"proctoring/{gaze_plot_filename}",
+                    content_type="image/png",
+                )
+            except Exception as upload_err:
+                print(f"⚠️ GCS upload failed for gaze plot (report will omit it): {upload_err}")
+                gaze_plot_path = None
+            finally:
+                try:
+                    os.remove(staging_plot_path)
+                except OSError:
+                    pass
         except Exception as e:
             print(f"⚠️ Failed to generate local gaze tracking plot: {e}")
             if not gaze_plot_path:  # fallback to external one if available
@@ -1151,25 +1170,44 @@ def upload_recording(current_user, session_id):
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
     if file:
+        # Recordings live in GCS only — staged briefly on disk (the analyzer
+        # needs a local path), uploaded, then the staging file is deleted.
+        # No local fallback: a failed GCS upload fails the request loudly.
         filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
         filepath = os.path.join(RECORDING_FOLDER, filename)
         file.save(filepath)
-        # Update the interview record with the path to the recording
-        interviews_collection.update_one(
-            {"session_id": session_id, "user_id": str(current_user["_id"])},
-            {"$set": {"recording_path": filepath}},
-        )
-        if recording_analyzer:
-            # Note: This might take some time to process.
-            # For a production app, this should be a background task (Celery/Redis).
+        try:
+            if recording_analyzer:
+                # Note: This might take some time to process.
+                # For a production app, this should be a background task (Celery/Redis).
+                try:
+                    recording_analyzer.run_full_analysis(filepath)
+                except Exception as e:
+                    print(f"Error running post-interview analysis: {e}")
+
+            from services import gcs_service
+            gcs_object_path = f"recordings/{filename}"
             try:
-                recording_analyzer.run_full_analysis(filepath)
+                gcs_uri = gcs_service.upload_from_path(
+                    filepath, gcs_object_path, content_type="video/webm"
+                )
             except Exception as e:
-                print(f"Error running post-interview analysis: {e}")
-        return (
-            jsonify({"message": "Recording uploaded successfully", "path": filepath}),
-            200,
-        )
+                print(f"GCS upload failed for interview recording: {e}")
+                return jsonify({"error": "Failed to store recording in cloud storage"}), 500
+
+            interviews_collection.update_one(
+                {"session_id": session_id, "user_id": str(current_user["_id"])},
+                {"$set": {"recording_path": gcs_uri, "recording_gcs_path": gcs_object_path}},
+            )
+            return (
+                jsonify({"message": "Recording uploaded successfully", "path": gcs_uri}),
+                200,
+            )
+        finally:
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
 
     return jsonify({"error": "File upload failed"}), 500
 
@@ -1202,17 +1240,36 @@ def upload_mobile_recording(session_id):
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        # Save with a specific suffix to distinguish from webcam
+        # Save with a specific suffix to distinguish from webcam. GCS only —
+        # staged briefly on disk, uploaded, staging file deleted; a failed
+        # upload fails the request (no local fallback).
         filename = secure_filename(f"{session_id}_mobile_env.webm")
         filepath = os.path.join(M_RECORDING_FOLDER, filename)
         file.save(filepath)
+        try:
+            from services import gcs_service
+            gcs_object_path = f"mobile_recordings/{filename}"
+            try:
+                gcs_uri = gcs_service.upload_from_path(
+                    filepath, gcs_object_path, content_type="video/webm"
+                )
+            except Exception as e:
+                print(f"GCS upload failed for mobile recording: {e}")
+                return jsonify({"error": "Failed to store mobile recording in cloud storage"}), 500
 
-        # Update database with mobile recording path
-        interviews_collection.update_one(
-            {"session_id": session_id}, {"$set": {"mobile_recording_path": filepath}}
-        )
-
-        return jsonify({"message": "Mobile recording uploaded"}), 200
+            interviews_collection.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "mobile_recording_path": gcs_uri,
+                    "mobile_recording_gcs_path": gcs_object_path,
+                }},
+            )
+            return jsonify({"message": "Mobile recording uploaded"}), 200
+        finally:
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
 
 
 @interview_bp.route("/api/interviews", methods=["GET"])

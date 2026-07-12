@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useParams } from "react-router-do
 
 import Layout from "shared/components/layout/Layout";
 import ProtectedRoute from "app/ProtectedRoute";
+import { AdminLayoutOutlet } from "features/admin/components/AdminLayout";
 // Preserves params + query string when redirecting a legacy path to its
 // renamed successor (old links in emails/bookmarks keep working).
 function LegacyRedirect({ to }) {
@@ -95,17 +96,20 @@ export default function AppRoutes() {
         <Route path="/payment/success" element={<PaymentSuccess />} />
         <Route path="/payment/cancel" element={<PaymentCancel />} />
 
-        {/* Admin portal */}
-        <Route path="/admin" element={admin(<AdminOverview />)} />
-        <Route path="/admin/overview" element={admin(<AdminOverview />)} />
-        <Route path="/admin/candidates" element={admin(<ManageCandidates />)} />
-        <Route path="/admin/candidates/:candidateId" element={admin(<CandidateDetail />)} />
-        <Route path="/admin/recruiters" element={admin(<ManageRecruiters />)} />
-        <Route path="/admin/recruiters/:recruiterId" element={admin(<RecruiterDetail />)} />
-        <Route path="/admin/admins" element={admin(<ManageAdmins />)} />
-        <Route path="/admin/verification" element={admin(<Verification />)} />
-        <Route path="/admin/cost-statistics" element={admin(<CostStatistics />)} />
-        <Route path="/admin/credit-statistics" element={admin(<CreditStatistics />)} />
+        {/* Admin portal — one persistent AdminLayout (sidebar stays mounted;
+            tab switches only swap the <Outlet/> content, no panel reload) */}
+        <Route element={admin(<AdminLayoutOutlet />)}>
+          <Route path="/admin" element={<AdminOverview />} />
+          <Route path="/admin/overview" element={<AdminOverview />} />
+          <Route path="/admin/candidates" element={<ManageCandidates />} />
+          <Route path="/admin/candidates/:candidateId" element={<CandidateDetail />} />
+          <Route path="/admin/recruiters" element={<ManageRecruiters />} />
+          <Route path="/admin/recruiters/:recruiterId" element={<RecruiterDetail />} />
+          <Route path="/admin/admins" element={<ManageAdmins />} />
+          <Route path="/admin/verification" element={<Verification />} />
+          <Route path="/admin/cost-statistics" element={<CostStatistics />} />
+          <Route path="/admin/credit-statistics" element={<CreditStatistics />} />
+        </Route>
 
         {/* Role dashboards & stats */}
         <Route path="/recruiter/cost-statistics" element={<RecruiterCostStatistics />} />

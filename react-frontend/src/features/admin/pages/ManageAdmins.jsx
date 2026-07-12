@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import AdminLayout from "features/admin/components/AdminLayout";
 import UserTable from "features/admin/components/UserTable";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import styles from "./AdminPages.module.css";
@@ -79,7 +78,7 @@ const ManageAdmins = () => {
   };
 
   return (
-    <AdminLayout>
+    <>
       <div className={styles.pageContainer}>
         {/* Notification */}
         {notification.show && (
@@ -196,7 +195,7 @@ const ManageAdmins = () => {
           isLoading={deleteLoading}
         />
       </div>
-    </AdminLayout>
+    </>
   );
 };
 

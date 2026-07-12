@@ -8,6 +8,7 @@ here so exactly one instance of each exists per process.
 """
 
 import os
+import tempfile
 
 from config.env_loader import load_environment
 
@@ -20,12 +21,16 @@ from utils.gaze_recorder_service import GazeRecorderService
 # In-memory store: session_id -> { registered_face_bytes, proctoring_score, infractions }
 live_sessions = {}
 
-# Directories for storing interview artifacts
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
-PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
-RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "recordings")
-M_RECORDING_FOLDER = os.path.join(UPLOAD_FOLDER, "mobile_recordings")
-TMP_FOLDER = os.path.join(UPLOAD_FOLDER, "tmp")
+# Transient STAGING directories only — every persistent interview artifact
+# (recordings, gaze plots/JSON, mobile recordings) lives in GCS; files land
+# here just long enough to be processed/uploaded and are deleted immediately
+# after. Rooted in the OS temp dir (not the app tree) so nothing accumulates
+# inside the deployment and the OS can reclaim it.
+_STAGING_ROOT = os.path.join(tempfile.gettempdir(), "genhire_staging")
+PROCTORING_FOLDER = os.path.join(_STAGING_ROOT, "proctoring")
+RECORDING_FOLDER = os.path.join(_STAGING_ROOT, "recordings")
+M_RECORDING_FOLDER = os.path.join(_STAGING_ROOT, "mobile_recordings")
+TMP_FOLDER = os.path.join(_STAGING_ROOT, "tmp")
 GAZE_RECORDER_FOLDER = os.path.join(PROCTORING_FOLDER, "gaze_recorder")
 
 for _folder in (PROCTORING_FOLDER, RECORDING_FOLDER, M_RECORDING_FOLDER, TMP_FOLDER, GAZE_RECORDER_FOLDER):

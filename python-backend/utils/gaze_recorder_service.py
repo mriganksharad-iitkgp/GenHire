@@ -145,22 +145,30 @@ class GazeRecorderService:
         analysis_result: Dict[str, Any],
         gaze_points: List[Dict[str, Any]],
     ) -> Dict[str, str]:
+        """Persist the gaze artifacts to GCS (gs:// URIs returned; served back
+        through /api/view-file's signed-URL redirect). Nothing is kept on
+        local disk — GCS is mandatory platform-wide, so an upload failure
+        raises rather than silently writing a file the next container restart
+        would destroy."""
+        from services import gcs_service
+
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         base_name = f"{session_id}_{user_id}_{timestamp}"
+
+        def _upload_json(payload: Any, filename: str) -> str:
+            blob = json.dumps(payload, indent=2).encode("utf-8")
+            return gcs_service.upload_file(
+                blob,
+                f"proctoring/gaze_recorder/{filename}",
+                content_type="application/json",
+            )
+
         recording_path = ""
-
         if recording_data is not None:
-            recording_path = os.path.join(self.output_dir, f"{base_name}_gaze_recorder_recording.json")
-            with open(recording_path, "w", encoding="utf-8") as rec_file:
-                json.dump(recording_data, rec_file, indent=2)
+            recording_path = _upload_json(recording_data, f"{base_name}_gaze_recorder_recording.json")
 
-        analysis_path = os.path.join(self.output_dir, f"{base_name}_gaze_analysis.json")
-        with open(analysis_path, "w", encoding="utf-8") as analysis_file:
-            json.dump(analysis_result, analysis_file, indent=2)
-
-        points_path = os.path.join(self.output_dir, f"{base_name}_gaze_points.json")
-        with open(points_path, "w", encoding="utf-8") as points_file:
-            json.dump(gaze_points, points_file, indent=2)
+        analysis_path = _upload_json(analysis_result, f"{base_name}_gaze_analysis.json")
+        points_path = _upload_json(gaze_points, f"{base_name}_gaze_points.json")
 
         return {
             "recording_path": recording_path,

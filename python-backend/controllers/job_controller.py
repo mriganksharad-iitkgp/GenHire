@@ -20,8 +20,11 @@ class JobController:
     def __init__(self, db_collections):
         self.jobs_collection = db_collections['jobs']
         self.applications_collection = db_collections['applications']
-        self.upload_folder = 'uploads/jds'
-        
+        # Transient staging only (JD text extraction before the GCS upload) —
+        # rooted in the OS temp dir; the persistent copy lives in GCS.
+        import tempfile
+        self.upload_folder = os.path.join(tempfile.gettempdir(), 'genhire_staging', 'jds')
+
         # Ensure upload directory exists
         os.makedirs(self.upload_folder, exist_ok=True)
         
@@ -262,10 +265,11 @@ class JobController:
         company_name = recruiter_profile.get('company_name') or job_data.get('company') or 'TechCorp Solutions'
         company_logo = recruiter_profile.get('company_logo') or job_data.get('logo') or None
         
-        # Handle JD PDF upload — stored in Google Cloud Storage so candidates
-        # can download the exact document the recruiter uploaded. The file is
-        # optional and non-fatal: if GCS isn't configured or the upload fails,
-        # the job is still created (just without a downloadable JD PDF).
+        # Handle JD PDF upload — stored in Google Cloud Storage (mandatory, no
+        # local fallback) so candidates can download the exact document the
+        # recruiter uploaded. If the recruiter attached a JD but it can't be
+        # stored, the job creation FAILS loudly rather than silently dropping
+        # the document the recruiter expects candidates to receive.
         jd_pdf_path = None
         jd_gcs_path = None
         jd_original_filename = None
@@ -275,45 +279,39 @@ class JobController:
         if jd_file and jd_file.filename:
             file_extension = secure_filename(jd_file.filename).rsplit('.', 1)[-1].lower()
             if file_extension not in ['pdf', 'txt']:
-                logger.warning(f"Invalid JD file type: {file_extension}")
-            else:
-                job_uid = str(uuid.uuid4())
-                jd_filename = f"jd_{job_uid}.{file_extension}"
-                local_path = os.path.join(self.upload_folder, jd_filename)
-                try:
-                    jd_file.save(local_path)
+                return {'error': 'JD file must be a PDF or TXT document.'}, 400
 
-                    # Extract text before upload (pdf_parser needs a local path).
-                    if self.pdf_parser:
-                        try:
-                            jd_extracted_text = self.pdf_parser.extract_text(local_path)
-                            logger.info(f"Extracted {len(jd_extracted_text)} characters from JD: {jd_filename}")
-                        except Exception as e:
-                            logger.error(f"Failed to extract text from JD: {e}")
-                    else:
-                        logger.warning("PDF parser not available, JD text not extracted")
+            job_uid = str(uuid.uuid4())
+            jd_filename = f"jd_{job_uid}.{file_extension}"
+            local_path = os.path.join(self.upload_folder, jd_filename)
+            try:
+                jd_file.save(local_path)
 
-                    if gcs_service.is_gcs_configured():
-                        try:
-                            jd_gcs_path = f"jds/{recruiter_id}/{jd_filename}"
-                            gcs_service.upload_from_path(local_path, jd_gcs_path)
-                            jd_pdf_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{jd_gcs_path}"
-                            jd_original_filename = secure_filename(jd_file.filename)
-                            jd_upload_date = datetime.datetime.utcnow()
-                            logger.info(f"JD uploaded to GCS: {jd_gcs_path}")
-                        except Exception as e:
-                            logger.error(f"GCS upload failed for JD, continuing without it: {e}")
-                            jd_gcs_path = None
-                            jd_pdf_path = None
-                    else:
-                        logger.warning("GCS not configured — JD PDF will not be available for candidate download")
-                except Exception as e:
-                    logger.error(f"Error processing JD file: {e}")
-                finally:
+                # Extract text before upload (pdf_parser needs a local path).
+                if self.pdf_parser:
                     try:
-                        os.remove(local_path)
-                    except OSError:
-                        pass
+                        jd_extracted_text = self.pdf_parser.extract_text(local_path)
+                        logger.info(f"Extracted {len(jd_extracted_text)} characters from JD: {jd_filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to extract text from JD: {e}")
+                else:
+                    logger.warning("PDF parser not available, JD text not extracted")
+
+                try:
+                    jd_gcs_path = f"jds/{recruiter_id}/{jd_filename}"
+                    gcs_service.upload_from_path(local_path, jd_gcs_path)
+                    jd_pdf_path = f"gs://{os.getenv('GCS_BUCKET_NAME')}/{jd_gcs_path}"
+                    jd_original_filename = secure_filename(jd_file.filename)
+                    jd_upload_date = datetime.datetime.utcnow()
+                    logger.info(f"JD uploaded to GCS: {jd_gcs_path}")
+                except Exception as e:
+                    logger.error(f"GCS upload failed for JD: {e}")
+                    return {'error': 'Failed to store the JD document in cloud storage. Please try again.'}, 500
+            finally:
+                try:
+                    os.remove(local_path)
+                except OSError:
+                    pass
 
         job_document = {
             'title': job_title,

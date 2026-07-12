@@ -349,6 +349,47 @@
   color: #b45309;
 }
 
+.knowMore {
+  margin-top: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.knowMore summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4338ca;
+  list-style: none;
+  user-select: none;
+}
+
+.knowMore summary::-webkit-details-marker {
+  display: none;
+}
+
+.knowMore summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.15s ease;
+}
+
+.knowMore[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.knowMore summary:hover {
+  color: #312e81;
+}
+
+.knowMoreBody {
+  padding: 4px 14px 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
 @media (max-width: 768px) {
   .wrapper {
     padding: 14px;

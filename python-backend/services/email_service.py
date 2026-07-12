@@ -18,7 +18,29 @@ class EmailService:
 
     def send_email(self, to_email, subject, html_content, text_content=None):
         """Send an email via the configured provider."""
-        return bool(self.provider.send(to_email, subject, html_content, text_content))
+        ok = bool(self.provider.send(to_email, subject, html_content, text_content))
+        self._log_send(to_email=to_email, subject=subject, success=ok)
+        return ok
+
+    def _log_send(self, *, to_email, subject, success):
+        """Append one row to the `email_log` collection for every outbound
+        email. This log powers the admin cost page's ZeptoMail line:
+        cost = successful sends in the selected window × per-email price
+        (ZEPTOMAIL_PER_EMAIL_COST_INR). Logging must never break sending."""
+        try:
+            from datetime import timezone
+            from config.database import db_config
+
+            db_config.get_db()["email_log"].insert_one({
+                "sent_at": datetime.now(timezone.utc),
+                "to_email": str(to_email or ""),
+                "subject": str(subject or "")[:200],
+                "provider": getattr(self.provider, "name", "unknown"),
+                "success": bool(success),
+            })
+        except Exception:
+            # A cost-tracking miss must never fail the actual email.
+            pass
 
     def last_error(self) -> Optional[str]:
         """Human-readable reason for the most recent failed send on this

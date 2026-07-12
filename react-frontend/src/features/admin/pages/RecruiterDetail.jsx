@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AdminLayout from "features/admin/components/AdminLayout";
 import ConfirmModal from "features/admin/components/ConfirmModal";
 import JobDetailModal from "features/admin/components/JobDetailModal";
 import JobEditModal from "features/recruiter/components/JobEditModal";
@@ -257,18 +256,18 @@ const RecruiterDetail = () => {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <>
         <div className={styles.loadingContainer}>
           <div className={styles.spinner}></div>
           <p>Loading recruiter details...</p>
         </div>
-      </AdminLayout>
+      </>
     );
   }
 
   if (!recruiter) {
     return (
-      <AdminLayout>
+      <>
         <div className={styles.pageContainer}>
           <div className={styles.emptyState}>
             <div className={styles.emptyStateIcon}>
@@ -291,12 +290,12 @@ const RecruiterDetail = () => {
             </p>
           </div>
         </div>
-      </AdminLayout>
+      </>
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <div className={styles.pageContainer}>
         {/* Notification */}
         {notification.show && (
@@ -966,7 +965,7 @@ const RecruiterDetail = () => {
           jobData={jobEditModal.job}
         />
       </div>
-    </AdminLayout>
+    </>
   );
 };
 
