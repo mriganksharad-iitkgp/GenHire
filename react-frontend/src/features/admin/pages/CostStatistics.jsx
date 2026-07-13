@@ -145,6 +145,28 @@ const formatDateInput = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+// Quick timeline presets. Every range ends at "present" (the To Date input is
+// fixed to today), so a preset only has to pick the start date.
+const QUICK_RANGES = [
+  { key: 'today', label: 'Today' },
+  { key: 'this_month', label: 'This Month' },
+  { key: 'last_30', label: 'Last 30 Days' },
+  { key: 'last_90', label: 'Last 90 Days' },
+  { key: 'this_year', label: 'This Year' },
+];
+
+const quickRangeStart = (key) => {
+  const ist = nowInIST();
+  if (key === 'this_month') return formatDateInput(new Date(ist.getFullYear(), ist.getMonth(), 1));
+  if (key === 'this_year') return formatDateInput(new Date(ist.getFullYear(), 0, 1));
+  if (key === 'last_30' || key === 'last_90') {
+    const start = new Date(ist);
+    start.setDate(start.getDate() - (key === 'last_30' ? 29 : 89));
+    return formatDateInput(start);
+  }
+  return formatDateInput(ist); // 'today'
+};
+
 const formatMoney = (value) => formatInrNumber(value);
 const formatOptionalMoney = (value) => (
   value === null || value === undefined ? '-' : formatInrNumber(value)
@@ -617,6 +639,18 @@ const CostStatistics = () => {
             >
               Export CSV
             </button>
+          </div>
+          <div className={styles.quickFilters}>
+            {QUICK_RANGES.map((range) => (
+              <button
+                key={range.key}
+                type="button"
+                className={`${styles.quickFilterBtn} ${startDate === quickRangeStart(range.key) ? styles.quickFilterBtnActive : ''}`}
+                onClick={() => setStartDate(quickRangeStart(range.key))}
+              >
+                {range.label}
+              </button>
+            ))}
           </div>
           <div className={styles.timelineGrid}>
             <label className={styles.field}>

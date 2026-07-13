@@ -347,6 +347,76 @@ class InviteController:
         except Exception:
             logger.warning("Failed to finalize invite batch", exc_info=True)
 
+    def list_invited_candidates(self, *, recruiter: Dict[str, Any], job_id: str):
+        """Every candidate ever invited to this job (burner accounts carrying
+        this job id), newest re-invite first — lets the recruiter see who has
+        already been invited before sending more. Re-inviting a listed email
+        is allowed: it refreshes that candidate's credentials, magic link, and
+        validity window (and costs credits again like any invite)."""
+        try:
+            job = self.jobs.find_one({"_id": ObjectId(job_id)})
+        except Exception:
+            return {"error": "Invalid job id"}, 400
+        if not job:
+            return {"error": "Job not found"}, 404
+
+        recruiter_id = str(recruiter.get("_id"))
+        if recruiter.get("user_type") == "recruiter" and str(job.get("created_by")) != recruiter_id:
+            return {"error": "You can only view invites for jobs you posted"}, 403
+
+        job_id_str = str(job["_id"])
+        now = datetime.datetime.utcnow()
+
+        def _iso(dt):
+            return dt.isoformat() + "Z" if isinstance(dt, datetime.datetime) else None
+
+        burners = list(
+            self.users.find(
+                {"is_invite_only": True, "invited_job_ids": job_id_str},
+                {
+                    "email": 1,
+                    "invite_id": 1,
+                    "created_at": 1,
+                    "temp_password_set_at": 1,
+                    "access_expires_at": 1,
+                    "last_redeemed_at": 1,
+                },
+            )
+        )
+
+        # One lookup for all burners' application progress on this job.
+        student_ids = [str(b["_id"]) for b in burners]
+        app_by_student: Dict[str, Dict[str, Any]] = {}
+        if student_ids:
+            for app in self.applications.find(
+                {"job_id": job_id_str, "student_id": {"$in": student_ids}},
+                {"student_id": 1, "status": 1},
+            ):
+                app_by_student[str(app.get("student_id"))] = app
+
+        invited = []
+        for b in burners:
+            expires_at = b.get("access_expires_at")
+            last_invited = b.get("temp_password_set_at") or b.get("created_at")
+            app = app_by_student.get(str(b["_id"])) or {}
+            invited.append(
+                {
+                    "email": b.get("email"),
+                    "invite_id": b.get("invite_id"),
+                    "first_invited_at": _iso(b.get("created_at")),
+                    "last_invited_at": _iso(last_invited),
+                    "valid_until": _iso(expires_at),
+                    "access_status": (
+                        "expired" if (expires_at and expires_at < now) else "active"
+                    ),
+                    "redeemed": bool(b.get("last_redeemed_at")),
+                    "application_status": app.get("status"),
+                }
+            )
+        invited.sort(key=lambda r: r.get("last_invited_at") or "", reverse=True)
+
+        return {"job_id": job_id_str, "total": len(invited), "invited": invited}, 200
+
     def get_batch_status(self, *, recruiter: Dict[str, Any], batch_id: str):
         """Poll-friendly status for a bulk invite batch (used by the frontend
         progress UI instead of waiting for one long final response)."""

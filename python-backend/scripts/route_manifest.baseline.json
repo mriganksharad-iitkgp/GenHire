@@ -920,6 +920,13 @@
     {
       "rule": "/api/recruiter/jobs/<job_id>/invites",
       "methods": [
+        "GET"
+      ],
+      "endpoint": "invites.list_invited_candidates"
+    },
+    {
+      "rule": "/api/recruiter/jobs/<job_id>/invites",
+      "methods": [
         "POST"
       ],
       "endpoint": "invites.send_invites"

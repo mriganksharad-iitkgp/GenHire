@@ -75,9 +75,13 @@ DEDUCTION_ACTIVITY_TYPES = {
     "practice_interview",
     "ai_jd_generation",
     "real_interview_recruiter",
+    "candidate_invite",
 }
 
-RECHARGE_ACTIVITY_TYPES = {"recharge", "migration_recharge"}
+# candidate_invite_refund rows are positive credit deltas (auto-refunds for
+# invite emails that never sent) — surfaced alongside recharges so the
+# recruiter can reconcile what an invite batch actually cost.
+RECHARGE_ACTIVITY_TYPES = {"recharge", "migration_recharge", "candidate_invite_refund"}
 
 
 def _is_proctored(tx):
@@ -108,6 +112,11 @@ def _credit_activity_label(tx):
         return "AI JD Generation"
     if tx_type == "migration_recharge":
         return "Migration Recharge"
+    if tx_type == "candidate_invite":
+        count = (tx.get("metadata") or {}).get("candidate_count")
+        return f"Candidate Invites ({count} invited)" if count else "Candidate Invites"
+    if tx_type == "candidate_invite_refund":
+        return "Candidate Invite Refund (email not delivered)"
     return _humanize_tx_type(tx_type)
 
 
@@ -237,8 +246,10 @@ def get_recruiter_cost_statistics(current_user):
         tx_list = wallet_service.get_transactions(
             recruiter_id, "recruiter", limit=100, kind="deductions"
         )
-        recharge_list = wallet_service.get_recharge_history(
-            recruiter_id, "recruiter", limit=100
+        # kind="all" (not "recharges") so candidate_invite_refund rows are
+        # included — RECHARGE_ACTIVITY_TYPES filters the display set below.
+        recharge_list = wallet_service.get_transactions(
+            recruiter_id, "recruiter", limit=100, kind="all"
         )
 
         monthly_map = {}

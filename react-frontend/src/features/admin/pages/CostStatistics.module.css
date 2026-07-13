@@ -114,6 +114,40 @@
   display: inline-block;
 }
 
+.quickFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quickFilterBtn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.quickFilterBtn:hover {
+  border-color: #64748b;
+  background: #f8fafc;
+}
+
+.quickFilterBtnActive {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.quickFilterBtnActive:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
 .timelineGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

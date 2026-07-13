@@ -215,7 +215,8 @@ const RecruiterCostStatistics = () => {
       const delta = Number(row?.delta_credits || 0);
       return (
         (txType === "ai_jd_generation" ||
-          txType === "real_interview_recruiter") &&
+          txType === "real_interview_recruiter" ||
+          txType === "candidate_invite") &&
         delta < 0
       );
     });
@@ -552,7 +553,7 @@ const RecruiterCostStatistics = () => {
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
               <h2>Recharge History</h2>
-              <p>Wallet credit additions, including migration recharges.</p>
+              <p>Wallet credit additions — recharges, migration credits, and automatic refunds for invite emails that failed to send.</p>
             </div>
             <div className={styles.activityTableSection}>
               {rechargeRows && rechargeRows.length > 0 ? (
@@ -676,7 +677,7 @@ const RecruiterCostStatistics = () => {
                   Current Wallet: {planName}
                 </div>
                 <p className={styles.planDescription}>
-                  Recharge packs are non-expiring. Credits are deducted at fixed rates for AI JD generation and real interviews.
+                  Recharge packs are non-expiring. Credits are deducted at fixed rates for AI JD generation, real interviews, and candidate email invites (1 credit per candidate, auto-refunded if the email fails).
                 </p>
               </div>
               <button

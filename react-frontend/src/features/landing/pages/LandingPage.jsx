@@ -161,6 +161,7 @@ const LandingPage = () => {
       { action: "Real Candidate Interview", cost: "30 credits" },
       { action: "Interview + Proctoring", cost: "50 credits" },
       { action: "AI Job Description Generation", cost: "10 credits" },
+      { action: "Candidate Invite (per email)", cost: "1 credit" },
       { action: "Signup Welcome Bonus", cost: "+100 free", highlight: true },
     ],
   };
@@ -184,7 +185,7 @@ const LandingPage = () => {
     {
       question: "How do wallet credits work?",
       answer:
-        "Credits are a fixed-cost currency — no subscriptions, no surprises. Candidates spend 30 credits per practice interview (50 with proctoring). Recruiters spend 30 credits per real interview (50 with proctoring) and 10 credits for AI job description generation. Credits never expire and are only deducted when a session completes successfully."
+        "Credits are a fixed-cost currency — no subscriptions, no surprises. Candidates spend 30 credits per practice interview (50 with proctoring). Recruiters spend 30 credits per real interview (50 with proctoring), 10 credits for AI job description generation, and 1 credit per candidate invited by email (auto-refunded if the email fails to send). Credits never expire and are only deducted when a session completes successfully."
     },
     {
       question: "What is interview proctoring?",
@@ -725,6 +726,7 @@ const LandingPage = () => {
                 <li><span>✓</span> 5,000 non-expiring credits</li>
                 <li><span>✓</span> AI JD generation billed at fixed credits</li>
                 <li><span>✓</span> Real interview deductions at fixed credits</li>
+                <li><span>✓</span> Candidate email invites at 1 credit each</li>
                 <li><span>✓</span> 100 signup bonus credits on first signup</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
@@ -746,6 +748,7 @@ const LandingPage = () => {
                 <li><span>✓</span> 10,000 non-expiring credits</li>
                 <li><span>✓</span> AI JD generation billed at fixed credits</li>
                 <li><span>✓</span> Real interview deductions at fixed credits</li>
+                <li><span>✓</span> Candidate email invites at 1 credit each</li>
                 <li><span>✓</span> Recharge anytime</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>

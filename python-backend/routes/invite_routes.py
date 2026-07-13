@@ -3,6 +3,7 @@
 Recruiter-facing (auth required):
   POST /api/recruiter/jobs/<job_id>/invites/preview  - parse + classify a list
   POST /api/recruiter/jobs/<job_id>/invites          - send invites
+  GET  /api/recruiter/jobs/<job_id>/invites          - list already-invited candidates
 
 Public (no auth):
   GET  /api/invite/redeem?token=<raw>                - lookup an invite token
@@ -77,6 +78,21 @@ def send_invites(current_user, job_id):
         invite_type=invite_type,
         source=source,
         validity_days=validity_days,
+    )
+    return jsonify(response), status_code
+
+
+@invite_bp.route("/recruiter/jobs/<job_id>/invites", methods=["GET"])
+@cross_origin()
+@token_required
+@recruiter_required
+@verified_required
+def list_invited_candidates(current_user, job_id):
+    """All candidates ever invited to this job — shown in the invite modal so
+    the recruiter knows who already holds an invite before sending more."""
+    response, status_code = _invite_controller.list_invited_candidates(
+        recruiter=current_user,
+        job_id=job_id,
     )
     return jsonify(response), status_code
 

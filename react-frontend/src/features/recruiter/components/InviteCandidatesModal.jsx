@@ -1,6 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./InviteCandidatesModal.module.css";
-import { previewInvites, sendInvites, getInviteBatchStatus } from "features/recruiter/api/inviteApi";
+import {
+  previewInvites,
+  sendInvites,
+  getInviteBatchStatus,
+  listInvitedCandidates,
+} from "features/recruiter/api/inviteApi";
 
 const BATCH_POLL_INTERVAL_MS = 1500;
 
@@ -13,6 +18,14 @@ const TABS = {
 // password login stop working after this many days (re-inviting refreshes it).
 const VALIDITY_OPTIONS = [3, 7, 14, 30];
 const DEFAULT_VALIDITY_DAYS = 7;
+
+const formatInviteDate = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+};
 
 const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   const [inviteType, setInviteType] = useState("apply");
@@ -28,6 +41,8 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [copiedLink, setCopiedLink] = useState("");
+  const [invited, setInvited] = useState(null); // null = loading, [] = none yet
+  const [reinviting, setReinviting] = useState("");
   const pollRef = useRef(null);
 
   const stopPolling = () => {
@@ -49,11 +64,29 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
       setInviteType("apply");
       setValidityDays(DEFAULT_VALIDITY_DAYS);
       setCopiedLink("");
+      setInvited(null);
+      setReinviting("");
     }
   }, [isOpen]);
 
   // Stop polling if the component unmounts mid-send.
   useEffect(() => () => stopPolling(), []);
+
+  const jobIdForList = job?._id || job?.id;
+
+  const loadInvited = useCallback(async () => {
+    if (!jobIdForList) return;
+    try {
+      const data = await listInvitedCandidates(jobIdForList);
+      setInvited(data.invited || []);
+    } catch {
+      setInvited([]); // list is informational — never block the modal on it
+    }
+  }, [jobIdForList]);
+
+  useEffect(() => {
+    if (isOpen && jobIdForList) loadInvited();
+  }, [isOpen, jobIdForList, loadInvited]);
 
   const jobTitle = job?.title || "this role";
   const sourceForCurrentTab = useMemo(() => {
@@ -89,22 +122,21 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
     });
   };
 
-  const handleSend = async () => {
-    if (!preview || preview.valid.length === 0) {
-      setError("Add at least one valid email before sending.");
-      return;
-    }
+  // Shared by the normal send flow and per-row re-invites: fire the batch,
+  // then poll it for live progress. Refreshes the invited-candidates list
+  // once the batch completes.
+  const startBatch = async (emails, source) => {
     setError("");
     setIsSending(true);
     const jobId = job._id || job.id;
     try {
-      // Sending now returns immediately (the batch dispatches emails in the
+      // Sending returns immediately (the batch dispatches emails in the
       // background) rather than blocking until every email is sent — poll
       // the batch status endpoint for live progress instead.
       const started = await sendInvites(jobId, {
-        emails: preview.valid,
+        emails,
         invite_type: inviteType,
-        source: sourceForCurrentTab,
+        source,
         validity_days: validityDays,
       });
       setResult({ ...started, totals: { sent: 0, skipped: 0, failed: 0 } });
@@ -117,15 +149,19 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
           if (status.status === "completed") {
             stopPolling();
             setIsSending(false);
+            setReinviting("");
+            loadInvited();
           }
         } catch (e) {
           stopPolling();
           setIsSending(false);
+          setReinviting("");
           setError(e.message || "Failed to check invite progress");
         }
       }, BATCH_POLL_INTERVAL_MS);
     } catch (e) {
       setIsSending(false);
+      setReinviting("");
       if (e?.data?.error_code === "insufficient_credits") {
         setError(
           e.data.error ||
@@ -135,6 +171,23 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
         setError(e.message || "Failed to send invites");
       }
     }
+  };
+
+  const handleSend = async () => {
+    if (!preview || preview.valid.length === 0) {
+      setError("Add at least one valid email before sending.");
+      return;
+    }
+    await startBatch(preview.valid, sourceForCurrentTab);
+  };
+
+  // Re-inviting an already-invited candidate is a normal invite for that one
+  // email: the backend refreshes their credentials, magic link, and validity
+  // window (and it costs 1 credit again, refunded if the email fails).
+  const handleReinvite = async (email) => {
+    if (isSending) return;
+    setReinviting(email);
+    await startBatch([email], "reinvite");
   };
 
   const canPreview =
@@ -262,6 +315,73 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                       }}
                     />
                     <div className={styles.helperText}>One or many. Duplicates and invalid addresses are auto-detected on preview.</div>
+                  </>
+                )}
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionLabel}>
+                  Invited candidates{Array.isArray(invited) ? ` (${invited.length})` : ""}
+                </div>
+                {invited === null ? (
+                  <div className={styles.helperText}>Loading invited candidates…</div>
+                ) : invited.length === 0 ? (
+                  <div className={styles.helperText}>
+                    No candidates have been invited to this job yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.invitedTableWrap}>
+                      <table className={styles.invitedTable}>
+                        <thead>
+                          <tr>
+                            <th>Invited Candidate</th>
+                            <th>Last Invited</th>
+                            <th>Valid Until</th>
+                            <th>Status</th>
+                            <th aria-label="Actions"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {invited.map((row) => (
+                            <tr key={row.invite_id || row.email}>
+                              <td className={styles.invitedEmail}>{row.email}</td>
+                              <td>{formatInviteDate(row.last_invited_at)}</td>
+                              <td>{formatInviteDate(row.valid_until)}</td>
+                              <td>
+                                <span
+                                  className={`${styles.chip} ${
+                                    row.access_status === "expired"
+                                      ? styles.chipInvalid
+                                      : styles.chipValid
+                                  }`}
+                                >
+                                  {row.access_status === "expired" ? "Expired" : "Active"}
+                                </span>
+                                {row.redeemed && (
+                                  <span className={styles.invitedMeta}> link used</span>
+                                )}
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className={styles.reinviteBtn}
+                                  disabled={isSending}
+                                  onClick={() => handleReinvite(row.email)}
+                                  title="Sends a fresh invite email with new credentials, a new magic link, and a new validity window. Costs 1 credit (refunded if the email fails)."
+                                >
+                                  {reinviting === row.email ? "Re-inviting…" : "Re-invite"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className={styles.helperText}>
+                      Re-inviting an already-invited candidate refreshes their credentials,
+                      magic link, and validity window — it costs 1 credit like any invite.
+                    </div>
                   </>
                 )}
               </div>

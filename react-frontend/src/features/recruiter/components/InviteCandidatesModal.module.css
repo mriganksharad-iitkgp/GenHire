@@ -233,6 +233,63 @@
 }
 .removeChip:hover { color: #b91c1c; }
 
+.invitedTableWrap {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.invitedTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.invitedTable th {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.invitedTable td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+  white-space: nowrap;
+}
+.invitedTable tr:last-child td { border-bottom: none; }
+.invitedEmail {
+  color: #111827;
+  font-weight: 500;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.invitedMeta {
+  font-size: 11px;
+  color: #6b7280;
+}
+.reinviteBtn {
+  background: #ffffff;
+  color: #4F46E5;
+  border: 1px solid #c7d2fe;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.reinviteBtn:hover { background: #eef2ff; }
+.reinviteBtn:disabled { color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; }
+
 .errorBanner {
   background: #fef2f2;
   border-left: 4px solid #ef4444;

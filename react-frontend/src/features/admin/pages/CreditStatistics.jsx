@@ -23,6 +23,47 @@ const formatDateInput = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+// Quick timeline presets. Every range ends at "present" (the To Date input is
+// fixed to today), so a preset only has to pick the start date.
+const QUICK_RANGES = [
+  { key: 'today', label: 'Today' },
+  { key: 'this_month', label: 'This Month' },
+  { key: 'last_30', label: 'Last 30 Days' },
+  { key: 'last_90', label: 'Last 90 Days' },
+  { key: 'this_year', label: 'This Year' },
+];
+
+const quickRangeStart = (key) => {
+  const ist = nowInIST();
+  if (key === 'this_month') return formatDateInput(new Date(ist.getFullYear(), ist.getMonth(), 1));
+  if (key === 'this_year') return formatDateInput(new Date(ist.getFullYear(), 0, 1));
+  if (key === 'last_30' || key === 'last_90') {
+    const start = new Date(ist);
+    start.setDate(start.getDate() - (key === 'last_30' ? 29 : 89));
+    return formatDateInput(start);
+  }
+  return formatDateInput(ist); // 'today'
+};
+
+const toCsvValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const stringValue = String(value).replace(/"/g, '""');
+  return `"${stringValue}"`;
+};
+
+const downloadCsv = (filename, rows) => {
+  const csvContent = rows.map((row) => row.map((cell) => toCsvValue(cell)).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 const CreditStatistics = () => {
   // Timeline defaults to the CURRENT MONTH in Indian time (IST).
   const todayDate = useMemo(() => nowInIST(), []);
@@ -144,6 +185,37 @@ const CreditStatistics = () => {
     }
   };
 
+  const handleExportCsv = () => {
+    const rows = [
+      ['Section', 'Name', 'Email', 'Current Balance (credits)', 'Last Recharge Date', 'Last Recharge Plan', 'Usage In Timeline (credits)'],
+      ['Summary', 'All candidate wallets', '', formatCredits(summaryTotals.candidateBalance), '', '', formatCredits(summaryTotals.candidateUsage)],
+      ['Summary', 'All recruiter wallets', '', formatCredits(summaryTotals.recruiterBalance), '', '', formatCredits(summaryTotals.recruiterUsage)],
+    ];
+    candidateCreditRows.forEach((row) => {
+      rows.push([
+        'Candidate',
+        row.name || '',
+        row.email || '',
+        formatCredits(row.current_balance_inr),
+        row.last_recharge_date ? String(row.last_recharge_date).slice(0, 10) : '',
+        row.last_recharge_plan || '',
+        formatCredits(row.total_usage_inr),
+      ]);
+    });
+    recruiterCreditRows.forEach((row) => {
+      rows.push([
+        'Recruiter',
+        row.name || '',
+        row.email || '',
+        formatCredits(row.current_balance_inr),
+        row.last_recharge_date ? String(row.last_recharge_date).slice(0, 10) : '',
+        row.last_recharge_plan || '',
+        formatCredits(row.total_usage_inr),
+      ]);
+    });
+    downloadCsv(`admin-credit-statistics-${startDate}-to-${endDate}.csv`, rows);
+  };
+
   const renderCreditCategories = (categories = []) => {
     const deductionCategory = categories.find((category) => category.key === 'deductions');
     const rows = deductionCategory?.lines || [];
@@ -196,6 +268,26 @@ const CreditStatistics = () => {
         <section className={styles.card}>
           <div className={styles.sectionTitleRow}>
             <h2>Timeline</h2>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={handleExportCsv}
+              disabled={loading || (!candidateCreditRows.length && !recruiterCreditRows.length)}
+            >
+              Export CSV
+            </button>
+          </div>
+          <div className={styles.quickFilters}>
+            {QUICK_RANGES.map((range) => (
+              <button
+                key={range.key}
+                type="button"
+                className={`${styles.quickFilterBtn} ${startDate === quickRangeStart(range.key) ? styles.quickFilterBtnActive : ''}`}
+                onClick={() => setStartDate(quickRangeStart(range.key))}
+              >
+                {range.label}
+              </button>
+            ))}
           </div>
           <div className={styles.timelineGrid}>
             <label className={styles.field}>
@@ -240,7 +332,7 @@ const CreditStatistics = () => {
                 <div className={styles.kpiCard}>
                   <h3>Recruiter Usage (Timeline)</h3>
                   <p>{formatCredits(summaryTotals.recruiterUsage)} credits</p>
-                  <small>Real interviews, proctored interviews, AI JD generation</small>
+                  <small>Real interviews, proctored interviews, AI JD generation, candidate invites</small>
                 </div>
               </div>
             </section>

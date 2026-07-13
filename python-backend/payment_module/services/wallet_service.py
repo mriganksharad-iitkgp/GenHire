@@ -18,6 +18,7 @@ class WalletService:
         "practice_interview",
         "ai_jd_generation",
         "real_interview_recruiter",
+        "candidate_invite",
     }
 
     def __init__(self, db):

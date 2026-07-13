@@ -46,6 +46,12 @@ export async function sendInvites(jobId, { emails, invite_type, source = "manual
   });
 }
 
+// Everyone ever invited to this job (newest re-invite first) — shown in the
+// invite modal so the recruiter can see existing invites before sending more.
+export async function listInvitedCandidates(jobId) {
+  return jsonRequest(`/recruiter/jobs/${jobId}/invites`, { method: "GET" });
+}
+
 // sendInvites now returns immediately (batch is dispatched in the
 // background) — poll this to drive a live progress UI instead of waiting
 // on one long-running request.

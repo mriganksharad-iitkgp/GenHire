@@ -272,9 +272,16 @@ class AuthController:
         token = self.generate_token(user['_id'])
 
         # Backfill normalized email_lower for legacy rows when we logged in via email.
+        # Invite-only burners must NEVER carry email_lower: the sparse unique index
+        # uq_users_email_lower_real would collide with the real account (or another
+        # burner) holding the same email, turning login into a DuplicateKeyError 500.
         stored_email = user.get('email') or ''
         canonical_email = self._normalize_email(stored_email)
-        if canonical_email and (stored_email != canonical_email or not user.get('email_lower')):
+        if (
+            not user.get('is_invite_only')
+            and canonical_email
+            and (stored_email != canonical_email or not user.get('email_lower'))
+        ):
             self.users.update_one(
                 {'_id': user['_id']},
                 {
