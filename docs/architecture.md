@@ -5,7 +5,7 @@ GenHire is an AI-powered hiring platform made of **three applications** that tal
 | Application | Technology | Folder | Role |
 |---|---|---|---|
 | Backend API | Python / Flask + Flask-SocketIO | `python-backend/` | All business logic, database, AI interview engine, payments, proctoring |
-| Web Frontend | React 19 (Create React App) | `react-frontend/` | The website candidates, recruiters, and admins use |
+| Web Frontend | React 19 (Vite) | `react-frontend/` | The website candidates, recruiters, and admins use |
 | Secure Browser | Electron (desktop app) | `secure-browser-kiosk/` | Locked-down kiosk that runs the actual AI interview |
 
 ## The Big Picture

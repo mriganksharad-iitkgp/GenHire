@@ -975,10 +975,12 @@ move to GCS.
 
 ### Stack
 
-React 19 on Create React App (`react-scripts`), `react-router-dom` v7, plain CSS
+React 19 on **Vite** (`vite`, `@vitejs/plugin-react`), `react-router-dom` v7, plain CSS
 Modules (no UI framework), `socket.io-client`, `@react-oauth/google`, `chart.js` +
 `react-chartjs-2` (cost dashboards), `lucide-react` (icons), `react-qr-code`,
-`@ffmpeg/ffmpeg` (WASM, client media processing).
+`@ffmpeg/ffmpeg` (WASM, client media processing). Env vars keep the `REACT_APP_`
+prefix — `vite.config.mjs` shims `process.env.REACT_APP_*` so the CRA → Vite move
+touched no source files.
 
 ### App shell (`App.jsx`)
 
@@ -1239,8 +1241,8 @@ chart.js + react-chartjs-2, lucide-react, react-qr-code, @ffmpeg/ffmpeg.
 - **Backend dev:** `python app.py` → `socketio.run(app, host="0.0.0.0", port=5000)`.
 - **Backend prod:** Cloud Run from `python-backend/Dockerfile` (Gunicorn + eventlet
   worker, `$PORT` default 8080), config in `gunicorn.conf.py` / `start_server.sh`.
-- **Frontend:** `npm start` (CRA dev, port 3000); `npm run build` (CI warnings
-  non-fatal via `cross-env CI=false`); hosted on Vercel (`vercel.json` SPA rewrites).
+- **Frontend:** `npm run dev` (Vite dev, port 3000; `npm start` aliases it);
+  `npm run build` (output in `build/`); hosted on Vercel (`vercel.json` SPA rewrites).
 - **Kiosk:** `npm start` (dev), `npm run dist` / `dist:mac` (installers).
 
 **Cold-start mitigation:** Cloud Run scales to zero when idle; the next request pays
@@ -1268,7 +1270,7 @@ python app.py                   # http://localhost:5000
 cd react-frontend
 cp .env.example .env            # set REACT_APP_API_URL=http://localhost:5000
                                 #     REACT_APP_GOOGLE_CLIENT_ID=...
-npm install && npm start        # http://localhost:3000
+npm install && npm run dev      # http://localhost:3000
 
 # 3. Secure browser (only for interview flows)
 cd secure-browser-kiosk

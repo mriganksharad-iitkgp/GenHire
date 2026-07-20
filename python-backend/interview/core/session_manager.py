@@ -80,7 +80,7 @@ class InterviewSessionManager:
     def _create_fallback_llm(primary_config: LLMConfig):
         """
         Create an LLM whose provider ORDER follows the app-wide priority
-        (LLM_PROVIDER_PRIORITY, default groq -> gemini -> openai — see
+        (LLM_PROVIDER_PRIORITY, default openai -> gemini -> groq — see
         services/llm_fallback_service.py). primary_config supplies the
         generation settings (temperature/max_tokens/timeout); INTERVIEW_LLM_MODEL
         pins the first provider's model when it belongs to that provider.

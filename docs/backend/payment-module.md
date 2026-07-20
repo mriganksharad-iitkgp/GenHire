@@ -94,6 +94,33 @@ Independently, Razorpay calls `POST /api/payment/webhooks/razorpay`
 server-to-server even if the browser never completes the verify call.
 Test mode is auto-detected from a `rzp_test_` key prefix.
 
+### Crediting is idempotent and self-healing (no lost credits)
+
+A payment can succeed at Razorpay but fail to credit the wallet (a transient
+DB error, etc.). That money must never vanish silently. Both the synchronous
+`verify_payment` path and the `payment.captured` webhook route the credit
+through one shared helper, `PaymentService._apply_recharge_credit`:
+
+- The credit is a `wallet_service.credit_wallet` call keyed
+  `recharge:<order_id>`, so calling it from **both** paths can never
+  double-credit — whichever runs second is an idempotent replay.
+- On success the payment is stamped `credit_status: "completed"` and any open
+  reconciliation row is resolved.
+- On failure it logs at **ERROR**, stamps the payment
+  `credit_status: "failed"` + `needs_reconciliation: true`, and upserts a row
+  into the **`payment_reconciliations`** collection — a durable, queryable
+  queue (deduped on `razorpay_order_id`) for an operator to replay.
+- `verify_payment` still returns `success: true` (the charge did happen) but
+  adds `credit_status: "pending_reconciliation"` so the UI can show "credits
+  pending" instead of a balance the user hasn't received yet.
+- The webhook is the automatic self-heal: it only short-circuits a
+  `SUCCEEDED` order when `credit_status == "completed"`, otherwise it replays
+  the idempotent credit and clears the flag.
+
+> Operational note: `payment_reconciliations` has no admin UI yet — surface
+> unresolved rows (`resolved: false`) via an alert/report before scale. See
+> [production-readiness.md](../production-readiness.md).
+
 ## WalletService — the single source of truth for balances
 
 All balance changes go through `wallet_service.py`:

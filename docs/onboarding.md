@@ -93,7 +93,7 @@ REACT_APP_GOOGLE_CLIENT_ID=<same client id as backend>
 Run it:
 
 ```bash
-npm start            # http://localhost:3000
+npm run dev          # Vite dev server, http://localhost:3000 (npm start is an alias)
 ```
 
 Port 3000 matters: the backend's default `CORS_ORIGINS` allows

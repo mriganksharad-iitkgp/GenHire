@@ -12,7 +12,7 @@ Design Decisions:
 import logging
 import uuid
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from bson import ObjectId
 from pymongo import ReturnDocument
@@ -22,6 +22,7 @@ from ..models.plan import Plan
 from ..services.razorpay_service import RazorpayService
 from ..services.plan_service import PlanService
 from ..services.wallet_service import WalletService
+from ..services.subscription_service import SubscriptionService
 from ..config.settings import PaymentConfig
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ class PaymentService:
         self.razorpay_service = RazorpayService()
         self.plan_service = PlanService(db)
         self.wallet_service = WalletService(db)
+        # Used by the order.paid webhook handler to activate subscriptions;
+        # instantiated here so that path never hits an undefined attribute.
+        self.subscription_service = SubscriptionService(db)
 
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
@@ -181,6 +185,136 @@ class PaymentService:
                 "error_code": "initiation_failed",
             }
 
+    def _apply_recharge_credit(
+        self,
+        payment_doc: Dict[str, Any],
+        payment: "Payment",
+        razorpay_order_id: str,
+        razorpay_payment_id: Optional[str],
+    ) -> Tuple[Dict[str, Any], str, int]:
+        """Credit the buyer's wallet for a succeeded recharge and record the
+        outcome durably on the payment record.
+
+        credit_wallet is idempotent on ``recharge:{order_id}``, so this is safe
+        to call from BOTH the synchronous verify path and the async webhook
+        path — whichever runs second is a no-op replay, never a double credit.
+
+        The critical robustness guarantee: a payment can succeed at Razorpay but
+        fail to credit the wallet (DB blip, etc.). We must never let that money
+        vanish silently. On failure we flag the payment
+        (``credit_status='failed'``, ``needs_reconciliation=True``), log at
+        ERROR, and upsert a row into ``payment_reconciliations`` — a durable,
+        queryable queue an admin/ops can replay. The webhook then self-heals the
+        same idempotent credit when it arrives.
+
+        Returns ``(credit_result, audience, recharge_credits)``.
+        """
+        metadata = payment_doc.get("metadata", {}) or {}
+        audience = (
+            metadata.get("plan_audience")
+            or metadata.get("buyer_type")
+            or "recruiter"
+        )
+        if audience == "student":
+            audience = "candidate"
+
+        recharge_credits = int(metadata.get("recharge_credits", 0) or 0)
+        if recharge_credits <= 0:
+            plan_id = payment_doc.get("plan_id")
+            if plan_id:
+                plan = self.plan_service.get_plan_by_id(str(plan_id), audience=audience)
+                if plan:
+                    recharge_credits = int(plan.credits_allocated or 0)
+
+        owner_id = str(payment_doc.get("employer_id"))
+        amount_paise = int(payment_doc.get("amount_paise", 0) or 0)
+
+        credited = self.wallet_service.credit_wallet(
+            owner_id=owner_id,
+            audience=audience,
+            credits=recharge_credits,
+            transaction_type="recharge",
+            reference_type="payment",
+            reference_id=str(payment._id),
+            metadata={
+                "plan_id": str(payment_doc.get("plan_id") or ""),
+                "razorpay_order_id": razorpay_order_id,
+                "razorpay_payment_id": razorpay_payment_id,
+                "amount_paise": amount_paise,
+                "plan_name": metadata.get("plan_name"),
+                "plan_slug": metadata.get("plan_slug"),
+                "recharge_credits": recharge_credits,
+            },
+            idempotency_key=f"recharge:{razorpay_order_id}",
+        )
+
+        if credited.get("success"):
+            self.collection.update_one(
+                {"_id": payment._id},
+                {
+                    "$set": {
+                        "credit_status": "completed",
+                        "credit_completed_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                    "$unset": {"needs_reconciliation": "", "credit_error": ""},
+                },
+            )
+            # Clear any prior reconciliation row now that the credit landed.
+            try:
+                self.db["payment_reconciliations"].update_one(
+                    {"razorpay_order_id": razorpay_order_id},
+                    {"$set": {"resolved": True, "resolved_at": datetime.utcnow()}},
+                )
+            except Exception:
+                pass
+        else:
+            error_msg = credited.get("error", "unknown error")
+            logger.error(
+                "CRITICAL: wallet credit FAILED after a SUCCEEDED payment. "
+                "payment_id=%s order=%s owner=%s credits=%s error=%s — flagged "
+                "for reconciliation (payment_reconciliations).",
+                str(payment._id), razorpay_order_id, owner_id, recharge_credits, error_msg,
+            )
+            self.collection.update_one(
+                {"_id": payment._id},
+                {
+                    "$set": {
+                        "credit_status": "failed",
+                        "credit_error": error_msg,
+                        "needs_reconciliation": True,
+                        "updated_at": datetime.utcnow(),
+                    }
+                },
+            )
+            try:
+                self.db["payment_reconciliations"].update_one(
+                    {"razorpay_order_id": razorpay_order_id},
+                    {
+                        "$set": {
+                            "payment_id": str(payment._id),
+                            "owner_id": owner_id,
+                            "audience": audience,
+                            "recharge_credits": recharge_credits,
+                            "razorpay_order_id": razorpay_order_id,
+                            "razorpay_payment_id": razorpay_payment_id,
+                            "amount_paise": amount_paise,
+                            "error": error_msg,
+                            "resolved": False,
+                            "updated_at": datetime.utcnow(),
+                        },
+                        "$setOnInsert": {"created_at": datetime.utcnow()},
+                    },
+                    upsert=True,
+                )
+            except Exception as rec_exc:
+                logger.error(
+                    "Failed to enqueue reconciliation for order %s: %s",
+                    razorpay_order_id, rec_exc,
+                )
+
+        return credited, audience, recharge_credits
+
     def verify_payment(
         self,
         razorpay_order_id: str,
@@ -255,50 +389,11 @@ class PaymentService:
 
             payment = Payment.from_dict(update_result)
 
-            audience = (
-                update_result.get("metadata", {}).get("plan_audience")
-                or update_result.get("metadata", {}).get("buyer_type")
-                or "recruiter"
-            )
-            if audience == "student":
-                audience = "candidate"
-
-            recharge_credits = int(
-                update_result.get("metadata", {}).get("recharge_credits", 0) or 0
-            )
-            if recharge_credits <= 0:
-                plan_id = update_result.get("plan_id")
-                if plan_id:
-                    plan = self.plan_service.get_plan_by_id(str(plan_id), audience=audience)
-                    if plan:
-                        recharge_credits = int(plan.credits_allocated or 0)
-
-            credited = self.wallet_service.credit_wallet(
-                owner_id=str(update_result.get("employer_id")),
-                audience=audience,
-                credits=recharge_credits,
-                transaction_type="recharge",
-                reference_type="payment",
-                reference_id=str(payment._id),
-                metadata={
-                    "plan_id": str(update_result.get("plan_id") or ""),
-                    "razorpay_order_id": razorpay_order_id,
-                    "razorpay_payment_id": razorpay_payment_id,
-                    "amount_paise": int(update_result.get("amount_paise", 0) or 0),
-                    "plan_name": update_result.get("metadata", {}).get("plan_name"),
-                    "plan_slug": update_result.get("metadata", {}).get("plan_slug"),
-                    "recharge_credits": recharge_credits,
-                },
-                idempotency_key=f"recharge:{razorpay_order_id}",
+            credited, audience, _ = self._apply_recharge_credit(
+                update_result, payment, razorpay_order_id, razorpay_payment_id
             )
 
-            # Use configured recharge credits from payment metadata.
-            if not credited.get("success"):
-                logger.warning(
-                    f"Wallet recharge failed for payment {payment._id}: {credited.get('error')}"
-                )
-
-            return {
+            response = {
                 "success": True,
                 "message": "Payment verified successfully",
                 "payment_id": str(payment._id),
@@ -307,6 +402,18 @@ class PaymentService:
                     audience=audience,
                 ),
             }
+            # The payment itself succeeded. If crediting the wallet did NOT, the
+            # order is already flagged for reconciliation (see
+            # _apply_recharge_credit) and the Razorpay webhook will replay the
+            # same idempotent credit. Signal the client so it shows "credits
+            # pending" instead of a balance it hasn't actually received yet.
+            if not credited.get("success"):
+                response["credit_status"] = "pending_reconciliation"
+                response["message"] = (
+                    "Payment received. Your credits are being finalized — if they "
+                    "do not appear shortly, contact support with your payment id."
+                )
+            return response
 
         except Exception as e:
             logger.error(f"Payment verification error: {str(e)}")
@@ -395,7 +502,11 @@ class PaymentService:
             razorpay_payment_id = payment_entity.get("id")
             razorpay_order_id = payment_entity.get("order_id")
 
-            # Check for duplicate processing
+            # Skip only when this order is fully done — succeeded AND already
+            # credited. If a prior (synchronous verify) attempt marked the
+            # payment succeeded but the wallet credit failed, we must NOT
+            # short-circuit: this webhook is the self-heal path that replays the
+            # idempotent credit and clears the reconciliation flag.
             existing_payment = self.collection.find_one(
                 {
                     "razorpay_order_id": razorpay_order_id,
@@ -403,9 +514,9 @@ class PaymentService:
                 }
             )
 
-            if existing_payment:
+            if existing_payment and existing_payment.get("credit_status") == "completed":
                 logger.info(
-                    f"Duplicate webhook for order {razorpay_order_id}, already processed"
+                    f"Duplicate webhook for order {razorpay_order_id}, already credited"
                 )
                 return {"success": True, "message": "Already processed"}
 
@@ -430,34 +541,11 @@ class PaymentService:
 
             payment = Payment.from_dict(update_result)
 
-            audience = (
-                update_result.get("metadata", {}).get("plan_audience")
-                or update_result.get("metadata", {}).get("buyer_type")
-                or "recruiter"
-            )
-            if audience == "student":
-                audience = "candidate"
-
-            recharge_credits = int(
-                update_result.get("metadata", {}).get("recharge_credits", 0) or 0
-            )
-            self.wallet_service.credit_wallet(
-                owner_id=str(update_result.get("employer_id")),
-                audience=audience,
-                credits=recharge_credits,
-                transaction_type="recharge",
-                reference_type="payment",
-                reference_id=str(payment._id),
-                metadata={
-                    "plan_id": str(update_result.get("plan_id") or ""),
-                    "razorpay_order_id": razorpay_order_id,
-                    "razorpay_payment_id": razorpay_payment_id,
-                    "amount_paise": int(update_result.get("amount_paise", 0) or 0),
-                    "plan_name": update_result.get("metadata", {}).get("plan_name"),
-                    "plan_slug": update_result.get("metadata", {}).get("plan_slug"),
-                    "recharge_credits": recharge_credits,
-                },
-                idempotency_key=f"recharge:{razorpay_order_id}",
+            # Idempotent credit shared with the synchronous verify path; on
+            # failure it flags the payment + enqueues reconciliation instead of
+            # losing the customer's credits silently.
+            self._apply_recharge_credit(
+                update_result, payment, razorpay_order_id, razorpay_payment_id
             )
 
             return {

@@ -1,7 +1,7 @@
 # Frontend — Simple Overview
 
 **What it is:** the GenHire website — a **React 19** single-page app (folder
-`react-frontend/`, built with Create React App) used by candidates,
+`react-frontend/`, built with **Vite**) used by candidates,
 recruiters, and admins in a normal browser.
 
 **In one sentence:** it renders the dashboards and forms, calls the Flask
@@ -74,8 +74,13 @@ cd react-frontend
 npm install
 # .env: REACT_APP_API_URL=http://localhost:5000
 #       REACT_APP_GOOGLE_CLIENT_ID=<your client id>
-npm start                    # dev server on http://localhost:3000
-npm run build                # production build (deployed via vercel.json)
+npm run dev                  # Vite dev server on http://localhost:3000 (npm start is an alias)
+npm run build                # production build to build/ (deployed via vercel.json)
+npm run preview              # serve the production build locally
 ```
+
+> Env vars keep the `REACT_APP_` prefix from the old Create React App setup:
+> Vite's config (`vite.config.mjs`) shims `process.env.REACT_APP_*` so no call
+> sites had to change during the CRA → Vite migration.
 
 **Want the details?** → [frontend-detailed.md](frontend-detailed.md)

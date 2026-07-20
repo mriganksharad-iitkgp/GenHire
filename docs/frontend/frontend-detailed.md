@@ -1,22 +1,31 @@
 # Frontend — Detailed Wiring
 
 Folder: `react-frontend/`. A single-page application built with **React 19 on
-Create React App** (`react-scripts`), plain CSS Modules for styling (no UI
+Vite** (`vite`, `@vitejs/plugin-react`), plain CSS Modules for styling (no UI
 framework), `react-router-dom` v7 for routing, and `socket.io-client` for
 real-time updates.
 
 ## Environment variables
+
+Variables keep the `REACT_APP_` prefix inherited from the original Create React
+App setup. `vite.config.mjs` loads every `REACT_APP_*` var for the active mode
+and statically shims `process.env` with them, so all call sites read
+`process.env.REACT_APP_*` unchanged (unset vars read back as `undefined`, as
+they did under CRA).
 
 | Variable | Purpose |
 |---|---|
 | `REACT_APP_API_URL` | Backend origin, e.g. `http://localhost:5000`. Used for Socket.IO and direct fetches. |
 | `REACT_APP_API_BASE` | Optional full API base; defaults to `${REACT_APP_API_URL}/api`. |
 | `REACT_APP_GOOGLE_CLIENT_ID` | Google OAuth client id for `@react-oauth/google`. |
+| `REACT_APP_TOKEN_KEY` / `REACT_APP_USER_KEY` | localStorage keys for the JWT and user record. |
+| `REACT_APP_KIOSK_DOWNLOAD_URL` | Installer link offered when the desktop kiosk app isn't installed. |
 
-Run with `npm run dev` / `npm start` (CRA dev server, port 3000 — matching the
-backend's default `CORS_ORIGINS`). Build with `npm run build` (CI warnings
-non-fatal via `cross-env CI=false`). `vercel.json` at the repo root configures
-SPA hosting on Vercel.
+Run with `npm run dev` (Vite dev server, port 3000 — matching the backend's
+default `CORS_ORIGINS`; `npm start` is an alias). Build with `npm run build`
+(output in `build/`, `.env.production` values baked in); `npm run preview`
+serves that build locally. `vercel.json` at the repo root configures SPA
+hosting on Vercel.
 
 ## Application shell (`src/App.jsx`)
 

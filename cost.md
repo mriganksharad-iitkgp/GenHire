@@ -10,12 +10,12 @@
 
 | Component | What runs there | Provider |
 |---|---|---|
-| `react-frontend/` | CRA SPA | Vercel |
+| `react-frontend/` | Vite SPA | Vercel |
 | `python-backend/` | Flask + Socket.IO (gunicorn, 1 eventlet worker) | Google Cloud Run (europe-west1) |
 | Database | MongoDB (users, jobs, applications, interviews, GridFS files) | MongoDB Atlas |
 | Object storage | CVs, JDs, interview + mobile recordings, gaze artifacts | Google Cloud Storage |
 | Speech | STT (interview answers), TTS (interviewer voice) | Google Cloud Speech / TTS |
-| LLM chain | Interview Q-gen + evaluation, CV parse/score, face match, JD gen | **Groq (primary) → Gemini → OpenAI** (`LLM_PROVIDER_PRIORITY`) |
+| LLM chain | Interview Q-gen + evaluation, CV parse/score, face match, JD gen | **OpenAI → Gemini → Groq** (`LLM_PROVIDER_PRIORITY`, current default) |
 | Email | Verification, invites, notifications | ZeptoMail (primary; Mailgun sandbox fallback) |
 | Payments | Recharge packs | Razorpay (2% of transaction value — a revenue cost, excluded from infra totals) |
 | Kiosk | Electron desktop app | one-time build, no runtime cost |
@@ -128,16 +128,19 @@ days. Practice ≈ half of the above and no recordings.
 
 ## 5. What today's env defaults mean for cost
 
-- `LLM_PROVIDER_PRIORITY=groq,gemini,openai` — Groq answers everything while
-  its quota lasts. **Groq's free tier is rate-limited, not metered**: at 100
-  DAU you may pay ~$0 for LLM; at 1,000+ DAU move to Groq's paid tier (priced
-  above) or the chain will fall over to Gemini/OpenAI.
+- `LLM_PROVIDER_PRIORITY=openai,gemini,groq` — OpenAI is tried first, then
+  Gemini, then Groq. Because of the key states below, in practice Gemini and
+  Groq answer most requests today; each leg has a cooldown so a failing leg
+  costs latency, not repeated failures.
+- The OpenAI key is **valid but has zero inference quota** (no billing credit)
+  — so the primary leg fails over immediately at runtime. (Its separate
+  *admin* key does work for the Costs API used by the admin cost page.)
 - The Gemini key is **free-tier with zero quota on 2.x-flash models** — as a
-  fallback leg it only works on `gemini-flash-lite-latest` until billing is
-  enabled on that Google project.
-- The OpenAI key is currently **invalid** — the tertiary leg is dead until
-  replaced (the chain's cooldown makes this cost latency only when both
-  Groq and Gemini fail).
+  leg it only works on `gemini-flash-lite-latest` until billing is enabled on
+  that Google project.
+- Groq is **working on its free tier** (rate-limited, not metered): at 100 DAU
+  you may pay ~$0 for LLM; at 1,000+ DAU move to Groq's paid tier (priced
+  above) or add real quota to the OpenAI/Gemini legs.
 - Practice interviews are credit-gated (`CANDIDATE_PRACTICE_CREDITS=30` per
   session, signup bonus 100) — the credit economy already throttles abuse.
 

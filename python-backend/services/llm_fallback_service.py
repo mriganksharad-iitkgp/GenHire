@@ -3,10 +3,11 @@ LLM Fallback Service — the app-wide resilient LLM chain with automatic
 failover on quota exhaustion.
 
 Provider ORDER comes from the environment (primary -> secondary -> tertiary):
-    LLM_PROVIDER_PRIORITY=groq,gemini,openai        (single-var form)
+    LLM_PROVIDER_PRIORITY=openai,gemini,groq        (single-var form)
 or  LLM_PRIMARY_PROVIDER / LLM_SECONDARY_PROVIDER / LLM_TERTIARY_PROVIDER
 
-Default order: groq, gemini, openai. "gemini" and "google" are aliases.
+Default order: openai, gemini, groq (see _DEFAULT_PRIORITY below).
+"gemini" and "google" are aliases.
 Per-provider default models: LLM_GROQ_MODEL, LLM_GEMINI_MODEL,
 LLM_OPENAI_MODEL; call sites can pass task-specific model_overrides.
 

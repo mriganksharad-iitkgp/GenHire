@@ -66,7 +66,7 @@ python app.py                         # http://localhost:5000
 
 # Frontend (needs REACT_APP_API_URL + REACT_APP_GOOGLE_CLIENT_ID in .env)
 cd react-frontend
-npm install && npm start              # http://localhost:3000
+npm install && npm run dev            # Vite dev server, http://localhost:3000
 
 # Secure browser (only needed for interview flows)
 cd secure-browser-kiosk
