@@ -382,6 +382,163 @@
   flex-shrink: 0;
 }
 
+.successMessage {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #d1fae5;
+  border: 1px solid #10b981;
+  border-radius: 12px;
+  color: #065f46;
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+.successMessage i {
+  color: #10b981;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Unblocking a candidate who has neither a CV nor profile details ─────── */
+
+.getStarted {
+  padding: 20px;
+  margin-bottom: 24px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+}
+
+.getStartedText {
+  margin: 0 0 14px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3730a3;
+}
+
+.getStartedActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primaryAction {
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.primaryAction:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.secondaryAction {
+  border: 2px solid #c7d2fe;
+  background: white;
+  color: #4338ca;
+}
+
+.secondaryAction:hover:not(:disabled) {
+  border-color: #818cf8;
+  background: #f5f3ff;
+}
+
+.primaryAction:disabled,
+.secondaryAction:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.getStartedOr {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Persistent "attach another" affordance below the CV list. */
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 10px;
+  background: white;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.uploadButton:hover:not(:disabled) {
+  border-color: #667eea;
+  color: #4f46e5;
+  background: #f5f3ff;
+}
+
+.uploadButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.uploadHint {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Inline escape hatch on the incomplete profile-details card. */
+.inlineFixButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 2px solid #fbbf24;
+  border-radius: 10px;
+  background: white;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inlineFixButton:hover {
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+
 .loadingState {
   text-align: center;
   padding: 48px 16px;

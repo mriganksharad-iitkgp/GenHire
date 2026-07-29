@@ -1,18 +1,33 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCandidateData } from 'features/candidate/context/CandidateDataContext';
-import { getProfile } from 'shared/api/endpoints';
+import { getProfile, updateCvDetails } from 'shared/api/endpoints';
 import { isProfileCvComplete } from 'shared/utils/cvDetails';
+import cvService from 'features/candidate/api/cvService';
+import CVDetailsForm from 'features/candidate/components/CVDetailsForm';
 import styles from './CVSelectionModal.module.css';
 
 import { getToken } from "shared/utils/session";
-const CVSelectionModal = ({ 
-  isOpen, 
-  onClose, 
+
+// Mirrors the limits enforced by CVController (PDF only, 10 MB, 5 per user) so
+// a doomed upload is rejected here instead of after a round trip.
+const MAX_CV_SIZE_MB = 10;
+const MAX_CVS_PER_USER = 5;
+
+const CVSelectionModal = ({
+  isOpen,
+  onClose,
   onSubmit,
   jobTitle,
   mode = 'apply' // 'apply', 'practice', or 'check_score'
 }) => {
-  const { cvs: cachedCvs, cvsLoaded, loadCvsCached, loadProfileCached } = useCandidateData();
+  const {
+    cvs: cachedCvs,
+    cvsLoaded,
+    loadCvsCached,
+    loadProfileCached,
+    invalidateCvs,
+    updateCachedProfile,
+  } = useCandidateData();
   const [cvList, setCvList] = useState([]);
   const [selectedCvId, setSelectedCvId] = useState(null);
   const [useManualCV, setUseManualCV] = useState(false);
@@ -21,15 +36,44 @@ const CVSelectionModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualCVComplete, setManualCVComplete] = useState(false);
 
+  // Inline "unblock myself" state — a candidate with neither an uploaded CV nor
+  // completed profile details used to hit a dead end here, told to go to their
+  // profile page with no way to act and no way back into the application.
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState(null);
+  const [showCvDetailsForm, setShowCvDetailsForm] = useState(false);
+  const [existingCvDetails, setExistingCvDetails] = useState(null);
+  const fileInputRef = useRef(null);
+
   const checkManualCVCompletion = useCallback(async () => {
     try {
       const profile = await loadProfileCached(false, getProfile);
+      setExistingCvDetails(profile?.cv_details || null);
       setManualCVComplete(isProfileCvComplete(profile?.cv_details));
     } catch (err) {
       console.error('Error checking manual CV:', err);
       setManualCVComplete(false);
     }
   }, [loadProfileCached]);
+
+  // Picks the best default: primary CV, else the first CV, else profile details.
+  const applyDefaultSelection = useCallback((cvs, preferredCvId = null) => {
+    if (preferredCvId) {
+      setSelectedCvId(preferredCvId);
+      setUseManualCV(false);
+      return;
+    }
+    const primaryCV = cvs?.find(cv => cv.is_primary);
+    if (primaryCV) {
+      setSelectedCvId(primaryCV.cv_id);
+      setUseManualCV(false);
+    } else if (cvs?.length > 0) {
+      setSelectedCvId(cvs[0].cv_id);
+      setUseManualCV(false);
+    } else {
+      setUseManualCV(true);
+    }
+  }, []);
 
   const fetchCVs = useCallback(async () => {
     setLoading(true);
@@ -52,19 +96,7 @@ const CVSelectionModal = ({
       });
 
       setCvList(cvs);
-      
-      // Auto-select primary CV if available
-      const primaryCV = cvs?.find(cv => cv.is_primary);
-      if (primaryCV) {
-        setSelectedCvId(primaryCV.cv_id);
-        setUseManualCV(false);
-      } else if (cvs?.length > 0) {
-        setSelectedCvId(cvs[0].cv_id);
-        setUseManualCV(false);
-      } else {
-        // No CVs uploaded, default to manual CV
-        setUseManualCV(true);
-      }
+      applyDefaultSelection(cvs);
     } catch (err) {
       console.error('Error fetching CVs:', err);
       setError('Failed to load CVs');
@@ -72,7 +104,7 @@ const CVSelectionModal = ({
     } finally {
       setLoading(false);
     }
-  }, [loadCvsCached]);
+  }, [loadCvsCached, applyDefaultSelection]);
 
   useEffect(() => {
     if (isOpen) {
@@ -82,28 +114,94 @@ const CVSelectionModal = ({
         fetchCVs();
       } else {
         // Use cached data - instant loading!
-        console.log('📦 Using cached CVs from context');
         setCvList(cachedCvs);
         setLoading(false);
-        
-        // Auto-select primary CV if available
-        const primaryCV = cachedCvs?.find(cv => cv.is_primary);
-        if (primaryCV) {
-          setSelectedCvId(primaryCV.cv_id);
-          setUseManualCV(false);
-        } else if (cachedCvs?.length > 0) {
-          setSelectedCvId(cachedCvs[0].cv_id);
-          setUseManualCV(false);
-        } else {
-          setUseManualCV(true);
-        }
+        applyDefaultSelection(cachedCvs);
       }
     } else {
-      // Reset submitting state when modal closes
+      // Reset transient state when modal closes
       setIsSubmitting(false);
       setError(null);
+      setUploadNotice(null);
+      setShowCvDetailsForm(false);
     }
-  }, [isOpen, cvsLoaded, cachedCvs, checkManualCVCompletion, fetchCVs]);
+  }, [isOpen, cvsLoaded, cachedCvs, checkManualCVCompletion, fetchCVs, applyDefaultSelection]);
+
+  /**
+   * Attach a CV PDF without leaving the application. On success the new CV is
+   * selected, so the candidate can submit immediately.
+   */
+  const handleFileSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // let the same file be re-picked after an error
+    if (!file) return;
+
+    if (!/\.pdf$/i.test(file.name)) {
+      setError('Only PDF files are supported. Please attach your CV as a PDF.');
+      return;
+    }
+    if (file.size > MAX_CV_SIZE_MB * 1024 * 1024) {
+      setError(`That file is larger than ${MAX_CV_SIZE_MB} MB. Please attach a smaller PDF.`);
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    setUploadNotice(null);
+    try {
+      // First CV becomes the primary one so future applications default to it.
+      const result = await cvService.uploadCV(file, cvList.length === 0);
+      const newCvId = result?.cv?.cv_id || null;
+
+      invalidateCvs();
+      const cvs = await loadCvsCached(true, async () => {
+        const data = await cvService.listCVs();
+        return data?.cvs || [];
+      });
+
+      setCvList(cvs);
+      applyDefaultSelection(cvs, newCvId);
+      setUploadNotice(`"${file.name}" attached — you can submit your application now.`);
+    } catch (err) {
+      console.error('CV upload failed:', err);
+      setError(err?.message || 'Could not upload that CV. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  /**
+   * Save profile CV details entered inline, then select that option so the
+   * candidate lands back on a submittable application.
+   */
+  const handleSaveCvDetails = async (formData) => {
+    try {
+      await updateCvDetails(formData);
+      updateCachedProfile(prev => ({ ...(prev || {}), cv_details: formData }));
+      setExistingCvDetails(formData);
+      const complete = isProfileCvComplete(formData);
+      setManualCVComplete(complete);
+      setShowCvDetailsForm(false);
+      setError(null);
+      if (complete) {
+        setUseManualCV(true);
+        setSelectedCvId(null);
+        setUploadNotice('Profile CV details saved — you can submit your application now.');
+      } else {
+        setError('Saved, but some required CV details are still missing. Please complete education, technical skills, a project, and expected salary.');
+      }
+    } catch (err) {
+      console.error('Error saving CV details:', err);
+      setError(err?.message || 'Could not save your CV details. Please try again.');
+      // Rethrow so CVDetailsForm stays open showing its own error toast,
+      // instead of reporting "saved successfully" over a failed write.
+      throw err;
+    }
+  };
+
+  // Nothing to submit with — surfaced on the button instead of failing on click.
+  const hasUsableChoice = useManualCV ? manualCVComplete : !!selectedCvId;
+  const atCvLimit = cvList.length >= MAX_CVS_PER_USER;
 
   const handleSubmit = () => {
     // Validation
@@ -128,7 +226,7 @@ const CVSelectionModal = ({
 
   const formatFileSize = (bytes) => {
     if (!bytes) return 'N/A';
-    return bytes < 1024 * 1024 
+    return bytes < 1024 * 1024
       ? `${(bytes / 1024).toFixed(1)} KB`
       : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
@@ -141,6 +239,9 @@ const CVSelectionModal = ({
       day: 'numeric'
     });
   };
+
+  const actionNoun =
+    mode === 'practice' ? 'start practice' : mode === 'check_score' ? 'check your score' : 'apply';
 
   if (!isOpen) return null;
 
@@ -170,6 +271,36 @@ const CVSelectionModal = ({
             </div>
           ) : (
             <>
+              {/* Both ways forward, offered up front when neither is ready yet,
+                  so the candidate never has to leave to unblock themselves. */}
+              {!hasUsableChoice && (
+                <div className={styles.getStarted}>
+                  <p className={styles.getStartedText}>
+                    To {actionNoun}, choose one of these — either works:
+                  </p>
+                  <div className={styles.getStartedActions}>
+                    <button
+                      type="button"
+                      className={styles.primaryAction}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading || atCvLimit}
+                    >
+                      <i className={`fa ${isUploading ? 'fa-spinner fa-spin' : 'fa-upload'}`}></i>{' '}
+                      {isUploading ? 'Uploading…' : 'Attach CV (PDF)'}
+                    </button>
+                    <span className={styles.getStartedOr}>or</span>
+                    <button
+                      type="button"
+                      className={styles.secondaryAction}
+                      onClick={() => setShowCvDetailsForm(true)}
+                      disabled={isUploading}
+                    >
+                      <i className="fa fa-pencil-square-o"></i> Fill in CV details
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Uploaded CV Options */}
               {cvList.length > 0 && (
                 <div className={styles.section}>
@@ -177,10 +308,7 @@ const CVSelectionModal = ({
                     <i className="fa fa-file-pdf-o"></i> Uploaded CVs/Resumes
                   </h3>
                   <div className={styles.cvList}>
-                    {cvList.map((cv, index) => {
-                      console.log(`📄 Rendering CV ${index}:`, cv);
-                      console.log(`📄 Filename for CV ${index}:`, cv.filename);
-                      return (
+                    {cvList.map((cv, index) => (
                       <div
                         key={cv.cv_id}
                         className={`${styles.cvCard} ${
@@ -224,11 +352,40 @@ const CVSelectionModal = ({
                           </div>
                         </div>
                       </div>
-                    );
-                    })}
+                    ))}
                   </div>
                 </div>
               )}
+
+              {/* Attach another CV — always available, not just when empty. */}
+              <div className={styles.uploadRow}>
+                <button
+                  type="button"
+                  className={styles.uploadButton}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || atCvLimit}
+                >
+                  <i className={`fa ${isUploading ? 'fa-spinner fa-spin' : 'fa-paperclip'}`}></i>{' '}
+                  {isUploading
+                    ? 'Uploading…'
+                    : cvList.length > 0
+                      ? 'Attach a different CV (PDF)'
+                      : 'Attach your CV (PDF)'}
+                </button>
+                <span className={styles.uploadHint}>
+                  {atCvLimit
+                    ? `You've reached the ${MAX_CVS_PER_USER}-CV limit. Remove one from your profile to add another.`
+                    : `PDF only, up to ${MAX_CV_SIZE_MB} MB.`}
+                </span>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFileSelected}
+                style={{ display: 'none' }}
+              />
 
               {/* Manual CV Option */}
               <div className={styles.section}>
@@ -255,12 +412,25 @@ const CVSelectionModal = ({
                         Use your manually entered CV information from your profile
                       </p>
                       {!manualCVComplete && (
-                        <div className={styles.warning}>
-                          <i className="fa fa-exclamation-triangle"></i>
-                          <span>
-                            Your profile CV details are incomplete. Please complete them before using this option.
-                          </span>
-                        </div>
+                        <>
+                          <div className={styles.warning}>
+                            <i className="fa fa-exclamation-triangle"></i>
+                            <span>
+                              Your profile CV details are incomplete — you'll need education,
+                              technical skills, a project, and expected salary.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.inlineFixButton}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowCvDetailsForm(true);
+                            }}
+                          >
+                            <i className="fa fa-pencil-square-o"></i> Complete them now
+                          </button>
+                        </>
                       )}
                       {manualCVComplete && (
                         <div className={styles.success}>
@@ -272,17 +442,15 @@ const CVSelectionModal = ({
                   </div>
                 </div>
               </div>
-
-              {/* No CVs Uploaded Message */}
-              {cvList.length === 0 && (
-                <div className={styles.emptyState}>
-                  <i className="fa fa-info-circle"></i>
-                  <p>
-                    You haven't uploaded any CVs yet. You can upload CVs from your profile page or apply with your profile details.
-                  </p>
-                </div>
-              )}
             </>
+          )}
+
+          {/* Success notice after an inline upload / details save */}
+          {uploadNotice && (
+            <div className={styles.successMessage}>
+              <i className="fa fa-check-circle"></i>
+              {uploadNotice}
+            </div>
           )}
 
           {/* Error Message */}
@@ -305,7 +473,12 @@ const CVSelectionModal = ({
           <button
             className={styles.submitButton}
             onClick={handleSubmit}
-            disabled={isSubmitting || loading}
+            disabled={isSubmitting || loading || isUploading || !hasUsableChoice}
+            title={
+              hasUsableChoice
+                ? undefined
+                : 'Attach a CV PDF or complete your profile CV details first'
+            }
           >
             {isSubmitting ? (
               <>
@@ -328,6 +501,15 @@ const CVSelectionModal = ({
           </button>
         </div>
       </div>
+
+      {/* Renders its own full-screen layer above this modal (z-index 10040). */}
+      {showCvDetailsForm && (
+        <CVDetailsForm
+          existingData={existingCvDetails}
+          onSave={handleSaveCvDetails}
+          onClose={() => setShowCvDetailsForm(false)}
+        />
+      )}
     </div>
   );
 };
