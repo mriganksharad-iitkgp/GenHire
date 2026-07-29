@@ -363,37 +363,52 @@ class AuthController:
         }
     
     def verify_email(self, token):
-        """Verify user's email address using token"""
-        user = self.users.find_one({
-            'verification_token': token,
-            'email_verified': False
-        })
-        
+        """Verify user's email address using token.
+
+        Idempotent by design. A verification link gets requested more than once
+        in normal use — the user hits refresh, forwards the mail to themselves,
+        or a corporate email scanner pre-fetches every link before delivery.
+        The previous version matched on `email_verified: False` and then cleared
+        the token, so the second request reported "Invalid or expired token" on
+        an account that had in fact just been verified.
+
+        The token is deliberately NOT cleared on success: it is what lets a
+        replay resolve back to this account, and it grants nothing once
+        `email_verified` is True. `resend_verification_email` overwrites it.
+        """
+        if not token:
+            return {'error': 'Invalid or expired verification token'}, 400
+
+        user = self.users.find_one({'verification_token': token})
+
         if not user:
             return {'error': 'Invalid or expired verification token'}, 400
-        
-        # Check if token is expired
-        if user.get('verification_token_expires'):
-            if user['verification_token_expires'] < datetime.datetime.utcnow():
+
+        already_verified = bool(user.get('email_verified'))
+
+        if not already_verified:
+            # Expiry only gates the first verification — a token that already
+            # did its job stays acceptable as an idempotent replay.
+            expires = user.get('verification_token_expires')
+            if expires and expires < datetime.datetime.utcnow():
                 return {'error': 'Verification token has expired'}, 400
-        
-        # Update user document
-        self.users.update_one(
-            {'_id': user['_id']},
-            {
-                '$set': {
-                    'email_verified': True,
-                    'updated_at': datetime.datetime.utcnow()
-                },
-                '$unset': {
-                    'verification_token': '',
-                    'verification_token_expires': ''
+
+            self.users.update_one(
+                {'_id': user['_id']},
+                {
+                    '$set': {
+                        'email_verified': True,
+                        'updated_at': datetime.datetime.utcnow()
+                    }
                 }
-            }
-        )
-        
+            )
+
         return {
-            'message': 'Email verified successfully',
+            'message': (
+                'Email already verified' if already_verified
+                else 'Email verified successfully'
+            ),
+            'already_verified': already_verified,
             'user': {
                 'id': str(user['_id']),
                 'name': user['name'],

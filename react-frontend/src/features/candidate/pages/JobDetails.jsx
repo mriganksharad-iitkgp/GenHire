@@ -8,6 +8,8 @@ import { getToken, getUser } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { checkCvMatchScore, getJdDownloadUrl } from "shared/api/endpoints";
+import { companyLabel } from "shared/constants/company";
+import useSavedJobs from "features/candidate/hooks/useSavedJobs";
 
 const JobDetails = () => {
 	const { jobId } = useParams();
@@ -28,7 +30,22 @@ const JobDetails = () => {
 	const [applicationStatus, setApplicationStatus] = useState(null);
 	const [pendingWithdrawal, setPendingWithdrawal] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-	
+
+	// Read the role synchronously (not from the userType state, which is only
+	// set once the load effect runs) so the saved-jobs fetch is never issued
+	// for a recruiter — the endpoint 403s for them.
+	const isCandidateViewer = (() => {
+		const user = getUser();
+		const role = user?.user_type || user?.userType || "candidate";
+		return role !== "recruiter" && role !== "admin" && !user?.is_invite_only;
+	})();
+	const {
+		isSaved,
+		isPending: isSavePending,
+		toggleSave,
+		available: savedJobsAvailable,
+	} = useSavedJobs({ enabled: isCandidateViewer });
+
 	const { invalidateApplications } = useCandidateData();
 	
 	// Toast state
@@ -121,7 +138,7 @@ const JobDetails = () => {
 				// Normalize fields for UI fallbacks with comprehensive job data
 				const jobData = {
 					...data,
-					company: data.company || "TechCorp Solutions",
+					company: companyLabel(data.company),
 					logo: data.logo || "../android-chrome-192x192.png",
 					responsibilities: toList(data.responsibilities),
 					requirements: toList(data.requirements),
@@ -178,7 +195,7 @@ const JobDetails = () => {
 				setJob({
 					id: jobId,
 					title: "Job Position",
-					company: "TechCorp Solutions",
+					company: "",
 					logo: "../android-chrome-192x192.png",
 					location: "Remote",
 					type: "Full-time",
@@ -198,6 +215,17 @@ const JobDetails = () => {
 		};
 		init();
 	}, [jobId, navigate]);
+
+	const handleToggleSave = async () => {
+		const result = await toggleSave(jobId, job);
+		if (result === true) {
+			showToast('Job saved — find it under "Saved" on your dashboard', 'success');
+		} else if (result === false) {
+			showToast('Removed from your saved jobs', 'info');
+		} else {
+			showToast('Could not update your saved jobs. Please try again.', 'error');
+		}
+	};
 
 	// Downloads the actual recruiter-uploaded JD file when one exists
 	// (fetches a short-lived signed GCS URL); falls back to a generated
@@ -410,7 +438,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 			// Update local job state
 			setJob({
 				...updatedJob,
-				company: updatedJob.company || "TechCorp Solutions",
+				company: companyLabel(updatedJob.company),
 				logo: updatedJob.logo || "../android-chrome-192x192.png",
 				responsibilities: toList(updatedJob.responsibilities),
 				requirements: toList(updatedJob.requirements),
@@ -527,9 +555,18 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 								>
 									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
 								</button>
-								<button className={styles.saveButton}>
-									<i className="fa fa-bookmark-o"></i> Save
-								</button>
+								{savedJobsAvailable && (
+									<button
+										className={`${styles.saveButton} ${isSaved(jobId) ? styles.savedButton : ''}`}
+										onClick={handleToggleSave}
+										disabled={isSavePending(jobId)}
+										aria-pressed={isSaved(jobId)}
+										title={isSaved(jobId) ? 'Remove from saved jobs' : 'Save this job to apply later'}
+									>
+										<i className={`fa ${isSaved(jobId) ? 'fa-bookmark' : 'fa-bookmark-o'}`}></i>{' '}
+										{isSavePending(jobId) ? 'Saving…' : isSaved(jobId) ? 'Saved' : 'Save'}
+									</button>
+								)}
 							</>
 						)}
 					</div>

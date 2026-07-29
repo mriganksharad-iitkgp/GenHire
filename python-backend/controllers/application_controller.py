@@ -26,6 +26,7 @@ from services.email_service import EmailService
 from services.cv_scoring_service import CVScoringService
 from controllers.cv_controller import CVController
 from services.background_processor import get_background_processor
+from utils.company_resolver import attach_company_info
 from extensions import socketio
 
 logger = logging.getLogger(__name__)
@@ -458,6 +459,7 @@ class ApplicationController:
             # BULK FETCH JOBS
             job_ids = list(set([ObjectId(app["job_id"]) for app in applications if "job_id" in app and len(str(app["job_id"])) == 24]))
             all_jobs = list(self.jobs_collection.find({"_id": {"$in": job_ids}}))
+            attach_company_info(self.users_collection, all_jobs)
             jobs_by_id = {str(job["_id"]): job for job in all_jobs}
 
             # BULK FETCH INTERVIEWS
@@ -504,7 +506,7 @@ class ApplicationController:
                 if job:
                     app["job_details"] = {
                         "title": job.get("title"),
-                        "company": job.get("company", "TechCorp Solutions"),
+                        "company": job.get("company") or "",
                         "location": job.get("location"),
                         "type": job.get("type"),
                         "department": job.get("department"),
@@ -562,10 +564,11 @@ class ApplicationController:
         elif user_type == "recruiter":
             # Recruiters see applications for their jobs - ONLY VISIBLE ONES (CV scoring completed)
             recruiter_jobs = list(
-                self.jobs_collection.find({"created_by": user_id}, {"_id": 1, "title": 1, "department": 1, "location": 1, "logo": 1, "company": 1, "gaze_proctoring": 1})
+                self.jobs_collection.find({"created_by": user_id}, {"_id": 1, "title": 1, "department": 1, "location": 1, "logo": 1, "company": 1, "gaze_proctoring": 1, "created_by": 1})
             )
             job_ids = [str(job["_id"]) for job in recruiter_jobs]
 
+            attach_company_info(self.users_collection, recruiter_jobs)
             jobs_by_id = {str(job["_id"]): job for job in recruiter_jobs}
 
             applications = list(
@@ -646,7 +649,7 @@ class ApplicationController:
                         "department": job.get("department"),
                         "location": job.get("location"),
                         "logo": job.get("logo"),
-                        "company": job.get("company", "TechCorp Solutions"),
+                        "company": job.get("company") or "",
                     }
 
                 # Provide base URL for CV retrieval; the frontend can append '?token=...'
@@ -847,9 +850,10 @@ class ApplicationController:
 
         job = self.jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
         if job:
+            attach_company_info(self.users_collection, [job])
             app_doc["job_details"] = {
                 "title": job.get("title"),
-                "company": job.get("company", "TechCorp Solutions"),
+                "company": job.get("company") or "",
                 "location": job.get("location"),
                 "type": job.get("type"),
                 "department": job.get("department"),

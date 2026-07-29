@@ -6,6 +6,8 @@ import Pagination from "shared/components/ui/Pagination";
 import CVSelectionModal from "features/candidate/components/CVSelectionModal";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { INDIA_LOCATION_OPTIONS, canonicalizeJobRole } from "shared/constants/jobTaxonomy";
+import { companyLabel } from "shared/constants/company";
+import useSavedJobs from "features/candidate/hooks/useSavedJobs";
 import styles from "./Dashboard.module.css";
 import { getToken, getUser, isLoggedIn } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
@@ -32,6 +34,10 @@ const Dashboard = () => {
 	const [showCVModal, setShowCVModal] = useState(false);
 	const [selectedJobForApplication, setSelectedJobForApplication] = useState(null);
 	
+	// Which list the candidate is looking at: the open job board, or the jobs
+	// they bookmarked to come back to.
+	const [activeView, setActiveView] = useState("all");
+
 	// Pagination state
 	const [currentPage, setCurrentPage] = useState(1);
 	const itemsPerPage = 10;
@@ -173,8 +179,12 @@ const Dashboard = () => {
 			return;
 		}
 
-		// Find the job to get its title
-		const job = jobOpenings.find(j => j._id === jobId);
+		// Find the job to get its title. Applying from the Saved tab means the
+		// job may not be in the current (filtered/paginated) board list, so fall
+		// back to the saved list before the generic label.
+		const job =
+			jobOpenings.find(j => String(j._id) === String(jobId)) ||
+			savedJobs.find(j => String(j._id) === String(jobId));
 		setSelectedJobForApplication({ id: jobId, title: job?.title || 'this position' });
 		setShowCVModal(true);
 	};
@@ -274,6 +284,49 @@ const Dashboard = () => {
 	const invitedJobIds = (cachedUser?.invited_job_ids || cachedUser?.invitedJobIds || []).map(String);
 	const isAllowedToApply = (jobId) =>
 		!isInviteOnly || invitedJobIds.includes(String(jobId));
+
+	// Bookmarks. Burner accounts are scoped to a single invited job, so the
+	// backend has no saved list for them and the toggle stays hidden.
+	const {
+		savedJobs,
+		savedCount,
+		loading: savedJobsLoading,
+		available: savedJobsAvailable,
+		isSaved,
+		isPending: isSavePending,
+		toggleSave,
+	} = useSavedJobs({ enabled: !isInviteOnly });
+
+	const handleToggleSave = async (job) => {
+		const result = await toggleSave(job._id, job);
+		if (result === true) {
+			showToast(`"${job.title}" saved — apply any time from Saved Jobs`, 'success');
+		} else if (result === false) {
+			showToast(`"${job.title}" removed from saved jobs`, 'info');
+		} else {
+			showToast('Could not update your saved jobs. Please try again.', 'error');
+		}
+	};
+
+	// Small bookmark toggle rendered on every job card.
+	const renderSaveToggle = (job) => {
+		if (!savedJobsAvailable) return null;
+		const saved = isSaved(job._id);
+		return (
+			<button
+				type="button"
+				className={`${styles.bookmarkButton} ${saved ? styles.bookmarkButtonActive : ''}`}
+				onClick={() => handleToggleSave(job)}
+				disabled={isSavePending(job._id)}
+				aria-pressed={saved}
+				aria-label={saved ? `Remove ${job.title} from saved jobs` : `Save ${job.title} for later`}
+				title={saved ? 'Remove from saved jobs' : 'Save this job to apply later'}
+			>
+				<i className={`fa ${saved ? 'fa-bookmark' : 'fa-bookmark-o'}`}></i>
+				<span>{saved ? 'Saved' : 'Save'}</span>
+			</button>
+		);
+	};
 
 	// Function to get the correct button state and text
 	const getJobButtonState = (jobId) => {
@@ -460,7 +513,7 @@ const Dashboard = () => {
 	];
 	
 	// Get unique companies for the filter dropdown
-	const uniqueCompanies = [...new Set(jobOpenings.map(job => job.company || 'TechCorp Solutions').filter(Boolean))].sort();
+	const uniqueCompanies = [...new Set(jobOpenings.map(job => companyLabel(job.company)).filter(Boolean))].sort();
 
 	// Include custom recruiter-entered locations in addition to standard options
 	const uniqueLocations = [...new Set(jobOpenings.map(job => job.location).filter(Boolean))].sort();
@@ -560,7 +613,7 @@ const Dashboard = () => {
 		if (desc.includes(q)) return 2;
 
 		const dept = String(job.department || '').toLowerCase();
-		const companyStr = String(job.company || 'TechCorp Solutions').toLowerCase();
+		const companyStr = String(companyLabel(job.company)).toLowerCase();
 		const locationStr = String(job.location || '').toLowerCase();
 		
 		if (dept.includes(q) || companyStr.includes(q) || locationStr.includes(q)) return 1;
@@ -580,7 +633,7 @@ const Dashboard = () => {
 			const title = String(job.title || '').toLowerCase();
 			const desc = String(job.description || '').toLowerCase();
 			const dept = String(job.department || '').toLowerCase();
-			const companyStr = String(job.company || 'TechCorp Solutions').toLowerCase();
+			const companyStr = String(companyLabel(job.company)).toLowerCase();
 			const locationStr = String(job.location || '').toLowerCase();
 			const skills = Array.isArray(job.skills) ? job.skills : [];
 
@@ -617,7 +670,7 @@ const Dashboard = () => {
 			const matchesJobRole = roleSel === '' || canonicalJobRole === roleSel;
 
 			const companySel = companyFilter.trim();
-			const matchesCompany = companySel === '' || String(job.company || 'TechCorp Solutions') === companySel;
+			const matchesCompany = companySel === '' || String(companyLabel(job.company)) === companySel;
 
 			const skillSel = skillsFilter.trim();
 			const matchesSkill = skillSel === '' || (Array.isArray(job.skills) && job.skills.includes(skillSel));
@@ -872,6 +925,141 @@ const Dashboard = () => {
 							Showing search for "{searchQuery}"
 						</p>
 					)}
+					{savedJobsAvailable && (
+						<div className={styles.viewTabs} role="tablist" aria-label="Job list view">
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeView === 'all'}
+								className={`${styles.viewTab} ${activeView === 'all' ? styles.viewTabActive : ''}`}
+								onClick={() => { setActiveView('all'); setCurrentPage(1); }}
+							>
+								<i className="fa fa-briefcase"></i> All Jobs
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={activeView === 'saved'}
+								className={`${styles.viewTab} ${activeView === 'saved' ? styles.viewTabActive : ''}`}
+								onClick={() => { setActiveView('saved'); setCurrentPage(1); }}
+							>
+								<i className="fa fa-bookmark"></i> Saved Jobs{savedCount > 0 ? ` (${savedCount})` : ''}
+							</button>
+						</div>
+					)}
+
+					{activeView === 'saved' ? (
+						<>
+							<h3>Saved Jobs ({savedJobs.length})</h3>
+							{savedJobsLoading ? (
+								<div>
+									{Array.from({ length: 3 }).map((_, i) => (
+										<SkeletonCard key={i} variant="job" />
+									))}
+								</div>
+							) : savedJobs.length === 0 ? (
+								<div className={styles.noJobsFound}>
+									<p>
+										You haven't saved any jobs yet. Tap <i className="fa fa-bookmark-o"></i>{' '}
+										<strong>Save</strong> on any opening and it will wait for you here
+										until you're ready to apply.
+									</p>
+									<button
+										type="button"
+										className={styles.viewButton}
+										onClick={() => { setActiveView('all'); setCurrentPage(1); }}
+									>
+										Browse open jobs
+									</button>
+								</div>
+							) : (
+								<div className={styles.jobSection}>
+									{savedJobs.map((job) => {
+										const isClosed = String(job.status || 'active').toLowerCase() !== 'active';
+										return (
+											<div key={job._id} className={styles.jobCard}>
+												<div className={styles.jobMain}>
+													<div className={styles.jobTitleSection}>
+														<h4 className={styles.jobTitle}>
+															{job.title}
+															{isClosed && (
+																<span className={styles.closedBadge}>
+																	No longer accepting applications
+																</span>
+															)}
+														</h4>
+														<div className={styles.companyInfo}>
+															<span className={styles.companyName}>
+																<i className="fa fa-building"></i> {companyLabel(job.company)}
+															</span>
+															<span className={styles.jobLocation}>
+																<i className="fa fa-map-marker"></i> {job.location}
+															</span>
+															{job.saved_at && (
+																<span className={styles.jobDate}>
+																	<i className="fa fa-bookmark"></i> Saved:{' '}
+																	{new Date(job.saved_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+																</span>
+															)}
+														</div>
+													</div>
+
+													<div className={styles.jobAttributes}>
+														<span className={styles.jobType}>{job.type}</span>
+														<span className={styles.jobExperience}>
+															<i className="fa fa-briefcase"></i> {job.experience}
+														</span>
+														<span className={styles.jobSalary}>
+															<i className="fa fa-money"></i> {job.salary}
+														</span>
+													</div>
+
+													<div className={styles.jobDescription}>
+														<p>{job.description}</p>
+													</div>
+
+													<div className={styles.jobSkills}>
+														{job.skills && job.skills.map((skill, index) => (
+															<span key={index} className={styles.skillTag}>{skill}</span>
+														))}
+													</div>
+												</div>
+
+												<div className={styles.jobActions}>
+													<Link to={`/jobs/${job._id}`} className={styles.viewButton}>
+														View Details
+													</Link>
+													{isClosed ? (
+														<button
+															className={`${styles.applyButton} ${styles.appliedButton}`}
+															disabled
+														>
+															Closed
+														</button>
+													) : (() => {
+														// Same Apply/Withdraw state machine as the job board, so a
+														// saved job behaves identically to one found by browsing.
+														const buttonState = getJobButtonState(job._id);
+														return (
+															<button
+																onClick={buttonState.onClick}
+																className={buttonState.className}
+																disabled={buttonState.disabled}
+															>
+																{buttonState.text}
+															</button>
+														);
+													})()}
+													{renderSaveToggle(job)}
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							)}
+						</>
+					) : (
+					<>
 					<h3>Current Openings ({filteredJobs.length})</h3>
 
 					{loading ? (
@@ -923,7 +1111,7 @@ const Dashboard = () => {
 																<div className={styles.companyInfo}>
 																	<span className={styles.companyName}>
 																		<i className="fa fa-building"></i>{" "}
-																		{job.company || 'TechCorp Solutions'}
+																		{companyLabel(job.company)}
 																	</span>
 																	<span
 																		className={styles.jobLocation}
@@ -988,6 +1176,7 @@ const Dashboard = () => {
 																	</button>
 																);
 															})()}
+															{renderSaveToggle(job)}
 														</div>
 													</div>
 												))}
@@ -1013,7 +1202,7 @@ const Dashboard = () => {
 																</h4>
 																<div className={styles.companyInfo}>
 																	<span className={styles.companyName}>
-																		<i className="fa fa-building"></i> {job.company || 'TechCorp Solutions'}
+																		<i className="fa fa-building"></i> {companyLabel(job.company)}
 																	</span>
 																	<span className={styles.jobLocation}>
 																		<i className="fa fa-map-marker"></i> {job.location}
@@ -1064,6 +1253,7 @@ const Dashboard = () => {
 																	</button>
 																);
 															})()}
+															{renderSaveToggle(job)}
 														</div>
 													</div>
 												))}
@@ -1082,6 +1272,8 @@ const Dashboard = () => {
 								);
 							})()}
 						</>
+					)}
+					</>
 					)}
 				</div>
 			</div>

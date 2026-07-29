@@ -5,6 +5,7 @@ import "./darkModeOverride.css";
 import "./emergency-fixes.css";
 import { getToken } from "shared/utils/session";
 import { authedFetch } from "shared/api/client";
+import { companyLabel } from "shared/constants/company";
 
 const ApplicationView = () => {
 	const { applicationId } = useParams();
@@ -99,7 +100,7 @@ const ApplicationView = () => {
 					setApplication({
 						id: app._id,
 						position: app.job_details?.title || app.job_title || "Applied Position",
-						company: app.job_details?.company || "TechCorp Solutions",
+						company: companyLabel(app.job_details?.company),
 						jobId: app.job_id,
 						status:
 							status === "screening_cleared"

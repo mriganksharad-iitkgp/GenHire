@@ -5,6 +5,7 @@ import {
   normalizeStatus,
   applicationStatusLabel,
 } from "shared/utils/applicationStatus";
+import { companyLabel } from "shared/constants/company";
 
 // Helper function to map application data
 const mapApplication = (a) => {
@@ -22,7 +23,7 @@ const mapApplication = (a) => {
 
   return {
     id: a._id,
-    company: a.job_details?.company || "TechCorp Solutions",
+    company: companyLabel(a.job_details?.company),
     logo: a.job_details?.logo || null,
     location: a.job_details?.location || null,
     jobType: a.job_details?.type || null,

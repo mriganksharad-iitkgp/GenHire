@@ -666,6 +666,20 @@
       "endpoint": "jobs.get_jd_download_url"
     },
     {
+      "rule": "/api/jobs/<job_id>/save",
+      "methods": [
+        "DELETE"
+      ],
+      "endpoint": "jobs.unsave_job"
+    },
+    {
+      "rule": "/api/jobs/<job_id>/save",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "jobs.save_job"
+    },
+    {
       "rule": "/api/jobs/<job_id>/screening-cleared/export",
       "methods": [
         "GET"
@@ -972,6 +986,13 @@
         "POST"
       ],
       "endpoint": "auth.reset_password"
+    },
+    {
+      "rule": "/api/saved-jobs",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "jobs.get_saved_jobs"
     },
     {
       "rule": "/api/speech/synthesize",

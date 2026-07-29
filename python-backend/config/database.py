@@ -130,6 +130,22 @@ class DatabaseConfig:
             print(f"Warning: failed to ensure applications indexes: {e}")
 
         try:
+            saved_jobs = self.db['saved_jobs']
+            # A candidate can bookmark a job at most once — the unique index is
+            # what makes the save endpoint safely idempotent under double-click.
+            saved_jobs.create_index(
+                [('candidate_id', 1), ('job_id', 1)],
+                unique=True,
+                name='uq_saved_jobs_candidate_job',
+            )
+            # Backs the "my saved jobs, newest first" listing.
+            saved_jobs.create_index(
+                [('candidate_id', 1), ('saved_at', -1)], name='idx_saved_jobs_candidate_saved_at'
+            )
+        except Exception as e:
+            print(f"Warning: failed to ensure saved_jobs indexes: {e}")
+
+        try:
             # Outbound email audit log (see EmailService._log_send) — the
             # admin cost page counts successful sends per timeline window.
             email_log = self.db['email_log']
@@ -156,7 +172,8 @@ class DatabaseConfig:
             'interviews': self.db['interviews'],
             'practice_sessions': self.db['practice_sessions'],
             'invite_tokens': self.db['invite_tokens'],
-            'invite_batches': self.db['invite_batches']
+            'invite_batches': self.db['invite_batches'],
+            'saved_jobs': self.db['saved_jobs']
         }
     
     def close_connection(self):

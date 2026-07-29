@@ -1,7 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
-  "installCommand": "npm install",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "//": "Fallback config for when the Vercel project's Root Directory is the repo root. The authoritative config lives in react-frontend/vercel.json — Vercel only reads the vercel.json inside the configured Root Directory, so a rewrite declared here alone never reaches the deployment.",
   "framework": "vite",
+  "installCommand": "npm install --prefix react-frontend",
+  "buildCommand": "npm run build --prefix react-frontend",
+  "outputDirectory": "react-frontend/build",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import styles from "./JobDetailsModal.module.css";
+import { companyLabel } from "shared/constants/company";
 
 const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 	if (!isOpen || !job) return null;
@@ -63,7 +64,7 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 							<div className={styles.companyInfo}>
 								<span className={styles.companyName}>
 									<i className="fa fa-building"></i>
-									{job.company || 'TechCorp Solutions'}
+									{companyLabel(job.company)}
 								</span>
 							</div>
 						</div>

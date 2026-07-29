@@ -4,7 +4,8 @@ from bson import ObjectId
 class ProfileController:
     def __init__(self, db_collections):
         self.users_collection = db_collections['users']
-        
+        self.jobs_collection = db_collections['jobs']
+
     def get_profile(self, user_id):
         """Retrieve user profile data"""
         user = self.users_collection.find_one({'_id': ObjectId(user_id)})
@@ -80,8 +81,32 @@ class ProfileController:
                 {'_id': ObjectId(user_id)},
                 {'$set': update_fields}
             )
-        
+            self._sync_company_to_jobs(user_id, update_fields)
+
         return {'message': 'Company profile updated successfully'}, 200
+
+    def _sync_company_to_jobs(self, user_id, update_fields):
+        """Job documents carry a denormalized copy of the recruiter's company
+        name/logo. Read paths re-resolve those from the recruiter record, but
+        the stored copy is still what lands in application snapshots and any
+        direct consumer — so keep it in step when the profile changes."""
+        job_fields = {}
+        if 'company_name' in update_fields:
+            job_fields['company'] = str(update_fields['company_name'] or '').strip()
+        if 'company_logo' in update_fields:
+            job_fields['logo'] = update_fields['company_logo'] or None
+        if not job_fields:
+            return
+
+        try:
+            self.jobs_collection.update_many(
+                {'created_by': str(user_id)},
+                {'$set': job_fields},
+            )
+        except Exception as e:
+            # A stale denormalized copy is cosmetic — the profile save itself
+            # already succeeded and read paths resolve the live value.
+            print(f"Warning: could not propagate company details to jobs: {e}")
         
     def get_cv_details(self, user_id):
         """Get CV details for the user"""

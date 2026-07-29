@@ -101,6 +101,13 @@ export const checkCvMatchScore = (jobId, payload) =>
     body: JSON.stringify(payload),
   });
 
+// Saved jobs (candidate bookmarks)
+export const getSavedJobs = () => request("/saved-jobs");
+export const saveJob = (jobId) =>
+  request(`/jobs/${jobId}/save`, { method: "POST" });
+export const unsaveJob = (jobId) =>
+  request(`/jobs/${jobId}/save`, { method: "DELETE" });
+
 // Applications
 export const getApplications = () => request("/applications");
 export const setApplicationStatus = (applicationId, status) =>

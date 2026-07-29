@@ -3,6 +3,7 @@ from flask_cors import cross_origin
 import datetime
 import json
 from controllers.job_controller import JobController
+from controllers.saved_job_controller import SavedJobController
 from middleware.auth_middleware import token_required, recruiter_required, verified_required
 from config.database import db_config
 
@@ -11,6 +12,7 @@ job_bp = Blueprint('jobs', __name__, url_prefix='/api')
 # Initialize job controller
 collections = db_config.get_collections()
 job_controller = JobController(collections)
+saved_job_controller = SavedJobController(collections)
 
 @job_bp.route('/jobs', methods=['GET'])
 @cross_origin()
@@ -172,6 +174,61 @@ def get_job_applications(current_user, job_id):
     recruiter_id = str(current_user['_id'])
     result, status_code = job_controller.get_job_applications(job_id, recruiter_id)
     return jsonify(result), status_code
+
+def _candidate_only(current_user):
+    """Saved jobs are a candidate-side feature. Returns an error tuple when the
+    caller isn't an ordinary candidate, else None."""
+    user_type = str(current_user.get('user_type') or 'candidate').strip().lower()
+    if user_type not in ('candidate', 'student'):
+        return jsonify({'error': 'Only candidates can save jobs.'}), 403
+    # Burner (invite-only) accounts exist for a single interview and never
+    # browse the job board, so a bookmark list would be meaningless for them.
+    if current_user.get('is_invite_only'):
+        return jsonify({
+            'error': 'Invite-only accounts cannot save jobs.',
+            'error_code': 'invite_only_scope',
+        }), 403
+    return None
+
+
+@job_bp.route('/saved-jobs', methods=['GET'])
+@cross_origin()
+@token_required
+def get_saved_jobs(current_user):
+    """List the candidate's saved jobs, joined to live job data."""
+    denied = _candidate_only(current_user)
+    if denied:
+        return denied
+
+    result, status_code = saved_job_controller.list_saved_jobs(str(current_user['_id']))
+    return jsonify(result), status_code
+
+
+@job_bp.route('/jobs/<job_id>/save', methods=['POST'])
+@cross_origin()
+@token_required
+def save_job(current_user, job_id):
+    """Bookmark a job so the candidate can apply to it later."""
+    denied = _candidate_only(current_user)
+    if denied:
+        return denied
+
+    result, status_code = saved_job_controller.save_job(str(current_user['_id']), job_id)
+    return jsonify(result), status_code
+
+
+@job_bp.route('/jobs/<job_id>/save', methods=['DELETE'])
+@cross_origin()
+@token_required
+def unsave_job(current_user, job_id):
+    """Remove a job from the candidate's saved list."""
+    denied = _candidate_only(current_user)
+    if denied:
+        return denied
+
+    result, status_code = saved_job_controller.unsave_job(str(current_user['_id']), job_id)
+    return jsonify(result), status_code
+
 
 # Remove hardcoded sample jobs from database
 @job_bp.route('/remove-sample-jobs', methods=['DELETE'])

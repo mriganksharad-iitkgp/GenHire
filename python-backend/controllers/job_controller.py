@@ -10,6 +10,7 @@ from services.pdf_parser_service import get_pdf_parser
 from services import gcs_service
 from dotenv import load_dotenv
 from utils.job_standards import canonicalize_job_role
+from utils.company_resolver import attach_company_info
 from services.usage_telemetry_service import record_usage_event
 from payment_module.config.settings import PaymentConfig
 from payment_module.services.wallet_service import WalletService
@@ -20,6 +21,7 @@ class JobController:
     def __init__(self, db_collections):
         self.jobs_collection = db_collections['jobs']
         self.applications_collection = db_collections['applications']
+        self.users_collection = db_collections['users']
         # Transient staging only (JD text extraction before the GCS upload) —
         # rooted in the OS temp dir; the persistent copy lives in GCS.
         import tempfile
@@ -39,6 +41,11 @@ class JobController:
     @staticmethod
     def _normalize_text_key(value):
         return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+
+    def _attach_company_info(self, jobs):
+        """Re-resolve company name/logo from the owning recruiter — see
+        utils.company_resolver for why the stored copy can't be trusted."""
+        return attach_company_info(self.users_collection, jobs)
 
     def _find_recruiter_duplicate_job(self, recruiter_id, title, location, exclude_job_id=None):
         """Check duplicate by normalized title+location within a single recruiter's jobs."""
@@ -89,6 +96,7 @@ class JobController:
             jobs = list(self.jobs_collection.find(query))
             for job in jobs:
                 job['_id'] = str(job['_id'])
+            self._attach_company_info(jobs)
 
             job_ids_str = [job['_id'] for job in jobs]
 
@@ -146,6 +154,7 @@ class JobController:
                 if search_filter:
                     query = {'$and': [query, search_filter]}
                 jobs = list(self.jobs_collection.find(query))
+                self._attach_company_info(jobs)
                 for job in jobs:
                     job['_id'] = str(job['_id'])
                     # Remove sensitive recruiter info (same as public listing)
@@ -168,6 +177,7 @@ class JobController:
                 query = {'$and': [query, search_filter]}
             
             jobs = list(self.jobs_collection.find(query))
+            self._attach_company_info(jobs)
             for job in jobs:
                 job['_id'] = str(job['_id'])
                 # Remove sensitive recruiter info
@@ -261,8 +271,10 @@ class JobController:
                 return [p for p in parts if p]
             return []
 
-        # Get company information from recruiter's profile
-        company_name = recruiter_profile.get('company_name') or job_data.get('company') or 'TechCorp Solutions'
+        # Denormalized copy of the recruiter's company details. Never fall back
+        # to a placeholder name — an empty string reads as "not specified" in
+        # the UI, and read paths re-resolve this from the recruiter anyway.
+        company_name = str(recruiter_profile.get('company_name') or job_data.get('company') or '').strip()
         company_logo = recruiter_profile.get('company_logo') or job_data.get('logo') or None
         
         # Handle JD PDF upload — stored in Google Cloud Storage (mandatory, no
@@ -520,6 +532,8 @@ class JobController:
 
         if not job:
             return {'error': 'Job not found'}, 404
+
+        self._attach_company_info([job])
 
         if user_type != 'recruiter':
             # For candidates, restrict to active jobs only

@@ -1349,6 +1349,123 @@ body.dark .appliedBadge,
 body.dark .applicationStatusText,
 :global(.dark) .applicationStatusText { color: #4ade80; }
 
+/* ── Saved jobs ─────────────────────────────────────────────────────────── */
+
+/* All Jobs / Saved Jobs switch above the listing. */
+.viewTabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+body.dark .viewTabs,
+:global(.dark) .viewTabs { border-bottom-color: var(--dark-border); }
+
+.viewTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--gray-600);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.viewTab:hover { color: var(--primary-600); }
+
+.viewTabActive {
+  color: var(--primary-600);
+  border-bottom-color: var(--primary-500);
+}
+
+body.dark .viewTab,
+:global(.dark) .viewTab { color: var(--dark-text-muted, #94a3b8); }
+
+body.dark .viewTabActive,
+:global(.dark) .viewTabActive { color: #60a5fa; border-bottom-color: #60a5fa; }
+
+/* Bookmark toggle on each job card. Sized to sit beside View/Apply without
+   competing with them — it's a secondary action. */
+.bookmarkButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 2px solid var(--gray-300);
+  border-radius: var(--radius-lg);
+  background: white;
+  color: var(--gray-700);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.bookmarkButton:hover:not(:disabled) {
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+  background: var(--primary-50);
+}
+
+.bookmarkButtonActive {
+  border-color: var(--primary-500);
+  background: var(--primary-500);
+  color: white;
+}
+
+.bookmarkButtonActive:hover:not(:disabled) {
+  background: var(--primary-600);
+  color: white;
+}
+
+.bookmarkButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+body.dark .bookmarkButton,
+:global(.dark) .bookmarkButton {
+  background: linear-gradient(135deg, #1e293b 0%, var(--dark-surface) 100%);
+  color: var(--dark-text);
+  border-color: var(--dark-border);
+}
+
+body.dark .bookmarkButtonActive,
+:global(.dark) .bookmarkButtonActive {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: white;
+}
+
+/* A saved job whose posting has since closed — the card stays, the Apply
+   button doesn't. */
+.closedBadge {
+  margin-left: 0.625rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+body.dark .closedBadge,
+:global(.dark) .closedBadge { background: #7f1d1d; color: #fecaca; }
+
+@media (max-width: 640px) {
+  .bookmarkButton span { display: none; }
+  .bookmarkButton { padding: var(--spacing-md); }
+}
+
 @media (max-width: 480px) {
   .dashboardContainer {
     padding-top: 70px;
