@@ -10,8 +10,9 @@ refresh themselves.
 
 ## What each role sees
 
-- **Candidates** — a landing page and job board (`/dashboard`), a profile
-  with multi-CV management (`/profile`), job application pages, practice
+- **Candidates** — a landing page and job board (`/dashboard`, with saved-job
+  bookmarking), a profile with multi-CV management and the one-time
+  identity-card upload (`/profile`), job application pages, practice
   interviews (`/practice`), their application/interview reports, and a
   credit recharge page.
 - **Recruiters** — `/recruiter/dashboard` for posting jobs (with an
@@ -48,7 +49,7 @@ refresh themselves.
 
 ```
 react-frontend/src/
-├── App.jsx            # providers + router only (~18 lines)
+├── App.jsx            # providers + router only (~20 lines)
 ├── app/               # routes.jsx (all lazy routes + ProtectedRoute guards),
 │                      # providers.jsx, NotFound
 ├── features/          # one folder per domain, each with pages/ components/

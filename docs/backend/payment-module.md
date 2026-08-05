@@ -32,6 +32,7 @@ debit it. Two wallet audiences exist: `candidate` and `recruiter`.
 | AI job-description generation | −10 | Recruiter | `RECRUITER_AI_JD_CREDITS=10` |
 | Real interview | −30 | **Recruiter** (job owner) | `RECRUITER_REAL_INTERVIEW_CREDITS=30` |
 | Real interview, proctored | −50 | **Recruiter** | `RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS=50` |
+| Bulk invite, per candidate | −1 | Recruiter | `RECRUITER_INVITE_CREDITS_PER_CANDIDATE=1` (charged upfront for the batch; rows whose email fails are auto-refunded) |
 
 Note the key design decision: **candidates never pay for real interviews** —
 the recruiter who posted the job does. When a candidate starts an interview,
@@ -42,9 +43,9 @@ zero-credit audit transaction on the candidate side for traceability.
 
 Interview credits are debited at `/start` and **reversed automatically**
 when the session ends with zero substantive answers — start failure after
-the debit, identity-verification block, abandonment, or an `/end` with
-nothing answered (`services/interview_credit_service.py`; a background
-sweeper handles abandoned sessions). Mechanics that matter for the ledger:
+the debit, abandonment, or an `/end` with nothing answered
+(`services/interview_credit_service.py`; a background sweeper handles
+abandoned sessions). Mechanics that matter for the ledger:
 
 - Refunds are `credit_wallet` calls with idempotency key
   `refund:<original-debit-key>` and transaction types
@@ -151,8 +152,9 @@ All balance changes go through `wallet_service.py`:
 Plan prices and credit amounts are env-editable
 (`PLAN_<NAME>_PRICE_PAISE` / `PLAN_<NAME>_CREDITS`) and sync into MongoDB on
 every boot.
-- Pages: `/subscription` (recruiter packs), `/candidate/subscription`
-  (candidate packs), `/payment/success`, `/payment/cancel`.
+- Pages: `/recruiter/subscription` (recruiter packs; `/subscription` still
+  redirects there), `/candidate/subscription` (candidate packs),
+  `/payment/success`, `/payment/cancel`.
 - Credit balances/transactions also surface in the recruiter/candidate
   cost-statistics pages and the admin cost dashboards.
 

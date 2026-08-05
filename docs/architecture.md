@@ -20,14 +20,14 @@ GenHire is an AI-powered hiring platform made of **three applications** that tal
                                      │ PyMongo
                                      │
    HTTPS (REST /api/*)   ┌───────────┴───────────────┐    External services
-  ┌─────────────────────►│      Flask Backend        │◄──► Groq (LLM interviews)
+  ┌─────────────────────►│      Flask Backend        │◄──► LLM chain: OpenAI → Gemini → Groq
   │                      │      (port 5000)          │◄──► Google Cloud Speech (STT/TTS)
   │  WebSocket           │                           │◄──► Razorpay (payments)
-  │  (Socket.IO)         │  - 10 route blueprints    │◄──► ZeptoMail (emails)
-  │ ┌───────────────────►│  - payment_module         │◄──► Google Cloud Storage (CV files)
+  │  (Socket.IO)         │  - 15 route blueprints    │◄──► ZeptoMail (emails)
+  │ ┌───────────────────►│  - payment_module         │◄──► Google Cloud Storage (all artifacts)
   │ │                    │  - interview engine       │◄──► GazeRecorder (eye tracking)
-  │ │                    │  - proctoring (MediaPipe/ │
-  │ │                    │    DeepFace)              │
+  │ │                    │  - proctoring + identity  │
+  │ │                    │    scoring                │
   │ │                    └───────────▲───────────────┘
   │ │                                │ REST + Socket.IO
 ┌─┴─┴──────────────┐                 │ (same API, called directly)
@@ -52,7 +52,7 @@ each feature's `api/` module; the client:
   `auth:session-expired` event that redirects the user to `/login?expired=1`.
 
 ### 2. Frontend ↔ Backend (Socket.IO, real-time)
-A single shared Socket.IO connection (`services/socket.js`) authenticates
+A single shared Socket.IO connection (`react-frontend/src/shared/api/socket.js`) authenticates
 with the JWT during the handshake. The backend puts each connected user in a
 room named after their own user id, then pushes `application_update` events
 (`created` / `status_changed` / `score_updated`) so recruiter and candidate
@@ -66,7 +66,8 @@ a custom-protocol URL:
 secure-interview://start?initData=<encoded payload>
 ```
 
-(see `pages/Profile.jsx` and `pages/Practice.jsx`). The OS launches the
+(see `features/candidate/pages/Profile.jsx` and
+`features/candidate/pages/Practice.jsx`). The OS launches the
 installed Electron app, which is registered as the handler for the
 `secure-interview://` scheme. The payload carries everything the kiosk needs
 (auth token, API URL, application/practice context).
@@ -78,18 +79,22 @@ Flask API directly:
 - Socket.IO events `start_proctoring`, `proctoring_frame`, `proctoring_violation`, and mobile-camera relay events.
 
 ### 5. Backend → External services
-- **Groq** — LLM that generates interview questions and evaluates answers.
-- **Google Cloud Speech** — speech-to-text and text-to-speech (backend `/api/speech/*`; the kiosk also has its own direct Google Cloud clients).
+- **LLM chain (OpenAI → Gemini → Groq)** — one env-ordered failover chain
+  (`LLM_PROVIDER_PRIORITY`, default `openai,gemini,groq`) behind *every* LLM
+  task: interview questions, answer evaluation, CV parse/score, JD generation,
+  and the ID-card face match. Quota errors fail over with a per-provider
+  cooldown.
+- **Google Cloud Speech** — speech-to-text and text-to-speech, always via the backend (`/api/speech/*`). The kiosk proxies TTS through the same endpoint and gets a short-lived Google access token from `/api/speech/token` for its streaming STT — it ships no service-account key.
 - **Razorpay** — payment gateway for credit recharge packs (checkout + webhook).
 - **ZeptoMail** (Mailgun sandbox fallback) — transactional email (verification, invites, status updates, interview results); every send is logged for usage-based cost tracking.
-- **Google Cloud Storage / GridFS** — CV file storage.
-- **GazeRecorder (app.gazerecorder.com)** — third-party browser eye-tracking used for the gaze heatmap proctoring signal.
+- **Google Cloud Storage** — mandatory, and the only store for persistent artifacts (CVs, JDs, recordings, gaze data). Identity-card images and interview face captures are the exception: they live in MongoDB GridFS.
+- **GazeRecorder (app.gazerecorder.com)** — third-party browser eye-tracking used for the gaze heatmap proctoring signal on the web interview UI (the kiosk runs WebGazer locally instead).
 
 ## User roles
 
 | Role | Entry point | What they can do |
 |---|---|---|
-| Candidate | `/dashboard`, `/practice`, `/profile` | Browse jobs, upload CVs, apply, take practice + real AI interviews, buy candidate credit packs |
+| Candidate | `/dashboard`, `/practice`, `/profile` | Browse jobs, save jobs, upload CVs, upload a one-time identity card (required before any real interview), apply, take practice + real AI interviews, buy candidate credit packs |
 | Recruiter | `/recruiter/dashboard` | Post jobs (with AI JD generation), review applications and interview reports, mark candidates **Screening Cleared** / **Not Cleared** (one-click XLSX/CSV export of the cleared list per job), invite candidates in bulk, buy recruiter credit packs |
 | Admin | `/admin/*` | Verify recruiters, manage users/jobs/applications, view platform cost statistics |
 | Invite-only candidate | `/invite/redeem` | A "burner" account created by a recruiter invite; logs in with an Invite ID instead of email |
@@ -104,9 +109,12 @@ Everything costly runs on **credits** held in per-user wallets
 - Recruiter AI job-description generation: **10**
 - Real interview (charged to the **recruiter** who owns the job): **30** (or **50** with proctoring)
 
+Bulk-inviting a candidate costs the recruiter **1 credit** per invitee
+(auto-refunded if the email fails to send).
+
 Interviews are charged when they **start** and refunded automatically —
 always idempotently — if the session ends with **zero answers** (candidate
-never spoke, browser crashed, identity verification blocked the session). A
+never spoke, browser crashed, the start failed after the debit). A
 background sweeper also refunds or auto-finalizes sessions abandoned
 mid-interview. Credits are bought via Razorpay recharge packs. See
 [backend/payment-module.md](backend/payment-module.md).

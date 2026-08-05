@@ -12,7 +12,7 @@
 |---|---|---|
 | `react-frontend/` | Vite SPA | Vercel |
 | `python-backend/` | Flask + Socket.IO (gunicorn, 1 eventlet worker) | Google Cloud Run (europe-west1) |
-| Database | MongoDB (users, jobs, applications, interviews, GridFS files) | MongoDB Atlas |
+| Database | MongoDB (users, jobs, applications, interviews + GridFS for identity cards, face captures, legacy CVs) | MongoDB Atlas |
 | Object storage | CVs, JDs, interview + mobile recordings, gaze artifacts | Google Cloud Storage |
 | Speech | STT (interview answers), TTS (interviewer voice) | Google Cloud Speech / TTS |
 | LLM chain | Interview Q-gen + evaluation, CV parse/score, face match, JD gen | **OpenAI → Gemini → Groq** (`LLM_PROVIDER_PRIORITY`, current default) |
@@ -158,8 +158,11 @@ days. Practice ≈ half of the above and no recordings.
    Without lifecycle rules storage grows unbounded.
 3. **TTS caching** — interview questions repeat across candidates for the same
    JD; caching synthesized audio by text-hash cuts TTS spend materially.
-4. **Keep Groq primary** (already the default) — 10–20× cheaper than GPT-4-class
-   for these tasks; the env chain makes experimentation free.
+4. **Keep the cheap leg answering** — Groq is 10–20× cheaper than GPT-4-class
+   for these tasks. Note the configured default order is
+   `openai,gemini,groq`, so Groq only answers after the earlier legs fail;
+   putting `groq` first in `LLM_PROVIDER_PRIORITY` makes the saving explicit
+   rather than incidental. The env chain makes experimentation free.
 5. **Cloud Run min-instances=1** instead of the keep-warm cron once revenue
    supports it (~$15/mo) — removes cold starts without the 5-minute ping.
 6. **Atlas right-sizing** — M10 is enough until ~1,000 DAU if GridFS recordings

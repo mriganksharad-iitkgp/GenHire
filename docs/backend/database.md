@@ -6,8 +6,10 @@ managed by `config/database.py` (`DatabaseConfig`), reading `MONGODB_URI` and
 (idle connections are not pre-opened because Atlas closes them and causes SSL
 resets), 10 s connect/server-selection timeouts, 30 s socket timeout.
 
-`db_config.get_collections()` returns the seven core collections; a few more
-are accessed ad-hoc via `db.get_collection(...)`.
+`db_config.get_collections()` returns the eight core collections (`users`,
+`jobs`, `applications`, `interviews`, `practice_sessions`, `invite_tokens`,
+`invite_batches`, `saved_jobs`); a few more are accessed ad-hoc via
+`db.get_collection(...)`.
 
 ## Core collections
 
@@ -20,11 +22,16 @@ Key fields: `name`, `email`, `email_lower`, `password` (hashed), `user_type`
 and/or email verification), `is_active`, `permissions` (admin permission list,
 `*` = super admin), `cv_details` (structured CV on the profile),
 `is_invite_only` + `invite_id_lower` (burner accounts created by recruiter
-invites — these log in with an Invite ID, not an email), and `face_profile`
-(`{image_file_id (GridFS), registered_at, source_session_id,
-source_application_id}` — the permanent face identity enrolled at the
-candidate's **first** real interview; every later real interview is verified
-against it).
+invites — these log in with an Invite ID, not an email), and `identity_card`
+(`{image_file_id (GridFS), content_type, original_filename, uploaded_at,
+uploaded_by: 'candidate' | 'admin:<admin_id>'}` — the one-time
+government/institutional ID that every real interview's face capture is
+scored against; candidates cannot replace their own).
+
+`face_profile` (`{image_file_id, registered_at, source_session_id,
+source_application_id}`) is the **legacy** enrolled-selfie identity from the
+DeepFace-era flow. Nothing writes it any more; it is only read to serve the
+`reference` face image for interviews that predate the ID-card flow.
 
 ### `jobs`
 Recruiter job postings. Key fields: `title`, `company`, `department`,
@@ -36,7 +43,7 @@ Recruiter job postings. Key fields: `title`, `company`, `department`,
 (`pending`, `interviewed`, `screening_cleared`, `rejected`) that are
 `$inc`-synced whenever an application changes status. (`selected` is the
 legacy name for the `screening_cleared` counter — folded in by
-`scripts/migrate_screening_cleared.py`.)
+`scripts/migrations/migrate_screening_cleared.py`.)
 
 JD file fields (populated when a recruiter uploads a JD file — either
 directly on the create-job form, or via AI JD generation's "upload to parse"
@@ -72,17 +79,21 @@ refunded; each refund makes the next attempt use a fresh idempotency key).
 ### `interviews`
 One per real AI interview session. Key fields: `user_id`, `session_id` (UUID
 from the interview engine), `application_id`, `recruiter_id`, `status`
-(`active` → `completed` | `abandoned` (discarded/refunded) |
-`identity_blocked` (face verification failed repeatedly)),
-`cv_path`/`jd_path` (temp .txt files),
+(`active` → `completed` | `abandoned` (discarded/refunded); `identity_blocked`
+is a legacy value from the old blocking face gate — nothing sets it now, but
+the refund sweeper still picks up old docs carrying it),
+`cv_path`/`jd_path` (transient staging .txt files under the OS temp dir),
 `similarity_score`, `proctoring_config`, `proctoring_score`,
 `proctoring_status`, `evaluation` (full AI evaluation object), `final_score`,
 `transcript` (`[{role, text, ai_probability}]`), `manual_infractions`,
 `gaze_metrics`, `gaze_plot_path`, `gaze_recorder_*` (recording/analysis/points
 paths + analysis + score), `recording_path`, `mobile_recording_path`,
 `usage_summary`, `usage_deduction`, `start_time`,
-`identity_verification` (`{status, verified, distance, threshold, attempts,
-checked_at, captured_image_file_id, reference_image_file_id}`),
+`identity_verification` (`{status: "score_pending" → "scored" |
+"score_unavailable" (or "skipped" when `FACE_VERIFICATION_MODE=off`), method:
+"llm_id_card_match", verified, matched, score, threshold, model,
+match_reason, checked_at, scored_at, captured_image_file_id,
+reference_image_file_id}` — the reference id points at the account's ID card),
 `debit_idempotency_key` (the exact key used for the recruiter debit, so
 refunds can reverse it precisely), `questions_answered_count` (incremented
 per substantive answer — the zero-answer refund decision survives a server
@@ -103,11 +114,24 @@ auto-deletes expired tokens.
 One per bulk-invite action: `recruiter_id`, `job_id`, counts of
 sent/valid/invalid/redeemed, `created_at`.
 
+### `saved_jobs`
+One per (candidate, job) bookmark: `candidate_id`, `job_id`, `saved_at`.
+A unique compound index is what makes the save endpoint idempotent under a
+double-click.
+
 ## Cost/telemetry collections (ad-hoc access)
 
 - `openai_cost_logs` — every tracked LLM call (tokens, model, cost, request id).
 - `speech_cost_logs` — STT seconds / TTS characters cost events.
+- `email_log` — one row per outbound send (`sent_at`, `success`), written by
+  `EmailService._log_send`; the admin cost page counts successful sends per
+  window and prices them at `ZEPTOMAIL_PER_EMAIL_COST_INR`.
+- `payment_reconciliations` — durable queue of payments that succeeded at
+  Razorpay but failed to credit a wallet (see [payment-module.md](payment-module.md)).
 - Usage-telemetry events written by `usage_telemetry_service.record_usage_event()` power the admin/recruiter/candidate cost-statistics endpoints.
+
+Files stored in **GridFS** (the `fs.files` / `fs.chunks` collections):
+identity-card images, interview face captures, and legacy CVs.
 
 ## Payment collections (`payment_module/models/`)
 
@@ -130,6 +154,9 @@ sent/valid/invalid/redeemed, `created_at`.
 | `invite_batches` | `idx_invite_batches_recruiter` · `idx_invite_batches_job` · `idx_invite_batches_created_at` | Batch status queries. |
 | `applications` | `idx_applications_job_visible` on `(job_id, is_visible)` | Matches the recruiter dashboard query. |
 | `applications` | `idx_applications_job_student` on `(job_id, student_id)` | "Has this candidate already applied to this job?" lookup. |
+| `saved_jobs` | `uq_saved_jobs_candidate_job` on `(candidate_id, job_id)` (**unique**) | Makes bookmarking idempotent under a double-click. |
+| `saved_jobs` | `idx_saved_jobs_candidate_saved_at` on `(candidate_id, saved_at desc)` | Backs the "my saved jobs, newest first" listing. |
+| `email_log` | `idx_email_log_sent_at_success` on `(sent_at, success)` | The admin cost page's per-window successful-send count. |
 
 All index creation is wrapped in try/except so legacy duplicate data never
 blocks startup.

@@ -24,6 +24,15 @@ implemented today.
   practice sessions, auth.
 - **[onboarding.md](onboarding.md)** — set up and run everything locally,
   try the full loop, where to change what, gotchas.
+- **[production-readiness.md](production-readiness.md)** — honest scorecard of
+  what is industry-standard, what is partial, and the ranked gaps.
+- **[SMOKE_CHECKLIST.md](SMOKE_CHECKLIST.md)** — the manual click-through pass
+  to run before merging or deploying.
+- **[costfetch.md](costfetch.md)** — how the admin cost page gets *real*
+  provider spend (GCP billing export, OpenAI Costs API) and what is still a
+  hand-entered env estimate.
+- **[../cost.md](../cost.md)** — what running the platform costs at
+  100 / 1k / 10k DAU, and the cost levers.
 
 ### Backend (`python-backend/`)
 - **[backend/overview.md](backend/overview.md)** — what it does, in simple terms.

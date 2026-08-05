@@ -17,31 +17,43 @@ python-backend/
 │   │   ├── speech_cost_tracker.py# STT/TTS cost events
 │   │   └── pricing.py            # model price tables
 │   ├── document/                 # DocumentLoader — reads CV/JD text files
-│   ├── llm/                      # LLM provider clients (Groq)
-│   └── prompts/                  # prompt templates
+│   ├── llm/                      # provider clients: openai_llm, gemini_llm,
+│   │                             #   groq_llm, fallback_llm + factory
+│   ├── prompts/                  # prompt templates
+│   └── runtime.py                # process-wide singletons: session manager,
+│                                 #   live_sessions, gaze service, staging dirs
 ├── evaluation_model/rubrics_eval/
 │   ├── answer_evaluator.py       # scores answer content against rubrics
 │   ├── communication_evaluator.py# scores language/communication quality
 │   ├── answer_classifier.py      # classifies answer types
 │   └── rubric_generator.py, evaluation_system.py, ...
+├── services/
+│   ├── llm_fallback_service.py   # THE app-wide provider chain
+│   ├── face_match_service.py     # vision-LLM ID-card ↔ capture similarity
+│   └── identity_card_service.py  # one-time ID card storage (GridFS)
 ├── utils/
 │   ├── ai_detection.py           # "was this answer AI-generated?" probability
-│   ├── cheating_detection.py     # proctoring analysis helpers
 │   └── gaze_recorder_service.py  # GazeRecorder page builder + gaze analysis
+├── sockets/proctoring_sockets.py # the live frame/violation stream
 └── security_check.py             # per-frame MediaPipe + DeepFace analysis
 ```
 
-The LLM is **Groq** (`GROQ_API_KEY`), with a fallback chain
-(`_create_fallback_llm` / `llm_fallback_service.py`) if the primary model
-fails. The model recorded for usage fallback is `llama-3.3-70b-versatile`.
+**Which LLM runs.** The interview session manager is built from
+`interview/config/settings.py`'s `LLMConfig`, which defaults to
+**OpenAI / `gpt-4o-mini`** (`INTERVIEW_LLM_MODEL` or `OPENAI_MODEL` to
+override) with `interview/llm/factory.py` wrapping multiple configs in a
+`FallbackLLM`. Everything *outside* the session manager — CV scoring, JD
+generation, the face match — goes through the app-wide chain in
+`services/llm_fallback_service.py`, ordered by `LLM_PROVIDER_PRIORITY`
+(default `openai,gemini,groq`).
 
 ## Session lifecycle (`InterviewSessionManager`)
 
 ### 1. `create_session(cv_path, jd_path, ...)`
 - Generates a UUID `session_id`, starts a `CostTracker` session.
-- Loads the CV and JD text via `DocumentLoader` (files were written to
-  `uploads/tmp/` by the start route from trusted DB data, so validation is
-  skipped with `pre_validated=True`).
+- Loads the CV and JD text via `DocumentLoader` (files were written to the
+  transient staging dir `<os-temp>/genhire_staging/tmp/` by the start route
+  from trusted DB data, so validation is skipped with `pre_validated=True`).
 - Returns **instantly** with a hardcoded first question — *"Hello, I'm Alex.
   Great to meet you! Could you please give me a brief introduction about
   yourself and your background?"* — for zero-lag startup.
@@ -84,7 +96,7 @@ finishes speaking:
   and survives server restarts.
 - `_should_continue_interview` decides when the interview is complete.
 
-### 3. Ending — `POST /api/interviews/<session_id>/end` (in `app.py`)
+### 3. Ending — `POST /api/interviews/<session_id>/end` (in `routes/interview_routes.py`)
 - **Zero-answer discard**: if not a single substantive answer was recorded,
   the interview is not scored at all — the recruiter's start-time debit is
   refunded (idempotently), the interview doc becomes `abandoned`, the
@@ -106,37 +118,57 @@ finishes speaking:
   recruiter's socket rooms, and both parties get notification emails
   (fire-and-forget threads).
 
-## Face identity verification (`services/face_verification_service.py`)
+## Face identity verification (advisory, never blocking)
 
-Before any real interview runs, `POST .../register-face` acts as an
-**identity gate**:
+Identity works in two stages: a **one-time ID-card upload** on the profile,
+and a **background similarity score** at each real interview.
 
-1. **First real interview ever** → the captured selfie is enrolled as the
-   account's permanent identity: stored in GridFS and referenced from
-   `users.face_profile`. Status: `registered_new`.
-2. **Every later real interview** (any company's job) → the new selfie is
-   compared against the registered face with **DeepFace (VGG-Face)**:
-   - match → `verified`, interview proceeds;
-   - mismatch → the candidate may retry up to `FACE_VERIFY_MAX_ATTEMPTS`
-     (default 3); after that the interview is **blocked**
-     (interview status `identity_blocked`, HTTP 403
-     `error_code: face_mismatch_blocked`) and the attempt is recorded.
-     Blocked sessions are refunded by the sweeper.
-3. A quality gate rejects images with no face / multiple faces before any
-   comparison (`error_code`s the UI turns into "retake photo" hints).
+### Stage 1 — the identity card (`services/identity_card_service.py`)
 
-The captured photo (and the reference, on later interviews) is stored per
-interview and served to the interview owner, the job's recruiter, and admins
-via `GET .../face-image/{captured|reference}` — the recruiter sees a
-"Candidate Identity" section in the report and an identity chip on the
-candidate card (`identity_verification` on the application).
+The candidate uploads a government/institutional ID **once**
+(`POST /api/identity-card`, JPEG/PNG/WebP ≤ 5 MB). It is stored in GridFS and
+pointed to by `users.identity_card`. Candidates cannot replace it — only an
+admin can, via `PUT/DELETE /api/admin/candidates/<id>/identity-card`.
 
-Modes (`FACE_VERIFICATION_MODE`): `enforce` (default, blocks impersonators),
-`monitor` (records mismatches, never blocks), `off`. If the DeepFace/OpenCV
-stack isn't installed, verification degrades to photo capture with status
-`unverified_system_unavailable` — a missing server dependency never locks a
-candidate out. **Practice sessions soft-verify**: the photo is taken, but a
-mismatch never blocks.
+### Stage 2 — scoring at interview start (`POST .../register-face`)
+
+1. A **quality gate** rejects images with no face / multiple faces before
+   anything else (`error_code`s the UI turns into "retake photo" hints).
+2. **No identity card on the account → HTTP 403
+   `error_code: identity_card_required`.** This is the only identity condition
+   that stops an interview.
+3. Otherwise the capture is stored, `identity_verification.status` is set to
+   `score_pending`, the session is flipped to `active`, and the endpoint
+   **returns immediately**. A daemon thread (`_score_identity_async`) then
+   sends the ID card and the capture through the LLM chain on a vision model
+   (`services/face_match_service.py`, `FACE_MATCH_*_MODEL`), which returns a
+   0–100 similarity plus a same-person judgement against
+   `FACE_MATCH_THRESHOLD` (default 75). The result is written back as
+   `scored` (or `score_unavailable` if every provider failed) onto both the
+   interview and the application.
+
+**Nothing about the score blocks or fails the interview**, for any account
+type. It is advisory: the recruiter sees the score and both photos and makes
+the call. `FACE_VERIFICATION_MODE=off` skips capture and scoring entirely
+(status `skipped`); `enforce` and `monitor` behave identically today.
+
+The captured photo and the ID-card reference are served to the interview
+owner, the job's recruiter, and admins via
+`GET .../face-image/{captured|reference}` — the recruiter sees a "Candidate
+Identity" section in the report and an identity chip on the candidate card
+(`identity_verification` on the application).
+
+**Practice sessions** only capture the photo (for live proctoring). They never
+score against the ID card and never block. If a legacy `users.face_profile`
+exists, practice soft-verifies against it for information only.
+
+> **Legacy note.** This used to be a blocking DeepFace gate: the first real
+> interview enrolled a permanent selfie in `users.face_profile`, later ones
+> verified against it, and repeated mismatches produced `face_mismatch` /
+> `face_mismatch_blocked` and an `identity_blocked` interview. None of that
+> runs any more. The backend no longer returns those error codes (the kiosk's
+> `renderer.js` still carries dead branches for them), and `face_profile` is
+> read-only legacy data.
 
 ## Proctoring — four independent signals
 
@@ -145,26 +177,32 @@ Per-job `proctoring_config` toggles: `voice_detection`, `object_detection`,
 costs the recruiter 50 credits instead of 30.
 
 ### Signal 1 — Live frame analysis (Socket.IO)
-1. The identity-gate selfie from `register-face` initializes the in-memory
-   `live_sessions` dict with `proctoring_score: 100`. When the account has a
-   registered face profile, **that** image (not just the session selfie) is
-   the comparison reference — someone can't enroll a stand-in's face for a
-   single session.
-2. The kiosk emits `start_proctoring` (joins the session room) and then one
+1. The capture from `register-face` initializes the in-memory `live_sessions`
+   entry (`registered_face`, `registered_face_np`, `proctoring_score: 100`,
+   `infractions: {}`) — this session's own capture is the per-frame comparison
+   reference.
+2. The client emits `start_proctoring` (joins the session room) and then one
    `proctoring_frame` per second (base64 JPEG).
 3. `security_check.analyze_frame_for_proctoring()` runs **MediaPipe head-pose**
-   and **DeepFace identity** checks against the registered face; infractions
-   reduce the running score.
-4. Violations trigger a `proctoring_alert` back to the kiosk in real time.
+   and **DeepFace identity** checks against that reference; infractions reduce
+   the running score. Both libraries are deliberately absent from
+   `requirements.txt` — where they aren't installed this signal is simply
+   unavailable and the score falls back to the gaze signal (see below).
+4. Violations trigger a `proctoring_alert` back to the client in real time.
+5. **The kiosk does not use this path.** It runs MediaPipe FaceLandmarker and
+   a coco-ssd phone detector locally in `renderer.js` and relays only the
+   resulting `proctoring_violation` events.
 
-### Signal 2 — GazeRecorder eye tracking (third-party CDN)
+### Signal 2 — Gaze tracking
 The backend serves an HTML page at
 `/api/interviews/<session_id>/gaze-recorder-page` that loads GazeCloudAPI /
-GazeRecorderAPI scripts from `app.gazerecorder.com`. Gaze points are POSTed to
-`/gaze-recorder-results`, where `gaze_recorder_service.analyze_gaze_patterns()`
-computes a `cheatingScore`; `proctoring_score = 100 - cheatingScore`. Heatmap
-and raw-point files are saved under `uploads/proctoring/gaze_recorder/`.
-This signal depends on the CDN script loading in the candidate's browser.
+GazeRecorderAPI scripts from `app.gazerecorder.com` (the kiosk instead runs
+`webgazer` locally, bundled from a CDN in its `index.html`). Gaze points are
+POSTed to `/gaze-recorder-results`, where
+`gaze_recorder_service.analyze_gaze_patterns()` computes a `cheatingScore`;
+`proctoring_score = 100 - cheatingScore`. Heatmap and raw-point files are
+staged under `<os-temp>/genhire_staging/proctoring/gaze_recorder/` and
+uploaded to GCS.
 
 ### Signal 3 — Manual violations
 Tab switches / window blur / app switches detected client-side are emitted as
@@ -172,8 +210,9 @@ Tab switches / window blur / app switches detected client-side are emitted as
 In the kiosk these fire when Electron detects window blur during kiosk mode.
 
 ### Signal 4 — Mobile second camera
-A QR code pairs the candidate's phone (`/mobile-cam/:sessionId` page in the
-React app) to the session room. The desktop relays start/stop via
+A QR code pairs the candidate's phone (`/mobile-camera/:sessionId` page in the
+React app; `MOBILE_RECORDING_ENABLED=false` hides the pairing UI and rejects
+uploads) to the session room. The desktop relays start/stop via
 `control_mobile_recording`; the phone records the environment and uploads to
 `/api/interviews/<session_id>/upload-mobile-recording`.
 
@@ -184,7 +223,8 @@ counts — they're independent signals). If **neither** signal is available
 (camera denied, CDN blocked), the score is stored as `null` with
 `proctoring_status: "incomplete"` — the system never fabricates a passing
 score. A matplotlib gaze-ratio plot is also generated from client tracking
-data and saved to `uploads/proctoring/`.
+data, staged under `<os-temp>/genhire_staging/proctoring/`, and uploaded to
+GCS.
 
 ## Credit lifecycle & refunds (`services/interview_credit_service.py`)
 
@@ -194,7 +234,6 @@ wallet for practice) and refunded — always idempotently, key
 substantive answers**:
 
 - start failed right after the debit,
-- identity verification blocked the candidate,
 - the candidate abandoned the tab / crashed before answering,
 - `/end` was called with nothing answered (→ `interview_discarded`).
 
@@ -204,10 +243,11 @@ derives a fresh debit key (`real-interview:<app_id>:r<n>`) — replaying the
 original key after a refund would return the old transaction and never
 actually re-charge.
 
-The **`InterviewRefundSweeper`** daemon (started in `app.py`, same pattern
-as the invite cleanup scheduler) runs every
+The **`InterviewRefundSweeper`** daemon (started by `jobs/runner.start_all()`,
+same pattern as the invite cleanup scheduler) runs every
 `INTERVIEW_REFUND_SWEEP_INTERVAL_MINUTES` (15) and looks for sessions stuck
-in `active` / `identity_blocked` past `INTERVIEW_ABANDON_TTL_MINUTES` (120):
+in `active` — or the legacy `identity_blocked` — past
+`INTERVIEW_ABANDON_TTL_MINUTES` (120):
 
 | Stale session | Outcome |
 |---|---|

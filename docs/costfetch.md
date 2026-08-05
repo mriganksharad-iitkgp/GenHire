@@ -57,7 +57,9 @@ GCP does **not** have a simple "give me cost for date range X–Y" REST endpoint
 ad-hoc queries. The supported mechanism is **Cloud Billing Export**: GCP writes a row
 per SKU per day into a BigQuery table, and you query that table like any other data.
 
-### Setup (one-time, console work — do this yourself, not via code)
+### Setup (one-time, console work) — ✅ DONE 2026-07-12
+
+Recorded here for reference/reproduction; both steps are already complete.
 
 1. GCP Console → Billing → **Billing export** → **BigQuery export** → enable
    "Standard usage cost" export for the `hr-tech-2026` project's billing account.
@@ -86,9 +88,10 @@ ORDER BY cost_usd DESC
 the current `Cloud Run ₹54.01 − ₹53.40 savings = ₹0.62 net` line on the console
 represents; the export table has both components separately.
 
-### Backend integration sketch
+### Backend integration (shipped)
 
-Add a `python-backend/services/gcp_billing_service.py`:
+`python-backend/services/gcp_billing_service.py` does this — the snippet below
+is the shape of it, kept as a readable summary of the query path:
 
 ```python
 from google.cloud import bigquery
@@ -110,13 +113,16 @@ def fetch_gcp_costs_for_range(start_date, end_date):
     return {r.service: (r.cost_usd or 0) + (r.credit_usd or 0) for r in rows}
 ```
 
-Call this from `cost_stats_admin.py` in place of the itemized `_env_monthly_inr()`
-GCP block (lines ~160–164), converting USD→INR with a live or configured FX rate,
-and map service names (`"Cloud Run"`, `"Artifact Registry"`, `"Cloud Build"`,
-`"Cloud Storage"`) onto the existing `gcp_breakdown` keys.
+`cost_stats_admin.py` calls it ahead of the itemized `_env_monthly_inr()` GCP
+block, converts USD→INR, and maps service names (`"Cloud Run"`,
+`"Artifact Registry"`, `"Cloud Build"`, `"Cloud Storage"`) onto the existing
+`gcp_breakdown` keys.
 
-**New dependency**: `google-cloud-bigquery` (not currently in
-`python-backend/requirements.txt`).
+**Dependency**: `google-cloud-bigquery` — pinned in
+`python-backend/requirements.txt`.
+
+**Env var**: `GCP_BILLING_EXPORT_BQ_TABLE` (full table id). Unset ⇒ the page
+silently falls back to the `INFRA_MONTHLY_GCP_*` estimates.
 
 **Cost of querying**: BigQuery's own free tier is 1 TB scanned/month — a table this
 small (a few thousand rows/month) costs nothing to query.
@@ -164,7 +170,8 @@ Currently low-priority: per project memory, the OpenAI key has **zero quota** (e
 call 429s), so real spend is ₹0 regardless — but wiring this up costs nothing and
 future-proofs the day billing credit is added.
 
-**New env var needed**: `OPENAI_ADMIN_API_KEY` (distinct from `OPENAI_API_KEY`).
+**Env var**: `OPENAI_ADMIN_API_KEY` (distinct from `OPENAI_API_KEY`) — created
+and set; the integration is live.
 
 ---
 
@@ -273,11 +280,11 @@ if the volume assumption changes (e.g. 50k emails/mo → 5 credits → ₹750).
 
 ## Recommended rollout order
 
-1. ~~**GCP Billing Export → BigQuery**~~ (Section 1) — **DONE**: backend
-   integration shipped; only the console-side export enablement + env var
-   remain (owner action). Also covers Gemini for free (Section 3).
-2. ~~**OpenAI Costs API**~~ (Section 2) — **DONE**: backend integration
-   shipped; only the Admin API key creation remains (owner action).
+1. ~~**GCP Billing Export → BigQuery**~~ (Section 1) — **DONE and live**:
+   backend integration shipped, console export enabled 2026-07-12, env var
+   set. Also covers Gemini for free (Section 3).
+2. ~~**OpenAI Costs API**~~ (Section 2) — **DONE and live**: backend
+   integration shipped, Admin API key created and set.
 3. **MongoDB Atlas Admin API** (Section 6) — next-biggest known line item
    (₹3,000/mo estimate), real invoice data readily available.
 4. **Vercel REST API** (Section 5) — ₹0 cost either way on Hobby, but useful for

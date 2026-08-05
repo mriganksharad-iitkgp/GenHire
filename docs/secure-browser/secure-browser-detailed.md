@@ -7,14 +7,18 @@ open DevTools, or leave the interview window.
 
 ```
 secure-browser-kiosk/
-├── main.js       # Electron main process (405 lines) — window, kiosk lockdown,
-│                 #   deep links, Google Cloud TTS/STT, local HTTP server
+├── main.js       # Electron main process (~450 lines) — window, kiosk lockdown,
+│                 #   deep links, speech token broker + TTS proxy, local HTTP server
 ├── preload.js    # contextBridge — the ONLY bridge between UI and main process
-├── renderer.js   # The interview UI logic (~1,900 lines) — talks to the backend
-├── index.html    # UI markup loaded into the window
-├── credentials.json  # Google Cloud service-account key (packaged as extraResource)
+├── renderer.js   # The interview UI logic (~2,070 lines) — talks to the backend
+├── index.html    # UI markup loaded into the window (~740 lines, CDN scripts)
 └── package.json  # electron-builder config (NSIS installer / dmg, protocol registration)
 ```
+
+**No Google service-account key ships with the app.** A `credentials.json`
+still sits in the working tree but is explicitly excluded from the build
+(`build.files: ["!credentials.json", ...]`) and nothing reads it — speech
+auth is brokered by the backend at runtime (see below).
 
 ## Launch flow — from website click to running interview
 
@@ -30,6 +34,8 @@ secure-browser-kiosk/
 3. **Payload handoff** — `main.js` parses `initData` from the URL and sends it
    to the renderer over IPC (`init-from-deeplink`). The payload carries the
    auth token, the backend API URL, and the application/practice context.
+   The main process **also keeps** `{apiUrl, token}` for itself
+   (`captureBackendSession`) — that is what authorizes its speech calls.
    Deep links are handled on both cold start (scanning `process.argv`) and
    while running (`second-instance` on Windows, `open-url` on macOS).
 4. **Local HTTP server** — on startup the main process spins up a tiny HTTP
@@ -71,20 +77,27 @@ permissions are denied.
 Extra check: `get-display-info` returns the number of connected displays, so
 the renderer can **flag** (not block) multi-monitor setups at interview start.
 
-## Google Cloud Speech — local to the kiosk
+## Google Cloud Speech — brokered by the backend
 
-Unlike the website (which uses the backend's `/api/speech/*`), the kiosk has
-its **own** Google Cloud clients, initialized from `credentials.json`
-(bundled by electron-builder as an extraResource; found at
-`process.resourcesPath` when packaged, next to `main.js` in dev):
+The kiosk uses the **same** `/api/speech/*` endpoints as the website, with the
+interview JWT from the deep link as its credential. Shipping a service-account
+key inside a user-installed desktop app would have handed every candidate a
+usable GCP key; this design removes that entirely.
 
-- **TTS** (`synthesize-speech` IPC, invoke/response): tries voices in order
-  `en-US-Journey-F` → `en-US-Neural2-C` → `en-US-Standard-C`, returns MP3
-  audio as base64 for the renderer to play.
+- **TTS** (`synthesize-speech` IPC, invoke/response): `main.js` POSTs to
+  `{apiUrl}/api/speech/synthesize` with `Authorization: Bearer <session jwt>`,
+  trying voices in order `en-US-Journey-F` → `en-US-Neural2-C` →
+  `en-US-Standard-C`, and returns the base64 MP3 for the renderer to play.
 - **Streaming STT** (`start-stt-stream` / `audio-chunk` / `stop-stt-stream`):
-  a live `streamingRecognize` stream (WEBM_OPUS, 48 kHz, `latest_long` model,
+  `getSpeechAccessToken()` POSTs to `{apiUrl}/api/speech/token` for a
+  short-lived Google OAuth access token (cached until 2 minutes before expiry,
+  re-minted per session). That token is wrapped in gRPC channel credentials to
+  build a `@google-cloud/speech` client, which opens a live
+  `streamingRecognize` stream (WEBM_OPUS, 48 kHz, `latest_long` model,
   automatic punctuation, interim results). Transcripts flow back over
   `stt-on-transcript (text, isFinal)`; errors over `stt-error`.
+- Both paths throw *"No backend session — launch the app from the GenHire
+  dashboard"* if the app was opened directly instead of via a deep link.
 
 ## Preload bridge (`preload.js`)
 
@@ -109,10 +122,12 @@ this explicit API surface via `contextBridge` as `window.electronAPI`:
 calls the **same Flask API the website uses**:
 
 - `POST {apiUrl}/api/interviews/start` — begins the session (real mode).
-- `POST .../api/interviews/<session_id>/register-face` — the face identity
-  gate: enrolls the face on the first-ever real interview, verifies against
-  the registered identity on every later one; repeated mismatches block the
-  interview (see
+- `POST .../api/interviews/<session_id>/register-face` — captures the
+  candidate's face. The backend stores it, activates the session, and scores
+  it against the account's identity card in the background; only a *missing*
+  identity card (`identity_card_required`) stops the interview. `renderer.js`
+  still contains branches for the retired `face_mismatch` /
+  `face_mismatch_blocked` codes — the backend no longer returns them (see
   [../backend/interview-engine.md](../backend/interview-engine.md)).
 - `POST .../api/interviews/<session_id>/answer` or
   `.../api/practice/<session_id>/answer` — submits each answer (the same
@@ -136,5 +151,10 @@ npm run dist         # Windows x64 NSIS installer (Genhire.exe)
 npm run dist:mac     # macOS universal dmg/zip
 ```
 
-`credentials.json` (Google service account with Speech APIs enabled) must be
-present at build time — it ships inside the installer as an extraResource.
+No credentials setup is required at build time. The kiosk gets everything it
+needs (backend URL + JWT) from the `secure-interview://` deep link at runtime,
+so a build is reproducible from a clean checkout.
+
+`npm start` launches Electron directly; to exercise the full website→kiosk
+handoff you need the `secure-interview://` protocol registered with the OS,
+which only happens when you install a built package.

@@ -42,6 +42,9 @@ new browser tab).
 | GET | `/api/jobs/<job_id>/jd-download` | 🔑 | Signed, time-limited download URL for the job's uploaded JD file (404 if none was uploaded). |
 | GET / PUT / DELETE | `/api/jobs/<job_id>` | 🔑 / 🧑‍💼 / 🧑‍💼 | Read / update / delete a job. |
 | GET | `/api/jobs/<job_id>/applications` | 🧑‍💼 | Applications for one job. |
+| GET | `/api/jobs/<job_id>/screening-cleared/export` | 🧑‍💼 | One-click XLSX/CSV export of the job's screening-cleared candidates. |
+| POST / DELETE | `/api/jobs/<job_id>/save` | 🎓 | Bookmark / un-bookmark a job (idempotent — a unique index on `(candidate_id, job_id)` makes a double-click safe). |
+| GET | `/api/saved-jobs` | 🎓 | The candidate's saved jobs, newest first. |
 | DELETE | `/api/remove-sample-jobs` | — | Dev/maintenance helper. |
 | GET | `/api/test-jobs` | — | Dev helper. |
 
@@ -82,7 +85,19 @@ Candidates can store multiple CVs; one is "primary".
 | POST | `/api/upload`, `/api/upload-cv`, `/api/upload-photo` | Legacy single-file uploads (profile photo still uses `/upload-photo`). |
 | GET | `/api/view-file`, `/api/view-cv`, `/api/download-cv`, `/api/view-photo` | Stream own files. |
 | GET | `/api/admin/cv/<user_id>`, `/api/admin/photo/<user_id>` | 🛡️ view any user's files. |
-| GET | `/api/files/<gridfs_id>` | Serve any GridFS-stored file inline (defined in `app.py`). |
+| GET | `/api/files/<gridfs_id>` | Serve any GridFS-stored file inline (defined in `routes/system_routes.py`). |
+
+## Identity card — `routes/identity_routes.py` (prefix `/api`)
+
+The one-time government/institutional ID a candidate must have on file before
+any real interview. Candidates cannot replace their own card once uploaded —
+only admins can (`/api/admin/candidates/<id>/identity-card`).
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/identity-card` | 🎓 | Card status for the pre-interview gate. |
+| POST | `/api/identity-card` | 🎓 | One-time upload (JPEG/PNG/WebP, ≤5 MB). |
+| GET | `/api/identity-card/image` | 🎓 | Stream one's own card image. |
 
 ## Practice Interviews — `routes/practice_routes.py` (prefix `/api/practice`)
 
@@ -99,7 +114,7 @@ the candidate (`{status: "interview_discarded"}`).
 | GET | `/api/practice/history` | Own past sessions. |
 | GET | `/api/practice/<session_id>/report` | Full report for one session. |
 
-## Real Interviews — defined in `app.py` (prefix `/api/interviews`)
+## Real Interviews — `routes/interview_routes.py` (prefix `/api/interviews`)
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -107,7 +122,7 @@ the candidate (`{status: "interview_discarded"}`).
 | GET | `/api/interviews/<session_id>/question` | 🔑 | Next question for the session (owner-checked). |
 | POST | `/api/interviews/<session_id>/answer` | 🎓 | Submit an answer (empty string allowed — auto-submitted on timeout). Returns evaluation + next question; non-empty answers increment `questions_answered_count`. |
 | POST | `/api/interviews/<session_id>/end` | 🎓 | Finalize: builds evaluation + transcript, computes interview score (70% answers / 30% language), merges proctoring signals, updates interview + application docs, syncs job counters, emails recruiter & candidate, records usage telemetry. If **zero answers** were recorded, the session is discarded instead — recruiter credits refunded, response `{status: "interview_discarded", refund: {...}}`. |
-| POST | `/api/interviews/<session_id>/register-face` | 🎓 | The face identity gate. First real interview: enrolls the face permanently on the account (`users.face_profile`). Later interviews: verifies the captured face against the registered one (DeepFace); mismatches return `error_code: face_mismatch` (attempts left) or `face_mismatch_blocked` (interview blocked, status `identity_blocked`). Also initializes the live proctoring session. Practice sessions soft-verify (never block). |
+| POST | `/api/interviews/<session_id>/register-face` | 🎓 | Captures the candidate's face and activates the session. Requires an identity card on the account — without one it returns 403 `error_code: identity_card_required`, the **only** identity error that stops an interview. With one, the capture is stored and similarity-scored against the card by a vision LLM on a **background thread**; the response returns immediately with `identity.status: "score_pending"` and the interview proceeds regardless of the eventual score. Also initializes the live proctoring session. Practice sessions only capture (soft-verify, never score against the card). |
 | GET | `/api/interviews/<session_id>/face-image/<kind>` | 🔑 | Serve the `captured` or `reference` identity photo (interview owner, the job's recruiter, or admin only). |
 | GET | `/api/interviews/<session_id>/gaze-recorder-page` | 🔓 (token via query) | Server-rendered HTML page that loads the GazeRecorder eye-tracking scripts. |
 | POST | `/api/interviews/<session_id>/gaze-recorder-results` | 🎓 | Receives gaze points; computes cheating score → `proctoring_score`. |
@@ -120,7 +135,8 @@ the candidate (`{status: "interview_discarded"}`).
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | POST | `/api/recruiter/jobs/<job_id>/invites/preview` | 🧑‍💼 | Parse & classify emails from text/CSV/XLSX before sending. |
-| POST | `/api/recruiter/jobs/<job_id>/invites` | 🧑‍💼 | Send invites (creates tokens, burner accounts, pre-shortlisted applications, emails). |
+| POST | `/api/recruiter/jobs/<job_id>/invites` | 🧑‍💼 | Send invites (creates tokens, burner accounts, pre-shortlisted applications, emails). Charges `RECRUITER_INVITE_CREDITS_PER_CANDIDATE` (default 1) per invitee; rows whose email fails are auto-refunded. |
+| GET | `/api/recruiter/jobs/<job_id>/invites` | 🧑‍💼 | List invites already sent for this job. |
 | GET | `/api/recruiter/jobs/<job_id>/invites/batches/<batch_id>` | 🧑‍💼 | Batch send/redeem status. |
 | GET | `/api/invite/redeem?token=` | 🔓 | Look up an invite token (used by the redeem page). |
 | POST | `/api/invite/redeem` | 🔓 | Redeem: activates the burner account, returns Invite ID + temp credentials/JWT. |
@@ -131,7 +147,9 @@ User & verification: `GET /stats`, `GET /users`, `GET /users/<id>`,
 `DELETE /users/<id>`, `PUT /users/<id>/permissions`, `PUT /users/<id>/user-type`,
 `GET /pending-recruiters`, `PUT /users/<id>/verify`, `PUT /users/<id>/reject`,
 `GET /permissions`, `GET/PUT /candidates/<id>`, `GET/PUT /recruiters/<id>`,
-`GET/DELETE /candidates/<id>/cv`.
+`GET/DELETE /candidates/<id>/cv`,
+`GET/PUT/DELETE /candidates/<id>/identity-card` (view / replace / reset — the
+only way a candidate's locked ID card can be changed).
 
 Jobs & applications: `GET /jobs`, `GET/PUT/DELETE /jobs/<id>`,
 `GET/PUT/DELETE /applications/<id>`, `PUT /applications/<id>/status`,
@@ -152,7 +170,8 @@ APIs.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/speech/transcribe` | Google Cloud speech-to-text. |
-| POST | `/api/speech/synthesize` | Google Cloud text-to-speech (used by the browser interview UI; the kiosk uses its own local Google clients instead). |
+| POST | `/api/speech/synthesize` | Google Cloud text-to-speech. Used by both the browser interview UI **and** the kiosk, which proxies its TTS through here. |
+| POST | `/api/speech/token` | Mints a short-lived Google access token so the kiosk can open its own streaming-STT gRPC connection without shipping a service-account key. |
 
 ## Payments — `payment_module/routes/payment_routes.py` (prefix `/api/payment`)
 
@@ -173,12 +192,21 @@ APIs.
 | POST | `/webhooks/razorpay` | Razorpay server-to-server webhook (signature-verified). |
 | GET | `/health` | Payment module health. |
 
-## Miscellaneous (in `app.py`)
+## System — `routes/system_routes.py`
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | Liveness/readiness — pings MongoDB, 503 if unreachable. |
 | GET | `/` | Plain-text welcome. |
+
+## Cost logging — `routes/cost_routes.py`
+
+| Method | Path | Purpose |
+|---|---|---|
 | POST | `/chat` · `/api/chat` | Direct LLM chat with cost tracking (logs to `openai_cost_logs`). |
 | GET | `/cost-summary` · `/api/cost-summary` | Aggregated LLM cost summary. |
 | POST | `/stt-cost` · `/api/stt-cost`, `/tts-cost` · `/api/tts-cost` | Record STT/TTS cost events. |
+
+> `scripts/route_manifest.py` dumps the live URL map and diffs it against
+> `scripts/route_manifest.baseline.json`. If you add or rename an endpoint,
+> update this document **and** refresh the baseline in the same change.

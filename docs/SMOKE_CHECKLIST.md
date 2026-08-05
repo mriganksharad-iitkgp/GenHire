@@ -16,8 +16,12 @@ the reorganization — same pages, same redirects, same data.
 
 ## 2. Candidate core
 - `/dashboard` loads jobs and applications.
-- Open a job (`/job/:jobId`); CV list renders; apply flow opens (CV selection).
-- `/profile` loads and CV management renders.
+- Open a job (`/jobs/:jobId`); CV list renders; apply flow opens (CV selection).
+  Save/unsave the job; it appears in the saved list.
+- `/profile` loads; CV management and the identity-card panel render (an
+  already-uploaded card shows as locked).
+- Legacy `/job/:jobId` still redirects to `/jobs/:jobId` with the query string
+  preserved.
 
 ## 3. Practice
 - `/practice` starts a practice session (mic/cam permission prompt appears).
@@ -27,7 +31,7 @@ the reorganization — same pages, same redirects, same data.
 - Open an interview link; pre-interview checklist and webcam preview work.
 - First question TTS plays; an answer round-trips (STT transcribes).
 - End interview → report generated; report modal renders.
-- Mobile camera pairing: QR at `/mobile-cam/:sessionId` connects and streams.
+- Mobile camera pairing: QR at `/mobile-camera/:sessionId` connects and streams.
 
 ## 5. Recruiter
 - `/recruiter/dashboard` tabs all render (overview, jobs, candidates, activity).
@@ -38,10 +42,13 @@ the reorganization — same pages, same redirects, same data.
 ## 6. Admin portal
 - `/admin` overview stats load.
 - Candidates list → candidate detail; recruiters list → recruiter detail.
-- Verification queue renders; cost statistics charts render.
+- Verification queue renders; `/admin/cost-statistics` and
+  `/admin/credit-statistics` charts render.
+- A candidate's identity-card panel loads (view / replace / reset).
 
 ## 7. Payments & subscription
-- `/subscription` (recruiter) and `/candidate/subscription` render plans.
+- `/recruiter/subscription` and `/candidate/subscription` render plans
+  (legacy `/subscription` redirects to the recruiter page).
 - Payment history renders. (Full payment flow only when explicitly testing.)
 
 ## 8. Public pages

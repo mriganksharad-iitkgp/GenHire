@@ -27,7 +27,7 @@ default `CORS_ORIGINS`; `npm start` is an alias). Build with `npm run build`
 serves that build locally. `vercel.json` at the repo root configures SPA
 hosting on Vercel.
 
-## Application shell (`src/App.jsx`)
+## Application shell (`src/App.jsx` + `src/app/`)
 
 Provider nesting: `GoogleOAuthProvider` → `CandidateDataProvider` →
 `ErrorBoundary` → `Router`. All pages are **lazy-loaded** (`React.lazy` +
@@ -54,7 +54,7 @@ window event (fired by the API layer on any 401) and redirects to
 | `/recruiter/subscription`, `/candidate/subscription` | recharge-pack purchase pages | recruiter / candidate |
 | `/payment/success`, `/payment/cancel` | post-Razorpay redirect pages | any |
 | `/candidate/cost-statistics` | candidate usage dashboard | candidate |
-| `/admin`, `/admin/overview`, `/admin/candidates(/:id)`, `/admin/recruiters(/:id)`, `/admin/admins`, `/admin/verification`, `/admin/cost-statistics` | admin portal (`features/admin/pages/*` with `AdminLayout`) | admin (`ProtectedRoute allow="admin"`) |
+| `/admin`, `/admin/overview`, `/admin/candidates(/:id)`, `/admin/recruiters(/:id)`, `/admin/admins`, `/admin/verification`, `/admin/cost-statistics`, `/admin/credit-statistics` | admin portal (`features/admin/pages/*` under one persistent `AdminLayoutOutlet` — the sidebar stays mounted and tab switches only swap the `<Outlet/>`) | admin (`ProtectedRoute allow="admin"`) |
 | `/404`, `*` | `NotFound` | — |
 
 Legacy paths (`/recruiter-dashboard`, `/subscription`, `/job/:id`,
@@ -75,6 +75,7 @@ URLs themselves.
 | `features/recruiter/api/inviteApi.js` | `previewInvites` (multipart: file/text/single), `sendInvites`, `getInviteBatchStatus`, `lookupInvite`, `redeemInvite`. |
 | `features/recruiter/api/jobExportApi.js` | One-click screening-cleared XLSX/CSV export per job. |
 | `features/candidate/api/cvService.js` | Multi-CV management calls (`/api/cv/*`). |
+| `shared/api/endpoints.js` | Also covers saved jobs (`/api/jobs/<id>/save`, `/api/saved-jobs`). |
 | `features/candidate/api/identityCardApi.js` | One-time identity-card upload/status/preview. |
 | `features/auth/api/authApi.js` | Login/register/OAuth/verify/reset (raw-Response contract — these flows branch on status codes). |
 | `features/payment/api/paymentApi.js` | All `/api/payment/*` calls. |
@@ -93,7 +94,7 @@ until an admin approves them (`verified_required` on the backend).
 
 ## Real-time updates
 
-- `hooks/useRealtimeApplications.js` — subscribes to the shared socket's
+- `features/candidate/hooks/useRealtimeApplications.js` — subscribes to the shared socket's
   `application_update` event and invokes `onUpdate(type, application)` where
   type ∈ `created | status_changed | score_updated`. Dashboards patch their
   lists in place instead of refetching.
@@ -107,13 +108,14 @@ until an admin approves them (`verified_required` on the backend).
 | Hook / context | Role |
 |---|---|
 | `features/candidate/context/CandidateDataContext.jsx` | App-wide provider caching candidate data (profile, applications) across pages. |
-| `features/candidate/hooks/useApplications.js` | Fetch + manage application lists. |
+| `features/candidate/hooks/useApplications.js`, `useCandidateApplications.js` | Fetch + manage application lists. |
+| `features/candidate/hooks/useCandidateProfile.js` | Candidate profile data. |
 | `features/candidate/hooks/useJobs.js` | Job list fetching/filtering. |
+| `features/candidate/hooks/useSavedJobs.js` | Saved-job bookmarks (list, save, unsave). |
 | `features/payment/hooks/useRazorpay.js` | Loads the Razorpay checkout script and opens the payment modal. |
-| `shared/hooks/useDebounce.js` | Debounced search inputs. |
-| `features/candidate/hooks/` | Candidate-specific data hooks (profile, applications). |
+| `shared/hooks/useAuth.js`, `shared/hooks/useDebounce.js` | Login state; debounced search inputs. |
 
-## The interview UI (`pages/Chat.jsx`, ~2,400 lines)
+## The interview UI (`features/interview/pages/Chat.jsx`, ~2,900 lines)
 
 The in-browser interview experience (also largely mirrored inside the
 Electron kiosk's own `renderer.js`). Responsibilities:
@@ -121,13 +123,14 @@ Electron kiosk's own `renderer.js`). Responsibilities:
 1. Starts the session — `POST /api/interviews/start` (or is handed one), and
    for practice mode targets `/api/practice/*` instead. Reads
    `max_questions` / `question_deadline` for progress display and pacing.
-2. Runs the **identity gate** — the lobby (`Interview.jsx`) first requires an
-   identity card on the profile; then the capture goes to
-   `POST /api/interviews/<id>/register-face`, where a vision LLM scores it
-   against the ID-card photo. Outcomes: quality problems become "retake
-   photo" toasts, `face_mismatch` shows attempts remaining,
-   `face_mismatch_blocked` and `identity_card_required` park the candidate on
-   a dedicated blocked screen (interview over / upload card first).
+2. Runs the **identity capture** — the lobby (`Interview.jsx`) first requires
+   an identity card on the profile; then the capture goes to
+   `POST /api/interviews/<id>/register-face`, which returns immediately and
+   scores the photo against the ID card in the background. Quality problems
+   become "retake photo" toasts; `identity_card_required` parks the candidate
+   on a dedicated screen telling them to upload their card first. A low
+   similarity score never blocks or interrupts the interview — it is reported
+   to the recruiter afterwards.
 3. Opens a Socket.IO connection and streams webcam frames
    (`proctoring_frame`) once per second; listens for `proctoring_alert`.
 4. Plays questions aloud via `POST /api/speech/synthesize` (Google TTS,
@@ -177,6 +180,9 @@ Electron kiosk's own `renderer.js`). Responsibilities:
   `PracticeDetailsModal`, `GazeHeatmapPanel`, checklist/loading screens.
 - **`features/payment/components/`** — plan cards, payment history, both
   role subscription trees.
+
+- **`features/interview/config/proctoring.js`** — the client-side proctoring
+  toggles/thresholds shared by the interview components.
 
 Application statuses render through `shared/utils/applicationStatus.js` —
 `normalizeStatus()` folds the legacy `"selected"` value into

@@ -48,7 +48,7 @@ own post-interview call). **`rejected` is reused at two different points** —
 a CV-score rejection (never interviewed) and a post-interview "not cleared"
 call both persist as `status: "rejected"`. The frontend disambiguates the two
 for display using `applicationStatusLabel()`
-(`react-frontend/src/utils/applicationStatus.js`): no `interview_score` on
+(`react-frontend/src/shared/utils/applicationStatus.js`): no `interview_score` on
 the application → "Not Shortlisted"; an `interview_score` present → "Screening
 Not Cleared". Both recruiter and candidate views use this helper so a
 CV-stage rejection is never mislabeled as a screening outcome that never
@@ -74,25 +74,27 @@ happened.
    • inserts the `interviews` document (status: active,
      questions_answered_count: 0, debit_idempotency_key persisted)
    • if anything fails AFTER the debit, the charge is refunded immediately
-4. FACE IDENTITY GATE — the candidate takes a selfie
+4. IDENTITY CAPTURE — the candidate takes a selfie
    (POST .../register-face):
-   • FIRST real interview ever → the face is enrolled permanently on the
-     account (users.face_profile, image in GridFS)
-   • every LATER real interview (any company) → the captured face is
-     compared (DeepFace VGG-Face) against the registered one:
-       match    → identity_verification.status "verified", interview proceeds
-       mismatch → up to FACE_VERIFY_MAX_ATTEMPTS (3) retries, then the
-                  interview is BLOCKED (status identity_blocked) and the
-                  attempt is recorded for the recruiter; credits are
-                  refunded by the sweeper
-   • the captured photo is stored and shown to the recruiter in the report
-   • FACE_VERIFICATION_MODE: enforce (default) | monitor (log, never block)
-     | off; if the DeepFace stack is missing, checks degrade to photo
-     capture ("unverified_system_unavailable") — candidates are never
-     locked out by a missing server dependency
+   • NO identity card on the account → 403 identity_card_required. This is
+     the only identity condition that stops an interview; the candidate
+     uploads their card once on /profile and it is locked afterwards
+     (admins alone can replace it).
+   • otherwise → the capture is stored (GridFS), identity_verification.status
+     becomes "score_pending", the interview flips to "active", and the
+     endpoint RETURNS IMMEDIATELY
+   • a background daemon thread then sends the ID card + the capture through
+     the LLM chain on a vision model (face_match_service) and writes back
+     status "scored" with a 0-100 similarity vs FACE_MATCH_THRESHOLD (75),
+     or "score_unavailable" if every provider failed. The summary is copied
+     onto the application so the recruiter's candidate card can badge it.
+   • the score NEVER blocks, delays, or fails the interview for any account
+     type — the recruiter sees the number and both photos and decides
+   • FACE_VERIFICATION_MODE=off skips capture and scoring entirely
+     (status "skipped")
 5. Kiosk/browser enables lockdown, connects Socket.IO, emits
-   start_proctoring. Live frames are compared against the account's
-   REGISTERED face (not just the session selfie).
+   start_proctoring. Live frames are compared against this session's own
+   capture, held in the in-memory live_sessions store.
 6. Interview loop (repeats, up to max_questions):
    • the question appears on screen as the AI speaks it (TTS)
    • candidate answers by voice → streaming STT → text
@@ -103,8 +105,11 @@ happened.
          next question; empty ones get "No problem, let's move on."
    • POST .../answer {question, answer} → evaluation + next question
      (each non-empty answer $inc's questions_answered_count)
-   • meanwhile: 1 frame/sec → proctoring_frame → MediaPipe + DeepFace;
-     GazeRecorder collects gaze points; blur/app-switch → proctoring_violation
+   • meanwhile: the WEB UI streams 1 frame/sec → proctoring_frame →
+     server-side MediaPipe + DeepFace. The KIOSK analyzes frames locally
+     (MediaPipe FaceLandmarker + coco-ssd phone detection) and relays only
+     violations. Gaze points are collected either way; blur/app-switch →
+     proctoring_violation
 7. Wrap-up:
    • gaze results   → POST .../gaze-recorder-results
    • webcam video   → POST .../upload-recording
@@ -157,13 +162,17 @@ Decision: PUT /api/applications/<id>/status
 1. Recruiter opens InviteCandidatesModal on a job
    → POST /api/recruiter/jobs/<job_id>/invites/preview
      (paste text, or upload CSV/XLSX — emails parsed and classified)
-2. POST /api/recruiter/jobs/<job_id>/invites  → for each email, InviteService:
+2. POST /api/recruiter/jobs/<job_id>/invites  → charges the recruiter
+   RECRUITER_INVITE_CREDITS_PER_CANDIDATE (1) per invitee upfront, then for
+   each email, InviteService:
    • creates or refreshes an invite token (SHA-hashed, TTL — Mongo expires it)
    • creates a "burner" invite-only user (no email uniqueness clash —
      the sparse unique index skips them) with a generated Invite ID
    • creates a pre-shortlisted application skeleton
      (processing_status: "awaiting_candidate")
-   • sends the invite email (invite_email_templates)
+   • sends the invite email (invite_email_templates) — a row whose email
+     fails to send is auto-refunded (the invite/link still exists for manual
+     sharing)
    • all grouped under an invite_batches record
 3. Recruiter polls GET .../invites/batches/<batch_id> for send/redeem status.
 4. Candidate clicks the email link → /invite/redeem (React page)
@@ -171,8 +180,8 @@ Decision: PUT /api/applications/<id>/status
    → POST /api/invite/redeem           (consume: activates the burner account,
                                         hands over the Invite ID login)
 5. Candidate logs in with the Invite ID, uploads a CV to complete the
-   application, then takes the interview (flow #2). Interview start is
-   blocked until the CV exists.
+   application and an identity card on their profile, then takes the
+   interview (flow #2). Interview start is blocked until both exist.
 6. InviteCleanupScheduler periodically purges burner accounts that never
    became active.
 ```
@@ -199,8 +208,9 @@ Practice page → deep link into the kiosk (same as flow #2) but:
                                        pacing rules as real interviews)
   • POST /api/practice/<sid>/end      (zero answers → session discarded +
                                        candidate credits refunded)
-  • face check is soft — the selfie is captured but a mismatch never blocks
-    a practice session
+  • identity is capture-only — the selfie is taken for live proctoring, is
+    never scored against the ID card, and never blocks (no identity card is
+    required to practice)
   • results in `practice_sessions`; history via GET /api/practice/history,
     reports via GET /api/practice/<sid>/report
   • abandoned practice sessions: sweeper refunds if unanswered, otherwise

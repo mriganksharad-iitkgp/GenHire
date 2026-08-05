@@ -1,8 +1,8 @@
 # Production-Readiness Review — what's done, what's left
 
-Honest scorecard as of **2026-07-20**, after the reorganization, billing/costing,
-go-live hardening, the **CRA → Vite** migration, and the **payment
-credit-reconciliation** hardening.
+Honest scorecard as of **2026-08-06**, after the reorganization,
+billing/costing, go-live hardening, the **CRA → Vite** migration, and the
+**payment credit-reconciliation** hardening.
 
 "✅" = matches common industry practice · "⚠️" = partial · "❌" = gap with a
 concrete recommendation. This is the single source of truth for "how
@@ -26,8 +26,8 @@ production-ready are we" — keep it current when flows change.
   per-provider cooldowns used by every LLM feature.
 - **Storage**: GCS-only for every persistent artifact (CVs, JDs, recordings,
   gaze data) with a boot-time hard requirement — no local-disk fallback that
-  silently loses files on container restarts. Dev and prod use separate
-  buckets.
+  silently loses files on container restarts. (Identity cards and face
+  captures are the deliberate exception: they live in GridFS.)
 - **Payments — no lost credits**: recharge crediting is idempotent
   (`recharge:<order_id>`) and **self-healing**. If a payment succeeds at
   Razorpay but the wallet credit fails, the order is flagged
@@ -46,12 +46,9 @@ production-ready are we" — keep it current when flows change.
   verification (ID card + background LLM face-match scoring); CORS is
   origin-listed (trailing slashes normalized); admin endpoints are role-gated;
   artifact serving (`/api/view-file`) requires auth and is bucket-scoped.
-- **Dev/prod isolation** (since 2026-07-12): separate Atlas clusters, separate
-  GCS buckets (`genhireuploads` vs `genhire-uploads-prod`), a prod-only
-  invite-token secret, and a deliberate boot failure if production is deployed
-  without its own database URI.
-- **Change safety**: route-manifest diffing, smoke checklist, lint ratchet
-  (`npm run lint:ci`), per-step commits with verified gates.
+- **Change safety**: route-manifest diffing (`scripts/route_manifest.py` vs
+  its committed baseline), smoke checklist, lint ratchet (`npm run lint:ci`),
+  per-step commits with verified gates.
 
 ## Partial ⚠️
 
@@ -67,8 +64,17 @@ production-ready are we" — keep it current when flows change.
 - **Payments — reconciliation has no UI**: the `payment_reconciliations` queue
   is written and self-heals via webhook, but there's no admin view or alert to
   catch a row that stays `resolved:false`. *Add an admin panel + alert.*
-- **Docs**: refreshed for the Vite move and payment hardening, but the ~70 KB
-  handbook needs a full pass whenever flows change again.
+- **Dev/prod isolation — designed, not yet in effect.** The two-env-file
+  split exists (`python-backend/.env` and `.env.production`), but **both
+  currently point at the same Atlas cluster (`hrtech.kdo8zml.mongodb.net`) and
+  the same GCS bucket (`genhireuploads`)**. The intended end state is a
+  company-account prod cluster, a `genhire-uploads-prod` bucket, and a
+  prod-only invite-token secret. Until then a production incident can touch
+  development data and vice versa. *Stand up the prod cluster + bucket and
+  repoint `.env.production`.*
+- **Docs**: refreshed 2026-08-06 against the current code (identity flow, LLM
+  chain order, kiosk speech brokering, blueprint list, route inventory).
+  Re-verify the ~70 KB handbook whenever flows change again.
 
 ## Gaps that matter ❌ (ranked)
 
@@ -83,7 +89,7 @@ production-ready are we" — keep it current when flows change.
    `live_sessions` to Redis so multiple Cloud Run instances can serve.*
 3. **JWT in URL query params** (CV/report/image links `?token=`). URLs leak
    into logs/history. *Replace with short-lived signed download URLs.*
-4. **UI/UX consistency**: ~400 inline `style={{}}` blocks remain (Chat, admin
+4. **UI/UX consistency**: ~500 inline `style={{}}` blocks remain (Chat, admin
    detail pages) alongside CSS Modules; no design tokens. *Adopt a small token
    layer (CSS variables for colors/spacing/typography), migrate inline styles
    opportunistically, fix a11y warnings.*
@@ -107,9 +113,11 @@ Concrete, ordered — the things to clear before real users and real money.
    (`/api/payment/webhooks/razorpay`) in the Razorpay dashboard and confirm a
    `payment.captured` event credits/self-heals; confirm `payment_reconciliations`
    stays empty on the happy path.
-2. **Secrets & isolation**: confirm prod `MONGODB_URI`, prod GCS bucket, prod
-   invite-token secret, and live Razorpay keys are set **only** in the prod
-   environment; rotate anything ever committed or shared.
+2. **Secrets & isolation**: create the production Atlas cluster and the
+   `genhire-uploads-prod` bucket, then point `.env.production` at them so it
+   stops sharing the dev cluster/bucket. Confirm the prod invite-token secret
+   and live Razorpay keys are set **only** in the prod environment; rotate
+   anything ever committed or shared.
 3. **Observability**: set `SENTRY_DSN`; add Cloud Run alerts on 5xx rate and
    latency; add an alert on unresolved `payment_reconciliations`.
 4. **CI gate**: GitHub Actions running `lint:ci`, the Vite build, and the

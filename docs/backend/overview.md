@@ -30,38 +30,42 @@ emails, and manages the credit/payment system.
   call is **Screening Cleared** or **Screening Not Cleared** — the platform
   screens, it doesn't hire.
 - **Face identity verification** — candidates upload a government/institutional
-  **identity card once** (locked afterwards; only admins can replace it). At
-  every real interview the webcam capture is matched against the ID-card
-  photo by a vision LLM (0–100 similarity, `FACE_MATCH_THRESHOLD`); a
-  mismatch blocks the interview (`identity_blocked`, credits auto-refunded)
-  and the captured photo is shared with the recruiter. Impersonation
-  ("proxy interviewing") is the #1 fraud vector this kills.
+  **identity card once** (locked afterwards; only admins can replace it).
+  Having one on file is a hard precondition for starting a real interview
+  (`identity_card_required`, HTTP 403). At the interview's face capture, the
+  webcam photo is scored against the ID-card photo by a vision LLM (0–100
+  similarity, `FACE_MATCH_THRESHOLD`, default 75) **in a background thread** —
+  the interview always proceeds immediately and a low score never blocks
+  anyone. The score and both photos go to the recruiter, who makes the call.
+  Impersonation ("proxy interviewing") is the fraud vector this surfaces.
 - **One LLM provider chain** — every LLM task (interview questions,
   evaluation, CV parse/score, face match, JD generation) goes through a
   single failover chain ordered by `LLM_PROVIDER_PRIORITY`
-  (default `groq,gemini,openai`) with per-provider cooldowns on quota
+  (default `openai,gemini,groq`) with per-provider cooldowns on quota
   errors — swap providers by editing env, no code changes.
 - **Proctoring** — while the interview runs, the backend analyzes webcam
   frames (face identity + head pose), gaze-tracking data, tab switches, and
   an optional phone camera, producing a proctoring score for the recruiter.
 - **Payments & credits** — every costly action (interviews, AI job
-  descriptions) spends credits from a wallet; credits are bought through
-  Razorpay. Real interviews are paid by the **recruiter**, practice
-  interviews by the candidate. Interviews are charged at start and
-  **auto-refunded** if they end with zero answers (crash, abandonment,
-  identity block).
+  descriptions, bulk invites) spends credits from a wallet; credits are
+  bought through Razorpay. Real interviews are paid by the **recruiter**,
+  practice interviews by the candidate. Interviews are charged at start and
+  **auto-refunded** if they end with zero answers (crash, abandonment, or a
+  start that failed after the debit).
 - **Invites** — recruiters can bulk-invite candidates by email (CSV/Excel
-  upload); invitees get temporary "Invite ID" accounts that skip signup.
+  upload, 1 credit each); invitees get temporary "Invite ID" accounts that
+  skip signup.
 - **Real-time updates** — a Socket.IO channel pushes application changes to
   dashboards instantly, and streams proctoring data during interviews.
 - **Emails** — verification, invites, application status changes, interview
-  results (via Mailgun).
+  results (ZeptoMail primary, Mailgun as fallback, `noop` in dev).
 
 ## Shape of the code (layered since the 2026-07 reorganization)
 
 ```
 python-backend/
-├── app.py            # 24-line entry shim (gunicorn app:app / python app.py)
+├── app.py            # entry shim (gunicorn app:app / python app.py) — the
+│                     # logic is the dev-reloader double-boot guard, not setup
 ├── core/             # composition root: factory.py (create_app), bootstrap,
 │                     # extensions (socketio), config, security (JWT secret)
 ├── routes/           # URL definitions (thin blueprints), one file per feature
@@ -81,9 +85,15 @@ python-backend/
 ├── interview/        # the AI interview engine (+ runtime.py shared state)
 ├── evaluation_model/ # answer & communication evaluators (rubrics)
 ├── payment_module/   # self-contained Razorpay + wallet package
-├── scripts/          # route_manifest safety harness + migrations/admin/smoke
-└── uploads/          # recordings, proctoring artifacts, temp files
+└── scripts/          # route_manifest safety harness + migrations/admin/dev/smoke
 ```
+
+Not part of the Flask app, but living in the same folder:
+`cv_jd_processing/` (standalone FastAPI scorer) and `gpu_intensive_task/`
+(standalone GPU proctoring server) are separately deployed and excluded from
+the backend Docker image — see their own READMEs. There is **no `uploads/`
+directory**: persistent artifacts go to GCS, and transient staging files live
+under the OS temp dir (`genhire_staging/`).
 
 ## How to run it
 
