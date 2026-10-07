@@ -66,7 +66,7 @@ class FallbackLLM(BaseLLM):
         errors = []
 
         for i in range(len(self._providers)):
-            provider_idx = (self._current_index + i) % len(self._providers)
+            provider_idx = i  # Always respect primary -> Gemini -> Groq order.
             provider = self._providers[provider_idx]
 
             try:

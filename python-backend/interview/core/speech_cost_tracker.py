@@ -10,7 +10,7 @@ from .pricing import PRICING
 logger = logging.getLogger(__name__)
 
 
-def calculate_stt_cost(audio_seconds: Any) -> Optional[float]:
+def calculate_stt_cost(audio_seconds: Any, model: str = None) -> Optional[float]:
     if audio_seconds is None:
         return None
     try:
@@ -21,6 +21,11 @@ def calculate_stt_cost(audio_seconds: Any) -> Optional[float]:
         return None
     if seconds == 0:
         return 0.0
+
+    import os
+    if model == "whisper-large-v3-turbo" or (model is None and os.getenv("STT_PROVIDER", "groq") == "groq"):
+        from services.ai_pricing_service import groq_stt_cost
+        return groq_stt_cost(seconds)
 
     price_per_15s = float(PRICING["gcp_stt"]["default"])
     billed_units = math.ceil(seconds / 15.0)

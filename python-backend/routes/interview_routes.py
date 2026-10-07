@@ -44,6 +44,7 @@ from services import interview_credit_service
 from services.cv_scoring_service import CVScoringService
 from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
+from services.llm_fallback_service import default_model_for, get_provider_priority
 
 logger = logging.getLogger(__name__)
 
@@ -794,7 +795,7 @@ def end_interview(current_user, session_id):
             "total_completion_tokens": 0,
             "total_stt_seconds": stt_seconds,
             "total_tts_characters": int(tts_characters or 0),
-            "model": "gpt-4o-mini",
+            "model": default_model_for(get_provider_priority()[0]),
         },
     )
 
@@ -1019,7 +1020,7 @@ def end_interview(current_user, session_id):
                 action_type="ai_interview",
                 actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model="gpt-4o-mini",
+                model=default_model_for(get_provider_priority()[0]),
                 stt_seconds=stt_seconds,
                 tts_characters=int(tts_characters or 0),
                 usage_source="actual",
@@ -1040,7 +1041,7 @@ def end_interview(current_user, session_id):
                 action_type="ai_interview_evaluation",
                 actor_type="recruiter",
                 actor_id=recruiter_actor_id,
-                model="gpt-4o-mini",
+                model=default_model_for(get_provider_priority()[0]),
                 usage_source="assumed",
                 source={
                     "type": "application",

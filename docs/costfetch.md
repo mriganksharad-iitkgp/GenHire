@@ -1,3 +1,7 @@
+# Current S2 Low provider tracking
+
+DeepSeek selected-timeline spend is estimated from the persistent request ledger; its live current balance uses the normal DeepSeek API key. See [S2 Low deployment](S2_LOW_DEPLOYMENT.md#how-deepseek-spend-is-reported) for setup, prices and limits. The sections below describe retained legacy infrastructure/billing integrations.
+
 # Fetching exact infrastructure/provider costs (vs. today's manual placeholders)
 
 ## Current state

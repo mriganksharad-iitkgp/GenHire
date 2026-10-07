@@ -92,7 +92,7 @@ def call_llm_with_tracking(
     logs_collection: Optional[Any] = None,
 ) -> Tuple[Any, Optional[float], Dict[str, Any]]:
     """
-    Execute OpenAI chat completion and return response + real usage-based cost.
+    Execute configured provider chat completion and return response + real usage-based cost.
 
     Actual cost is computed only from response.usage. No manual token estimation.
     """
@@ -100,7 +100,7 @@ def call_llm_with_tracking(
     # LLM_PROVIDER_PRIORITY. The cost log records whichever model answered.
     result = get_llm_fallback_service().invoke(
         _to_langchain_messages(messages),
-        model_overrides={"openai": model} if model else None,
+        model_overrides={"deepseek": model} if model and model.startswith("deepseek-") else None,
     )
     response = result["raw_response"]
     model_used = f"{result['provider_used']}:{result['model_used']}"

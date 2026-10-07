@@ -36,7 +36,7 @@ GAZE_RECORDER_FOLDER = os.path.join(PROCTORING_FOLDER, "gaze_recorder")
 for _folder in (PROCTORING_FOLDER, RECORDING_FOLDER, M_RECORDING_FOLDER, TMP_FOLDER, GAZE_RECORDER_FOLDER):
     os.makedirs(_folder, exist_ok=True)
 
-# Interview session manager singleton (default configs, GROQ-backed LLM)
+# Interview session manager singleton (default configs, S2 provider chain)
 interview_config = InterviewConfig()
 llm_config = LLMConfig()
 interview_manager = InterviewSessionManager(config=interview_config, llm_config=llm_config)

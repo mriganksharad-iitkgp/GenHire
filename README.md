@@ -11,10 +11,12 @@ their own further hiring rounds.
 
 | Folder | What it is | Stack |
 |---|---|---|
-| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (OpenAI→Gemini→Groq, env-ordered), Google Cloud Speech, Google Cloud Storage (mandatory — all artifacts), Razorpay, ZeptoMail/Mailgun |
+| [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (DeepSeek → Gemini → Groq), Groq Whisper STT + Google Standard TTS, Google Cloud Storage (mandatory — all artifacts), Razorpay, ZeptoMail/Mailgun |
 | [`react-frontend/`](react-frontend/) | The website used by candidates, recruiters, and admins | React 19 (Vite), feature-folder layout (`app/ features/ shared/`), react-router v7, socket.io-client, CSS Modules |
 | [`secure-browser-kiosk/`](secure-browser-kiosk/) | The **Genhire** desktop app that runs interviews in fullscreen kiosk lockdown | Electron, backend-proxied speech (no bundled credentials), electron-builder |
 | [`docs/`](docs/) | **Full documentation** — architecture, per-component overviews and deep dives, API reference, data flows, onboarding | Markdown |
+
+See [S2 Low deployment and interview workflow](docs/S2_LOW_DEPLOYMENT.md) for the provider migration, Render/Vercel environment values, and DeepSeek spend tracking.
 
 ## How it fits together (30 seconds)
 

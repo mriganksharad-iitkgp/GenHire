@@ -1,3 +1,5 @@
+For the current provider migration, see **[S2 Low deployment, interview workflow and costs](S2_LOW_DEPLOYMENT.md)**.
+
 # GenHire Documentation
 
 Everything in these docs is written directly from the current code — file

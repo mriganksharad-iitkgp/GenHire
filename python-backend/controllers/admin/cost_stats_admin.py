@@ -72,6 +72,7 @@ class CostStatsAdmin:
                         microsecond=999999 if end_of_day else 0,
                     )
 
+                    parsed = parsed - datetime.timedelta(hours=5, minutes=30)
                 return parsed
 
             def _period_window(period_value):
@@ -485,6 +486,16 @@ class CostStatsAdmin:
 
             openai_actual_usd = fetch_openai_costs_usd(period_start, period_end)
             openai_balance_usd = get_openai_credit_balance_usd()
+            from services.deepseek_billing_service import fetch_deepseek_balance
+            from services.provider_usage_service import provider_costs_for_range
+            deepseek_balance = fetch_deepseek_balance()
+            try:
+                provider_usage = provider_costs_for_range(db, period_start, period_end)
+                deepseek_usage = provider_usage.get("deepseek", {})
+                deepseek_ledger_available = True
+            except Exception:
+                deepseek_usage = {}
+                deepseek_ledger_available = False
 
             # ZeptoMail: actual usage from the email send log for the window.
             try:
@@ -501,6 +512,7 @@ class CostStatsAdmin:
                 "mongodb": "MongoDB Atlas",
                 "zeptomail": "ZeptoMail (transactional email)",
                 "openai": "OpenAI API",
+                "deepseek": "DeepSeek V4.1 Flash API",
                 "gemini": "Google Gemini API",
                 "groq": "Groq API",
                 "cloudflare": "Cloudflare (legacy)",
@@ -512,7 +524,13 @@ class CostStatsAdmin:
                 if infra_key == "cloudflare" and estimate_value <= 0:
                     continue
 
-                if infra_key == "gcp" and gcp_window_total is not None:
+                if infra_key == "deepseek":
+                    window_value = float(deepseek_usage.get("cost_usd", 0)) * inr_per_usd
+                    usage_source = "request_usage" if deepseek_ledger_available else "unavailable"
+                    note = ("Estimated cost from recorded request tokens and snapshotted rates in the selected timeline. "
+                            "Includes cache-hit pricing. Tracking starts with this deployment; earlier usage and other apps are excluded. "
+                            "Provider reference only; excluded from infrastructure total to avoid counting AI usage twice.")
+                elif infra_key == "gcp" and gcp_window_total is not None:
                     window_value = gcp_window_total
                     usage_source = "billing_export"
                     note = "Actual spend from the GCP Billing BigQuery export for the selected timeline."
@@ -532,13 +550,22 @@ class CostStatsAdmin:
                     usage_source = "env_estimate"
                     note = "Flat env-entered estimate (no billing API for this provider) — shown as-is for the timeline."
 
-                total_infra_window += window_value
+                if infra_key != "deepseek":
+                    total_infra_window += window_value
                 entry = {
                     "label": infra_label,
                     "cost_inr": _round_money(window_value),
                     "usage_source": usage_source,
                     "note": note,
                 }
+                if infra_key == "deepseek":
+                    entry.update(deepseek_usage)
+                    entry["cost_usd"] = round(float(deepseek_usage.get("cost_usd", 0)), 8)
+                    entry["included_in_infrastructure_total"] = False
+                    entry["balance_status"] = deepseek_balance["status"]
+                    entry["balances"] = deepseek_balance["balances"]
+                    entry["balance_fetched_at"] = deepseek_balance.get("fetched_at")
+                    entry["credit_balance_note"] = "Live current account balance from DeepSeek /user/balance; independent of the selected timeline."
                 if infra_key == "gcp":
                     entry["breakdown"] = gcp_breakdown
                     if gcp_outstanding is not None:

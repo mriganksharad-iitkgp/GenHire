@@ -22,8 +22,8 @@ class InterviewAPI:
 
     def __init__(
         self,
-        llm_provider: LLMProvider = LLMProvider.GROQ,
-        model_name: str = "llama-3.3-70b-versatile",
+        llm_provider: LLMProvider = LLMProvider.DEEPSEEK,
+        model_name: str = None,
         api_key: str = None,
         **config_overrides,
     ):
@@ -37,13 +37,11 @@ class InterviewAPI:
             **config_overrides: Override default configuration values
         """
 
-        if not api_key:
-            raise ValueError("API key is required")
-
         # Create configurations
         self.interview_config = InterviewConfig(**config_overrides)
         self.llm_config = LLMConfig(
-            provider=llm_provider, model_name=model_name, api_key=api_key
+            provider=llm_provider, model_name=model_name or LLMConfig().model_name,
+            api_key=api_key or LLMConfig().api_key
         )
 
         # Initialize session manager

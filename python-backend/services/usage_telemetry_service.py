@@ -86,42 +86,35 @@ def record_usage_event(
 
 
 def extract_usage_from_response(response: Any) -> Dict[str, Any]:
-    """Best-effort extraction of token usage from multiple LLM response shapes."""
-    usage = {
-        "prompt_tokens": None,
-        "completion_tokens": None,
-        "usage_source": "assumed",
-    }
-
+    """Normalize SDK/LangChain usage, preserving zero tokens and cache counts."""
+    usage = {"prompt_tokens": None, "completion_tokens": None, "usage_source": "assumed"}
     if response is None:
         return usage
-
-    # Common OpenAI/Groq style.
-    raw_usage = getattr(response, "usage", None)
-    if isinstance(raw_usage, dict):
-        usage["prompt_tokens"] = raw_usage.get("prompt_tokens")
-        usage["completion_tokens"] = raw_usage.get("completion_tokens")
-
-    # LangChain metadata variants.
-    response_metadata = getattr(response, "response_metadata", None)
-    if isinstance(response_metadata, dict):
-        token_usage = response_metadata.get("token_usage")
-        if isinstance(token_usage, dict):
-            usage["prompt_tokens"] = usage["prompt_tokens"] or token_usage.get("prompt_tokens") or token_usage.get("input_tokens")
-            usage["completion_tokens"] = usage["completion_tokens"] or token_usage.get("completion_tokens") or token_usage.get("output_tokens")
-
-        usage_metadata = response_metadata.get("usage_metadata")
-        if isinstance(usage_metadata, dict):
-            usage["prompt_tokens"] = usage["prompt_tokens"] or usage_metadata.get("input_tokens") or usage_metadata.get("prompt_tokens")
-            usage["completion_tokens"] = usage["completion_tokens"] or usage_metadata.get("output_tokens") or usage_metadata.get("completion_tokens")
-
-    # Some response objects expose usage_metadata directly.
-    direct_usage = getattr(response, "usage_metadata", None)
-    if isinstance(direct_usage, dict):
-        usage["prompt_tokens"] = usage["prompt_tokens"] or direct_usage.get("input_tokens") or direct_usage.get("prompt_tokens")
-        usage["completion_tokens"] = usage["completion_tokens"] or direct_usage.get("output_tokens") or direct_usage.get("completion_tokens")
-
-    if usage["prompt_tokens"] is not None or usage["completion_tokens"] is not None:
+    raw = getattr(response, "usage", None)
+    if hasattr(raw, "model_dump"):
+        raw = raw.model_dump()
+    meta = getattr(response, "response_metadata", {}) or {}
+    payloads = [raw, meta.get("token_usage"), meta.get("usage"),
+                meta.get("usage_metadata"), getattr(response, "usage_metadata", None)]
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        for target, aliases in (("prompt_tokens", ("prompt_tokens", "input_tokens", "prompt_token_count")),
+                                ("completion_tokens", ("completion_tokens", "output_tokens", "candidates_token_count"))):
+            if usage[target] is None:
+                for alias in aliases:
+                    if payload.get(alias) is not None:
+                        usage[target] = int(payload[alias])
+                        break
+        cached = payload.get("prompt_cache_hit_tokens")
+        if cached is None:
+            cached = (payload.get("prompt_tokens_details") or {}).get("cached_tokens")
+        if cached is None:
+            cached = (payload.get("input_token_details") or {}).get("cache_read")
+        if cached is not None and "prompt_cache_hit_tokens" not in usage:
+            usage["prompt_cache_hit_tokens"] = int(cached)
+        if payload.get("prompt_cache_miss_tokens") is not None:
+            usage["prompt_cache_miss_tokens"] = int(payload["prompt_cache_miss_tokens"])
+    if usage["prompt_tokens"] is not None and usage["completion_tokens"] is not None:
         usage["usage_source"] = "actual"
-
     return usage

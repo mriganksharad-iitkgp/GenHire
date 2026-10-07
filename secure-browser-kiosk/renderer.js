@@ -195,8 +195,13 @@ const P_LEFT_EYE_INNER = 133;
 const P_RIGHT_EYE_OUTER = 263;
 const P_RIGHT_EYE_INNER = 362;
 
-// Google Cloud Speech State
+// Recorded answer state for backend Groq transcription
 let mediaRecorder = null;
+let answerAudioChunks = [];
+let answerAudioBlob = null;
+let recordingStopped = Promise.resolve();
+let speechLevelTimer = null;
+let speechLevelContext = null;
 let audioStream = null;
 let videoStream = null;
 let currentTranscript = "";
@@ -302,7 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             speechNetworkFailed = true;
             stopRecording();
             if (transcriptText) {
-                transcriptText.innerHTML = '<span style="color:#f6e05e">⚠️ Voice input error. Check credentials.json or network connection.</span>';
+                transcriptText.innerHTML = '<span style="color:#f6e05e">⚠️ Voice input error. Check the backend speech configuration or network connection.</span>';
             }
         });
     } else {
@@ -1064,7 +1069,7 @@ function beginQuestionPacing() {
             updatePacingStatus(`No answer yet — auto-advancing in ${Math.ceil(NO_ANSWER_TIMEOUT_SECONDS - waited)}s`);
         } else {
             const silentFor = (now - lastSpeechTime) / 1000;
-            if (silentFor >= POST_SPEECH_SILENCE_SECONDS && currentTranscript.trim().length > 0) {
+            if (silentFor >= POST_SPEECH_SILENCE_SECONDS) {
                 clearInterval(pacingInterval);
                 pacingInterval = null;
                 submitAnswer();
@@ -1350,6 +1355,17 @@ async function submitAnswer() {
     stopRecording();
 
     try {
+        await recordingStopped;
+        if (hasSpokenThisQuestion && answerAudioBlob && !currentTranscript.trim()) {
+            const audioBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(answerAudioBlob);
+            });
+            currentTranscript = await window.electronAPI.transcribeAudio(audioBase64, currentSessionId);
+            transcriptText.textContent = currentTranscript || currentQuestion;
+        }
         const answerText = currentTranscript.trim() || "(No answer provided)";
 
         const payload = {
@@ -1675,7 +1691,25 @@ function startRecording() {
     currentTranscript = "";
     document.getElementById('mic-btn').classList.add('mic-recording');
 
-    window.electronAPI.startSTTStream();
+    answerAudioChunks = [];
+    answerAudioBlob = null;
+    // Whisper transcribes at submission; local audio levels drive silence pacing.
+    speechLevelContext = new AudioContext();
+    const source = speechLevelContext.createMediaStreamSource(audioStream);
+    const analyser = speechLevelContext.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+    speechLevelContext.resume().catch(() => {});
+    const samples = new Float32Array(analyser.fftSize);
+    speechLevelTimer = setInterval(() => {
+        analyser.getFloatTimeDomainData(samples);
+        const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+        if (isRecording && rms > 0.025) {
+            hasSpokenThisQuestion = true;
+            lastSpeechTime = Date.now();
+            transcriptText.textContent = 'Listening — your answer will be transcribed when submitted.';
+        }
+    }, 100);
 
     // Extract only the audio track to avoid codec mismatch errors
     const recordStream = new MediaStream([existingTrack]);
@@ -1694,19 +1728,19 @@ function startRecording() {
             : new MediaRecorder(recordStream);
     } catch (err) {
         console.error("MediaRecorder creation failed:", err);
-        isRecording = false;
+        stopRecording();
         speechNetworkFailed = true;
         return;
     }
-    mediaRecorder.ondataavailable = async (e) => {
-        if (e.data.size > 0 && isRecording) {
-            const arrayBuffer = await e.data.arrayBuffer();
-            // Convert ArrayBuffer to standard Buffer/Uint8Array for IPC
-            window.electronAPI.sendAudioChunk(new Uint8Array(arrayBuffer));
-        }
+    mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) answerAudioChunks.push(e.data);
     };
-
-    // Send data chunks every 250ms for streaming STT
+    recordingStopped = new Promise((resolve) => {
+        mediaRecorder.onstop = () => {
+            answerAudioBlob = new Blob(answerAudioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            resolve();
+        };
+    });
     mediaRecorder.start(250);
     lastSpeechTime = Date.now();
     // Auto-submit pacing (30s no-answer / 10s post-speech silence) is driven
@@ -1723,9 +1757,8 @@ function stopRecording() {
         mediaRecorder.stop();
     }
 
-    if (window.electronAPI) {
-        window.electronAPI.stopSTTStream();
-    }
+    if (speechLevelTimer) { clearInterval(speechLevelTimer); speechLevelTimer = null; }
+    if (speechLevelContext) { speechLevelContext.close().catch(() => {}); speechLevelContext = null; }
 }
 
 async function loadModels() {

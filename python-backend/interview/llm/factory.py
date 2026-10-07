@@ -6,10 +6,9 @@ import logging
 from typing import Dict, List, Type
 from ..config.settings import LLMProvider, LLMConfig
 from .base import BaseLLM
-from .groq_llm import GroqLLM
 from .openai_llm import OpenAILLM
-from .gemini_llm import GeminiLLM
 from .fallback_llm import FallbackLLM
+from .chat_provider_llm import DeepSeekLLM, GeminiChatLLM, GroqChatLLM
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +17,10 @@ class LLMFactory:
     """Factory class for creating LLM instances."""
 
     _providers: Dict[LLMProvider, Type[BaseLLM]] = {
-        LLMProvider.GROQ: GroqLLM,
+        LLMProvider.GROQ: GroqChatLLM,
         LLMProvider.OPENAI: OpenAILLM,
-        LLMProvider.GEMINI: GeminiLLM,
+        LLMProvider.GEMINI: GeminiChatLLM,
+        LLMProvider.DEEPSEEK: DeepSeekLLM,
     }
 
     @classmethod

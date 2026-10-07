@@ -10,6 +10,7 @@ import logging
 from services.pdf_parser_service import get_pdf_parser
 from controllers.cv_controller import CVController
 from services.usage_telemetry_service import record_usage_event
+from services.llm_fallback_service import default_model_for, get_provider_priority
 from services import interview_credit_service
 from payment_module.services.wallet_service import WalletService
 from payment_module.config.settings import PaymentConfig
@@ -73,17 +74,7 @@ class PracticeController:
 
         # Initialize Interview API
         try:
-            api_key = os.getenv("GROQ_API_KEY")
-            if not api_key:
-                logger.error("GROQ_API_KEY not found in environment variables")
-                self.interview_api = None
-                return
-
-            self.interview_api = InterviewAPI(
-                llm_provider=LLMProvider.GROQ,
-                model_name="llama-3.3-70b-versatile",
-                api_key=api_key,
-            )
+            self.interview_api = InterviewAPI()
         except Exception as e:
             logger.error(f"Failed to initialize Interview API: {e}")
             self.interview_api = None
@@ -750,7 +741,7 @@ class PracticeController:
                     "total_completion_tokens": 0,
                     "total_stt_seconds": stt_seconds,
                     "total_tts_characters": int(tts_characters or 0),
-                    "model": "gpt-4o-mini",
+                    "model": default_model_for(get_provider_priority()[0]),
                 },
             )
 
@@ -861,7 +852,7 @@ class PracticeController:
                 action_type="practice_interview",
                 actor_type="candidate",
                 actor_id=user_id,
-                model="gpt-4o-mini",
+                model=default_model_for(get_provider_priority()[0]),
                 stt_seconds=stt_seconds,
                 tts_characters=int(tts_characters or 0),
                 usage_source="actual",
@@ -879,7 +870,7 @@ class PracticeController:
                     action_type="practice_interview_evaluation",
                     actor_type="candidate",
                     actor_id=user_id,
-                    model="gpt-4o-mini",
+                    model=default_model_for(get_provider_priority()[0]),
                     usage_source="assumed",
                     source={
                         "type": "practice_session",

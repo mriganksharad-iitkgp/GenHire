@@ -28,6 +28,13 @@ class DatabaseConfig:
     def _ensure_indexes(self):
         """Create critical indexes used by auth and query paths."""
         try:
+            self.db['ai_provider_requests'].create_index(
+                [('occurred_at', 1), ('provider', 1)], name='idx_provider_usage_timeline'
+            )
+        except Exception as e:
+            print(f"Warning: failed to ensure provider usage index: {e}")
+
+        try:
             users = self.db['users']
             # Email uniqueness applies ONLY to non-invite-only docs (regular
             # candidates / recruiters / admins). Invite-only burner accounts

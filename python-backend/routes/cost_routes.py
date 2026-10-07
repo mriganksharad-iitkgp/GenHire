@@ -26,7 +26,7 @@ def create_cost_routes(db):
     def chat_with_cost_tracking():
         data = request.get_json() or {}
         messages = data.get("messages")
-        model = data.get("model", "gpt-4o-mini")
+        model = data.get("model", "deepseek-flash")
         user_id = data.get("user_id")
 
         if not isinstance(messages, list) or not messages:

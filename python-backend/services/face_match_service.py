@@ -3,15 +3,14 @@ webcam capture taken at interview start.
 
 Both images go through the app-wide LLM provider chain
 (services/llm_fallback_service.py — order set by LLM_PROVIDER_PRIORITY,
-default groq -> gemini -> openai) using vision-capable models per provider:
+default deepseek -> gemini -> groq) using vision-capable models per provider:
 
-    FACE_MATCH_GROQ_MODEL    (default meta-llama/llama-4-scout-17b-16e-instruct)
-    FACE_MATCH_GEMINI_MODEL  (default gemini-flash-lite-latest)
-    FACE_MATCH_OPENAI_MODEL  (default gpt-4o-mini)
+    FACE_MATCH_DEEPSEEK_MODEL (default deepseek-flash)
+    FACE_MATCH_GEMINI_MODEL   (default gemini-3.1-flash-lite)
+    FACE_MATCH_GROQ_MODEL     (optional, separate vision model)
 
-The model returns a 0-100 similarity score; the interview may only start when
-the score clears FACE_MATCH_THRESHOLD (default 75) AND the model judges them
-the same person.
+GPT-OSS 20B is text-only. Identity similarity remains an advisory score for
+recruiters; the route controls whether and how it is used.
 
 Contract mirrors the previous DeepFace verifier: when every provider fails the
 result is {"available": False} and the caller fails OPEN (records the gap for
@@ -38,8 +37,10 @@ def get_threshold() -> int:
 def get_vision_models() -> dict:
     """Vision-capable model per provider for the face-match task."""
     return {
-        "groq": os.getenv("FACE_MATCH_GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"),
-        "google": os.getenv("FACE_MATCH_GEMINI_MODEL", "gemini-flash-lite-latest"),
+        "deepseek": os.getenv("FACE_MATCH_DEEPSEEK_MODEL", "deepseek-flash"),
+        "google": os.getenv("FACE_MATCH_GEMINI_MODEL", "gemini-3.1-flash-lite"),
+        # GPT-OSS 20B has no image input. A separate vision fallback is opt-in.
+        **({"groq": os.getenv("FACE_MATCH_GROQ_MODEL")} if os.getenv("FACE_MATCH_GROQ_MODEL") else {}),
         "openai": os.getenv("FACE_MATCH_OPENAI_MODEL", "gpt-4o-mini"),
     }
 

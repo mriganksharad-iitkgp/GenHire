@@ -80,7 +80,7 @@ class InterviewSessionManager:
     def _create_fallback_llm(primary_config: LLMConfig):
         """
         Create an LLM whose provider ORDER follows the app-wide priority
-        (LLM_PROVIDER_PRIORITY, default openai -> gemini -> groq — see
+        (LLM_PROVIDER_PRIORITY, default deepseek -> gemini -> groq — see
         services/llm_fallback_service.py). primary_config supplies the
         generation settings (temperature/max_tokens/timeout); INTERVIEW_LLM_MODEL
         pins the first provider's model when it belongs to that provider.
@@ -94,6 +94,7 @@ class InterviewSessionManager:
         )
 
         chain_to_enum = {
+            "deepseek": LLMProvider.DEEPSEEK,
             "groq": LLMProvider.GROQ,
             "google": LLMProvider.GEMINI,
             "openai": LLMProvider.OPENAI,
@@ -101,12 +102,14 @@ class InterviewSessionManager:
 
         def model_belongs_to(model_name: str, provider: str) -> bool:
             name = (model_name or "").lower()
+            if provider == "deepseek":
+                return name.startswith("deepseek-")
             if provider == "openai":
                 return name.startswith(("gpt", "o1", "o3", "o4"))
             if provider == "google":
                 return "gemini" in name or "gemma" in name
             if provider == "groq":
-                return any(tag in name for tag in ("llama", "mixtral", "qwen", "deepseek", "kimi"))
+                return name.startswith("openai/") or any(tag in name for tag in ("llama", "mixtral", "qwen", "kimi"))
             return False
 
         interview_model = os.getenv("INTERVIEW_LLM_MODEL", "").strip()

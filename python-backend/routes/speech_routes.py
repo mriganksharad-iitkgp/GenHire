@@ -1,4 +1,5 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
+import os
 from controllers.speech_controller import SpeechController
 from middleware.auth_middleware import token_required
 
@@ -27,4 +28,6 @@ def synthesize(current_user):
 @token_required
 def speech_token(current_user):
     """Short-lived Google access token for the kiosk's streaming STT."""
+    if os.getenv("STT_PROVIDER", "groq").lower() == "groq":
+        return jsonify({"error": "Streaming Google STT is disabled for S2 Low. Update the kiosk and use /api/speech/transcribe."}), 410
     return speech_controller.issue_speech_access_token()

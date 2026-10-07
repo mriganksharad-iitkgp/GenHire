@@ -748,7 +748,7 @@ Rules:
                     action_type='ai_jd_generation',
                     actor_type='recruiter',
                     actor_id=str(recruiter_id),
-                    model='llama-3.3-70b-versatile',
+                    model=result['model_used'],
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     usage_source=usage_source,

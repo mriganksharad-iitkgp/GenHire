@@ -769,7 +769,7 @@ const CostStatistics = () => {
                   <summary>AI model & speech pricing reference — click to know more</summary>
                   <div className={styles.knowMoreBody}>
                     <p className={styles.subText}>
-                      Live provider fallback chain (<code>{llmPricingReference.chain_env_var}</code>) and the official per-1M-token rates used to price every AI cost line above.
+                      Configured provider fallback chain (<code>{llmPricingReference.chain_env_var}</code>) and the per-1M-token rates used for AI cost estimates.
                     </p>
                     <div className={styles.tableWrap}>
                       <table className={styles.table}>
@@ -816,11 +816,11 @@ const CostStatistics = () => {
                       </table>
                     </div>
 
-                    <h3 className={styles.subsectionTitle}>Speech Pricing (Google Cloud)</h3>
+                    <h3 className={styles.subsectionTitle}>Speech Pricing (S2 Low)</h3>
                     <div className={styles.kpiGrid}>
                       <div className={styles.kpiCard}>
                         <h3>Speech-to-Text</h3>
-                        <p>${llmPricingReference.speech.stt.usd_per_minute_equivalent.toFixed(3)}/min</p>
+                        <p>${llmPricingReference.speech.stt.usd_per_minute_equivalent.toFixed(6)}/min</p>
                         <small>{llmPricingReference.speech.stt.billing_unit} — ${llmPricingReference.speech.stt.usd_per_unit}/unit</small>
                       </div>
                       <div className={styles.kpiCard}>
@@ -829,7 +829,7 @@ const CostStatistics = () => {
                         <small>{llmPricingReference.speech.tts_standard.billing_unit}</small>
                       </div>
                       <div className={styles.kpiCard}>
-                        <h3>Text-to-Speech (Neural2)</h3>
+                        <h3>Neural2 (historical reference)</h3>
                         <p>${llmPricingReference.speech.tts_neural.usd_per_1m_chars_equivalent.toFixed(2)}/1M chars</p>
                         <small>{llmPricingReference.speech.tts_neural.billing_unit}</small>
                       </div>
@@ -842,10 +842,10 @@ const CostStatistics = () => {
             <section className={styles.card}>
               <h2>Infrastructure & Provider Cost</h2>
               <p className={styles.subText}>
-                Cost for the selected timeline. GCP, OpenAI, and ZeptoMail are <strong>actual fetched/logged spend</strong>; providers with no billing API show a flat env-entered estimate (each card shows its source).
+                DeepSeek shows recorded-token cost estimates for the selected timeline and a live account balance. Its reference card is excluded from the infrastructure total because AI usage is reported above. Each provider card identifies its source.
               </p>
               <div className={styles.kpiGrid}>
-                {['gcp', 'vercel', 'mongodb', 'zeptomail', 'openai', 'gemini', 'groq', 'cloudflare'].map((infraKey) => {
+                {['gcp', 'vercel', 'mongodb', 'zeptomail', 'deepseek', 'openai', 'gemini', 'groq', 'cloudflare'].map((infraKey) => {
                   const entry = infraCosts?.[infraKey];
                   if (!entry) return null;
                   const isActual = ['billing_export', 'costs_api', 'email_log'].includes(entry.usage_source);
@@ -855,7 +855,11 @@ const CostStatistics = () => {
                       <p>{formatMoney(entry.cost_inr)}</p>
                       {entry.usage_source && (
                         <small className={isActual ? styles.sourceActual : styles.sourcePlaceholder}>
-                          {entry.usage_source === 'billing_export'
+                          {entry.usage_source === 'request_usage'
+                            ? 'Estimate — recorded provider usage'
+                            : entry.usage_source === 'unavailable'
+                              ? 'Usage ledger unavailable'
+                              : entry.usage_source === 'billing_export'
                             ? 'Actual — GCP Billing export'
                             : entry.usage_source === 'costs_api'
                               ? 'Actual — OpenAI Costs API'
@@ -863,6 +867,19 @@ const CostStatistics = () => {
                                 ? 'Actual — logged email sends'
                                 : 'Estimate — env-entered'}
                         </small>
+                      )}
+                      {infraKey === 'deepseek' && (
+                        <>
+                          <small>Recorded cost: ${Number(entry.cost_usd || 0).toFixed(6)} USD</small>
+                          <small>{entry.request_count || 0} requests · {Number(entry.prompt_tokens || 0).toLocaleString()} input tokens · {Number(entry.completion_tokens || 0).toLocaleString()} output tokens</small>
+                          <small>{Number(entry.cached_tokens || 0).toLocaleString()} cached input tokens</small>
+                          {!!entry.unpriced_requests && <small>{entry.unpriced_requests} requests have missing usage/pricing</small>}
+                          {(entry.balances || []).map((balance) => (
+                            <small key={balance.currency}>Live balance: {balance.total_balance} {balance.currency}</small>
+                          ))}
+                          {entry.balance_status !== 'available' && <small>Live balance: {entry.balance_status === 'not_configured' ? 'set DEEPSEEK_API_KEY on Render' : 'temporarily unavailable'}</small>}
+                          <small>Current balance; independent of the selected dates.</small>
+                        </>
                       )}
                       {entry.emails_sent !== undefined && (
                         <small>{entry.emails_sent} email{entry.emails_sent === 1 ? '' : 's'} sent in timeline</small>
@@ -888,7 +905,7 @@ const CostStatistics = () => {
                 <div className={styles.kpiCard}>
                   <h3>Total Infrastructure Cost</h3>
                   <p>{formatMoney(infraCosts?.total_infrastructure_cost_inr)}</p>
-                  <small>All entries above, for the selected timeline</small>
+                  <small>Selected timeline; excludes the DeepSeek reference card</small>
                 </div>
               </div>
 
@@ -896,7 +913,7 @@ const CostStatistics = () => {
                 <summary>How is each provider figure derived? Plans & free tiers — click to know more</summary>
                 <div className={styles.knowMoreBody}>
                   <div className={styles.methodologyList}>
-                    {['gcp', 'vercel', 'mongodb', 'zeptomail', 'openai', 'gemini', 'groq'].map((infraKey) => {
+                    {['gcp', 'vercel', 'mongodb', 'zeptomail', 'deepseek', 'openai', 'gemini', 'groq'].map((infraKey) => {
                       const entry = infraCosts?.[infraKey];
                       if (!entry || !(entry.note || entry.pricing_note || entry.credit_balance_note)) return null;
                       return (

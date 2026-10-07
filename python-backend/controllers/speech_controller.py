@@ -1,6 +1,7 @@
 from flask import request, jsonify
 from services.google_speech_service import GoogleSpeechService
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class SpeechController:
         try:
             # Optionally handle parameters from the request
             language_code = data.get("language_code", "en-US")
-            voice_name = data.get("voice_name", "en-US-Standard-C")
+            voice_name = data.get("voice_name") or os.getenv("GOOGLE_TTS_VOICE", "en-US-Standard-C")
             session_id = data.get("session_id")
 
             logger.info(f"Received synthesis request for text: '{text[:50]}...'")

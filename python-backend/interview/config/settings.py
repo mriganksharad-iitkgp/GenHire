@@ -17,6 +17,7 @@ class LLMProvider(Enum):
     GROQ = "groq"
     OPENAI = "openai"
     GEMINI = "gemini"
+    DEEPSEEK = "deepseek"
 
 
 class QuestionType(Enum):
@@ -39,8 +40,8 @@ class InterviewConfig:
     min_questions: int = 10
     question_timeout_seconds: int = 300
     similarity_threshold: float = 0.7
-    default_llm_provider: LLMProvider = LLMProvider.OPENAI
-    default_model: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    default_llm_provider: LLMProvider = LLMProvider.DEEPSEEK
+    default_model: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("LLM_DEEPSEEK_MODEL", "deepseek-flash"))
     embedding_model: str = "all-MiniLM-L6-v2"
     
     # Structure explanation phase settings
@@ -56,9 +57,9 @@ class InterviewConfig:
 class LLMConfig:
     """Configuration for LLM providers."""
 
-    provider: LLMProvider = LLMProvider.OPENAI
-    model_name: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-    api_key: str = os.getenv("OPENAI_API_KEY", "")
+    provider: LLMProvider = LLMProvider.DEEPSEEK
+    model_name: str = os.getenv("INTERVIEW_LLM_MODEL", os.getenv("LLM_DEEPSEEK_MODEL", "deepseek-flash"))
+    api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     temperature: float = 0.7
     max_tokens: Optional[int] = None
     timeout_seconds: int = 30

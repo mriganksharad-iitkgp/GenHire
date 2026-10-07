@@ -40,6 +40,7 @@ class CostStatsHelpers:
                 microsecond=999999 if end_of_day else 0,
             )
 
+            parsed = parsed - datetime.timedelta(hours=5, minutes=30)
         return parsed
 
     def _period_window(self, period_value):
@@ -529,8 +530,10 @@ class CostStatsHelpers:
                     candidates.extend([nested.get('model'), nested.get('llm_model')])
 
         for name in candidates:
-            if isinstance(name, str) and name.strip() in CostTracker.PRICING:
-                return name.strip()
+            if isinstance(name, str):
+                model = name.strip().split(':')[-1]
+                if model in CostTracker.PRICING:
+                    return model
         return cfg['model']
 
     def _build_token_cost_line(self, doc, action_type, title, cfg, timestamp_fields, source_id=None, source_meta=None):
@@ -593,7 +596,8 @@ class CostStatsHelpers:
         completion_tokens = int(completion_tokens if completion_tokens is not None else cfg['completion_tokens'])
 
         line_model = self._resolve_line_model(doc, cfg)
-        rates = pricing.get(line_model, {})
+        from services.ai_pricing_service import model_rates
+        rates = model_rates(line_model) or pricing.get(line_model, {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
 
@@ -764,7 +768,8 @@ class CostStatsHelpers:
         stt_seconds = min(stt_seconds, float(self.MAX_DERIVED_STT_SECONDS))
 
         line_model = self._resolve_line_model(doc, cfg)
-        rates = pricing.get(line_model, {})
+        from services.ai_pricing_service import model_rates, groq_stt_hourly_rate
+        rates = model_rates(line_model) or pricing.get(line_model, {})
         input_rate = rates.get('input', 0.0)
         output_rate = rates.get('output', 0.0)
         # STT/TTS rates come from interview.core.pricing — the SAME dict
@@ -779,8 +784,18 @@ class CostStatsHelpers:
 
         llm_usd = ((prompt_tokens / 1_000_000.0) * input_rate) + ((completion_tokens / 1_000_000.0) * output_rate)
         stt_billed_units = math.ceil(stt_seconds / 15.0) if stt_seconds > 0 else 0
-        stt_usd = stt_billed_units * stt_rate_per_15s
+        speech_summary = doc.get('usage_summary') or {}
+        stt_model = doc.get('stt_model') or speech_summary.get('stt_model') or 'whisper-large-v3-turbo'
+        if stt_model == 'whisper-large-v3-turbo':
+            from services.ai_pricing_service import groq_stt_cost
+            stt_usd = groq_stt_cost(stt_seconds) if stt_seconds > 0 else 0
+        else:
+            stt_usd = stt_billed_units * stt_rate_per_15s
         tts_usd = tts_characters * tts_rate
+        if speech_summary.get('stt_cost_usd') is not None:
+            stt_usd = float(speech_summary['stt_cost_usd'])
+        if speech_summary.get('tts_cost_usd') is not None:
+            tts_usd = float(speech_summary['tts_cost_usd'])
         calculated_cost_inr = (llm_usd + stt_usd + tts_usd) * inr_per_usd
 
         actual_llm_usd = None
@@ -830,9 +845,11 @@ class CostStatsHelpers:
                 'input_usd_per_1m_tokens': input_rate,
                 'output_usd_per_1m_tokens': output_rate,
                 'stt_usd_per_15_seconds': stt_rate_per_15s,
+                'stt_provider': 'groq' if stt_model == 'whisper-large-v3-turbo' else 'google',
+                'stt_usd_per_hour': groq_stt_hourly_rate() if stt_model == 'whisper-large-v3-turbo' else stt_rate_per_15s * 240,
                 'tts_usd_per_character': tts_rate,
             },
-            'formula': '[LLM token cost + STT(ceil(sec/15)×rate) + TTS(chars×rate)] × INR conversion',
+            'formula': '[LLM token cost + STT duration cost + TTS(chars×rate)] × INR conversion',
             'cost_inr': self._round_money(calculated_cost_inr),
             'calculated_cost_inr': self._round_money(calculated_cost_inr),
             'actual_cost_inr': actual_cost_inr,
@@ -844,105 +861,68 @@ class CostStatsHelpers:
         }
 
     def _action_assumptions(self):
-        # Fallback assumptions used ONLY when a document carries no real usage
-        # and nothing can be derived from its transcript. All LLM work runs
-        # through the provider chain with OpenAI gpt-4o-mini primary
-        # (LLM_PROVIDER_PRIORITY), so every action is assumed/priced at
-        # gpt-4o-mini rates. Values are deliberately modest — a typical
-        # 15-minute session — not worst-case.
+        from services.llm_fallback_service import default_model_for, get_provider_priority
+        # Used only when a document has no recorded usage or model.
         return {
             'cv_scoring': {
-                'model': 'gpt-4o-mini',
+                'model': default_model_for(get_provider_priority()[0]),
                 'prompt_tokens': 1800,
                 'completion_tokens': 600,
             },
             'ai_jd_generation': {
-                'model': 'gpt-4o-mini',
+                'model': default_model_for(get_provider_priority()[0]),
                 'prompt_tokens': 1500,
                 'completion_tokens': 1200,
             },
             'ai_interview': {
-                'model': 'gpt-4o-mini',
+                'model': default_model_for(get_provider_priority()[0]),
                 'prompt_tokens': 4200,
                 'completion_tokens': 2100,
                 'stt_seconds': 900,       # 15 min of candidate speech
                 'tts_characters': 8000,   # ~10 spoken questions
             },
             'evaluation': {
-                'model': 'gpt-4o-mini',
+                'model': default_model_for(get_provider_priority()[0]),
                 'prompt_tokens': 1500,
                 'completion_tokens': 1000,
             },
         }
 
     def _llm_pricing_reference(self):
-        """Static reference table for the admin UI: the current provider
-        chain order/models with official per-1M-token pricing and free-tier
-        notices, plus GCP speech pricing. This mirrors LLM_PROVIDER_PRIORITY
-        for display only — it does not read the env, so update it by hand if
-        the chain order or models change (env files + this list together)."""
+        """Read the actual configured chain and shared rates for the admin UI."""
+        from services.llm_fallback_service import get_provider_priority, default_model_for
+        from services.ai_pricing_service import model_rates, groq_stt_hourly_rate
+        from services.face_match_service import get_vision_models
+        labels = {'deepseek': 'DeepSeek', 'google': 'Google Gemini', 'groq': 'Groq', 'openai': 'OpenAI'}
+        providers = []
+        for i, provider in enumerate(get_provider_priority()):
+            model = default_model_for(provider)
+            rates = model_rates(model) or {}
+            providers.append({
+                'provider': labels[provider], 'model': model,
+                'role': ['primary', 'secondary fallback', 'tertiary fallback'][min(i, 2)],
+                'input_usd_per_1m_tokens': rates.get('input', 0),
+                'output_usd_per_1m_tokens': rates.get('output', 0),
+                'tier_note': ('Flash rates vary by cache and peak hours; ledger snapshots configured rates.'
+                              if provider == 'deepseek' else 'List-price estimate; provider credits/free quotas may reduce the invoice.'),
+            })
         return {
-            'chain_env_var': 'LLM_PROVIDER_PRIORITY',
-            'providers': [
-                {
-                    'provider': 'OpenAI',
-                    'model': 'gpt-4o-mini',
-                    'role': 'primary',
-                    'input_usd_per_1m_tokens': 0.15,
-                    'output_usd_per_1m_tokens': 0.60,
-                    'tier_note': 'Key is valid but currently has ZERO quota (429 insufficient_quota on every call) — no real spend accrues until billing credit is added at platform.openai.com.',
-                },
-                {
-                    'provider': 'Google Gemini',
-                    'model': 'gemini-flash-lite-latest',
-                    'role': 'secondary fallback',
-                    'input_usd_per_1m_tokens': 0.075,
-                    'output_usd_per_1m_tokens': 0.30,
-                    'tier_note': 'Free tier — this Google Cloud project has zero paid quota on gemini-2.x-flash models; only the flash-lite family works without enabling billing.',
-                },
-                {
-                    'provider': 'Groq',
-                    'model': 'llama-3.3-70b-versatile',
-                    'role': 'tertiary fallback (answers most traffic while OpenAI has no quota)',
-                    'input_usd_per_1m_tokens': 0.59,
-                    'output_usd_per_1m_tokens': 0.79,
-                    'tier_note': 'Free tier — rate-limited rather than metered; no card on file, so usage costs nothing until Groq introduces billing.',
-                },
-            ],
+            'stack': 'S2 Low', 'chain_env_var': 'LLM_PROVIDER_PRIORITY', 'providers': providers,
             'face_match_vision_models': [
-                {'provider': 'OpenAI', 'model': 'gpt-4o-mini'},
-                {'provider': 'Google Gemini', 'model': 'gemini-flash-lite-latest'},
-                {'provider': 'Groq', 'model': 'meta-llama/llama-4-scout-17b-16e-instruct'},
+                {'provider': labels[p], 'model': m} for p, m in get_vision_models().items()
+                if p in get_provider_priority()
             ],
             'speech': {
-                'stt': {
-                    'provider': 'Google Cloud Speech-to-Text',
-                    'billing_unit': 'per 15 seconds (rounded up)',
-                    'usd_per_unit': 0.006,
-                    'usd_per_minute_equivalent': 0.024,
-                },
-                'tts_standard': {
-                    'provider': 'Google Cloud Text-to-Speech (Standard)',
-                    'billing_unit': 'per character',
-                    'usd_per_unit': 0.000004,
-                    'usd_per_1m_chars_equivalent': 4.00,
-                },
-                'tts_neural': {
-                    'provider': 'Google Cloud Text-to-Speech (Neural2)',
-                    'billing_unit': 'per character',
-                    'usd_per_unit': 0.000016,
-                    'usd_per_1m_chars_equivalent': 16.00,
-                },
+                'stt': {'provider': 'Groq Whisper Large v3 Turbo',
+                        'billing_unit': 'per second; minimum 10 seconds per request',
+                        'usd_per_unit': groq_stt_hourly_rate() / 3600,
+                        'usd_per_minute_equivalent': groq_stt_hourly_rate() / 60},
+                'tts_standard': {'provider': 'Google Cloud Standard TTS', 'billing_unit': 'per character',
+                                 'usd_per_unit': 0.000004, 'usd_per_1m_chars_equivalent': 4.0},
+                'tts_neural': {'provider': 'Google Cloud Neural2 (historical reference only)', 'billing_unit': 'per character',
+                               'usd_per_unit': 0.000016, 'usd_per_1m_chars_equivalent': 16.0},
             },
-            'note': (
-                'Every AI cost line below is priced at gpt-4o-mini rates regardless of which '
-                'provider actually answered the call — the provider chain is a same-shape '
-                'fallback (whichever leg responds returns the same prompt/completion token '
-                'counts) and per-call logs do not record which leg served each request, so '
-                'gpt-4o-mini (the configured primary) is used as the flat pricing reference. '
-                'Real spend is usually lower in practice since the Gemini and Groq legs are '
-                'currently free-tier.'
-            ),
+            'note': 'Recorded model and usage are preferred. Missing usage is estimated. DeepSeek timeline costs come from the request ledger, not a provider invoice. GPT-OSS 20B is text-only, so vision uses DeepSeek then Gemini.',
         }
 
     def _infra_plan_reference(self):

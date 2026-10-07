@@ -9,11 +9,11 @@ load_dotenv()
 class Config:
     """Configuration class for the evaluation system."""
 
-    # OpenAI Configuration
+    # Optional legacy key; evaluation uses the configured provider chain.
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    RUBRIC_GENERATION_MODEL: str = "gpt-5-mini"
-    EVALUATION_MODEL: str = "gpt-5-mini"
-    ANSWER_GENERATION_MODEL: str = "gpt-5-mini"
+    RUBRIC_GENERATION_MODEL: str = os.getenv("LLM_DEEPSEEK_MODEL", "deepseek-flash")
+    EVALUATION_MODEL: str = os.getenv("LLM_DEEPSEEK_MODEL", "deepseek-flash")
+    ANSWER_GENERATION_MODEL: str = os.getenv("LLM_DEEPSEEK_MODEL", "deepseek-flash")
 
     # Temperature settings
     RUBRIC_GENERATION_TEMPERATURE: float = 1.0
@@ -33,7 +33,7 @@ class Config:
     def load_from_environment(cls) -> None:
         """Load configuration from environment variables."""
 
-        cls.OPENAI_API_KEY = cls._get_api_key()
+        cls.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         cls.LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
 
         # Set environment variables for LangChain
@@ -46,22 +46,9 @@ class Config:
         if cls.OPENAI_API_KEY:
             os.environ["OPENAI_API_KEY"] = cls.OPENAI_API_KEY
 
-    @staticmethod
-    def _get_api_key() -> str:
-        """Get OpenAI API key from environment variables."""
-        # Get API key from environment variables (loaded from .env file)
-        api_key = os.getenv("OPENAI_API_KEY")
-
-        if not api_key:
-            raise ValueError(
-                "Error: OPENAI_API_KEY not found. "
-                "Please set it in the .env file or as an environment variable."
-            )
-
-        return api_key
-
     @classmethod
     def validate(cls) -> None:
         """Validate the configuration."""
-        if not cls.OPENAI_API_KEY:
-            raise ValueError("OpenAI API key is required")
+        from services.llm_fallback_service import PROVIDER_SPECS, get_provider_priority
+        if not any(os.getenv(PROVIDER_SPECS[p]["key_env"]) for p in get_provider_priority()):
+            raise ValueError("Configure DEEPSEEK_API_KEY, GOOGLE_API_KEY or GROQ_API_KEY")

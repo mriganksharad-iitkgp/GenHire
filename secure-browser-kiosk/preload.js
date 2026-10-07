@@ -11,11 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('init-from-deeplink', callback);
     },
     
-    // Google Cloud Speech Additions
+    // Backend speech APIs: Google Standard TTS and Groq STT
     synthesizeSpeech: (text) => ipcRenderer.invoke('synthesize-speech', text),
-    startSTTStream: () => ipcRenderer.send('start-stt-stream'),
-    sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', buffer),
-    stopSTTStream: () => ipcRenderer.send('stop-stt-stream'),
+    transcribeAudio: (audioBase64, sessionId) => ipcRenderer.invoke('transcribe-audio', { audioBase64, sessionId }),
     onTranscript: (callback) => {
         ipcRenderer.removeAllListeners('stt-on-transcript');
         ipcRenderer.on('stt-on-transcript', callback);

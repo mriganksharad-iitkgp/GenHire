@@ -38,14 +38,7 @@ python-backend/
 └── security_check.py             # per-frame MediaPipe + DeepFace analysis
 ```
 
-**Which LLM runs.** The interview session manager is built from
-`interview/config/settings.py`'s `LLMConfig`, which defaults to
-**OpenAI / `gpt-4o-mini`** (`INTERVIEW_LLM_MODEL` or `OPENAI_MODEL` to
-override) with `interview/llm/factory.py` wrapping multiple configs in a
-`FallbackLLM`. Everything *outside* the session manager — CV scoring, JD
-generation, the face match — goes through the app-wide chain in
-`services/llm_fallback_service.py`, ordered by `LLM_PROVIDER_PRIORITY`
-(default `openai,gemini,groq`).
+**Which LLM runs.** Both the interview session manager and the shared scoring/evaluation service use **DeepSeek V4.1 Flash (deepseek-flash) ? Gemini 3.1 Flash-Lite ? Groq GPT-OSS 20B** by default. LLM_PROVIDER_PRIORITY sets the order. Interview adapters use the same chat clients as other tasks. Speech uses **Groq Whisper Turbo STT + Google Standard TTS**. See [S2 Low deployment](../S2_LOW_DEPLOYMENT.md) for model IDs, env fields, kiosk behavior and spend tracking.
 
 ## Session lifecycle (`InterviewSessionManager`)
 

@@ -3,13 +3,13 @@ LLM Fallback Service — the app-wide resilient LLM chain with automatic
 failover on quota exhaustion.
 
 Provider ORDER comes from the environment (primary -> secondary -> tertiary):
-    LLM_PROVIDER_PRIORITY=openai,gemini,groq        (single-var form)
+    LLM_PROVIDER_PRIORITY=deepseek,gemini,groq      (single-var form)
 or  LLM_PRIMARY_PROVIDER / LLM_SECONDARY_PROVIDER / LLM_TERTIARY_PROVIDER
 
-Default order: openai, gemini, groq (see _DEFAULT_PRIORITY below).
+Default order: deepseek, gemini, groq (S2 Low).
 "gemini" and "google" are aliases.
-Per-provider default models: LLM_GROQ_MODEL, LLM_GEMINI_MODEL,
-LLM_OPENAI_MODEL; call sites can pass task-specific model_overrides.
+Per-provider models: LLM_DEEPSEEK_MODEL, LLM_GEMINI_MODEL, LLM_GROQ_MODEL.
+LLM_OPENAI_MODEL is retained only for explicitly configured legacy chains.
 
 Detects quota/rate-limit errors and transparently switches to the next
 available provider. Tracks exhausted providers with a cooldown so we
@@ -79,20 +79,18 @@ def is_quota_error(error: Exception) -> bool:
 # Provider priority (primary / secondary / tertiary) — shared app-wide
 # ---------------------------------------------------------------------------
 
-_ALIASES = {"gemini": "google", "google": "google", "openai": "openai", "groq": "groq"}
-# Owner-chosen default (2026-07-11): OpenAI gpt-4o-mini first, then Gemini,
-# then Groq — env LLM_PROVIDER_PRIORITY still overrides.
-_DEFAULT_PRIORITY = ["openai", "google", "groq"]
+_ALIASES = {"gemini": "google", "google": "google", "openai": "openai", "groq": "groq", "deepseek": "deepseek"}
+_DEFAULT_PRIORITY = ["deepseek", "google", "groq"]
 
 PROVIDER_SPECS = {
+    "deepseek": {"key_env": "DEEPSEEK_API_KEY", "model_env": "LLM_DEEPSEEK_MODEL",
+                 "default_model": "deepseek-flash"},
     "google": {"key_env": "GOOGLE_API_KEY", "model_env": "LLM_GEMINI_MODEL",
-               # free-tier friendly default (gemini-2.x-flash has zero quota
-               # on keys without billing; flash-lite-latest works)
-               "default_model": "gemini-flash-lite-latest"},
+               "default_model": "gemini-3.1-flash-lite"},
     "openai": {"key_env": "OPENAI_API_KEY", "model_env": "LLM_OPENAI_MODEL",
                "default_model": "gpt-4o-mini"},
     "groq":   {"key_env": "GROQ_API_KEY", "model_env": "LLM_GROQ_MODEL",
-               "default_model": "llama-3.3-70b-versatile"},
+               "default_model": "openai/gpt-oss-20b"},
 }
 
 
@@ -101,8 +99,7 @@ def get_provider_priority() -> List[str]:
 
     LLM_PROVIDER_PRIORITY="groq,gemini,openai" wins; otherwise the
     LLM_PRIMARY/SECONDARY/TERTIARY_PROVIDER triple; otherwise the default.
-    Unknown names are ignored; missing providers are appended so the chain
-    always knows about all three.
+    Unknown names are ignored; an explicit list limits which providers run.
     """
     raw = os.getenv("LLM_PROVIDER_PRIORITY", "").strip()
     if raw:
@@ -119,10 +116,9 @@ def get_provider_priority() -> List[str]:
         canonical = _ALIASES.get(name)
         if canonical and canonical not in ordered:
             ordered.append(canonical)
-    for name in _DEFAULT_PRIORITY:
-        if name not in ordered:
-            ordered.append(name)
-    return ordered
+    # An explicitly configured chain is authoritative. In particular, never
+    # append OpenAI just because an old key remains in the environment.
+    return ordered or list(_DEFAULT_PRIORITY)
 
 
 def default_model_for(provider: str) -> str:
@@ -134,8 +130,8 @@ def default_model_for(provider: str) -> str:
         "google": os.getenv("CV_SCORING_MODEL"),
         "openai": os.getenv("OPENAI_CV_MODEL"),
         "groq": os.getenv("GROQ_CV_MODEL"),
-    }[provider]
-    return legacy or os.getenv(spec["model_env"]) or spec["default_model"]
+    }.get(provider)
+    return os.getenv(spec["model_env"]) or legacy or spec["default_model"]
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +149,8 @@ class ProviderConfig:
     max_retries: int = 2          # retries *within* this provider
     retry_base_delay: float = 1.0  # seconds
     cooldown_seconds: float = 300  # 5 min cooldown after quota error
+    timeout_seconds: float = 30
+    max_tokens: Optional[int] = None
 
 
 @dataclass
@@ -186,7 +184,7 @@ class LLMFallbackService:
         if not self._providers:
             raise ValueError(
                 "No LLM providers configured. Ensure at least one of "
-                "GOOGLE_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY is set."
+                "DEEPSEEK_API_KEY, GOOGLE_API_KEY, or GROQ_API_KEY is set."
             )
 
         names = [p.name for p in self._providers]
@@ -201,7 +199,7 @@ class LLMFallbackService:
         providers = []
         for name in get_provider_priority():
             spec = PROVIDER_SPECS[name]
-            api_key = os.getenv(spec["key_env"])
+            api_key = os.getenv(spec["key_env"], "").strip()
             if not api_key:
                 continue
             providers.append(ProviderConfig(
@@ -255,14 +253,25 @@ class LLMFallbackService:
                 temperature=config.temperature,
                 google_api_key=config.api_key,
                 max_retries=0,
+                timeout=config.timeout_seconds,
+                max_output_tokens=config.max_tokens,
             )
-        elif config.provider_type == "openai":
+        elif config.provider_type in ("openai", "deepseek"):
             from langchain_openai import ChatOpenAI
+            provider_options = {}
+            if config.provider_type == "deepseek":
+                provider_options = {
+                    "base_url": os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
+                    "extra_body": {"thinking": {"type": os.getenv("DEEPSEEK_THINKING_MODE", "disabled")}},
+                }
             return ChatOpenAI(
                 model=config.model,
                 temperature=config.temperature,
                 api_key=config.api_key,
                 max_retries=0,
+                timeout=config.timeout_seconds,
+                max_tokens=config.max_tokens,
+                **provider_options,
             )
         elif config.provider_type == "groq":
             from langchain_groq import ChatGroq
@@ -271,6 +280,8 @@ class LLMFallbackService:
                 temperature=config.temperature,
                 api_key=config.api_key,
                 max_retries=0,
+                timeout=config.timeout_seconds,
+                max_tokens=config.max_tokens,
             )
         else:
             raise ValueError(f"Unknown provider type: {config.provider_type}")
@@ -311,6 +322,10 @@ class LLMFallbackService:
         payload = self._build_payload(prompt, images)
 
         for base_cfg in self._providers:
+            # GPT-OSS 20B is text-only. Vision tasks stop after Gemini unless
+            # the caller explicitly supplies a different Groq vision model.
+            if images and base_cfg.provider_type == "groq" and not (model_overrides or {}).get("groq"):
+                continue
             provider_cfg = base_cfg
             override = (model_overrides or {}).get(base_cfg.name)
             if override and override != base_cfg.model:
@@ -325,7 +340,7 @@ class LLMFallbackService:
                     llm = self._create_llm(provider_cfg)
                     
                     if json_mode:
-                        if provider_cfg.provider_type in ["openai", "groq"]:
+                        if provider_cfg.provider_type in ["openai", "deepseek", "groq"]:
                             llm = llm.bind(response_format={"type": "json_object"})
 
                     response = llm.invoke(payload)
@@ -347,6 +362,8 @@ class LLMFallbackService:
 
                     # Extract usage metadata
                     usage = self._extract_usage(response)
+                    from services.provider_usage_service import record_provider_request
+                    record_provider_request(provider_cfg.provider_type, provider_cfg.model, usage)
 
                     return {
                         "content": content,
@@ -429,33 +446,8 @@ class LLMFallbackService:
 
     @staticmethod
     def _extract_usage(response) -> Optional[Dict[str, Any]]:
-        """Best-effort extraction of token usage from a LangChain response."""
-        usage = {}
-        try:
-            # LangChain ChatModel responses have response_metadata
-            meta = getattr(response, "response_metadata", {}) or {}
-            token_usage = meta.get("token_usage") or meta.get("usage") or {}
-            if token_usage:
-                usage["prompt_tokens"] = token_usage.get(
-                    "prompt_tokens", token_usage.get("input_tokens")
-                )
-                usage["completion_tokens"] = token_usage.get(
-                    "completion_tokens", token_usage.get("output_tokens")
-                )
-                usage["usage_source"] = "actual"
-                return usage
-
-            # Fallback: usage_metadata (newer LangChain)
-            usage_meta = getattr(response, "usage_metadata", None)
-            if usage_meta:
-                usage["prompt_tokens"] = getattr(usage_meta, "input_tokens", None)
-                usage["completion_tokens"] = getattr(usage_meta, "output_tokens", None)
-                usage["usage_source"] = "actual"
-                return usage
-        except Exception:
-            pass
-
-        return {"prompt_tokens": None, "completion_tokens": None, "usage_source": "assumed"}
+        from services.usage_telemetry_service import extract_usage_from_response
+        return extract_usage_from_response(response)
 
 
 # ---------------------------------------------------------------------------

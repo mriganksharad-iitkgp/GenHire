@@ -3,65 +3,16 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-// Google Cloud Speech access — NO bundled service-account key.
-// TTS goes through the GenHire backend proxy (/api/speech/synthesize) and
-// streaming STT authenticates with a short-lived access token minted by the
-// backend (/api/speech/token), both using the interview session's JWT that
-// arrives via the secure-interview:// deep link.
-const speech = require('@google-cloud/speech');
-const grpc = require('@grpc/grpc-js');
-const { OAuth2Client } = require('google-auth-library');
-
-let recognizeStream = null;
-
-// Captured from the deep link's initData (same payload the renderer parses).
+// Speech requests are proxied through the authenticated GenHire backend.
+// Provider credentials never leave the server.
 let backendSession = { apiUrl: null, token: null };
-// Cached short-lived Google access token for streaming STT.
-let speechAccessToken = { token: null, expiresAt: 0 };
-
 function captureBackendSession(initData) {
     try {
         const payload = JSON.parse(Buffer.from(initData, 'base64').toString('utf-8'));
         if (payload && payload.apiUrl && payload.token) {
             backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token };
-            speechAccessToken = { token: null, expiresAt: 0 }; // new session, new token
         }
-    } catch (e) {
-        console.warn('Could not parse deep-link session payload:', e.message);
-    }
-}
-
-async function getSpeechAccessToken() {
-    if (!backendSession.apiUrl || !backendSession.token) {
-        throw new Error('No backend session — launch the app from the GenHire dashboard.');
-    }
-    // Reuse the cached token until 2 minutes before expiry.
-    if (speechAccessToken.token && Date.now() < speechAccessToken.expiresAt - 120000) {
-        return speechAccessToken.token;
-    }
-    const response = await fetch(`${backendSession.apiUrl}/api/speech/token`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${backendSession.token}` },
-    });
-    if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || `Speech token request failed (${response.status})`);
-    }
-    const data = await response.json();
-    const expiresAt = data.expires_at ? Date.parse(data.expires_at) : Date.now() + 45 * 60 * 1000;
-    speechAccessToken = { token: data.access_token, expiresAt };
-    return speechAccessToken.token;
-}
-
-async function createSttClient() {
-    const accessToken = await getSpeechAccessToken();
-    const authClient = new OAuth2Client();
-    authClient.setCredentials({ access_token: accessToken });
-    const sslCreds = grpc.credentials.combineChannelCredentials(
-        grpc.credentials.createSsl(),
-        grpc.credentials.createFromGoogleCredential(authClient),
-    );
-    return new speech.SpeechClient({ sslCreds });
+    } catch (e) { console.warn('Could not parse deep-link session payload:', e.message); }
 }
 
 let KIOSK_HTTP_PORT = 0; // Set to 0 to auto-assign a free port to prevent EADDRINUSE
@@ -159,8 +110,8 @@ ipcMain.handle('synthesize-speech', async (event, text) => {
         throw new Error('No backend session — launch the app from the GenHire dashboard.');
     }
 
-    // Voice fallback chain: Journey (most natural) -> Neural2 -> Standard
-    const voices = ['en-US-Journey-F', 'en-US-Neural2-C', 'en-US-Standard-C'];
+    // S2 Low: Google Standard voice only.
+    const voices = ['en-US-Standard-C'];
 
     for (const voiceName of voices) {
         try {
@@ -187,64 +138,20 @@ ipcMain.handle('synthesize-speech', async (event, text) => {
 });
 
 // ==========================================
-// GOOGLE CLOUD SPEECH-TO-TEXT (STT) HANDLERS
+// GROQ SPEECH-TO-TEXT THROUGH THE BACKEND
 // ==========================================
-ipcMain.on('start-stt-stream', async (event) => {
-    let sttClient;
-    try {
-        sttClient = await createSttClient();
-    } catch (err) {
-        console.error('STT client init failed:', err.message);
-        event.sender.send('stt-error', err.message);
-        return;
-    }
-
-    // Cleanup previous stream if any
-    if (recognizeStream) {
-        recognizeStream.end();
-        recognizeStream = null;
-    }
-
-    const request = {
-        config: {
-            encoding: 'WEBM_OPUS',
-            sampleRateHertz: 48000,
-            languageCode: 'en-US',
-            enableAutomaticPunctuation: true,
-            model: 'latest_long'
-        },
-        interimResults: true,
-    };
-
-    recognizeStream = sttClient
-        .streamingRecognize(request)
-        .on('error', (err) => {
-            console.error('STT Stream Error:', err);
-            event.sender.send('stt-error', err.message);
-        })
-        .on('data', (data) => {
-            if (data.results[0] && data.results[0].alternatives[0]) {
-                const text = data.results[0].alternatives[0].transcript;
-                const isFinal = data.results[0].isFinal;
-                event.sender.send('stt-on-transcript', text, isFinal);
-            }
-        });
-
-    console.log("🎙️ Google STT recognizer stream opened");
-});
-
-ipcMain.on('audio-chunk', (event, buffer) => {
-    if (recognizeStream && recognizeStream.writable) {
-        recognizeStream.write(buffer);
-    }
-});
-
-ipcMain.on('stop-stt-stream', (event) => {
-    if (recognizeStream) {
-        recognizeStream.end();
-        recognizeStream = null;
-        console.log("🛑 Google STT recognizer stream closed");
-    }
+ipcMain.handle('transcribe-audio', async (event, { audioBase64, sessionId }) => {
+    if (!backendSession.apiUrl || !backendSession.token) throw new Error('Launch from the GenHire dashboard.');
+    const response = await fetch(backendSession.apiUrl + '/api/speech/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + backendSession.token },
+        body: JSON.stringify({ audio_base64: audioBase64, encoding: 'WEBM_OPUS',
+                               language_code: 'en-US', session_id: sessionId }),
+        signal: AbortSignal.timeout(45000),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Transcription failed');
+    return data.transcript || '';
 });
 
 // Enable kiosk mode (called when interview starts)

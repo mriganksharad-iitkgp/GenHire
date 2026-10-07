@@ -13,7 +13,7 @@ from .speech_cost_tracker import (
 
 def calculate_cost(model: str, usage: Any):
     """Return actual LLM cost in USD based only on provider usage payload."""
-    if not usage or model not in PRICING:
+    if not usage:
         return None
 
     if isinstance(usage, dict):
@@ -32,9 +32,12 @@ def calculate_cost(model: str, usage: Any):
     except (TypeError, ValueError):
         return None
 
-    input_price = PRICING[model]["input"]
-    output_price = PRICING[model]["output"]
-    return (prompt_tokens * input_price) + (completion_tokens * output_price)
+    from services.ai_pricing_service import token_cost_usd
+    payload = dict(usage) if isinstance(usage, dict) else {
+        "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+        "prompt_cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", 0),
+    }
+    return token_cost_usd(model, payload)
 
 
 
@@ -54,13 +57,16 @@ class UsageEvent:
 
 class CostTracker:
     _instance = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
     _session_context: ContextVar[Optional[str]] = ContextVar(
         "cost_tracker_session", default=None
     )
 
     # Pricing (approximate/assumed)
     PRICING = {
+        "deepseek-flash": {"input": 0.30, "output": 1.20},
+        "gemini-3.1-flash-lite": {"input": 0.25, "output": 1.50},
+        "openai/gpt-oss-20b": {"input": 0.075, "output": 0.30},
         # LLM pricing per 1M tokens
         "gpt-4o": {"input": 2.50, "output": 10.00},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
@@ -165,24 +171,27 @@ class CostTracker:
     def _calculate_llm_cost(
         self, model: str, prompt_tokens: int, completion_tokens: int
     ) -> float:
-        # Unrecognized models are priced as gpt-4o-mini — the chain's primary
-        # (LLM_PROVIDER_PRIORITY=openai,...) — so estimates track what the
-        # platform actually runs on.
-        model_key = "gpt-4o-mini"
+        # Recorded usage uses configured rates; missing usage keeps a margin.
+        from services.ai_pricing_service import model_rates
+        configured_rates = model_rates(model)
+        if configured_rates:
+            return ((prompt_tokens * configured_rates["input"] +
+                     completion_tokens * configured_rates["output"]) / 1_000_000) * self.SAFETY_MARGIN
+        model_key = "deepseek-flash"
         for key in self.PRICING:
             if key in model.lower() and not any(s in key for s in ["stt", "tts"]):
                 model_key = key
                 break
 
-        rates = self.PRICING.get(model_key, self.PRICING["gpt-4o-mini"])
+        rates = self.PRICING.get(model_key, self.PRICING["deepseek-flash"])
         input_cost = (prompt_tokens / 1_000_000) * rates["input"]
         output_cost = (completion_tokens / 1_000_000) * rates["output"]
         
         # Apply safety margin to the calculated cost
         return (input_cost + output_cost) * self.SAFETY_MARGIN
 
-    def _calculate_stt_cost(self, seconds: float) -> float:
-        cost = calculate_stt_cost(seconds)
+    def _calculate_stt_cost(self, seconds: float, model: str = "whisper-large-v3-turbo") -> float:
+        cost = calculate_stt_cost(seconds, model=model)
         return float(cost or 0.0)
 
     def _calculate_tts_cost(self, characters: int, model: str = "google-tts") -> float:
@@ -213,7 +222,7 @@ class CostTracker:
             completion_tokens = len(completion_text) // 4
 
         calculated_cost = self._calculate_llm_cost(model, prompt_tokens, completion_tokens)
-        cost = calculated_cost
+        cost = actual_cost if actual_cost is not None else calculated_cost
         resolved_session_id = self._resolve_session_id(session_id)
 
         event = UsageEvent(
@@ -248,10 +257,10 @@ class CostTracker:
         self,
         source: str,
         seconds: float,
-        model: str = "google-stt",
+        model: str = "whisper-large-v3-turbo",
         session_id: Optional[str] = None,
     ):
-        cost = self._calculate_stt_cost(seconds)
+        cost = self._calculate_stt_cost(seconds, model)
         resolved_session_id = self._resolve_session_id(session_id)
         event = UsageEvent(
             source=source,
@@ -267,7 +276,7 @@ class CostTracker:
             self.total_calculated_cost += cost
             self.total_cost += cost
             self._merge_session_totals(
-                session_id,
+                resolved_session_id,
                 stt_seconds=seconds,
                 calculated_cost=cost,
                 cost=cost,
@@ -277,13 +286,13 @@ class CostTracker:
         except (TypeError, ValueError):
             stt_seconds_val = 0.0
         log_cost(
-            "gcp_stt",
+            "groq_stt" if model == "whisper-large-v3-turbo" else "gcp_stt",
             cost,
             {
                 "source": source,
                 "session_id": resolved_session_id,
                 "audio_seconds": stt_seconds_val,
-                "billed_seconds": (math.ceil(stt_seconds_val / 15.0) * 15)
+                "billed_seconds": (max(10.0, stt_seconds_val) if model == "whisper-large-v3-turbo" else math.ceil(stt_seconds_val / 15.0) * 15)
                 if stt_seconds_val > 0
                 else 0,
             },
@@ -312,7 +321,7 @@ class CostTracker:
             self.total_calculated_cost += cost
             self.total_cost += cost
             self._merge_session_totals(
-                session_id,
+                resolved_session_id,
                 tts_characters=characters,
                 calculated_cost=cost,
                 cost=cost,
@@ -334,7 +343,7 @@ class CostTracker:
         completion_tokens: int = 0,
         stt_seconds: float = 0.0,
         tts_characters: int = 0,
-        llm_model: str = "gpt-4o-mini",
+        llm_model: str = "deepseek-flash",
     ) -> Dict:
         llm_cost = self._calculate_llm_cost(
             llm_model,
@@ -396,6 +405,11 @@ class CostTracker:
                     ),
                     "event_count": int(session_data.get("event_count", 0) or 0),
                 }
+                session_events = [event for event in self.events if str(event.session_id) == session_key]
+                summary["stt_model"] = next((event.model for event in session_events if event.audio_seconds > 0), "whisper-large-v3-turbo")
+                summary["stt_cost_usd"] = sum(event.cost for event in session_events if event.audio_seconds > 0)
+                summary["tts_cost_usd"] = sum(event.cost for event in session_events if event.character_count > 0)
+                summary["models"] = sorted({event.model for event in session_events if event.prompt_tokens or event.completion_tokens})
             else:
                 fallback_data = fallback or {}
                 summary = self.build_usage_summary(
@@ -409,7 +423,7 @@ class CostTracker:
                     tts_characters=int(
                         fallback_data.get("total_tts_characters", 0) or 0
                     ),
-                    llm_model=fallback_data.get("model", "gpt-4o-mini"),
+                    llm_model=fallback_data.get("model", "deepseek-flash"),
                 )
 
             if clear_events and session_key in self.session_totals:
