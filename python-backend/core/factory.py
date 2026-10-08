@@ -126,32 +126,13 @@ def create_app():
     except ImportError:
         print("[WARN] flask-talisman not installed, skipping security headers. Install with: pip install Flask-Talisman")
 
-    # Setup Rate Limiting — optional
-    try:
-        from flask_limiter import Limiter
-        from flask_limiter.util import get_remote_address
-
-        # In development, very high limits so developers aren't rate limited
-        is_development = os.getenv("FLASK_ENV") == "development"
-        default_limits = ["100000 per day", "10000 per hour"] if is_development else ["200 per day", "50 per hour"]
-
-        # Falls back to in-process memory storage automatically when REDIS_URL
-        # isn't set — set it to make limits shared across workers/containers.
-        Limiter(
-            get_remote_address,
-            app=app,
-            default_limits=default_limits,
-            storage_uri=app_config.redis_url(),
-        )
-        print(f"[OK] Flask-Limiter loaded with limits: {default_limits}")
-    except ImportError:
-        print("[WARN] flask-limiter not installed, skipping rate limiting. Install with: pip install Flask-Limiter")
-
     # ObjectId/datetime-safe JSON serialization for every route
     app.json = ObjectIdSafeJSONProvider(app)
 
     # Initialize extensions (shared socketio instance from core.extensions)
-    socketio.init_app(app, cors_allowed_origins=app_config.origin_is_allowed)
+    from middleware.rate_limiter import env_int
+    socketio.init_app(app, cors_allowed_origins=app_config.origin_is_allowed,
+                     max_http_buffer_size=env_int("SOCKET_MAX_MESSAGE_BYTES", 2 * 1024 * 1024, maximum=16 * 1024 * 1024))
 
     # Restrict CORS to known origins — a wildcard origin combined with
     # supports_credentials=True is invalid per the CORS spec.
@@ -168,16 +149,28 @@ def create_app():
                 ],
                 "supports_credentials": True,
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-                "expose_headers": ["Content-Type", "Authorization"],
+                "expose_headers": ["Content-Type", "Authorization", "Retry-After", "X-Request-ID"],
             }
         },
     )
 
     @app.errorhandler(Exception)
     def handle_exception(e):
+        from pydantic import ValidationError
+        if isinstance(e, ValidationError):
+            details = [{"field": ".".join(str(item) for item in issue["loc"]), "message": issue["msg"]}
+                       for issue in e.errors(include_input=False)]
+            return jsonify(error="Invalid request data.", details=details), 400
+        from pymongo.errors import AutoReconnect, WaitQueueTimeoutError, ServerSelectionTimeoutError
+        if isinstance(e, (AutoReconnect, WaitQueueTimeoutError, ServerSelectionTimeoutError)):
+            from middleware.rate_limiter import rejection
+            return rejection(503, "database_busy", 3, "database")
         # Pass through HTTP errors
         if isinstance(e, HTTPException):
-            return jsonify(error=e.description, code=e.code), e.code
+            response = e.get_response()
+            response.data = app.json.dumps({"error": e.description, "code": e.code})
+            response.content_type = "application/json"
+            return response
 
         # Log and return standard JSON for unhandled errors
         logger.error(f"Unhandled Exception [request_id={g.get('request_id', '-')}]: {str(e)}")
@@ -208,11 +201,15 @@ def create_app():
         if origin and app_config.origin_is_allowed(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Expose-Headers"] = "Content-Type, Authorization, Retry-After, X-Request-ID"
             response.headers["Access-Control-Allow-Methods"] = (
                 "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             )
             response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Mobile-Pairing-Token"
         return response
+
+    from middleware.rate_limiter import install_request_protection
+    install_request_protection(app)
 
     # Initialize database
     db = db_config.connect()

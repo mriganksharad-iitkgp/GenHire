@@ -104,6 +104,13 @@ def apply_for_job(current_user, job_id):
         return jsonify({'error': 'Unauthorized. Only candidates can apply for jobs.'}), 403
     
     data = request.get_json() or {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Application data must be a JSON object.'}), 400
+    letter = data.get('cover_letter', '')
+    if not isinstance(letter, str) or len(letter) > 5000:
+        return jsonify({'error': 'Cover letter must be text of at most 5,000 characters.'}), 400
+    if data.get('cv_id') is not None and (not isinstance(data['cv_id'], str) or len(data['cv_id']) > 128):
+        return jsonify({'error': 'Invalid CV ID.'}), 400
     user_id = str(current_user['_id'])
     
     # Extract optional cv_id from request data

@@ -1,12 +1,18 @@
 """
 Background Processing Service for CV Scoring
-Uses threading and queue for simple async task processing without Redis
+Uses Mongo-persisted applications, atomic leases and a bounded thread pool.
 """
 import threading
 import queue
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import uuid
+import math
+from pymongo import ReturnDocument
+from middleware.rate_limiter import env_int
+from services.bounded_executor import submit_notification
 from typing import Dict, Any, Callable, Optional
 from bson import ObjectId
 from services.usage_telemetry_service import record_usage_event
@@ -41,97 +47,162 @@ def _notify_candidate_of_status(applications_collection, application_id: str, ap
         company = (job or {}).get("company") or (job or {}).get("company_name") or "the company"
 
         email_svc = EmailService()
-        threading.Thread(
-            target=email_svc.send_application_status_notification,
-            args=(candidate_email, candidate_name, job_title, company, application_status),
-            daemon=True,
-        ).start()
+        submit_notification(
+            email_svc.send_application_status_notification,
+            candidate_email, candidate_name, job_title, company, application_status,
+        )
     except Exception:
         logger.warning("Candidate status-notification email failed to send", exc_info=True)
 
 
 class BackgroundProcessor:
     """
-    Simple background task processor using threading.
-    Handles CV scoring and other long-running tasks asynchronously.
+    Durable CV scoring processor with bounded workers and renewable Mongo leases.
     """
     
     def __init__(self):
-        self.task_queue = queue.Queue()
+        self.task_queue = queue.Queue(maxsize=1)  # compatibility stats; Mongo owns the work
         self.worker_thread = None
+        self.threads = []
         self.running = False
         self.processed_count = 0
         self.failed_count = 0
-        
+        self.collections = None
+        self.scoring_service = None
+        self.wakeup = threading.Event()
+        self.stop_event = threading.Event()
+        self.claim_lock = threading.Lock()
+        self.claims = {}
+        self.worker_count = env_int('CV_SCORING_WORKERS', 2, maximum=16)
+        self.lease_seconds = env_int('CV_SCORING_LEASE_SECONDS', 300, minimum=30)
+        self.poll_seconds = env_int('CV_SCORING_POLL_SECONDS', 2, maximum=60)
+
+    def configure(self, collections, scoring_service):
+        self.collections = collections
+        self.scoring_service = scoring_service
+
     def start(self):
-        """Start the background worker thread"""
         if self.running:
-            logger.warning("Background processor already running")
             return
-            
         self.running = True
-        self.worker_thread = threading.Thread(target=self._worker, daemon=True)
-        self.worker_thread.start()
-        logger.info("Background processor started")
-        
+        self.stop_event.clear()
+        self.threads = [
+            threading.Thread(target=self._worker, daemon=True, name=f'cv-scoring-{i}')
+            for i in range(self.worker_count)
+        ]
+        self.threads.append(threading.Thread(target=self._renew_claims, daemon=True, name='cv-lease-renewal'))
+        for thread in self.threads:
+            thread.start()
+        self.worker_thread = self.threads[0]
+
     def stop(self):
-        """Stop the background worker thread"""
         self.running = False
-        if self.worker_thread:
-            self.worker_thread.join(timeout=5)
-        logger.info(f"Background processor stopped. Processed: {self.processed_count}, Failed: {self.failed_count}")
-        
-    def enqueue_cv_scoring(self, application_id: str, cv_data: Dict[str, Any], 
-                          jd_data: Dict[str, Any], db_collections: Dict[str, Any],
-                          cv_scoring_service: Any):
-        """
-        Add a CV scoring task to the queue
-        
-        Args:
-            application_id: ID of the application to score
-            cv_data: Dictionary containing CV information (text, source, etc.)
-            jd_data: Dictionary containing job description information
-            db_collections: Database collections dict
-            cv_scoring_service: Instance of CVScoringService
-        """
-        task = {
-            'type': 'cv_scoring',
-            'application_id': application_id,
-            'cv_data': cv_data,
-            'jd_data': jd_data,
-            'db_collections': db_collections,
-            'cv_scoring_service': cv_scoring_service,
-            'enqueued_at': datetime.utcnow()
+        self.stop_event.set()
+        self.wakeup.set()
+        for thread in self.threads:
+            thread.join(timeout=1)
+
+    def enqueue_cv_scoring(self, application_id, cv_data, jd_data, db_collections, cv_scoring_service):
+        # Snapshots and pending status are saved in the original application write.
+        # No provider call or in-memory queue is required to accept the application.
+        self.configure(db_collections, cv_scoring_service)
+        self.wakeup.set()
+
+    def _claim_task(self):
+        if self.collections is None:
+            return None
+        now = datetime.utcnow()
+        token = uuid.uuid4().hex
+        collection = self.collections['applications']
+        doc = collection.find_one_and_update(
+            {
+                'cv_snapshot': {'$ne': None},
+                'cv_score_waived': {'$ne': True},
+                '$or': [
+                    {'processing_status': 'pending'},
+                    {'processing_status': 'scoring_retrying', '$or': [
+                        {'scoring_next_retry_at': {'$lte': now}},
+                        {'scoring_next_retry_at': None},
+                    ]},
+                    {'processing_status': 'processing', '$or': [
+                        {'scoring_lease_until': {'$lte': now}},
+                        {'scoring_lease_until': None},
+                    ]},
+                ],
+            },
+            {'$set': {
+                'processing_status': 'processing', 'scoring_lease_token': token,
+                'scoring_lease_until': now + timedelta(seconds=self.lease_seconds),
+                'updated_at': now,
+            }},
+            sort=[('applied_at', 1)], return_document=ReturnDocument.AFTER,
+        )
+        if not doc:
+            return None
+        snapshot = doc.get('cv_snapshot') or {}
+        jd = doc.get('jd_snapshot') or {}
+        job_id = doc.get('job_id')
+        job = jd.get('job')
+        if not job:
+            job = self.collections['jobs'].find_one({'_id': ObjectId(job_id)}) if ObjectId.is_valid(job_id) else {}
+        job = job or {'title': jd.get('job_title'), 'description': jd.get('text', '')}
+        return {
+            'application_id': str(doc['_id']), 'lease_token': token,
+            'retry_count': doc.get('scoring_retry_count', 0),
+            'cv_data': {
+                'cv_text': snapshot.get('text'), 'cv_details': snapshot.get('details'),
+                'parsing_confidence': (snapshot.get('metadata') or {}).get('parsing_confidence', 'high'),
+            },
+            'jd_data': {
+                'jd_text': jd.get('text', ''), 'job': job, 'job_id': job_id,
+                'minimum_cv_score': doc.get('minimum_cv_score_required', 50.0),
+            },
+            'db_collections': self.collections, 'cv_scoring_service': self.scoring_service,
         }
-        logger.info(f"Processing CV scoring synchronously for application {application_id}")
-        self._process_cv_scoring(task)
-        
+
+    @staticmethod
+    def _task_filter(task):
+        query = {'_id': ObjectId(task['application_id'])}
+        if task.get('lease_token'):
+            query['scoring_lease_token'] = task['lease_token']
+            query['processing_status'] = 'processing'
+        return query
+
+    def _renew_claims(self):
+        while not self.stop_event.wait(self.lease_seconds / 3):
+            with self.claim_lock:
+                tasks = list(self.claims.values())
+            for task in tasks:
+                try:
+                    task['db_collections']['applications'].update_one(
+                        self._task_filter(task),
+                        {'$set': {'scoring_lease_until': datetime.utcnow() + timedelta(seconds=self.lease_seconds)}},
+                    )
+                except Exception:
+                    logger.warning('CV scoring lease renewal failed')
+
     def _worker(self):
-        """Worker thread that processes tasks from the queue"""
-        logger.info("Background worker thread started")
-        
         while self.running:
+            task = None
             try:
-                # Wait for a task with timeout to allow graceful shutdown
-                task = self.task_queue.get(timeout=1)
-                
-                logger.info(f"Processing task: {task['type']} for application {task['application_id']}")
-                
-                if task['type'] == 'cv_scoring':
-                    self._process_cv_scoring(task)
-                    
-                self.task_queue.task_done()
+                task = self._claim_task()
+                if task is None:
+                    self.wakeup.wait(self.poll_seconds)
+                    self.wakeup.clear()
+                    continue
+                with self.claim_lock:
+                    self.claims[task['lease_token']] = task
+                self._process_cv_scoring(task)
                 self.processed_count += 1
-                
-            except queue.Empty:
-                # No tasks available, continue waiting
-                continue
-            except Exception as e:
-                logger.error(f"Error processing task: {e}", exc_info=True)
+            except Exception:
+                logger.warning('CV worker could not claim/process work', exc_info=True)
                 self.failed_count += 1
-                
-        logger.info("Background worker thread stopped")
-        
+                self.stop_event.wait(self.poll_seconds)
+            finally:
+                if task:
+                    with self.claim_lock:
+                        self.claims.pop(task['lease_token'], None)
+
     # Maximum retry attempts for CV scoring
     MAX_SCORING_RETRIES = 3
     # Backoff delays in seconds between retries: 30s, 60s, 120s
@@ -160,7 +231,7 @@ class BackgroundProcessor:
         try:
             # Update status to processing
             applications_collection.update_one(
-                {'_id': ObjectId(application_id)},
+                self._task_filter(task),
                 {
                     '$set': {
                         'processing_status': 'processing',
@@ -209,7 +280,9 @@ class BackgroundProcessor:
                     else:
                         cv_score = scoring_result.get('total_score')
                         cv_score_breakdown = scoring_result.get('score_breakdown')
-                        if cv_score is None:
+                        if (isinstance(cv_score, bool) or not isinstance(cv_score, (int, float))
+                                or not math.isfinite(cv_score) or not 0 <= cv_score <= 100):
+                            cv_score = None
                             scoring_failed = True
                         else:
                             logger.info(
@@ -237,60 +310,34 @@ class BackgroundProcessor:
                         f"Retrying in {delay}s..."
                     )
                     applications_collection.update_one(
-                        {'_id': ObjectId(application_id)},
+                        self._task_filter(task),
                         {
                             '$set': {
                                 'processing_status': 'scoring_retrying',
                                 'processing_error': str(scoring_result.get('error', 'Scoring failed')),
                                 'scoring_retry_count': next_retry,
-                                'scoring_next_retry_at': datetime.utcnow(),
+                                'scoring_next_retry_at': datetime.utcnow() + timedelta(seconds=delay),
                                 'is_visible': True,
                                 'updated_at': datetime.utcnow()
                             }
                         }
                     )
 
-                    # Schedule retry with a timer thread
-                    retry_task = dict(task)
-                    retry_task['retry_count'] = next_retry
-                    timer = threading.Timer(delay, self._process_cv_scoring, args=[retry_task])
-                    timer.daemon = True
-                    timer.start()
+                    # Persistent retry time is claimed by the same bounded workers.
                     return
                 else:
-                    # All retries exhausted — mark as permanently failed
-                    logger.error(
-                        f"CV scoring permanently failed for application "
-                        f"{application_id} after {retry_count} retries. Falling back to 75.0"
-                    )
-                    
-                    fallback_score = 75.0
-                    application_status = 'shortlisted' if fallback_score >= minimum_cv_score else 'rejected'
-
+                    # No invented score or eligibility decision when providers fail.
                     applications_collection.update_one(
-                        {'_id': ObjectId(application_id)},
-                        {
-                            '$set': {
-                                'cv_score': fallback_score,
-                                'cv_score_breakdown': '{"Error": "API quota exhausted. Fallback score assigned."}',
-                                'status': application_status,
-                                'status_reason': (
-                                    f'CV scoring service unavailable. Fallback score ({fallback_score}) '
-                                    f'assigned. Minimum required: {minimum_cv_score}'
-                                ),
-                                'processing_status': 'completed',
-                                'processing_error': str(scoring_result.get('error', 'All providers exhausted')),
-                                'scoring_retry_count': retry_count,
-                                'is_visible': True,
-                                'updated_at': datetime.utcnow(),
-                                'auto_processed': True,
-                            }
-                        }
+                        self._task_filter(task),
+                        {'$set': {
+                            'cv_score': None, 'cv_score_breakdown': None,
+                            'processing_status': 'scoring_failed',
+                            'processing_error': 'Scoring unavailable; recruiter review required.',
+                            'scoring_retry_count': retry_count,
+                            'is_visible': True, 'updated_at': datetime.utcnow(),
+                        }},
                     )
                     self.failed_count += 1
-                    _notify_candidate_of_status(
-                        applications_collection, application_id, application_status, job,
-                    )
                     return
 
             # ──────────────────────────────────────────────────────────────
@@ -301,7 +348,10 @@ class BackgroundProcessor:
                 current_app and current_app.get('auto_shortlisted_via_invite')
             )
 
-            if auto_shortlisted_via_invite:
+            if current_app and current_app.get('status') not in ('pending', 'applied', None) and not auto_shortlisted_via_invite:
+                application_status = current_app['status']
+                status_reason = current_app.get('status_reason') or 'Recruiter decision preserved'
+            elif auto_shortlisted_via_invite:
                 application_status = 'shortlisted'
                 status_reason = (
                     f'CV score ({cv_score:.1f}); status preserved from recruiter interview invite'
@@ -326,33 +376,43 @@ class BackgroundProcessor:
             provider_used = scoring_result.get('provider_used', 'unknown')
             model_used = scoring_result.get('model_used', 'unknown')
 
+            # Do not overwrite a recruiter decision that changes after our read.
+            result_filter = self._task_filter(task)
+            result_filter['status'] = (current_app or {}).get('status')
             # Update application with results
-            update_result = applications_collection.update_one(
-                {'_id': ObjectId(application_id)},
-                {
-                    '$set': {
-                        'cv_score': cv_score,
-                        'cv_score_breakdown': cv_score_breakdown,
-                        'status': application_status,
-                        'status_reason': status_reason,
-                        'processing_status': 'completed',
-                        'processing_error': None,
-                        'is_visible': True,
-                        'cv_score_calculated_at': datetime.utcnow(),
-                        'cv_scoring_usage': {
-                            'prompt_tokens': int(prompt_tokens or 0),
-                            'completion_tokens': int(completion_tokens or 0),
-                            'usage_source': usage_source,
-                            'provider_used': provider_used,
-                            'model_used': model_used,
-                        },
+            result_update = {
+                '$set': {
+                    'cv_score': cv_score,
+                    'cv_score_breakdown': cv_score_breakdown,
+                    'status': application_status,
+                    'status_reason': status_reason,
+                    'processing_status': 'completed',
+                    'processing_error': None,
+                    'is_visible': True,
+                    'cv_score_calculated_at': datetime.utcnow(),
+                    'cv_scoring_usage': {
                         'prompt_tokens': int(prompt_tokens or 0),
                         'completion_tokens': int(completion_tokens or 0),
-                        'updated_at': datetime.utcnow(),
-                        'auto_processed': True
-                    }
+                        'usage_source': usage_source,
+                        'provider_used': provider_used,
+                        'model_used': model_used,
+                    },
+                    'prompt_tokens': int(prompt_tokens or 0),
+                    'completion_tokens': int(completion_tokens or 0),
+                    'updated_at': datetime.utcnow(),
+                    'auto_processed': True
                 }
-            )
+            }
+            update_result = applications_collection.update_one(result_filter, result_update)
+            decision_changed = False
+            if not update_result.modified_count:
+                # A concurrent recruiter decision must survive. Publish the already
+                # calculated score without replaying a paid provider call.
+                score_only = {key: value for key, value in result_update['$set'].items()
+                              if key not in ('status', 'status_reason')}
+                update_result = applications_collection.update_one(self._task_filter(task), {'$set': score_only})
+                decision_changed = bool(update_result.modified_count)
+
 
             if update_result.modified_count > 0:
                 # Update job statistics
@@ -363,7 +423,7 @@ class BackgroundProcessor:
                     # selected counter; shortlisted applications belong in the
                     # pending bucket, which recruiter job listings recompute
                     # from application statuses anyway.
-                    if application_status == 'rejected':
+                    if application_status == 'rejected' and not decision_changed and (current_app or {}).get('status') != application_status:
                         job_update['rejected'] = 1
 
                     if job_update:
@@ -372,9 +432,10 @@ class BackgroundProcessor:
                             {'$inc': job_update}
                         )
 
-                _notify_candidate_of_status(
-                    applications_collection, application_id, application_status, job,
-                )
+                if not decision_changed and (current_app or {}).get("status") != application_status:
+                    _notify_candidate_of_status(
+                        applications_collection, application_id, application_status, job,
+                    )
 
                 logger.info(
                     f"Application {application_id} scored successfully: "
@@ -404,7 +465,7 @@ class BackgroundProcessor:
                     }
                 )
             else:
-                logger.warning(f"Application {application_id} not found or not updated")
+                logger.info("Application scoring lease changed or application was removed; stale result discarded")
 
         except Exception as e:
             logger.error(f"Failed to process CV scoring for application {application_id}: {e}", exc_info=True)
@@ -412,7 +473,7 @@ class BackgroundProcessor:
             # Mark as failed but VISIBLE
             try:
                 applications_collection.update_one(
-                    {'_id': ObjectId(application_id)},
+                    self._task_filter(task),
                     {
                         '$set': {
                             'processing_status': 'scoring_failed',
@@ -425,11 +486,35 @@ class BackgroundProcessor:
             except Exception as update_error:
                 logger.error(f"Failed to update error status: {update_error}")
 
+        finally:
+            self._publish_progress(task)
+
+    def _publish_progress(self, task):
+        try:
+            from extensions import socketio
+            doc = task['db_collections']['applications'].find_one({'_id': ObjectId(task['application_id'])})
+            if not doc:
+                return
+            keys = ('job_id', 'job_title', 'status', 'cv_score', 'interview_score', 'proctoring_score',
+                    'processing_status', 'processing_error', 'scoring_retry_count', 'auto_processed')
+            payload = {key: doc.get(key) for key in keys}
+            payload['_id'] = str(doc['_id'])
+            applied_at = doc.get('applied_at')
+            payload['applied_at'] = applied_at.isoformat() if isinstance(applied_at, datetime) else applied_at
+            job = task['jd_data'].get('job') or {}
+            payload['job_details'] = {key: job.get(key) for key in ('company', 'location', 'type', 'department')}
+            for room in {str(doc.get('student_id') or ''), str(doc.get('recruiter_id') or '')} - {''}:
+                socketio.emit('application_update', {'type': 'updated', 'application': payload}, room=room)
+        except Exception:
+            # Progress is best effort; polling reads the authoritative stored state.
+            logger.debug('Application progress push unavailable')
+
     def get_stats(self) -> Dict[str, Any]:
         """Get processor statistics"""
         return {
             'running': self.running,
-            'queue_size': self.task_queue.qsize(),
+            'queue_size': (self.collections['applications'].count_documents({'processing_status': {'$in': ['pending', 'scoring_retrying']}}) if self.collections else 0),
+            'workers': self.worker_count,
             'processed_count': self.processed_count,
             'failed_count': self.failed_count
         }

@@ -72,7 +72,7 @@ const Dashboard = () => {
 	// Poll for application updates when there are pending/processing applications
 	useEffect(() => {
 		const hasPending = applications.some(
-			app => app.processing_status === 'pending' || app.processing_status === 'processing'
+			app => ['pending', 'processing', 'scoring_retrying'].includes(app.processing_status)
 		);
 		if (!hasPending) return;
 

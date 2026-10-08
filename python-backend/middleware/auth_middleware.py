@@ -3,6 +3,7 @@ from functools import wraps
 from flask import request, jsonify
 import jwt as pyjwt
 from bson import ObjectId
+from pymongo.errors import AutoReconnect, WaitQueueTimeoutError, ServerSelectionTimeoutError
 from config.database import db_config
 from core.security import get_jwt_secret
 
@@ -70,6 +71,9 @@ def decode_user_from_token(token):
         if not current_user:
             return None, 'User not found!'
 
+        if current_user.get('is_active') is False:
+            return None, 'This account has been disabled.'
+
         if is_invite_access_expired(current_user):
             return None, INVITE_ACCESS_EXPIRED_MESSAGE
 
@@ -78,6 +82,9 @@ def decode_user_from_token(token):
         return None, 'Token has expired!'
     except pyjwt.InvalidTokenError:
         return None, 'Token is invalid!'
+    except (AutoReconnect, WaitQueueTimeoutError, ServerSelectionTimeoutError):
+        # Infrastructure overload is not an invalid credential; preserve the session.
+        raise
     except Exception:
         return None, 'Token is invalid!'
 

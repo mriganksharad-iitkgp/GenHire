@@ -6,19 +6,25 @@ import threading
 import time
 
 from flask import request
+from middleware.rate_limiter import socket_limit, env_int
 from flask_socketio import join_room
 from extensions import socketio
 from interview.runtime import live_sessions
 from services.proctoring_service import build_proctoring_report, mobile_is_ready, observe_mobile_coverage, record_manual_violation, record_observation, requires_mobile
-from sockets.session_access import bound_context, mobile_disconnect, owner_session, socket_contexts
+from sockets.session_access import bound_context, mobile_disconnect, owner_session, socket_contexts, contexts_lock
 
 logger = logging.getLogger(__name__)
 
 
 @socketio.on("connect")
+@socket_limit("socket_connect")
 def handle_connect(auth=None):
     from middleware.auth_middleware import decode_user_from_token
     auth = auth if isinstance(auth, dict) else {}
+    with contexts_lock:
+        if len(socket_contexts) >= env_int("SOCKET_MAX_CONNECTIONS", 2000):
+            return False
+        socket_contexts[request.sid] = {"role": "anonymous"}
     token = auth.get("token")
     if not token:
         # Anonymous handshakes are allowed only so phones can present a signed
@@ -27,6 +33,8 @@ def handle_connect(auth=None):
         return
     current_user, error = decode_user_from_token(token)
     if error:
+        with contexts_lock:
+            socket_contexts.pop(request.sid, None)
         return False
     user_id = str(current_user["_id"])
     socket_contexts[request.sid] = {"role": "desktop", "user_id": user_id}
@@ -48,6 +56,7 @@ def handle_disconnect(reason=None):
 
 
 @socketio.on("join_interview_session")
+@socket_limit("socket_control")
 def handle_join_interview_session(data):
     if not isinstance(data, dict):
         return {"ok": False, "error_code": "invalid_request"}
@@ -66,6 +75,7 @@ def handle_join_interview_session(data):
 
 
 @socketio.on("start_proctoring")
+@socket_limit("socket_control")
 def handle_start_proctoring(data):
     if not isinstance(data, dict):
         return {"ok": False, "error_code": "invalid_request"}
@@ -115,7 +125,7 @@ def process_camera_frame(data, source="desktop"):
             socketio.emit("mobile_status_dashboard", {"status": "disconnected", "camera_ready": False, "microphone_ready": False, "ready": False}, room=session_id)
         now = time.monotonic()
         last = state.setdefault("last_frame_at", {}).get(source)
-        if last is not None and now - last < 0.7:
+        if last is not None and now - last < env_int('PROCTORING_FRAME_INTERVAL_MS', 700, minimum=100) / 1000:
             return {"ok": True, "accepted": False, "reason": "rate_limited"}
         state["last_frame_at"][source] = now
         from security_check import analyze_frame, decode_frame
@@ -158,11 +168,13 @@ def process_camera_frame(data, source="desktop"):
 
 
 @socketio.on("proctoring_frame")
+@socket_limit("socket_frame")
 def handle_proctoring_frame(data):
     return process_camera_frame(data)
 
 
 @socketio.on("proctoring_violation")
+@socket_limit("socket_control")
 def handle_proctoring_violation(data):
     if not isinstance(data, dict) or not isinstance(data.get("session_id"), str):
         return {"ok": False, "error_code": "invalid_request"}
@@ -178,6 +190,7 @@ def handle_proctoring_violation(data):
 
 
 @socketio.on("stop_proctoring")
+@socket_limit("socket_control")
 def handle_stop_proctoring(data):
     if not isinstance(data, dict) or not isinstance(data.get("session_id"), str):
         return {"ok": False, "error_code": "invalid_request"}

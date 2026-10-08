@@ -21,6 +21,8 @@ from core.security import get_jwt_secret
 from payment_module.config.settings import PaymentConfig
 from payment_module.services.wallet_service import WalletService
 from services.email_service import EmailService
+from services.bounded_executor import reserve_invite_dispatch
+from middleware.rate_limiter import env_int
 from services.invite_service import (
     InviteService,
     classify_emails,
@@ -66,7 +68,24 @@ class InviteController:
             "total": len(buckets["valid"]) + len(buckets["invalid"]) + len(buckets["duplicates"]),
         }
 
-    def send_invites(
+    def send_invites(self, **kwargs):
+        # Reserve background capacity BEFORE charging a wallet or creating rows.
+        emails = kwargs.get("emails") or []
+        if len(emails) > env_int("INVITE_MAX_BATCH_SIZE", 2000):
+            return {"error": "This invite batch is too large. Split it into smaller batches."}, 422
+        if not all(isinstance(email, str) and len(email) <= 320 for email in emails):
+            return {"error": "Every invite email must be a string of at most 320 characters."}, 400
+        permit = reserve_invite_dispatch()
+        if permit is None:
+            return {"error": "Invite sending is busy. Please try again shortly.",
+                    "error_code": "capacity_busy", "retry_after": 3}, 503
+        try:
+            return self._send_invites(_permit=permit, **kwargs)
+        finally:
+            if not permit.transferred:
+                permit.release()
+
+    def _send_invites(
         self,
         *,
         recruiter: Dict[str, Any],
@@ -75,6 +94,7 @@ class InviteController:
         invite_type: str,
         source: str = "manual",
         validity_days: Optional[int] = None,
+        _permit=None,
     ):
         if invite_type not in ("apply", "interview"):
             return {"error": "invite_type must be 'apply' or 'interview'"}, 400
@@ -209,11 +229,10 @@ class InviteController:
             status="processing",
         )
 
-        threading.Thread(
-            target=self._dispatch_invite_emails,
-            args=(batch_id, rows_to_email, recruiter_company, job_title, pre_skipped, pre_failed, refund_ctx),
-            daemon=True,
-        ).start()
+        _permit.dispatch(
+            self._dispatch_invite_emails,
+            batch_id, rows_to_email, recruiter_company, job_title, pre_skipped, pre_failed, refund_ctx,
+        )
 
         return {
             "batch_id": str(batch_id),

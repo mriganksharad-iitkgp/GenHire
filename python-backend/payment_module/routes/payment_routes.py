@@ -359,7 +359,7 @@ def get_wallet_transactions(current_user):
 
 @payment_bp.route("/interviews/use", methods=["POST"])
 @token_required
-def use_interview():
+def use_interview(current_user):
     """
     POST /api/payment/interviews/use
 
@@ -383,7 +383,7 @@ def use_interview():
         "error_code": "limit_exceeded"
     }
     """
-    response, status_code = _subscription_controller.use_interview(g.user_data)
+    response, status_code = _subscription_controller.use_interview(current_user)
     return jsonify(response), status_code
 
 

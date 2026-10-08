@@ -102,3 +102,6 @@ desktop.ini
 # ── Debug / temp artifacts ───────────────────────────────────────────────────
 debug_*.txt
 pip_list.txt
+
+# Private staging load-test tokens
+*.load-test-accounts.json

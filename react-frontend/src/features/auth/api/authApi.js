@@ -8,12 +8,24 @@
 
 import { API_BASE } from "shared/api/client";
 
-export const authPost = (path, payload) =>
-  fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+export async function authPost(path, payload) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    return await fetch(API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    throw new Error(error.name === "AbortError"
+      ? "The request timed out. Please check your connection and try again."
+      : "Unable to reach the server. Please check your internet connection.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export const login = (payload) => authPost("/login", payload);
 export const register = (payload) => authPost("/register", payload);

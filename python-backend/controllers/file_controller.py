@@ -3,7 +3,7 @@ import tempfile
 from werkzeug.utils import secure_filename
 import uuid
 import filetype
-from flask import send_file, jsonify, redirect
+from flask import send_file, jsonify, redirect, Response
 from bson import ObjectId
 import gridfs
 from services import gcs_service
@@ -304,7 +304,8 @@ class FileController:
         if photo_path and photo_path.startswith('gridfs://'):
             from flask import redirect
             gridfs_id = photo_path.split('gridfs://')[1]
-            return redirect(f"/api/files/{gridfs_id}")
+            file_data = self.fs.get(ObjectId(gridfs_id))
+            return Response(file_data.read(), mimetype=file_data.content_type)
                 
         if not photo_path or not os.path.exists(photo_path):
             return {'error': 'Photo not found'}, 404
@@ -382,7 +383,8 @@ class FileController:
             if photo_path and photo_path.startswith('gridfs://'):
                 from flask import redirect
                 gridfs_id = photo_path.split('gridfs://')[1]
-                return redirect(f"/api/files/{gridfs_id}")
+                file_data = self.fs.get(ObjectId(gridfs_id))
+                return Response(file_data.read(), mimetype=file_data.content_type)
             
             if not photo_path or not os.path.exists(photo_path):
                 return jsonify({'error': 'Photo not found'}), 404

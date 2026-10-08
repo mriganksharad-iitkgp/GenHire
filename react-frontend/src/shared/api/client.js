@@ -13,9 +13,10 @@
 //  - 204 -> null; response bodies that fail to parse as JSON -> null.
 
 import { clearSession, getToken } from "shared/utils/session";
+import { retryAfterSeconds } from "./retry";
 
 export const API_BASE =
-  process.env.REACT_APP_API_BASE || `${process.env.REACT_APP_API_URL}/api`;
+  process.env.REACT_APP_API_BASE || (process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, "") + "/api" : "/api");
 
 export function signalExpiredSession() {
   clearSession();
@@ -92,6 +93,8 @@ export async function request(path, options = {}) {
     const error = new Error(errMsg);
     error.status = res.status;
     error.data = errorData;
+    error.code = errorData?.error_code;
+    error.retryAfter = retryAfterSeconds(res, errorData);
     throw error;
   }
 
@@ -123,8 +126,11 @@ export async function requestBlob(path, options = {}) {
       signalExpiredSession();
       throw expiredError();
     }
-    const error = new Error(`Request failed: ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.error || data.message || "Request failed: " + res.status);
     error.status = res.status;
+    error.code = data.error_code;
+    error.retryAfter = retryAfterSeconds(res, data);
     throw error;
   }
   return res.blob();

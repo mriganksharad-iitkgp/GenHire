@@ -139,15 +139,11 @@ export default function useCandidateApplications(toast) {
     }
 
     const interval = setInterval(() => {
-      if (pollCountRef.current >= MAX_POLLS) {
-        clearInterval(interval);
-        return;
-      }
       if (document.visibilityState === 'visible') {
         pollCountRef.current += 1;
         load(true); // force reload from API
       }
-    }, 5000); // poll every 5 seconds
+    }, pollCountRef.current >= MAX_POLLS ? 15000 : 5000);
 
     return () => clearInterval(interval);
   }, [applications, load]);

@@ -79,7 +79,10 @@ def send_invites(current_user, job_id):
         source=source,
         validity_days=validity_days,
     )
-    return jsonify(response), status_code
+    result = jsonify(response)
+    if response.get("retry_after"):
+        result.headers["Retry-After"] = str(response["retry_after"])
+    return result, status_code
 
 
 @invite_bp.route("/recruiter/jobs/<job_id>/invites", methods=["GET"])

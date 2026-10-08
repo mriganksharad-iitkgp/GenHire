@@ -1,5 +1,6 @@
 import os
 from pymongo import MongoClient
+from middleware.rate_limiter import env_int
 from config.env_loader import load_environment
 
 load_environment()
@@ -13,13 +14,16 @@ class DatabaseConfig:
     
     def connect(self):
         """Establish connection to MongoDB and return database instance"""
+        if self.db is not None:
+            return self.db
         self.client = MongoClient(
             self.uri,
-            maxPoolSize=50,
+            maxPoolSize=env_int('MONGO_MAX_POOL_SIZE', 50),
+            waitQueueTimeoutMS=env_int('MONGO_WAIT_QUEUE_TIMEOUT_MS', 2000),
             minPoolSize=0,  # Don't pre-open connections; Atlas closes idle ones causing SSL resets
             connectTimeoutMS=10000,
             socketTimeoutMS=30000,
-            serverSelectionTimeoutMS=10000,
+            serverSelectionTimeoutMS=env_int('MONGO_SERVER_SELECTION_TIMEOUT_MS', 5000),
         )
         self.db = self.client[self.database_name]
         self._ensure_indexes()
@@ -124,6 +128,16 @@ class DatabaseConfig:
             applications = self.db['applications']
             # Matches the recruiter dashboard's applications query exactly
             # (job_id $in [...] + is_visible) — was previously unindexed.
+            invalid_identity = applications.find_one({
+                '$or': [
+                    {'job_id': {'$type': 'array'}},
+                    {'student_id': {'$type': 'array'}},
+                    {'job_id': {'$not': {'$regex': '^[0-9a-f]{24}$'}}},
+                    {'student_id': {'$not': {'$regex': '^[0-9a-f]{24}$'}}},
+                ],
+            }, {'_id': 1})
+            if invalid_identity:
+                raise ValueError('Noncanonical legacy application identities require review')
             applications.create_index(
                 [('job_id', 1), ('is_visible', 1)], name='idx_applications_job_visible'
             )
@@ -131,10 +145,19 @@ class DatabaseConfig:
             # application for this job" lookup used throughout
             # application_controller.py / invite_service.py.
             applications.create_index(
-                [('job_id', 1), ('student_id', 1)], name='idx_applications_job_student'
+                [('job_id', 1), ('student_id', 1)], name='uq_applications_job_student',
+                unique=True,
+                partialFilterExpression={'job_id': {'$type': 'string'}, 'student_id': {'$type': 'string'}},
+            )
+            applications.create_index(
+                [('processing_status', 1), ('scoring_next_retry_at', 1), ('scoring_lease_until', 1)],
+                name='idx_applications_scoring_work',
             )
         except Exception as e:
-            print(f"Warning: failed to ensure applications indexes: {e}")
+            raise RuntimeError(
+                "Critical application indexes could not be ensured. Audit legacy duplicates "
+                "with scripts/admin/audit_application_duplicates.py before rollout."
+            ) from None
 
         try:
             saved_jobs = self.db['saved_jobs']

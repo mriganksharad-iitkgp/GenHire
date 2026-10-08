@@ -5,6 +5,7 @@ bare path and the /api-prefixed path, exactly as before.
 """
 
 import logging
+from middleware.auth_middleware import token_required, admin_required
 
 from flask import Blueprint, jsonify, request
 
@@ -23,7 +24,9 @@ def create_cost_routes(db):
     # Direct tracked chat endpoint (actual cost from response.usage only)
     @cost_bp.route("/chat", methods=["POST"])
     @cost_bp.route("/api/chat", methods=["POST"])
-    def chat_with_cost_tracking():
+    @token_required
+    @admin_required
+    def chat_with_cost_tracking(current_user):
         data = request.get_json() or {}
         messages = data.get("messages")
         model = data.get("model", "deepseek-flash")
@@ -65,7 +68,9 @@ def create_cost_routes(db):
 
     @cost_bp.route("/cost-summary", methods=["GET"])
     @cost_bp.route("/api/cost-summary", methods=["GET"])
-    def cost_summary():
+    @token_required
+    @admin_required
+    def cost_summary(current_user):
         user_id = request.args.get("user_id")
         summary = get_cost_summary(
             logs_collection=openai_cost_logs_collection,
@@ -75,7 +80,9 @@ def create_cost_routes(db):
 
     @cost_bp.route("/stt-cost", methods=["POST"])
     @cost_bp.route("/api/stt-cost", methods=["POST"])
-    def stt_cost():
+    @token_required
+    @admin_required
+    def stt_cost(current_user):
         data = request.get_json() or {}
         cost = process_stt(
             data.get("audio_seconds"),
@@ -86,7 +93,9 @@ def create_cost_routes(db):
 
     @cost_bp.route("/tts-cost", methods=["POST"])
     @cost_bp.route("/api/tts-cost", methods=["POST"])
-    def tts_cost():
+    @token_required
+    @admin_required
+    def tts_cost(current_user):
         data = request.get_json() or {}
         cost = process_tts(
             data.get("text"),

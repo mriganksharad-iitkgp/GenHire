@@ -1,139 +1,87 @@
+"""Staging-only application load profile with a distinct signed account per user.
+
+Set LOAD_TEST_CANDIDATES_FILE to an untracked JSON array of {token, cv_id}
+(e.g. staging.load-test-accounts.json, ignored by Git).
+Set LOAD_TEST_JOB_ID and LOAD_TEST_ALLOW_MUTATIONS=1, then run:
+  locust -f scripts/dev/locustfile.py --host=https://your-staging-api
+
+Do not reuse one token to simulate thousands of different candidates. This
+profile submits one application per user, then reads dashboard state. Set
+LOAD_TEST_REPEAT_APPLICATIONS=1 only for the separate abuse/replay scenario.
+429/503 are visible failures in the load report and trigger server-directed
+backoff; they are not hidden as successful requests. No interview credit or
+face/device setup is exercised; test those with the two-device acceptance matrix.
 """
-Load-test script for the two scale-critical paths this platform is sold on:
-"a recruiter posts one job and gets up to ~2000 applicants."
-
-  1. ApplicantUser  — concurrent job-application submissions, the endpoint
-     Step 5 added rate limiting to (10/hour/IP) — this test intentionally
-     exercises that limit so you can see the 429 behavior under load, not
-     just the happy path.
-  2. InterviewCandidateUser — concurrent AI-interview sessions (start +
-     several answer submissions), the other half of the "2000 candidates"
-     scenario once they've been screened in.
-
-This is a ready-to-run tool, not a completed test run — it needs a live
-backend plus seeded test data (see the "SETUP" section below) that doesn't
-exist in an automated coding session. Actually running it and interpreting
-the results (error rates, p95 latency, whether the CV-scoring background
-queue or the bulk-invite email dispatch fall behind under load) is a
-follow-up step for you.
-
-SETUP
------
-1. Start the backend normally (`python app.py`) against a real/staging Mongo.
-2. Seed test data:
-   - At least one recruiter account with one published job (note its job_id).
-   - At least one candidate account per simulated user, each with a CV already
-     uploaded (job application requires a CV on file — see
-     controllers/application_controller.py's apply_for_job).
-   - Log in as a seeded candidate via POST /api/login to get a JWT, or reuse
-     one you already have from the app.
-3. Export the env vars below, then run Locust:
-
-     export LOAD_TEST_JOB_ID=<a real job id>
-     export LOAD_TEST_TOKEN=<a candidate JWT>
-     locust -f locustfile.py --host=http://localhost:5000
-
-   Locust opens a web UI (default http://localhost:8089) where you set the
-   number of simulated users and spawn rate — start small (e.g. 50 users)
-   before working up toward the ~2000-candidate scenario this product is
-   sold on, since the CV-scoring background queue (services/background_processor.py)
-   is a single serial worker and will visibly queue up long before the API
-   layer itself falls over.
-"""
-
+import json
 import os
-import random
+import threading
+import time
+from collections import deque
+from pathlib import Path
 
-from locust import HttpUser, task, between
+from locust import HttpUser, between, task
+from locust.exception import StopUser
 
 JOB_ID = os.getenv("LOAD_TEST_JOB_ID", "")
-AUTH_TOKEN = os.getenv("LOAD_TEST_TOKEN", "")
-
-
-def _auth_headers():
-    return {"Authorization": f"Bearer {AUTH_TOKEN}"} if AUTH_TOKEN else {}
+_accounts = None
+_lock = threading.Lock()
 
 
 class ApplicantUser(HttpUser):
-    """Simulates a candidate repeatedly applying to the same job posting —
-    the exact scenario the Step 5 rate limit (10/hour/IP) exists to blunt."""
-
-    wait_time = between(1, 3)
-
-    @task
-    def apply_to_job(self):
-        if not JOB_ID:
-            return
-        with self.client.post(
-            f"/api/jobs/{JOB_ID}/apply",
-            json={"cover_letter": "Excited to apply for this role."},
-            headers=_auth_headers(),
-            catch_response=True,
-        ) as response:
-            if response.status_code == 429:
-                # Expected once a simulated user exceeds the rate limit —
-                # mark it a success so it doesn't skew the failure rate; the
-                # point of this scenario is to *observe* how often this
-                # happens under realistic concurrency, not to treat it as a bug.
-                response.success()
-            elif response.status_code >= 500:
-                response.failure(f"Unexpected server error: {response.status_code}")
-
-
-class InterviewCandidateUser(HttpUser):
-    """Simulates a candidate taking the AI interview end-to-end: start a
-    session, then answer a handful of questions in sequence."""
-
-    wait_time = between(2, 5)
+    wait_time = between(3, 7)
 
     def on_start(self):
-        self.session_id = None
-        self.current_question = None
+        global _accounts
+        if os.getenv("LOAD_TEST_ALLOW_MUTATIONS") != "1" or not JOB_ID:
+            raise StopUser()
+        with _lock:
+            if _accounts is None:
+                path = os.getenv("LOAD_TEST_CANDIDATES_FILE")
+                if not path:
+                    raise StopUser()
+                candidates = json.loads(Path(path).read_text(encoding="utf-8"))
+                tokens = [row.get("token") for row in candidates]
+                if not candidates or not all(tokens) or len(set(tokens)) != len(tokens):
+                    raise ValueError("Use one distinct signed token per simulated candidate")
+                _accounts = deque(candidates)
+            if not _accounts:
+                raise StopUser()
+            self.account = _accounts.popleft()
+        self.headers = {"Authorization": "Bearer " + self.account["token"]}
+        self.retry_at = 0
+        self.applied = False
+        self.submit()
 
-    @task
-    def take_interview(self):
-        if not AUTH_TOKEN:
+    def classify(self, response):
+        if response.status_code in (429, 503):
+            try:
+                delay = int(response.headers.get("Retry-After") or 3)
+            except ValueError:
+                delay = 3
+            self.retry_at = time.monotonic() + max(1, delay)
+            response.failure("throttled (429)" if response.status_code == 429 else "backpressure (503)")
+        elif not response.ok:
+            response.failure("unexpected status " + str(response.status_code))
+        return response.status_code in (200, 201)
+
+    @task(1)
+    def submit(self):
+        if time.monotonic() < self.retry_at:
             return
-
-        start_resp = self.client.post(
-            "/api/interviews/start",
-            json={},
-            headers=_auth_headers(),
-            name="/api/interviews/start",
-        )
-        if start_resp.status_code != 200:
+        if self.applied and os.getenv("LOAD_TEST_REPEAT_APPLICATIONS") != "1":
             return
+        body = {"cover_letter": "Staging load verification"}
+        if self.account.get("cv_id"):
+            body["cv_id"] = self.account["cv_id"]
+        with self.client.post("/api/jobs/" + JOB_ID + "/apply",
+                              name="/api/jobs/:job/apply", json=body,
+                              headers=self.headers, catch_response=True) as response:
+            if self.classify(response):
+                self.applied = True
 
-        data = start_resp.json()
-        self.session_id = data.get("session_id")
-        questions = data.get("initial_questions") or []
-        self.current_question = questions[0] if questions else None
-        if not self.session_id or not self.current_question:
+    @task(4)
+    def dashboard(self):
+        if time.monotonic() < self.retry_at:
             return
-
-        sample_answers = [
-            "I have several years of experience building and shipping this kind of system.",
-            "I'd approach it by first understanding the requirements, then designing for scale.",
-            "In my last role I led a similar project end-to-end, from design through deployment.",
-        ]
-
-        # Simulate answering a handful of questions in one session, mirroring
-        # a real interview rather than a single request.
-        for _ in range(3):
-            answer_resp = self.client.post(
-                f"/api/interviews/{self.session_id}/answer",
-                json={
-                    "question": self.current_question,
-                    "answer": random.choice(sample_answers),
-                },
-                headers=_auth_headers(),
-                name="/api/interviews/[session_id]/answer",
-            )
-            if answer_resp.status_code != 200:
-                break
-            answer_data = answer_resp.json()
-            if answer_data.get("interview_complete"):
-                break
-            self.current_question = answer_data.get("next_question")
-            if not self.current_question:
-                break
+        with self.client.get("/api/applications", headers=self.headers, catch_response=True) as response:
+            self.classify(response)

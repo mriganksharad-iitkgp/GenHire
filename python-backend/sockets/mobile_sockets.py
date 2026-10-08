@@ -3,6 +3,7 @@ import datetime
 import time
 
 from flask import request
+from middleware.rate_limiter import socket_limit, env_int
 from flask_socketio import join_room
 from extensions import socketio
 from interview.runtime import live_sessions
@@ -11,6 +12,7 @@ from sockets.session_access import bound_context, contexts_lock, owner_session, 
 
 
 @socketio.on("join_mobile_session")
+@socket_limit("socket_control")
 def handle_mobile_join(data):
     from core import config as app_config
     if not app_config.mobile_recording_enabled():
@@ -48,6 +50,7 @@ def handle_mobile_join(data):
 
 
 @socketio.on("control_mobile_recording")
+@socket_limit("socket_control")
 def handle_mobile_control(data):
     if not isinstance(data, dict) or data.get("action") not in {"start", "stop"}:
         return {"ok": False, "error_code": "invalid_request"}
@@ -68,6 +71,7 @@ def handle_mobile_control(data):
 
 
 @socketio.on("mobile_status_update")
+@socket_limit("socket_status")
 def handle_mobile_status(data):
     if not isinstance(data, dict):
         return {"ok": False, "error_code": "invalid_request"}
@@ -103,6 +107,7 @@ def handle_mobile_status(data):
 
 
 @socketio.on("mobile_proctoring_frame")
+@socket_limit("socket_frame")
 def handle_mobile_frame(data):
     if not isinstance(data, dict):
         return {"ok": False, "error_code": "invalid_request"}
@@ -111,7 +116,7 @@ def handle_mobile_frame(data):
     if not context:
         return {"ok": False, "error_code": "unauthorized_session"}
     now_monotonic = time.monotonic()
-    if now_monotonic - context.get("last_preview_at", -1) < 0.7:
+    if now_monotonic - context.get("last_preview_at", -1) < env_int('PROCTORING_FRAME_INTERVAL_MS', 700, minimum=100) / 1000:
         return {"ok": True, "accepted": False, "reason": "rate_limited"}
     collection, doc = session_record(session_id)
     if not doc or doc.get("status") in TERMINAL_STATUSES or (doc.get("mobile_proctoring") or {}).get("socket_id") != request.sid:

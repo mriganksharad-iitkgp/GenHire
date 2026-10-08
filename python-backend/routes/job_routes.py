@@ -4,7 +4,7 @@ import datetime
 import json
 from controllers.job_controller import JobController
 from controllers.saved_job_controller import SavedJobController
-from middleware.auth_middleware import token_required, recruiter_required, verified_required
+from middleware.auth_middleware import admin_required, token_required, recruiter_required, verified_required
 from config.database import db_config
 
 job_bp = Blueprint('jobs', __name__, url_prefix='/api')
@@ -233,7 +233,9 @@ def unsave_job(current_user, job_id):
 # Remove hardcoded sample jobs from database
 @job_bp.route('/remove-sample-jobs', methods=['DELETE'])
 @cross_origin()
-def remove_sample_jobs():
+@token_required
+@admin_required
+def remove_sample_jobs(current_user):
     """Remove hardcoded sample jobs created by 'system'"""
     collections = db_config.get_collections()
     jobs_collection = collections['jobs']
@@ -245,7 +247,9 @@ def remove_sample_jobs():
 
 @job_bp.route('/test-jobs', methods=['GET'])
 @cross_origin()
-def test_jobs():
+@token_required
+@admin_required
+def test_jobs(current_user):
     """Test endpoint to check jobs without authentication"""
     collections = db_config.get_collections()
     jobs_collection = collections['jobs']

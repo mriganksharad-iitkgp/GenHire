@@ -1,0 +1,70 @@
+.layout { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: #fafbfe; color: #172239; font-family: Inter, system-ui, sans-serif; }
+.storyPanel { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: clamp(32px, 4vw, 64px); background: radial-gradient(ellipse at 75% 90%, #2844a9 0, transparent 60%), linear-gradient(140deg, #0d1b39, #182d67); color: #fff; }
+.brand, .mobileBrand { display: inline-flex; align-items: center; gap: 11px; width: fit-content; font-size: 23px; font-weight: 700; letter-spacing: -.5px; color: inherit; text-decoration: none; }
+.brandMark { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 11px; background: #b5d7ff; color: #122751; font-size: 26px; font-weight: 800; }
+.storyCopy { margin-top: clamp(42px, 6vh, 82px); position: relative; z-index: 1; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; color: #c7d9ff; font-size: 13px; letter-spacing: .4px; }
+.storyCopy h1 { margin: 24px 0; font-size: clamp(34px, 3.7vw, 58px); letter-spacing: -2px; font-weight: 600; line-height: 1.13; }
+.storyCopy em { color: #a7c9ff; font-family: Georgia, serif; font-weight: 400; }
+.storyCopy p { max-width: 410px; color: #c9d4ed; line-height: 1.8; font-size: 15px; }
+.illustration { position: relative; min-height: 290px; display: grid; align-content: center; margin: 30px 0 25px; }
+.orbit, .orbitInner { position: absolute; width: 330px; height: 330px; border: 1px solid #94baff28; border-radius: 50%; top: 0; left: 14%; transform: rotate(-20deg); }
+.orbit::before { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #96bfff; top: 40px; left: 35px; box-shadow: 0 0 24px #87b7ff; }
+.orbit { animation: orbit 38s linear infinite; }
+.orbitInner { width: 245px; height: 245px; top: 42px; left: 23%; border-style: dashed; opacity: .7; }
+.interviewCard { position: relative; z-index: 1; width: min(100%, 435px); padding: 23px; border-radius: 20px; border: 1px solid #ffffff20; background: linear-gradient(120deg, #fff, #edf3ff); box-shadow: 0 24px 50px #070e2e40; color: #213050; transform: rotate(-3deg); animation: float 8s ease-in-out infinite; }
+.cardHeader { display: flex; align-items: center; gap: 12px; }
+.avatar { display: grid; place-items: center; width: 45px; height: 45px; flex-shrink: 0; border-radius: 14px; background: #dce8ff; color: #526bd1; }
+.cardHeader strong, .floatingCard strong { display: block; font-size: 12px; font-weight: 650; }
+.cardHeader small, .floatingCard small { display: block; margin-top: 5px; color: #697891; font-size: 11px; }
+.liveDot { width: 8px; height: 8px; border-radius: 50%; background: #31a684; margin-left: auto; }
+.waveform { display: flex; justify-content: center; align-items: center; gap: 5px; height: 92px; margin: 10px 0; background: #e8eefb; border-radius: 12px; }
+.waveform span { height: var(--bar-height); width: 5px; border-radius: 4px; background: linear-gradient(#899eeb, #526bd1); animation: wave 1.8s ease-in-out var(--delay) infinite alternate; transform-origin: center; }
+.cardFooter { display: flex; justify-content: space-between; align-items: center; font-size: 10px; gap: 8px; color: #64708a; }
+.sparkBadge { display: inline-flex; align-items: center; gap: 4px; color: #5365a4; }
+.floatingCard { display: flex; align-items: center; gap: 11px; z-index: 2; position: absolute; bottom: 5px; right: -5px; padding: 16px 20px; border-radius: 15px; background: #fff; color: #20314e; box-shadow: 0 18px 35px #050b263d; transform: rotate(4deg); animation: float 7s ease-in-out 1s infinite; }
+.checkBadge { display: grid; place-items: center; width: 36px; height: 36px; color: #24846a; background: #e4f5ef; border-radius: 50%; }
+.sparkOne, .sparkTwo { position: absolute; color: #9fbdf5; font-size: 28px; right: 7%; top: 0; }
+.sparkTwo { left: 0; top: auto; bottom: 0; color: #7997d0; }
+.storyFooter { color: #b5c4e3; margin: auto 0 0; font-size: 12px; }
+.formPanel { position: relative; padding: 50px clamp(24px, 5vw, 80px) 24px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.formCard { width: 100%; max-width: 410px; padding: 32px 0; }
+.formEyebrow { color: #63708c; letter-spacing: 1.8px; font-size: 10px; font-weight: 700; }
+.formCard h2 { margin: 14px 0 10px; font-size: 36px; font-weight: 650; letter-spacing: -1.2px; }
+.formIntro { color: #718098; font-size: 14px; margin-bottom: 32px; }
+.roleSelector { display: grid; grid-template-columns: repeat(3, 1fr); padding: 5px; background: #edf0f7; border-radius: 12px; gap: 3px; margin-bottom: 28px; }
+.roleSelector button { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: 8px; padding: 11px 5px; font-size: 12px; color: #68758e; background: transparent; cursor: pointer; font-weight: 600; }
+.roleSelector .selectedRole { color: #3559c7; background: #fff; border-color: #e0e6f1; box-shadow: 0 2px 5px #20305309; }
+.form { display: flex; flex-direction: column; gap: 21px; }
+.field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 9px; }
+.field input { box-sizing: border-box; width: 100%; height: 49px; background: #fff; border: 1px solid #dce2ed; border-radius: 10px; padding: 0 14px; color: #172239; font: inherit; font-size: 13px; transition: border-color .2s, box-shadow .2s; }
+.field input::placeholder { color: #8995aa; }
+.field input:focus { outline: 0; border-color: #5474d9; box-shadow: 0 0 0 3px #5474d915; }
+.labelRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.labelRow a { color: #4665c3; font-size: 11px; text-decoration: none; }
+.passwordField { position: relative; }
+.passwordField input { padding-right: 48px; }
+.passwordField button { position: absolute; right: 7px; top: 6px; display: grid; place-items: center; width: 36px; height: 36px; border: 0; background: transparent; color: #75829a; cursor: pointer; border-radius: 7px; }
+.submit { display: flex; align-items: center; justify-content: center; gap: 12px; height: 48px; color: #fff; background: #355bc7; border: 1px solid #355bc7; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 5px 13px #355bc71a; transition: background .2s, transform .2s; }
+.submit:hover:not(:disabled) { background: #294ba9; transform: translateY(-1px); }
+.layout button:disabled { opacity: .58; cursor: wait; }
+.layout button:focus-visible, .layout a:focus-visible { outline: 3px solid #799aef; outline-offset: 3px; }
+.divider { display: flex; align-items: center; gap: 14px; color: #8590a4; font-size: 11px; margin: 25px 0; }
+.divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: #e3e8f0; }
+.google { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; border: 1px solid #dce2ed; width: 100%; height: 47px; border-radius: 10px; color: #34425a; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.google:hover:not(:disabled) { background: #f3f6fc; }
+.googleMark { font-size: 19px; font-weight: 800; color: #4285f4; }
+.register { margin: 26px 0 0; text-align: center; font-size: 12px; color: #718098; }
+.register a { display: inline-flex; align-items: center; gap: 3px; color: #355bc7; font-weight: 600; text-decoration: none; }
+.inviteHint { text-align: center; font-size: 11px; line-height: 1.8; color: #7e899e; margin: 20px 0 0; }
+.notice { background: #edf3ff; color: #405a8d; padding: 12px 15px; border-radius: 9px; font-size: 12px; line-height: 1.6; }
+.error { color: #a33542; background: #fff0f2; border: 1px solid #f4d6dc; padding: 12px 14px; border-radius: 9px; font-size: 12px; line-height: 1.6; }
+.formFooter { color: #949db0; font-size: 10px; margin-top: 25px; text-align: center; }
+.mobileBrand { display: none; margin-bottom: 34px; }
+@keyframes float { 50% { translate: 0 -9px; } }
+@keyframes wave { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+@keyframes orbit { to { transform: rotate(340deg); } }
+@media (min-width: 1500px) { .layout { max-width: 1920px; margin: auto; } .storyPanel { padding-left: 90px; } .storyCopy { margin-top: 90px; } }
+@media (max-width: 1000px) { .storyPanel { padding: 32px; } .storyCopy h1 { font-size: 39px; letter-spacing: -1.4px; } .cardFooter { flex-wrap: wrap; } .floatingCard { right: -15px; padding: 14px; } .formPanel { padding: 30px; } .cardHeader strong { font-size: 11px; } }
+@media (max-width: 760px) { .layout { display: block; } .storyPanel { display: none; } .formPanel { min-height: 100dvh; box-sizing: border-box; padding: 28px 24px; } .formCard { padding: 10px 0; } .mobileBrand { display: inline-flex; } .formCard h2 { font-size: 32px; } }
+@media (prefers-reduced-motion: reduce) { .layout *, .layout *::before, .layout *::after { animation: none !important; transition: none !important; } }

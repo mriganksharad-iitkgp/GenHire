@@ -1,6 +1,7 @@
 import datetime
 import threading
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 import sys
 import os
 import logging
@@ -23,6 +24,7 @@ def _coerce_objectids(value):
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from services.email_service import EmailService
+from services.bounded_executor import submit_notification
 from services.cv_scoring_service import CVScoringService
 from controllers.cv_controller import CVController
 from services.background_processor import get_background_processor
@@ -54,8 +56,9 @@ class ApplicationController:
             logger.warning(f"CV controller initialization failed: {e}")
             self.cv_controller = None
 
-        # Get background processor instance
+        # Persistent scoring workers recover pending applications after restart.
         self.background_processor = get_background_processor()
+        self.background_processor.configure(db_collections, self.cv_scoring_service)
 
     def _emit_application_update(self, update_type, application_doc, job=None, rooms=()):
         """
@@ -121,6 +124,9 @@ class ApplicationController:
         Returns:
             tuple: (response_dict, status_code)
         """
+        if not ObjectId.is_valid(job_id):
+            return {"error": "Invalid job ID"}, 400
+        job_id, user_id = str(ObjectId(job_id)), str(user_id)
         # Check if job exists
         job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
         if not job:
@@ -150,7 +156,22 @@ class ApplicationController:
             )
         )
         if existing_application and not is_invite_skeleton:
-            return {"error": "You have already applied for this job"}, 400
+            return self._submission_replay(existing_application)
+
+        if job.get("status", "active") != "active":
+            return {"error": "This job is not accepting applications."}, 409
+        deadline = job.get("deadline")
+        if deadline:
+            try:
+                end = (datetime.datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+                       if not isinstance(deadline, datetime.datetime) else deadline)
+                if isinstance(deadline, str) and len(deadline) == 10:
+                    end += datetime.timedelta(days=1)
+                now = datetime.datetime.now(end.tzinfo) if end.tzinfo else datetime.datetime.utcnow()
+                if now >= end:
+                    return {"error": "The application deadline has passed."}, 409
+            except (ValueError, TypeError):
+                logger.warning("Invalid legacy job deadline; applying status gate only")
 
         # Get CV content (PDF or manual entry)
         cv_text = None
@@ -221,6 +242,7 @@ class ApplicationController:
                 'filename': selected_cv.get('filename'),
                 'file_path': selected_cv.get('file_path'),
                 'text': cv_text,
+                'details': cv_details,
                 'upload_date': selected_cv.get('upload_date'),
                 'source': cv_source,
                 'metadata': selected_cv.get('metadata', {})
@@ -236,6 +258,7 @@ class ApplicationController:
         # Create JD snapshot (preserve JD content at application time)
         jd_text = job.get("jd_extracted_text") or job.get("description", "")
         jd_snapshot = {
+            "job": dict(job),
             "text": jd_text,
             "job_title": job.get("title", ""),
             "company": job.get("company", ""),
@@ -300,10 +323,13 @@ class ApplicationController:
 
         if is_invite_skeleton:
             # Update the skeleton in place rather than insert a duplicate row.
-            self.applications_collection.update_one(
-                {"_id": existing_application["_id"]},
+            conversion = self.applications_collection.update_one(
+                {"_id": existing_application["_id"], "cv_snapshot": None},
                 {"$set": candidate_fields},
             )
+            if not conversion.modified_count:
+                winner = self.applications_collection.find_one({"_id": existing_application["_id"]})
+                return self._submission_replay(winner or existing_application)
             application_id = str(existing_application["_id"])
             application_doc = {**existing_application, **candidate_fields, "_id": application_id}
             # Bump applicants counter only now that the candidate actually
@@ -325,7 +351,13 @@ class ApplicationController:
                 **candidate_fields,
             }
 
-            result = self.applications_collection.insert_one(application_doc)
+            try:
+                result = self.applications_collection.insert_one(application_doc)
+            except DuplicateKeyError:
+                winner = self.applications_collection.find_one({"job_id": job_id, "student_id": user_id})
+                if winner:
+                    return self._submission_replay(winner)
+                raise
             application_id = str(result.inserted_id)
             application_doc["_id"] = application_id
 
@@ -388,37 +420,40 @@ class ApplicationController:
             _job_title = job.get("title") or "the position"
             _company = job.get("company") or job.get("company_name") or "the company"
             if _cand_email:
-                threading.Thread(
-                    target=_email_svc.send_application_received_email,
-                    args=(_cand_email, _cand_name, _job_title, _company),
-                    daemon=True,
-                ).start()
+                submit_notification(
+                    _email_svc.send_application_received_email,
+                    _cand_email, _cand_name, _job_title, _company,
+                )
 
             recruiter_doc = self.users_collection.find_one(
                 {"_id": ObjectId(job.get("created_by", ""))},
                 {"email": 1, "name": 1},
             ) if job.get("created_by") else None
             if recruiter_doc and recruiter_doc.get("email"):
-                threading.Thread(
-                    target=_email_svc.send_new_applicant_notification,
-                    args=(
-                        recruiter_doc["email"],
-                        recruiter_doc.get("name") or "Recruiter",
-                        _cand_name,
-                        _job_title,
-                    ),
-                    daemon=True,
-                ).start()
+                submit_notification(
+                    _email_svc.send_new_applicant_notification,
+                    recruiter_doc["email"], recruiter_doc.get("name") or "Recruiter",
+                    _cand_name, _job_title,
+                )
         except Exception:
             logger.warning("Application confirmation emails failed to send", exc_info=True)
 
         # Return success IMMEDIATELY!
         return {
-            "message": "Application submitted successfully! CV scoring is being processed.",
+            "message": "Application submitted successfully.",
             "application_id": application_id,
-            "processing_status": "pending",
-            "info": "Your application will appear in your dashboard once CV scoring is complete (usually within 30-60 seconds).",
+            "processing_status": candidate_fields["processing_status"],
+            "info": "Your application is visible now. CV scoring updates automatically when ready.",
         }, 201
+
+    @staticmethod
+    def _submission_replay(application):
+        return {
+            "message": "Your application has already been submitted.",
+            "application_id": str(application["_id"]),
+            "processing_status": application.get("processing_status", "pending"),
+            "already_applied": True,
+        }, 200
 
     def withdraw_application(self, job_id, user_id):
         """Withdraw job application"""

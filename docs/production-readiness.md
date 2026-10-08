@@ -1,5 +1,39 @@
 # Production-Readiness Review — what's done, what's left
 
+
+## Request robustness update ? 8 October 2026
+
+All HTTP routes now use mandatory environment-driven request protection with
+named critical-action policies and read/write fallbacks. Redis quotas are atomic
+and shared; production requires a reachable REDIS_URL. Local development has a
+bounded memory store. Invalid forwarded identities cannot bypass IP quotas,
+verified accounts get separate action budgets, and 429/503 includes retry hints.
+Request/body parsing, heavy HTTP work, socket analysis/traffic, bulk invite
+dispatch, notification workers and Mongo pool waits have bounds.
+
+Application submission no longer performs synchronous CV scoring. A unique
+candidate/job index and conditional invite conversion prevent duplicate records.
+Persisted snapshots/leases/retries recover scoring after restart; unavailable or
+invalid scores never invent eligibility. Recruiter decisions survive concurrent
+publication. Login now has an animated responsive split layout and protected
+auth/retry workflows; candidate polling/live scoring progress are repaired.
+
+**Local verification:** 109 backend tests and 14 frontend/kiosk contract tests
+pass, lint is clean, web/kiosk bundles build, and integration modules compile.
+This does not establish a production concurrency or latency target. No browser
+surface was available for visual acceptance.
+
+**Rollout prerequisites:** actual shared Redis credentials/network validation;
+read-only legacy application audit and any reviewed normalization/duplicate
+resolution before startup index enforcement; representative staging load tests;
+and continuously allocated CPU or a dedicated deployment for background workers.
+Live engines still require the existing sticky/single-worker topology. No live
+database migration or deployment was performed during this work.
+
+Plan: [robustness-plan.md](robustness-plan.md).
+Evidence: [robustness-audit.md](robustness-audit.md).
+Flow/settings/learning guide: [request-protection-flow.md](request-protection-flow.md).
+
 ## Interview update — 8 October 2026
 
 The interview implementation now includes recruiter-selected laptop/mobile
