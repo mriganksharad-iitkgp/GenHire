@@ -11,7 +11,7 @@ import JDDetailsModal from "features/recruiter/components/JDDetailsModal";
 import { PRACTICE_ROLE_OPTIONS } from "shared/constants/jobTaxonomy";
 import styles from "./Practice.module.css";
 import { getToken } from "shared/utils/session";
-import { KIOSK_DOWNLOAD_URL } from "shared/constants/appLinks";
+import KioskLaunchGuide, { openKiosk } from "features/interview/components/KioskLaunchGuide";
 import { authedFetch } from "shared/api/client";
 
 const Practice = () => {
@@ -52,7 +52,7 @@ const Practice = () => {
   const [isStarting, setIsStarting] = useState(false);
   const [sessionLaunched, setSessionLaunched] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [pendingDeepLink, setPendingDeepLink] = useState(null);
+  const [pendingLaunch, setPendingLaunch] = useState(null);
   const [practiceHistory, setPracticeHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -175,12 +175,12 @@ const Practice = () => {
       return;
     }
 
-    // Show CV selection modal
-    setShowCVModal(true);
+    if (window.electronAPI) setShowCVModal(true); else { setPendingLaunch(null); setShowDownloadModal(true); }
   };
 
   // Actually start practice with selected CV
   const handleCVSelectionSubmit = async (cvSelection) => {
+    setShowCVModal(false);
     setIsStarting(true);
 
     try {
@@ -232,8 +232,8 @@ const Practice = () => {
             practiceRole: selectedRole,
             sessionId: data.session_id,
             initialQuestion: data.initial_questions?.[0] || "",
-            similarityScore: data.similarity_score || 0,
-            cvScore: data.cv_score || 0,
+            similarityScore: data.similarity_score ?? null,
+            cvScore: data.cv_score ?? null,
             usageDeduction: data.usage_deduction || null,
             walletQuota: data.quota || null,
             // Pacing config so practice runs identically to real interviews
@@ -245,60 +245,8 @@ const Practice = () => {
         return;
       }
 
-      showToast(`Launching Secure Browser for practice session...`, 'info');
-      setSessionLaunched(true);
-
-      // Generate the initialization payload for practice mode
-      const payload = {
-        isPractice: true,
-        sessionId: data.session_id,
-        initialQuestion: data.initial_questions?.[0] || "",
-        similarityScore: data.similarity_score || 0,
-        questionDeadline: data.question_deadline || null,
-        questionTimeoutSeconds: data.question_timeout_seconds || null,
-        maxQuestions: data.max_questions || null,
-        proctoringConfig: {
-          voice_detection: proctoringEnabled,
-          object_detection: proctoringEnabled,
-          eyeball_tracking: proctoringEnabled,
-          gaze_heatmap: proctoringEnabled
-        },
-        token: getToken(),
-        apiUrl: process.env.REACT_APP_API_URL || window.location.origin
-      };
-
-      const encodedPayload = btoa(JSON.stringify(payload));
-      const customUri = `secure-interview://start?initData=${encodeURIComponent(encodedPayload)}`;
-
-      // Store for retry after install
-      setPendingDeepLink(customUri);
-
-      // Fire deep link via hidden iframe
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      iframe.src = customUri;
-      document.body.appendChild(iframe);
-      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
-
-      // If window still has focus after 4s → GenHire not installed
-      const timeoutId = setTimeout(() => {
-        if (document.hasFocus()) {
-          const link = document.createElement('a');
-          link.href = KIOSK_DOWNLOAD_URL;
-          link.download = 'Genhire.exe';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setShowDownloadModal(true);
-        }
-        setIsStarting(false);
-      }, 4000);
-
-      window.addEventListener('blur', () => {
-        clearTimeout(timeoutId);
-        setIsStarting(false);
-      }, { once: true });
-
+      const payload = { isPractice: true, sessionId: data.session_id, token: getToken(), apiUrl: process.env.REACT_APP_API_URL || window.location.origin };
+      setPendingLaunch(payload); setSessionLaunched(true); setShowDownloadModal(true); openKiosk(payload); setIsStarting(false);
     } catch (error) {
       console.error("Error starting practice interview:", error);
       if (error?.status === 402) {
@@ -694,12 +642,12 @@ const Practice = () => {
                                     CV Score
                                   </span>
                                   <span className={styles.pillValue}>
-                                    {Math.round((session.cv_score || 0) * 100)}%
+                                    {session.cv_score == null ? "Unavailable" : `${Math.round(session.cv_score * 100)}%`}
                                   </span>
                                   <div className={styles.miniBar}>
                                     <div
                                       style={{
-                                        width: `${Math.round((session.cv_score || 0) * 100)}%`,
+                                        width: `${session.cv_score == null ? "Unavailable" : `${Math.round(session.cv_score * 100)}%`}`,
                                         backgroundColor: "#3b82f6",
                                       }}
                                     ></div>
@@ -710,12 +658,12 @@ const Practice = () => {
                                     Interview
                                   </span>
                                   <span className={styles.pillValue}>
-                                    {session.interview_score || 0}%
+                                    {session.interview_score == null ? "Unavailable" : `${session.interview_score}%`}
                                   </span>
                                   <div className={styles.miniBar}>
                                     <div
                                       style={{
-                                        width: `${session.interview_score || 0}%`,
+                                        width: `${session.interview_score == null ? "Unavailable" : `${session.interview_score}%`}`,
                                         backgroundColor: "#10b981",
                                       }}
                                     ></div>
@@ -726,12 +674,12 @@ const Practice = () => {
                                     Proctoring
                                   </span>
                                   <span className={styles.pillValue}>
-                                    {session.proctoring_score || 90}%
+                                    {session.proctoring_score == null ? "Unavailable" : `${session.proctoring_score}%`}
                                   </span>
                                   <div className={styles.miniBar}>
                                     <div
                                       style={{
-                                        width: `${session.proctoring_score || 90}%`,
+                                        width: `${session.proctoring_score == null ? "Unavailable" : `${session.proctoring_score}%`}`,
                                         backgroundColor: "#f59e0b",
                                       }}
                                     ></div>
@@ -795,8 +743,8 @@ const Practice = () => {
             setSelectedReport(null);
           }}
           report={selectedReport}
-          cvScore={selectedReport.cv_score || 0}
-          interviewScore={selectedReport.interview_score || 0}
+          cvScore={selectedReport.cv_score}
+          interviewScore={selectedReport.interview_score}
         />
       )}
 
@@ -834,52 +782,10 @@ const Practice = () => {
         getRoleIcon={getRoleIcon}
       />
 
-      {/* GenHire not installed — download modal */}
-      {showDownloadModal && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:'16px',padding:'36px 40px',maxWidth:'480px',width:'90%',color:'#f1f5f9',fontFamily:'inherit'}}>
-            <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>📥</div>
-            <h2 style={{margin:'0 0 8px',fontSize:'1.4rem',color:'#f1f5f9'}}>Install GenHire Secure Browser</h2>
-            <p style={{margin:'0 0 20px',color:'#94a3b8',fontSize:'0.95rem'}}>
-              GenHire was not detected on this device. Your installer download has started automatically.
-            </p>
-            <div style={{background:'#0f172a',borderRadius:'10px',padding:'16px 20px',marginBottom:'24px'}}>
-              <p style={{margin:'0 0 10px',color:'#7dd3fc',fontWeight:600,fontSize:'0.9rem'}}>Follow these steps:</p>
-              <ol style={{margin:0,paddingLeft:'20px',color:'#cbd5e1',fontSize:'0.9rem',lineHeight:'1.9'}}>
-                <li>Open <strong>Genhire.exe</strong> from your Downloads folder</li>
-                <li>Click <strong>Install</strong> — the app will launch automatically</li>
-                <li>Return here and click <strong>Retry</strong> below</li>
-              </ol>
-            </div>
-            <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
-              <button onClick={() => {
-                const link = document.createElement('a');
-                link.href = KIOSK_DOWNLOAD_URL;
-                link.download = 'Genhire.exe';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }} style={{flex:1,padding:'10px 16px',background:'transparent',border:'1px solid #475569',borderRadius:'8px',color:'#94a3b8',cursor:'pointer',fontSize:'0.9rem'}}>
-                Download Again
-              </button>
-              <button onClick={() => {
-                if (!pendingDeepLink) return;
-                setShowDownloadModal(false);
-                const iframe = document.createElement("iframe");
-                iframe.style.display = "none";
-                iframe.src = pendingDeepLink;
-                document.body.appendChild(iframe);
-                setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 5000);
-              }} style={{flex:2,padding:'10px 16px',background:'#3b82f6',border:'none',borderRadius:'8px',color:'#fff',cursor:'pointer',fontWeight:600,fontSize:'0.95rem'}}>
-                Retry — Launch Interview
-              </button>
-            </div>
-            <button onClick={() => setShowDownloadModal(false)} style={{marginTop:'16px',width:'100%',padding:'8px',background:'transparent',border:'none',color:'#64748b',cursor:'pointer',fontSize:'0.85rem'}}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <KioskLaunchGuide practice prepareOnly={!pendingLaunch} isOpen={showDownloadModal} busy={isStarting} onClose={() => setShowDownloadModal(false)} onOpen={() => {
+        if (pendingLaunch) openKiosk(pendingLaunch);
+        else { setShowDownloadModal(false); setShowCVModal(true); }
+      }} />
     </div>
   );
 };

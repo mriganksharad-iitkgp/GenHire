@@ -14,6 +14,7 @@ import base64
 import datetime
 import logging
 import os
+import re
 import threading
 import time
 
@@ -45,6 +46,13 @@ from services.cv_scoring_service import CVScoringService
 from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
 from services.llm_fallback_service import default_model_for, get_provider_priority
+from services.interview_flow_service import (
+    normalize_proctoring_config, percentage, result_payload, serialized_session, evaluation_percentage, cached_answer_result, schedule_evaluation_refresh, stop_companion,
+)
+from services.proctoring_service import (
+    create_mobile_pairing_token, validate_mobile_pairing_token,
+    mobile_is_ready, build_proctoring_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +101,7 @@ if RECORDING_ANALYZER_AVAILABLE and RecordingAnalyzer is not None:
         recording_analyzer = None
 else:
     recording_analyzer = None
-    print("ℹ RecordingAnalyzer not available - recording analysis features disabled")
+    print("â„¹ RecordingAnalyzer not available - recording analysis features disabled")
 
 
 def _format_cv_from_details(cv_details: dict) -> str:
@@ -176,6 +184,47 @@ def _format_job_from_doc(job: dict) -> str:
 @interview_bp.route("/api/interviews/start", methods=["POST"])
 @token_required
 def start_interview(current_user):
+    """Lease creation in MongoDB so retries cannot create two paid attempts."""
+    import uuid
+    application_id = (request.get_json(silent=True) or {}).get("application_id")
+    try:
+        app_id = ObjectId(application_id)
+    except Exception:
+        return jsonify({"error": "Invalid application_id"}), 400
+    owner = str(current_user["_id"])
+    application = applications_collection.find_one({"_id": app_id, "student_id": owner})
+    if not application:
+        return jsonify({"error": "Application not found"}), 404
+    existing = interviews_collection.find_one({"application_id": application_id,
+        "user_id": owner, "status": {"$in": ["setup", "active"]}})
+    if existing:
+        return jsonify(_session_payload(existing)), 200
+    if str(application.get("status", "")).strip().lower() not in {"shortlisted", "pending interview", "pending_interview"}:
+        return jsonify({"error": "You can start this interview after the recruiter shortlists your application.",
+            "error_code": "interview_not_eligible"}), 409
+    lease_id = uuid.uuid4().hex
+    now = datetime.datetime.utcnow()
+    claimed = applications_collection.update_one({"_id": app_id, "student_id": owner,
+        "$or": [{"interview_start_lease": {"$exists": False}},
+                {"interview_start_lease.expires_at": {"$lt": now}}]},
+        {"$set": {"interview_start_lease": {"id": lease_id,
+            "expires_at": now + datetime.timedelta(minutes=2)}}})
+    if not claimed.modified_count:
+        return jsonify({"error": "Interview setup is already starting. Please retry in a moment.",
+            "error_code": "interview_start_in_progress"}), 409
+    try:
+        # Another worker may have finished between our initial read and lease.
+        existing = interviews_collection.find_one({"application_id": application_id,
+            "user_id": owner, "status": {"$in": ["setup", "active"]}})
+        if existing:
+            return jsonify(_session_payload(existing)), 200
+        return _start_interview(current_user)
+    finally:
+        applications_collection.update_one({"_id": app_id, "interview_start_lease.id": lease_id},
+            {"$unset": {"interview_start_lease": ""}})
+
+
+def _start_interview(current_user):
     data = request.json or {}
     application_id = data.get("application_id")
     if not application_id:
@@ -246,12 +295,10 @@ def start_interview(current_user):
                 403,
             )
 
-    proctoring_config = job.get("proctoring_config", {
-        "voice_detection": True,
-        "object_detection": True,
-        "eyeball_tracking": True,
-        "gaze_heatmap": True,
-    }) if job else {}
+    proctoring_config = normalize_proctoring_config(job.get("proctoring_config"))
+    if proctoring_config["dual_camera"] and not app_config.mobile_recording_enabled():
+        return jsonify({"error": "This job requires two cameras, but the mobile service is unavailable. Please contact the recruiter.",
+            "error_code": "mobile_recording_disabled"}), 503
 
     proctoring_enabled = any(bool(v) for v in (proctoring_config or {}).values())
     recruiter_interview_cost = (
@@ -351,7 +398,7 @@ def start_interview(current_user):
 
     def _refund_start_debit(reason):
         """Reverse the just-taken recruiter debit when the start attempt dies
-        before a usable session exists — credits used to simply vanish here."""
+        before a usable session exists â€” credits used to simply vanish here."""
         if not (recruiter_deduction and recruiter_deduction.get("success")):
             return
         try:
@@ -374,7 +421,7 @@ def start_interview(current_user):
                 exc_info=True,
             )
 
-    # Build plain-text CV — prefer snapshot text (PDF CVs), fall back to structured details
+    # Build plain-text CV â€” prefer snapshot text (PDF CVs), fall back to structured details
     if cv_text_prefetched:
         cv_text = cv_text_prefetched
     elif cv_details:
@@ -420,7 +467,7 @@ def start_interview(current_user):
 
         cv_score = app_doc.get("cv_score")
         sim_score = (
-            (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else 0.75
+            (float(cv_score) / 100.0) if isinstance(cv_score, (int, float)) else None
         )
 
         interview_doc = {
@@ -433,8 +480,11 @@ def start_interview(current_user):
             "recruiter_id": (
                 str(job.get("created_by")) if job and job.get("created_by") else None
             ),
-            "status": "active",
+            "status": "setup",
             "similarity_score": sim_score,
+            "cv_score": percentage(cv_score),
+            "dual_proctoring_required": proctoring_config["dual_camera"],
+            "setup_required": True,
             "proctoring_config": proctoring_config,
             # Initialized here (not just at /end) so a crashed/abandoned interview
             # still has an auditable record instead of no proctoring data at all.
@@ -453,7 +503,7 @@ def start_interview(current_user):
         interview_id = interviews_collection.insert_one(interview_doc).inserted_id
     except Exception:
         # Any unexpected failure between the debit and a persisted session
-        # doc means no interview can ever happen for this charge — refund,
+        # doc means no interview can ever happen for this charge â€” refund,
         # then let the global 500 handler answer the client.
         _refund_start_debit("start_failed_unexpected_error")
         raise
@@ -466,15 +516,117 @@ def start_interview(current_user):
             "similarity_score": sim_score,
             "conversation_context": session_details.get("conversation_context", {}),
             "question_timeout_seconds": session_details.get("question_timeout_seconds"),
-            "question_deadline": session_details.get("question_deadline"),
+            "question_deadline": None,
             "max_questions": session_details.get("max_questions"),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
             "usage_deduction": recruiter_deduction,
-            "mobile_recording_enabled": app_config.mobile_recording_enabled(),
+            "status": "setup",
+            "setup_required": True,
+            "cv_score": percentage(cv_score),
+            "dual_proctoring_required": proctoring_config["dual_camera"],
+            "mobile_recording_enabled": proctoring_config["dual_camera"],
+            "mobile_pairing_token": create_mobile_pairing_token(session_details["session_id"], str(current_user["_id"])) if proctoring_config["dual_camera"] else None,
             "recruiter_wallet_balance": (recruiter_deduction or {}).get("transaction", {}).get("balance_after"),
         }
     )
+
+
+def _owned_session(user_id, session_id):
+    doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(user_id)})
+    if doc:
+        return doc, interviews_collection, interview_manager
+    doc = collections["practice_sessions"].find_one({"session_id": session_id, "user_id": str(user_id)})
+    if doc:
+        # Practice uses its own manager; do not accidentally activate a real session.
+        from routes.practice_routes import practice_controller
+        return doc, collections["practice_sessions"], (practice_controller.interview_api.session_manager
+            if practice_controller.interview_api else None)
+    return None, None, None
+
+
+def _session_payload(doc, manager=None):
+    if manager is None:
+        _, _, manager = _owned_session(doc["user_id"], doc["session_id"])
+    session = manager.sessions.get(doc["session_id"]) if manager else None
+    dual = bool((doc.get("proctoring_config") or {}).get("dual_camera"))
+    payload = {
+        "session_id": doc["session_id"], "interview_id": str(doc.get("_id", "")),
+        "application_id": doc.get("application_id"), "status": doc.get("status"),
+        "is_practice": bool(doc.get("is_practice")),
+        "setup_required": doc.get("status") == "setup",
+        "identity_captured": bool(doc.get("identity_verification")),
+        "initial_questions": [session.current_question] if session else [],
+        "current_question": session.current_question if session else None,
+        "questions_asked": session.questions_asked if session else len(doc.get("qa_pairs") or []),
+        "question_count": min((session.questions_asked if session else len(doc.get("qa_pairs") or []))
+            + (0 if doc.get("status") in {"completed", "abandoned"} else 1), manager.config.max_questions if manager else 10),
+        "question_timeout_seconds": manager.config.question_timeout_seconds if manager else None,
+        "max_questions": manager.config.max_questions if manager else None,
+        "question_deadline": (session.question_served_at + manager.config.question_timeout_seconds)
+            if session and session.question_served_at else None,
+        "cv_score": percentage(doc.get("cv_score"), normalized=bool(doc.get("is_practice"))),
+        "cv_score_status": doc.get("cv_score_status"),
+        "similarity_score": doc.get("similarity_score"),
+        "proctoring_config": doc.get("proctoring_config") or {},
+        "proctoring_enabled": doc.get("proctoring_enabled", any((doc.get("proctoring_config") or {}).values())),
+        "dual_proctoring_required": dual, "mobile_recording_enabled": dual and app_config.mobile_recording_enabled(),
+        "mobile_pairing_token": create_mobile_pairing_token(doc["session_id"], doc["user_id"]) if dual else None,
+        "mobile_ready": mobile_is_ready(doc),
+        "engine_available": session is not None,
+        "last_answer": doc.get("last_answer"),
+        "interview_complete": bool((session and session.is_complete) or doc.get("status") == "finishing"
+            or ((doc.get("last_answer") or {}).get("result") or {}).get("interview_complete")),
+    }
+    if doc.get("status") in {"completed", "abandoned"}:
+        terminal = result_payload(doc)
+        payload.update(terminal)
+        payload["result_status"] = terminal["status"]
+        payload["status"] = doc["status"]
+    return payload
+
+
+@interview_bp.route("/api/interviews/<session_id>/session", methods=["GET"])
+@token_required
+def get_interview_session(current_user, session_id):
+    doc, _, manager = _owned_session(current_user["_id"], session_id)
+    if not doc:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify(_session_payload(doc, manager))
+
+
+@interview_bp.route("/api/interviews/<session_id>/activate", methods=["POST"])
+@token_required
+@serialized_session
+def activate_interview(current_user, session_id):
+    doc, collection, manager = _owned_session(current_user["_id"], session_id)
+    if not doc:
+        return jsonify({"error": "Session not found"}), 404
+    if doc.get("status") not in {"setup", "active"}:
+        return jsonify({"error": "This interview has ended", "error_code": "session_ended"}), 409
+    checks = request.get_json(silent=True) or {}
+    if doc.get("status") == "setup":
+        if not all(checks.get(key) is True for key in ("camera_ready", "microphone_ready", "speaker_ready")):
+            return jsonify({"error": "Complete the laptop camera, microphone and speaker checks first.",
+                "error_code": "device_checks_required"}), 409
+        if not doc.get("identity_verification"):
+            return jsonify({"error": "Capture your face before starting.", "error_code": "face_capture_required"}), 409
+        if doc.get("dual_proctoring_required") or (doc.get("proctoring_config") or {}).get("dual_camera"):
+            if not mobile_is_ready(doc):
+                return jsonify({"error": "Connect the mobile camera and keep it open before starting.",
+                    "error_code": "mobile_camera_required"}), 409
+    if manager is None:
+        return jsonify({"error": "The interview service is unavailable. Close this interrupted attempt safely before restarting.",
+            "error_code": "engine_unavailable"}), 503
+    result = manager.activate_session(session_id)
+    if "error" in result:
+        return jsonify(result), 409
+    if doc.get("status") == "active":
+        return jsonify(result)
+    collection.update_one({"_id": doc["_id"]}, {"$set": {"status": "active",
+        "activated_at": datetime.datetime.utcnow(), "device_checks": checks,
+        "updated_at": datetime.datetime.utcnow()}})
+    return jsonify(result)
 
 
 @interview_bp.route("/api/interviews/<session_id>/question", methods=["GET"])
@@ -490,7 +642,10 @@ def get_interview_question(current_user, session_id):
     if not owns_session:
         return jsonify({"error": "Session not found"}), 404
 
-    question_result = interview_manager.get_next_question(session_id)
+    doc, _, manager = _owned_session(user_id, session_id)
+    if manager is None:
+        return jsonify({"error": "The interview service is unavailable.", "error_code": "engine_unavailable"}), 503
+    question_result = manager.get_next_question(session_id)
 
     if "error" in question_result:
         return jsonify(question_result), 400
@@ -500,16 +655,28 @@ def get_interview_question(current_user, session_id):
 
 @interview_bp.route("/api/interviews/<session_id>/answer", methods=["POST"])
 @token_required
+@serialized_session
 def submit_answer(current_user, session_id):
+    doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
+    if not doc:
+        return jsonify({"error": "Session not found"}), 404
+    if doc.get("status") != "active":
+        return jsonify({"error": "Start the interview after completing setup before answering.",
+            "error_code": "session_not_active"}), 409
     data = request.json or {}
     question = data.get("question")
     answer = data.get("answer")
 
-    # `answer` may legitimately be an empty string — a client-side no-response
+    # `answer` may legitimately be an empty string â€” a client-side no-response
     # timeout auto-submits "" to advance the interview rather than leaving it
     # stuck. Only a missing question or a genuinely absent (None) answer is invalid.
     if not question or answer is None:
         return jsonify({"error": "Question and answer are required"}), 400
+    if not isinstance(question, str) or not isinstance(answer, str) or len(question) > 12000 or len(answer) > 30000:
+        return jsonify({"error": "Question and answer must be text within the allowed length."}), 400
+    cached = cached_answer_result(doc, question, answer)
+    if cached:
+        return jsonify(cached)
 
     try:
         # Submit answer using new system
@@ -520,7 +687,7 @@ def submit_answer(current_user, session_id):
 
         # Restart-safe evidence for the credit-refund policy: count
         # substantive answers on the interview doc itself. Repeat requests and
-        # empty auto-skips deliberately don't count — an interview with zero
+        # empty auto-skips deliberately don't count â€” an interview with zero
         # real answers is refundable.
         if not result.get("repeated_question") and str(answer or "").strip():
             try:
@@ -563,6 +730,15 @@ def submit_answer(current_user, session_id):
         # Apply deep serialization to the result
         serializable_result = make_json_serializable(result)
 
+        if not result.get("repeated_question"):
+            interviews_collection.update_one({"_id": doc["_id"]}, {
+                "$push": {"qa_pairs": {"question": question, "answer": answer,
+                    "evaluation": serializable_result.get("current_evaluation")},
+                    "transcript": {"$each": [{"role": "assistant", "text": question},
+                        {"role": "user", "text": answer}]}},
+                "$set": {"last_answer": {"question": question, "answer": answer,
+                    "result": serializable_result}, "updated_at": datetime.datetime.utcnow()}})
+
         return jsonify(serializable_result)
 
     except Exception as e:
@@ -575,28 +751,30 @@ def submit_answer(current_user, session_id):
 
 @interview_bp.route("/api/interviews/<session_id>/end", methods=["POST"])
 @token_required
+@serialized_session
 def end_interview(current_user, session_id):
+    session_doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
+    if not session_doc:
+        return jsonify({"error": "Session not found"}), 404
+    if session_doc.get("status") in {"completed", "abandoned"}:
+        return jsonify(result_payload(session_doc))
     data = request.json or {}
     tracking_data = data.get("tracking_data", [])
 
     def utc_now():
         return datetime.datetime.now(datetime.UTC)
 
-    def normalize_utc(dt):
-        if not isinstance(dt, datetime.datetime):
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=datetime.UTC)
-        return dt.astimezone(datetime.UTC)
-    
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
+    if live_sessions.get(session_id):
+        live_sessions[session_id]["monitoring"] = False
+    stop_companion(session_doc)
     final_evaluation = {}
-    interview_transcript = []
+    interview_transcript = list(session_doc.get("transcript") or [])
 
     # Interview score will be computed from final_evaluation below.
     # NOTE: CostTracker().end_session is called exactly once, further down,
-    # after the fallback estimates are known — an earlier extra call here used
+    # after the fallback estimates are known â€” an earlier extra call here used
     # clear_events=True and wiped the real tracked usage before the billing
     # call could read it.
     interview_score = None  # Calculated after evaluation is generated
@@ -665,17 +843,18 @@ def end_interview(current_user, session_id):
         try:
             final_evaluation = interview_manager._generate_final_evaluation(session)
         except Exception as e:
-            print(f"⚠️ Error generating final evaluation: {e}")
+            print(f"âš ï¸ Error generating final evaluation: {e}")
             import traceback
             traceback.print_exc()
             final_evaluation = {
                 "error": "Failed to generate AI evaluation.",
                 "details": str(e),
-                "final_score": 0
+                "final_score": None
             }
 
         # Always extract transcript regardless of evaluation success
         if hasattr(session, "interview_data") and session.interview_data:
+            interview_transcript = []
             for qa in session.interview_data:
                 if qa.get("question"):
                     interview_transcript.append(
@@ -691,87 +870,38 @@ def end_interview(current_user, session_id):
             "final_score": None,
         }
 
-    # Compute interview_score from final_evaluation
-    if final_evaluation:
-        qs = final_evaluation.get("quantitative_scores", {})
-        answer_score = qs.get("answer_score")
-        language_score = qs.get("language_score")
-        if answer_score is not None or language_score is not None:
-            # Weighted: 70% answer quality, 30% language quality
-            ans = float(answer_score or 0)
-            lang = float(language_score or 0)
-            interview_score = round((ans * 0.7 + lang * 0.3) * 100)
-        elif final_evaluation.get("final_score") is not None:
-            interview_score = final_evaluation["final_score"]
-        else:
-            # Try conversation_summary average scores as fallback
-            conv = final_evaluation.get("conversation_summary", {})
-            avg_ans = conv.get("average_answer_score")
-            avg_lang = conv.get("average_language_score")
-            if avg_ans is not None or avg_lang is not None:
-                a = float(avg_ans or 0)
-                l = float(avg_lang or 0)
-                interview_score = round((a * 0.7 + l * 0.3) * 100)
-            else:
-                interview_score = 0
-    else:
-        interview_score = 0
-
-    # DB-stored score from GazeRecorder (third-party CDN eye-tracking, submitted
-    # via /gaze-recorder-results while the interview was running — see
-    # finalizeInlineGazeRecorder in Chat.jsx). Real, but depends on that CDN
-    # script loading successfully in the candidate's browser.
-    db_score = (session_doc or {}).get("proctoring_score")
-    if db_score is None:
-        db_score = (session_doc or {}).get("gaze_recorder_score")
+    interview_score = evaluation_percentage(final_evaluation)
 
     manual_infractions = list((session_doc or {}).get("manual_infractions") or [])
     gaze_times = (session_doc or {}).get("gaze_metrics")
     gaze_plot_path = (session_doc or {}).get("gaze_plot_path")
 
-    # Live MediaPipe/DeepFace-based score computed in-process, in real time,
-    # while frames streamed in over this same app's own Socket.IO connection
-    # (see register_face / handle_proctoring_frame below) — an independent
-    # signal from db_score, not a duplicate of it. Previously this was never
-    # read at all; /end instead called a separate microservice
-    # (gpu_intensive_task/proctoring_server.py, port 5001) that nothing in the
-    # current frontend ever actually streams frames to, so it was always
-    # either unreachable (wasted latency, fell through to a hardcoded 90) or
-    # reachable-but-empty (silently overwrote a real score with its default of
-    # 100 for a session_id it had never seen).
+    # Primary server analysis (or its persisted snapshot) is authoritative.
     live_session = live_sessions.get(session_id)
-    live_score = live_session.get("proctoring_score") if live_session else None
+    proctoring_report = build_proctoring_report(live_session, session_doc)
+    live_score = proctoring_report.get("final_score")
 
-    # Combine conservatively — either detection method catching a problem
-    # should count, since they're independent signals (gaze/cheating-score vs.
-    # head-pose/identity), not two measurements of the same thing.
-    scores_available = [s for s in (db_score, live_score) if s is not None]
+    # Only server-analyzed camera evidence earns a proctoring score. Client
+    # gaze uploads are supplemental context, not authoritative score input.
+    scores_available = [live_score] if live_score is not None else []
     if scores_available:
         proctoring_score = min(scores_available)
-        proctoring_status = "complete"
+        proctoring_status = proctoring_report.get("status", "partial")
     else:
         # Neither signal is available (camera/mic denied, GazeRecorder CDN
-        # blocked, etc.) — be honest about it instead of awarding a fabricated
+        # blocked, etc.) â€” be honest about it instead of awarding a fabricated
         # default score that would let a candidate whose proctoring pipeline
         # failed score as if nothing was wrong.
         proctoring_score = None
         proctoring_status = "incomplete"
-
-    suspicious_activity_time = 0  # Not tracking this explicitly anymore in app.py
-
-    # Calculate total interview duration for logging
-    interview_duration = 0
-    if session_doc and "created_at" in session_doc:
-        start_time = normalize_utc(session_doc["created_at"])
-        end_time = utc_now()
-        if start_time is not None:
-            interview_duration = (end_time - start_time).total_seconds()
-
-        # Note: Proctoring score is currently hardcoded at 90%
-        # Future: Will be calculated based on gaze metrics and infractions
+    if proctoring_report.get("status") == "disabled":
+        proctoring_score = None
+        proctoring_status = "disabled"
+    interview_score = percentage(interview_score)
+    cv_score = percentage((session_doc or {}).get("cv_score"))
 
     # Derive actual media usage from the transcript. STT time must reflect the
-    # candidate's SPOKEN answers, never wall-clock session duration — stale
+    # candidate's SPOKEN answers, never wall-clock session duration â€” stale
     # sessions finalized hours/days later used to record absurd audio totals
     # (hundreds of thousands of "seconds") and blow up the cost statistics.
     tts_characters = sum(
@@ -784,7 +914,7 @@ def end_interview(current_user, session_id):
         for item in interview_transcript
         if item.get("role") == "user"
     )
-    # ~4 chars/token, ~0.4 s of speech per token (≈150 wpm), capped at 2 h.
+    # ~4 chars/token, ~0.4 s of speech per token (â‰ˆ150 wpm), capped at 2 h.
     stt_seconds = min((answer_chars / 4.0) * 0.4, 7200.0)
 
     usage_summary = CostTracker().end_session(
@@ -827,7 +957,7 @@ def end_interview(current_user, session_id):
             plt.legend()
 
             gaze_plot_filename = f"gaze_plot_{session_id}_{uuid.uuid4().hex[:6]}.png"
-            # Staged locally only long enough to upload to GCS — the plot is
+            # Staged locally only long enough to upload to GCS â€” the plot is
             # served back via /api/view-file, which redirects gs:// paths to a
             # signed URL. Best-effort: a plot-upload failure must never fail
             # end-interview (scores/refunds finalize below), so on failure the
@@ -844,7 +974,7 @@ def end_interview(current_user, session_id):
                     content_type="image/png",
                 )
             except Exception as upload_err:
-                print(f"⚠️ GCS upload failed for gaze plot (report will omit it): {upload_err}")
+                print(f"âš ï¸ GCS upload failed for gaze plot (report will omit it): {upload_err}")
                 gaze_plot_path = None
             finally:
                 try:
@@ -852,7 +982,7 @@ def end_interview(current_user, session_id):
                 except OSError:
                     pass
         except Exception as e:
-            print(f"⚠️ Failed to generate local gaze tracking plot: {e}")
+            print(f"âš ï¸ Failed to generate local gaze tracking plot: {e}")
             if not gaze_plot_path:  # fallback to external one if available
                 pass
     elif not gaze_plot_path:
@@ -867,7 +997,8 @@ def end_interview(current_user, session_id):
                 "evaluation": final_evaluation,
                 "final_score": interview_score,  # Store calculated interview score
                 "proctoring_score": proctoring_score,  # Store calculated proctoring score
-                "proctoring_status": proctoring_status,  # "complete" or "incomplete" — never a fabricated fallback
+                "proctoring_status": proctoring_status,  # "complete" or "incomplete" â€” never a fabricated fallback
+                "proctoring_report": proctoring_report,
                 "transcript": interview_transcript,  # Store conversation transcript
                 "manual_infractions": manual_infractions,
                 "gaze_metrics": gaze_times,
@@ -891,7 +1022,7 @@ def end_interview(current_user, session_id):
             )
             if not existing_app:
                 print(
-                    f"❌ ERROR: Application with ID {application_id} NOT FOUND in database!"
+                    f"âŒ ERROR: Application with ID {application_id} NOT FOUND in database!"
                 )
                 return jsonify(
                     {
@@ -908,7 +1039,7 @@ def end_interview(current_user, session_id):
                 )
 
             previous_status = str(existing_app.get("status", "pending")).lower()
-            # Must be assigned before the notification block below uses it —
+            # Must be assigned before the notification block below uses it â€”
             # it previously wasn't set until after that block, so the email
             # thread died on a NameError and no completion mail ever went out.
             recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
@@ -929,7 +1060,7 @@ def end_interview(current_user, session_id):
                 },
             )
 
-            # Push the finished interview's scores live — this write path is
+            # Push the finished interview's scores live â€” this write path is
             # raw pymongo directly in this route (not routed through
             # ApplicationController), so the controller's real-time sync never
             # covered it; reuses the exact same application_update event shape.
@@ -1008,11 +1139,11 @@ def end_interview(current_user, session_id):
                         daemon=True,
                     ).start()
             except Exception as _notify_exc:
-                print(f"⚠️ Interview completion notification failed: {_notify_exc}")
+                print(f"âš ï¸ Interview completion notification failed: {_notify_exc}")
 
             if result.modified_count == 0:
                 print(
-                    f"❌ Warning: Application {application_id} was not updated (no documents modified)"
+                    f"âŒ Warning: Application {application_id} was not updated (no documents modified)"
                 )
 
             record_usage_event(
@@ -1055,16 +1186,31 @@ def end_interview(current_user, session_id):
             )
 
         except Exception as e:
-            print(f"❌ Error updating application: {e}")
+            print(f"âŒ Error updating application: {e}")
             import traceback
 
             traceback.print_exc()
     else:
-        print(f"⚠️ WARNING: No application_id found in session document!")
+        print(f"âš ï¸ WARNING: No application_id found in session document!")
         print(
-            f"⚠️ Session doc keys: {session_doc.keys() if session_doc else 'No session doc'}"
+            f"âš ï¸ Session doc keys: {session_doc.keys() if session_doc else 'No session doc'}"
         )
 
+    if session and final_evaluation.get("pending_answers"):
+        def publish_refresh(score, evaluation):
+            application_id = session_doc.get("application_id")
+            if application_id:
+                applications_collection.update_one({"_id": ObjectId(application_id)},
+                    {"$set": {"interview_score": score}})
+                payload = {"type": "score_updated", "application": {"_id": application_id,
+                    "interview_score": score, "status": "interviewed"}}
+                for room in {session_doc.get("user_id"), session_doc.get("recruiter_id")} - {None, ""}:
+                    socketio.emit("application_update", payload, room=room)
+        schedule_evaluation_refresh(interview_manager, session, interviews_collection, publish_refresh)
+    else:
+        interview_manager.sessions.pop(session_id, None)
+        live_sessions.pop(session_id, None)
+    live_sessions.pop(session_id, None)
     return jsonify(
         {
             "status": "interview_ended",
@@ -1072,6 +1218,8 @@ def end_interview(current_user, session_id):
             "interview_score": interview_score,
             "proctoring_score": proctoring_score,
             "proctoring_status": proctoring_status,
+            "proctoring_report": proctoring_report,
+            "cv_score": cv_score,
             "transcript": interview_transcript,
             "usage_summary": usage_summary,
             "usage_deduction": usage_deduction,
@@ -1102,6 +1250,9 @@ def upload_gaze_recorder_results(current_user, session_id):
     """
     Receives raw GazeRecorder payloads and stores smart heatmap analysis.
     """
+    owned_doc, _, _ = _owned_session(str(current_user["_id"]), session_id)
+    if not owned_doc:
+        return jsonify({"error": "Interview session not found"}), 404
     utc_now = lambda: datetime.datetime.now(datetime.UTC)
     data = request.get_json() or {}
     recording_data = data.get("recordingData")
@@ -1142,10 +1293,7 @@ def upload_gaze_recorder_results(current_user, session_id):
                 "gaze_recorder_score": max(
                     0, 100 - analysis_result.get("cheatingScore", 0)
                 ),
-                "proctoring_score": max(
-                    0, 100 - analysis_result.get("cheatingScore", 0)
-                ),
-                "proctoring_source": "gaze_recorder_api",
+                "gaze_recorder_source": "client_reported_supplementary",
                 "updated_at": utc_now(),
             }
         },
@@ -1165,16 +1313,25 @@ def upload_gaze_recorder_results(current_user, session_id):
 @interview_bp.route("/api/interviews/<session_id>/upload-recording", methods=["POST"])
 @token_required
 def upload_recording(current_user, session_id):
+    request.max_content_length = 256 * 1024 * 1024
+    session_doc, target_collection, _ = _owned_session(current_user["_id"], session_id)
+    if not session_doc:
+        return jsonify({"error": "Session not found"}), 404
     if "recording" not in request.files:
         return jsonify({"error": "No recording file part"}), 400
     file = request.files["recording"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
     if file:
-        # Recordings live in GCS only — staged briefly on disk (the analyzer
+        part = request.form.get("recording_part", "0")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", part):
+            return jsonify({"error": "Invalid recording part"}), 400
+        media_type = "video/mp4" if file.mimetype == "video/mp4" else "video/webm"
+        extension = "mp4" if media_type == "video/mp4" else "webm"
+        # Recordings live in GCS only â€” staged briefly on disk (the analyzer
         # needs a local path), uploaded, then the staging file is deleted.
         # No local fallback: a failed GCS upload fails the request loudly.
-        filename = secure_filename(f"{session_id}-{current_user['_id']}.webm")
+        filename = secure_filename(f"{session_id}-{current_user['_id']}-{part}.{extension}")
         filepath = os.path.join(RECORDING_FOLDER, filename)
         file.save(filepath)
         try:
@@ -1190,18 +1347,20 @@ def upload_recording(current_user, session_id):
             gcs_object_path = f"recordings/{filename}"
             try:
                 gcs_uri = gcs_service.upload_from_path(
-                    filepath, gcs_object_path, content_type="video/webm"
+                    filepath, gcs_object_path, content_type=media_type
                 )
             except Exception as e:
                 print(f"GCS upload failed for interview recording: {e}")
                 return jsonify({"error": "Failed to store recording in cloud storage"}), 500
 
-            interviews_collection.update_one(
+            target_collection.update_one(
                 {"session_id": session_id, "user_id": str(current_user["_id"])},
-                {"$set": {"recording_path": gcs_uri, "recording_gcs_path": gcs_object_path}},
+                {"$set": {"recording_path": gcs_uri, "recording_gcs_path": gcs_object_path},
+                    "$addToSet": {"recording_parts": {"part": part, "path": gcs_uri,
+                        "content_type": media_type}}},
             )
             return (
-                jsonify({"message": "Recording uploaded successfully", "path": gcs_uri}),
+                jsonify({"message": "Recording uploaded successfully", "path": gcs_uri, "part": part}),
                 200,
             )
         finally:
@@ -1217,21 +1376,25 @@ def upload_recording(current_user, session_id):
 
 
 @interview_bp.route("/api/interviews/<session_id>/upload-mobile-recording", methods=["POST"])
-# No JWT here on purpose: the mobile companion is opened from a QR link and
-# has no token. The unguessable session_id acts as the capability; we at
-# least require it to reference a real session before accepting a file.
+# The phone uses its signed session-scoped pairing capability instead of a JWT.
 def upload_mobile_recording(session_id):
+    request.max_content_length = 256 * 1024 * 1024
     if not app_config.mobile_recording_enabled():
         return jsonify({
             "error": "Mobile recording is disabled on this server.",
             "error_code": "mobile_recording_disabled",
         }), 403
 
-    session_exists = interviews_collection.find_one(
-        {"session_id": session_id}, {"_id": 1}
-    ) or collections["practice_sessions"].find_one({"session_id": session_id}, {"_id": 1})
+    target_collection = interviews_collection
+    session_exists = target_collection.find_one({"session_id": session_id})
+    if not session_exists:
+        target_collection = collections["practice_sessions"]
+        session_exists = target_collection.find_one({"session_id": session_id})
     if not session_exists:
         return jsonify({"error": "Session not found"}), 404
+    pairing_token = request.headers.get("X-Mobile-Pairing-Token") or request.form.get("pairing_token")
+    if not validate_mobile_pairing_token(pairing_token, session_id, session_exists.get("user_id")):
+        return jsonify({"error": "The mobile pairing link is invalid or expired.", "error_code": "invalid_pairing_token"}), 403
 
     if "recording" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -1241,10 +1404,15 @@ def upload_mobile_recording(session_id):
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        # Save with a specific suffix to distinguish from webcam. GCS only —
+        media_type = "video/mp4" if file.mimetype == "video/mp4" else "video/webm"
+        extension = "mp4" if media_type == "video/mp4" else "webm"
+        part = request.form.get("recording_part", "0")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", part):
+            return jsonify({"error": "Invalid recording part"}), 400
+        # Save with a specific suffix to distinguish from webcam. GCS only â€”
         # staged briefly on disk, uploaded, staging file deleted; a failed
         # upload fails the request (no local fallback).
-        filename = secure_filename(f"{session_id}_mobile_env.webm")
+        filename = secure_filename(f"{session_id}_mobile_env-{part}.{extension}")
         filepath = os.path.join(M_RECORDING_FOLDER, filename)
         file.save(filepath)
         try:
@@ -1252,18 +1420,19 @@ def upload_mobile_recording(session_id):
             gcs_object_path = f"mobile_recordings/{filename}"
             try:
                 gcs_uri = gcs_service.upload_from_path(
-                    filepath, gcs_object_path, content_type="video/webm"
+                    filepath, gcs_object_path, content_type=media_type
                 )
             except Exception as e:
                 print(f"GCS upload failed for mobile recording: {e}")
                 return jsonify({"error": "Failed to store mobile recording in cloud storage"}), 500
 
-            interviews_collection.update_one(
+            target_collection.update_one(
                 {"session_id": session_id},
                 {"$set": {
                     "mobile_recording_path": gcs_uri,
                     "mobile_recording_gcs_path": gcs_object_path,
-                }},
+                }, "$addToSet": {"mobile_recording_parts": {"part": part, "path": gcs_uri,
+                    "content_type": media_type}}},
             )
             return jsonify({"message": "Mobile recording uploaded"}), 200
         finally:
@@ -1318,7 +1487,7 @@ def get_user_interviews(current_user):
             "jd_path": interview.get("jd_path"),
         }
 
-        # Include user info for recruiters — use pre-fetched map, no extra queries
+        # Include user info for recruiters â€” use pre-fetched map, no extra queries
         if user_type == "recruiter":
             user_info = candidate_map.get(str(interview.get("user_id", "")))
             if user_info:
@@ -1358,7 +1527,7 @@ def _score_identity_async(interview_id, application_id, card_file_id, capture_by
 
     Compares the live capture against the uploaded identity card and stores
     the similarity score on the interview + application for the recruiter.
-    Deliberately NEVER blocks or fails the interview — identity is advisory
+    Deliberately NEVER blocks or fails the interview â€” identity is advisory
     (score-only) for every account type; the recruiter judges from the score.
     """
     try:
@@ -1422,17 +1591,18 @@ def _score_identity_async(interview_id, application_id, card_file_id, capture_by
 
 @interview_bp.route("/api/interviews/<session_id>/register-face", methods=["POST"])
 @token_required
+@serialized_session
 def register_face(current_user, session_id):
     """
     Capture the candidate's face before the interview starts.
 
     Real interviews are similarity-scored (LLM) against the account's uploaded
-    identity card IN THE BACKGROUND — the interview always proceeds
+    identity card IN THE BACKGROUND â€” the interview always proceeds
     immediately, nobody is ever blocked on a mismatch, and the score is
     surfaced to the recruiter on the candidate card and reports. The capture
     and score are stored on the interview + application so the recruiter can
     see exactly who sat the interview. Practice interviews only capture (for
-    live proctoring) — they never score against the ID card and never block.
+    live proctoring) â€” they never score against the ID card and never block.
     """
     data = request.get_json()
     if not data or "image" not in data:
@@ -1442,7 +1612,9 @@ def register_face(current_user, session_id):
         # Strip the data-URL prefix (e.g. "data:image/jpeg;base64,...")
         raw = data["image"]
         encoded = raw.split(",", 1)[1] if "," in raw else raw
-        decoded_image = base64.b64decode(encoded)
+        if not isinstance(raw, str) or len(encoded) > 3_000_000:
+            raise ValueError("Image too large")
+        decoded_image = base64.b64decode(encoded, validate=True)
     except Exception:
         return jsonify({"error": "Invalid image data", "error_code": "invalid_image"}), 400
 
@@ -1459,6 +1631,9 @@ def register_face(current_user, session_id):
         if not practice_doc:
             return jsonify({"error": "Interview session not found", "error_code": "session_not_found"}), 404
 
+    owned_doc = interview_doc or practice_doc
+    if owned_doc.get("status") != "setup":
+        return jsonify({"error": "Face enrollment is only available during setup.", "error_code": "session_not_in_setup"}), 409
     quality = face_service.assess_face_image(decoded_image)
     if not quality.get("ok"):
         return (
@@ -1468,7 +1643,7 @@ def register_face(current_user, session_id):
                     "error_code": quality.get("error_code", "invalid_image"),
                 }
             ),
-            400,
+            503 if quality.get("error_code") == "face_detection_unavailable" else 400,
         )
 
     now = datetime.datetime.utcnow()
@@ -1480,25 +1655,11 @@ def register_face(current_user, session_id):
     }
 
     try:
-        user_doc = users_collection.find_one({"_id": current_user["_id"]}, {"face_profile": 1})
-        face_profile = (user_doc or {}).get("face_profile") or {}
-        reference_file_id = face_profile.get("image_file_id")
-
         if practice_doc is not None:
             # Practice: capture for live proctoring, softly verify against the
             # canonical identity when one exists, never enroll, never block.
             identity["status"] = "practice_captured"
             identity["verified"] = None
-            if reference_file_id and mode != "off":
-                try:
-                    ref_bytes, _ = face_service.load_face_image(db, reference_file_id)
-                    verdict = face_service.verify_face_images(ref_bytes, decoded_image)
-                    if verdict.get("available"):
-                        identity["verified"] = verdict["verified"]
-                        identity["distance"] = verdict["distance"]
-                        identity["threshold"] = verdict["threshold"]
-                except Exception as exc:
-                    print(f"Practice face soft-verify failed for {session_id}: {exc}")
             collections["practice_sessions"].update_one(
                 {"_id": practice_doc["_id"]},
                 {"$set": {"identity_verification": identity, "updated_at": now}},
@@ -1509,7 +1670,7 @@ def register_face(current_user, session_id):
             else:
                 # The uploaded identity card is the reference identity. The
                 # live capture is similarity-scored against it by an LLM in
-                # the BACKGROUND (see _score_identity_async) — the interview
+                # the BACKGROUND (see _score_identity_async) â€” the interview
                 # always proceeds immediately for every account type, and the
                 # recruiter judges from the score. No blocking, no attempts.
                 card_doc = users_collection.find_one(
@@ -1557,7 +1718,7 @@ def register_face(current_user, session_id):
             # Persist identity state and activate the session
             interviews_collection.update_one(
                 {"_id": interview_doc["_id"]},
-                {"$set": {"identity_verification": identity, "status": "active", "updated_at": now}},
+                {"$set": {"identity_verification": identity, "updated_at": now}},
             )
             if interview_doc.get("application_id"):
                 try:
@@ -1577,9 +1738,12 @@ def register_face(current_user, session_id):
         # ndarray: DeepFace inside analyze_frame_for_proctoring does not accept
         # raw bytes, so the per-frame identity check needs the array form.
         live_sessions[session_id] = {
+            "owner_id": user_id,
+            "proctoring_config": owned_doc.get("proctoring_config") or {},
             "registered_face": decoded_image,
             "registered_face_np": face_service.decode_image(decoded_image),
-            "proctoring_score": 100,
+            "proctoring_score": None,
+            "analyzed_frames": 0,
             "infractions": {},
         }
 
@@ -1658,5 +1822,3 @@ def get_interview_face_image(current_user, session_id, kind):
         mimetype=content_type or "image/jpeg",
         headers={"Cache-Control": "private, max-age=300"},
     )
-
-

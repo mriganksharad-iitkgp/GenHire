@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify
-from flask_cors import cross_origin
 from middleware.auth_middleware import token_required
 from controllers.practice_controller import PracticeController
 from config.database import db_config
+from services.interview_flow_service import serialized_session, session_lock
 
 practice_bp = Blueprint('practice', __name__, url_prefix='/api/practice')
 
@@ -11,7 +11,6 @@ collections = db_config.get_collections()
 practice_controller = PracticeController(collections)
 
 @practice_bp.route('/start', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
 def start_practice_interview(current_user):
     """
@@ -46,20 +45,44 @@ def start_practice_interview(current_user):
     
     user_id = str(current_user['_id'])
     
-    result, status_code = practice_controller.start_practice(
-        user_id=user_id,
-        jd_file=jd_file,
-        role=role,
-        difficulty=difficulty,
-        cv_id=cv_id,  # Pass cv_id to controller
-        proctoring_enabled=proctoring_enabled,
-    )
+    import datetime
+    import uuid
+    from routes.interview_routes import _session_payload
+    with session_lock(f"practice-start:{user_id}"):
+        existing = collections['practice_sessions'].find_one({'user_id': user_id,
+            'status': {'$in': ['setup', 'active', 'finishing']}})
+        if existing:
+            if existing.get('role') != role or existing.get('difficulty') != difficulty:
+                return jsonify({'error': 'Finish or close your current practice interview before starting a different one.',
+                    'error_code': 'practice_in_progress', 'session_id': existing['session_id']}), 409
+            return jsonify(_session_payload(existing, practice_controller.interview_api.session_manager
+                if practice_controller.interview_api else None)), 200
+        lease_id = uuid.uuid4().hex
+        now = datetime.datetime.utcnow()
+        claimed = collections['users'].update_one({'_id': current_user['_id'],
+            '$or': [{'practice_start_lease': {'$exists': False}}, {'practice_start_lease.expires_at': {'$lt': now}}]},
+            {'$set': {'practice_start_lease': {'id': lease_id, 'expires_at': now + datetime.timedelta(minutes=2)}}})
+        if not claimed.modified_count:
+            return jsonify({'error': 'Your practice interview is already starting. Please retry in a moment.',
+                'error_code': 'practice_start_in_progress'}), 409
+        try:
+            existing = collections['practice_sessions'].find_one({'user_id': user_id,
+                'status': {'$in': ['setup', 'active', 'finishing']}})
+            if existing:
+                return jsonify(_session_payload(existing, practice_controller.interview_api.session_manager
+                    if practice_controller.interview_api else None)), 200
+            result, status_code = practice_controller.start_practice(
+                user_id=user_id, jd_file=jd_file, role=role, difficulty=difficulty,
+                cv_id=cv_id, proctoring_enabled=proctoring_enabled)
+        finally:
+            collections['users'].update_one({'_id': current_user['_id'], 'practice_start_lease.id': lease_id},
+                {'$unset': {'practice_start_lease': ''}})
     
     return jsonify(result), status_code
 
 @practice_bp.route('/<session_id>/answer', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
+@serialized_session
 def submit_practice_answer(current_user, session_id):
     """Submit an answer in a practice interview"""
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
@@ -70,7 +93,7 @@ def submit_practice_answer(current_user, session_id):
     question = data.get('question')
     answer = data.get('answer')
     
-    if not question or not answer:
+    if not question or answer is None:
         return jsonify({'error': 'Question and answer are required'}), 400
     
     user_id = str(current_user['_id'])
@@ -91,8 +114,8 @@ def submit_practice_answer(current_user, session_id):
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @practice_bp.route('/<session_id>/end', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
+@serialized_session
 def end_practice_interview(current_user, session_id):
     """End a practice interview session"""
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
@@ -115,7 +138,6 @@ def end_practice_interview(current_user, session_id):
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 @practice_bp.route('/history', methods=['GET', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
 def get_practice_history(current_user):
     """Get user's practice interview history"""
@@ -130,7 +152,6 @@ def get_practice_history(current_user):
     return jsonify(result), status_code
 
 @practice_bp.route('/<session_id>/report', methods=['GET', 'OPTIONS'])
-@cross_origin(origins=["http://localhost:3000", "http://127.0.0.1:3000"], supports_credentials=True)
 @token_required
 def get_practice_report(current_user, session_id):
     """Get detailed report for a specific practice interview"""

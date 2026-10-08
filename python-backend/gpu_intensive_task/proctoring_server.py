@@ -1,181 +1,139 @@
-import os
-import logging
-import warnings
-import base64
-import cv2
-import numpy as np
-import eventlet
-from flask import Flask, jsonify, request
-from flask_socketio import SocketIO
-from dotenv import load_dotenv
-from flask_cors import CORS
+"""Optional gaze worker. Candidate pairing/live scoring use the primary API.
+
+Kept for deployments using extra gaze plots. All streams are owner scoped;
+missing observations never become a default 100 score. Heavy gaze imports
+are lazy so a missing optional MediaPipe stack does not break server boot.
+"""
 import datetime
+import hmac
+import logging
+import os
+import sys
+from pathlib import Path
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_socketio import SocketIO, join_room
+from core.config import allowed_origins, flask_secret_key
+from security_check import decode_frame
+from services.proctoring_service import record_manual_violation
+from sockets.session_access import owner_session, session_record
+
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
-
-# Filter warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-from cheating_detection import ProctoringGazeDetector
-
-# Initialize Flask App
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "proctoring-secret-key")
-
-# Setup CORS
-CORS(app, resources={r"/*": {"origins": "*"}})
-
-# Setup SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-
-# State management
+app.config["SECRET_KEY"] = flask_secret_key()
+CORS(app, resources={r"/*": {"origins": allowed_origins()}})
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins(), async_mode="threading")
 proctoring_detectors = {}
 live_sessions = {}
+connections = {}
+PROCTORING_FOLDER = os.path.join(os.getenv("UPLOAD_FOLDER", "../uploads"), "proctoring")
 
-# Ensure directories exist
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "../uploads") # Adjust path relative to where this script runs usually
-PROCTORING_FOLDER = os.path.join(UPLOAD_FOLDER, "proctoring")
-os.makedirs(PROCTORING_FOLDER, exist_ok=True)
 
-@app.route("/", methods=["GET"])
+@app.get("/")
 def health_check():
-    return jsonify({"status": "Proctoring Server Running", "service": "gpu-intensive-task"}), 200
+    return jsonify({"status": "running", "service": "optional-gaze-worker", "mobile_pairing": "primary-api"})
+
 
 @socketio.on("connect")
-def handle_connect():
-    logger.info(f"Client connected: {request.sid}")
+def handle_connect(auth=None):
+    from middleware.auth_middleware import decode_user_from_token
+    user, error = decode_user_from_token((auth or {}).get("token"))
+    if error:
+        return False
+    connections[request.sid] = {"user_id": str(user["_id"])}
+
 
 @socketio.on("disconnect")
-def handle_disconnect():
-    logger.info(f"Client disconnected: {request.sid}")
-    # Cleanup logic if needed, but usually we keep session state for a bit?
-    # For now, simplistic cleanup could happen here if we mapped sid to session_id effectively.
-    pass
+def handle_disconnect(reason=None):
+    connections.pop(request.sid, None)
+
 
 @socketio.on("start_proctoring")
 def handle_start_proctoring(data):
-    session_id = data.get("session_id")
-    if not session_id:
-        return
-    
-    logger.info(f"Starting proctoring for session: {session_id}")
-    
-    # Initialize session data if not exists (it might be initialized via API later/concurrently)
-    if session_id not in live_sessions:
-        live_sessions[session_id] = {
-            "proctoring_score": 100,
-            "manual_infractions": [],
-            "gaze_times": {"Left": 0, "Center": 0, "Right": 0}
-        }
-    
-    # Initialize detector
+    if not isinstance(data, dict):
+        return {"ok": False}
+    context = connections.get(request.sid) or {}
+    collection, doc = owner_session(data.get("session_id"), context.get("user_id"))
+    if not doc or doc.get("status") != "active":
+        return {"ok": False, "error_code": "unauthorized_session"}
+    session_id = data["session_id"]
     if session_id not in proctoring_detectors:
-        proctoring_detectors[session_id] = ProctoringGazeDetector()
-    
-    live_sessions[session_id]["connected"] = True
+        try:
+            from gpu_intensive_task.cheating_detection import ProctoringGazeDetector
+            proctoring_detectors[session_id] = ProctoringGazeDetector()
+        except Exception as exc:
+            logger.warning("Optional gaze model unavailable: %s", type(exc).__name__)
+            return {"ok": False, "error_code": "gaze_detector_unavailable"}
+    context["session_id"] = session_id
+    live_sessions.setdefault(session_id, {"analyzed_frames": 0, "infractions": {}, "events": [], "owner_id": context["user_id"]})
+    live_sessions[session_id]["monitoring"] = True
+    join_room(session_id)
+    return {"ok": True}
+
 
 @socketio.on("proctoring_frame")
 def handle_proctoring_frame(data):
+    if not isinstance(data, dict):
+        return {"ok": False}
     session_id = data.get("session_id")
-    if not session_id or session_id not in proctoring_detectors:
-        return
-
-    detector = proctoring_detectors[session_id]
-    session_data = live_sessions.get(session_id)
-    
+    context = connections.get(request.sid) or {}
+    state = live_sessions.get(session_id) or {}
+    if context.get("session_id") != session_id or not state.get("monitoring"):
+        return {"ok": False, "error_code": "unauthorized_session"}
     try:
-        header, encoded = data["image"].split(",", 1)
-        frame = cv2.imdecode(
-            np.frombuffer(base64.b64decode(encoded), np.uint8), cv2.IMREAD_COLOR
-        )
-        
-        # Process frame
-        analysis_result = detector.process_frame(frame)
-        
-        # Update session state
-        if session_data:
-            session_data["gaze_times"] = analysis_result["gaze_times"]
+        result = proctoring_detectors[session_id].process_frame(decode_frame(data.get("image")))
+        state["analyzed_frames"] += 1
+        state["gaze_times"] = result["gaze_times"]
+        socketio.emit("gaze_data", {"session_id": session_id, **result}, room=session_id)
+        return {"ok": True}
+    except Exception as exc:
+        logger.warning("Gaze analysis unavailable: %s", type(exc).__name__)
+        return {"ok": False, "error_code": "analysis_unavailable"}
 
-        # Emit back results
-        socketio.emit(
-            "gaze_data",
-            {
-                "session_id": session_id,
-                "is_cheating_alert": analysis_result["is_cheating_alert"],
-                "gaze_direction": analysis_result["gaze_direction"],
-                "gaze_times": analysis_result["gaze_times"],
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error processing frame for session {session_id}: {e}")
 
 @socketio.on("proctoring_violation")
 def handle_proctoring_violation(data):
-    session_id = data.get("session_id")
-    violation_type = data.get("type")
-    
-    if not session_id or session_id not in live_sessions:
-        return
-        
-    session_data = live_sessions[session_id]
-    
-    # Log infraction
-    timestamp = datetime.datetime.utcnow().isoformat()
-    infraction = {"type": violation_type, "timestamp": timestamp}
-    
-    if "manual_infractions" not in session_data:
-        session_data["manual_infractions"] = []
-    
-    session_data["manual_infractions"].append(infraction)
-    
-    # Deduct score
-    session_data["proctoring_score"] = max(
-        0, session_data.get("proctoring_score", 100) - 5
-    )
-    
-    logger.info(f"Violation recorded for {session_id}: {violation_type}")
+    if not isinstance(data, dict):
+        return {"ok": False}
+    context = connections.get(request.sid) or {}
+    state = live_sessions.get(data.get("session_id")) or {}
+    if context.get("session_id") != data.get("session_id") or not state.get("monitoring"):
+        return {"ok": False, "error_code": "unauthorized_session"}
+    return {"ok": bool(record_manual_violation(state, data.get("type")))}
 
-# Internal API for the main app to fetch stats when interview ends
-@app.route("/api/session/<session_id>/stats", methods=["GET"])
+
+@app.get("/api/session/<session_id>/stats")
 def get_session_stats(session_id):
-    session_data = live_sessions.get(session_id, {})
-    detector = proctoring_detectors.get(session_id)
-    
-    # Prepare stats
+    internal_key = os.getenv("PROCTORING_SERVICE_TOKEN")
+    provided_key = request.headers.get("X-Proctoring-Service-Token", "")
+    internal = bool(internal_key and hmac.compare_digest(internal_key, provided_key))
+    if not internal:
+        from middleware.auth_middleware import decode_user_from_token
+        user, error = decode_user_from_token(request.headers.get("Authorization"))
+        collection, doc = session_record(session_id)
+        if error or not doc or str(doc.get("user_id")) != str(user["_id"]):
+            return jsonify({"error": "Unauthorized session"}), 403
+    state = live_sessions.get(session_id)
+    if not state:
+        return jsonify({"proctoring_score": None, "proctoring_status": "incomplete", "analyzed_frames": 0}), 404
     stats = {
-        "manual_infractions": session_data.get("manual_infractions", []),
-        "proctoring_score": session_data.get("proctoring_score", 100),
-        "gaze_times": None
+        "proctoring_score": state.get("proctoring_score", 100) if state.get("analyzed_frames", 0) else None,
+        "proctoring_status": "partial" if state.get("analyzed_frames", 0) else "incomplete",
+        "analyzed_frames": state.get("analyzed_frames", 0), "gaze_times": state.get("gaze_times"),
+        "infractions": state.get("infractions", {}),
     }
-    
-    if detector:
-        stats["gaze_times"] = detector.gaze_tracker.get_times()
-        
-        # Generate plot if needed
+    detector = proctoring_detectors.get(session_id)
+    if detector and state.get("analyzed_frames", 0):
+        filename = f"{session_id}_gaze_plot.png"
         try:
-            plot_filename = f"{session_id}_gaze_plot.png"
-            detector.generate_gaze_plot(
-                output_dir=PROCTORING_FOLDER, 
-                filename=plot_filename
-            )
-            # Return path relative to what the main app expects? 
-            # Or just filename. Main app knows PROCTORING_FOLDER.
-            stats["gaze_plot_filename"] = plot_filename
-        except Exception as e:
-            logger.error(f"Failed to generate plot: {e}")
-            
-    # Cleanup session (optional, or wait for explicit end command)
-    # proctoring_detectors.pop(session_id, None)
-    # live_sessions.pop(session_id, None)
-    
+            detector.generate_gaze_plot(output_dir=PROCTORING_FOLDER, filename=filename)
+            stats["gaze_plot_filename"] = filename
+        except Exception as exc:
+            logger.warning("Gaze plot failed: %s", type(exc).__name__)
     return jsonify(stats)
 
+
 if __name__ == "__main__":
-    logger.info("Starting Proctoring Server on port 5001...")
-    socketio.run(app, debug=True, port=5001, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=False, port=5001)

@@ -7,6 +7,21 @@ here opportunistically as their modules get touched.
 """
 
 import os
+import re
+from urllib.parse import urlsplit
+
+KIOSK_ORIGIN_PATTERN = re.compile(r"^http://(?:localhost|127\.0\.0\.1):[0-9]{1,5}$")
+
+
+def origin_is_allowed(origin, environ=None):
+    if origin in allowed_origins():
+        return True
+    if not isinstance(origin, str) or not KIOSK_ORIGIN_PATTERN.fullmatch(origin):
+        return False
+    try:
+        return 0 < urlsplit(origin).port < 65536
+    except ValueError:
+        return False
 
 
 def flask_env() -> str:

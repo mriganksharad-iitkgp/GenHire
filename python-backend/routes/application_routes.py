@@ -345,8 +345,11 @@ def update_interview_score(current_user, application_id):
 # Debug endpoints
 @application_bp.route('/debug/applications', methods=['GET'])
 @cross_origin()
-def debug_applications():
+@token_required
+def debug_applications(current_user):
     """Debug endpoint to see what applications exist"""
+    if current_user.get('user_type') != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
     applications = list(collections['applications'].find({}))
     for app in applications:
         app['_id'] = str(app['_id'])

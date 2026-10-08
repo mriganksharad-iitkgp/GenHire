@@ -2,17 +2,16 @@ const { app, BrowserWindow, globalShortcut, Menu, ipcMain, shell, dialog, screen
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const { resolvePublicFile, validWebUrl, parseInitialization } = require('./runtime-security');
 
 // Speech requests are proxied through the authenticated GenHire backend.
 // Provider credentials never leave the server.
 let backendSession = { apiUrl: null, token: null };
+let pendingInitialization = null;
+let rendererReady = false;
 function captureBackendSession(initData) {
-    try {
-        const payload = JSON.parse(Buffer.from(initData, 'base64').toString('utf-8'));
-        if (payload && payload.apiUrl && payload.token) {
-            backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token };
-        }
-    } catch (e) { console.warn('Could not parse deep-link session payload:', e.message); }
+    const payload = parseInitialization(initData);
+    backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token };
 }
 
 let KIOSK_HTTP_PORT = 0; // Set to 0 to auto-assign a free port to prevent EADDRINUSE
@@ -41,15 +40,19 @@ if (process.defaultApp) {
 function handleDeepLink(url) {
     try {
         const urlObj = new URL(url);
+        if (urlObj.protocol !== 'secure-interview:') return;
+        if (isKioskActive) return; // Preserve the current interview's credentials while the interview is active.
         const initData = urlObj.searchParams.get('initData');
         if (initData) {
             captureBackendSession(initData);
+            pendingInitialization = initData;
         }
-        if (initData && mainWindow && !mainWindow.isDestroyed()) {
+        if (initData && rendererReady && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('init-from-deeplink', initData);
         }
     } catch (e) {
-        console.error("Failed to parse deep link URL:", url, e);
+        // Launch links contain credentials: never log the URL or payload.
+        console.error('Invalid interview launch link:', e.message);
     }
 }
 
@@ -72,11 +75,7 @@ if (!gotTheLock) {
 // macOS deep link handling
 app.on('open-url', (event, url) => {
     event.preventDefault();
-    if (app.isReady()) {
-        handleDeepLink(url);
-    } else {
-        app.once('ready', () => handleDeepLink(url));
-    }
+    handleDeepLink(url);
 });
 // ----------------------------------------------------
 
@@ -85,9 +84,14 @@ ipcMain.on('quit-app', () => {
     app.quit();
 });
 
+ipcMain.handle('renderer-ready', () => {
+    rendererReady = true;
+    return pendingInitialization;
+});
+
 // Open URL in default browser (for returning to GenHire dashboard)
 ipcMain.on('open-external', (event, url) => {
-    if (url && typeof url === 'string') {
+    if (typeof url === 'string' && validWebUrl(url)) {
         shell.openExternal(url).catch(err => {
             console.error('Failed to open external URL:', err);
         });
@@ -122,6 +126,7 @@ ipcMain.handle('synthesize-speech', async (event, text) => {
                     'Authorization': `Bearer ${backendSession.token}`,
                 },
                 body: JSON.stringify({ text, voice_name: voiceName, language_code: 'en-US' }),
+                signal: AbortSignal.timeout(6000),
             });
             if (!response.ok) {
                 const body = await response.json().catch(() => ({}));
@@ -147,7 +152,7 @@ ipcMain.handle('transcribe-audio', async (event, { audioBase64, sessionId }) => 
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + backendSession.token },
         body: JSON.stringify({ audio_base64: audioBase64, encoding: 'WEBM_OPUS',
                                language_code: 'en-US', session_id: sessionId }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(12000),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Transcription failed');
@@ -244,6 +249,7 @@ function blockInputHandler(event, input) {
 }
 
 function createWindow() {
+    rendererReady = false;
     // Start as a normal maximized window (NOT kiosk)
     mainWindow = new BrowserWindow({
         title: 'Genhire',
@@ -258,7 +264,8 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
-            webSecurity: false // Allow cross-origin requests from file:// to localhost API
+            webSecurity: true,
+            sandbox: true,
         }
     });
 
@@ -267,14 +274,20 @@ function createWindow() {
 
     // Auto-grant media permissions
     mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-        if (permission === 'media') return true;
+        if (permission === 'media' && requestingOrigin === `http://localhost:${KIOSK_HTTP_PORT}`) return true;
         return false;
     });
 
     mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
-        if (permission === 'media') callback(true);
+        if (permission === 'media' && details.requestingUrl?.startsWith(`http://localhost:${KIOSK_HTTP_PORT}/`)) callback(true);
         else callback(false);
     });
+
+    // Only the local, bundled UI can access the preload API.
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (new URL(url).origin !== `http://localhost:${KIOSK_HTTP_PORT}`) event.preventDefault();
+    });
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
     mainWindow.loadURL(`http://localhost:${KIOSK_HTTP_PORT}/index.html`);
 
@@ -313,9 +326,10 @@ app.whenReady().then(() => {
     };
 
     const server = http.createServer((req, res) => {
-        let filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
-        // Remove query strings if any
-        if (filePath.includes('?')) filePath = filePath.split('?')[0];
+        const filePath = resolvePublicFile(__dirname, req.url);
+        if (!['GET', 'HEAD'].includes(req.method) || !filePath) {
+            res.writeHead(404); res.end('Not Found'); return;
+        }
 
         const ext = path.extname(filePath).toLowerCase();
         const contentType = mimeTypes[ext] || 'application/octet-stream';
@@ -326,23 +340,21 @@ app.whenReady().then(() => {
                 res.end('Not Found');
                 return;
             }
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(data);
+            res.writeHead(200, {
+                'Content-Type': contentType,
+                'X-Content-Type-Options': 'nosniff',
+                'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            });
+            res.end(req.method === 'HEAD' ? undefined : data);
         });
     });
 
     server.listen(0, '127.0.0.1', () => {
         KIOSK_HTTP_PORT = server.address().port;
         console.log(`✅ Kiosk HTTP server running on http://localhost:${KIOSK_HTTP_PORT}`);
+        const url = process.argv.find(arg => arg.startsWith('secure-interview://'));
+        if (url) handleDeepLink(url);
         createWindow();
-
-        // Handle deep link passed as arg on initial launch
-        mainWindow.webContents.once('did-finish-load', () => {
-            const url = process.argv.find(arg => arg.startsWith('secure-interview://'));
-            if (url) {
-                handleDeepLink(url);
-            }
-        });
     });
 
     app.on('activate', function () {

@@ -95,6 +95,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
       eyeball_tracking: true,
       gaze_heatmap: true,
       ai_detection: false,
+      dual_camera: false,
     }
   });
 
@@ -136,13 +137,14 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
         requirements: toString(initialJobData.requirements),
         benefits: toString(initialJobData.benefits),
         status: initialJobData.status || 'draft',
-        minimum_cv_score: initialJobData?.minimum_cv_score || 50,
+        minimum_cv_score: initialJobData?.minimum_cv_score ?? 50,
         proctoring_config: initialJobData?.proctoring_config || {
           voice_detection: true,
           object_detection: true,
           eyeball_tracking: true,
           gaze_heatmap: true,
           ai_detection: false,
+          dual_camera: false,
         }
       });
     }
@@ -562,6 +564,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                     Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
                 </div>
                 {[
+                  { key: 'dual_camera', label: 'Require laptop + mobile cameras', desc: 'Candidates pair a phone to show their workspace. Both cameras must be ready before the interview starts.', icon: '📱' },
                   { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
                   { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
                   { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
@@ -579,7 +582,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                     <label className={proctoringStyles.toggleSwitch}>
                       <input
                         type="checkbox"
-                        checked={jobData.proctoring_config?.[opt.key] ?? true}
+                        checked={jobData.proctoring_config?.[opt.key] ?? !['dual_camera', 'ai_detection'].includes(opt.key)}
                         onChange={(e) => setJobData(prev => ({
                           ...prev,
                           proctoring_config: {

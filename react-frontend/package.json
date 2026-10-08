@@ -22,6 +22,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
+    "build:kiosk": "vite build --config vite.kiosk.config.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
     "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15"

@@ -4,14 +4,29 @@ Rubrics Evaluation System
 A modular system for generating rubrics, evaluating answers, and creating test datasets.
 """
 
-from .config import Config
-from .rubric_generator import RubricGenerator
-from .answer_evaluator import AnswerEvaluator
-from .answer_generator import AnswerGenerator
-from .data_processor import DataProcessor
-from .visualization import VisualizationUtils
-from .communication_evaluator import CommunicationEvaluator
-from .evaluation_system import EvaluationSystem
+from importlib import import_module
+
+# Importing the cheap answer classifier must not initialize plotting, data
+# processing, or provider clients. Preserve the public class exports lazily.
+_EXPORTS = {
+    "Config": "config",
+    "RubricGenerator": "rubric_generator",
+    "AnswerEvaluator": "answer_evaluator",
+    "AnswerGenerator": "answer_generator",
+    "DataProcessor": "data_processor",
+    "VisualizationUtils": "visualization",
+    "CommunicationEvaluator": "communication_evaluator",
+    "EvaluationSystem": "evaluation_system",
+}
+
+
+def __getattr__(name):
+    module = _EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f".{module}", __name__), name)
+    globals()[name] = value
+    return value
 
 __version__ = "1.0.0"
 __author__ = "BTP Team"

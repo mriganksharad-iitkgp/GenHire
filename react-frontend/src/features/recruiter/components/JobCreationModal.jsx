@@ -161,6 +161,7 @@ const DEFAULT_PROCTORING_CONFIG = {
   eyeball_tracking: true,
   gaze_heatmap: true,
   ai_detection: false,
+  dual_camera: false,
 };
 
 const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
@@ -295,7 +296,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
         gaze_proctoring: false,
         proctoring_config: {
           ...DEFAULT_PROCTORING_CONFIG,
-          ...(ai.proctoring_config || {})
+          ...(jobData.proctoring_config || {})
         }
       });
       setAiPrompt('');
@@ -886,6 +887,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                   Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
                 </div>
                 {[
+                  { key: 'dual_camera', label: 'Require laptop + mobile cameras', desc: 'Candidates pair a phone to show their workspace. Both cameras must be ready before the interview starts.', icon: '📱' },
                   { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
                   { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
                   { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
@@ -903,7 +905,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     <label className={styles.toggleSwitch}>
                       <input
                         type="checkbox"
-                        checked={jobData.proctoring_config?.[opt.key] ?? true}
+                        checked={jobData.proctoring_config?.[opt.key] ?? DEFAULT_PROCTORING_CONFIG[opt.key]}
                         onChange={(e) => setJobData(prev => ({
                           ...prev,
                           proctoring_config: {

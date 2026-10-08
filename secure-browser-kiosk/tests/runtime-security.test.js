@@ -1,0 +1,18 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { resolvePublicFile, parseInitialization, validWebUrl } = require('../runtime-security');
+test('only the bundled UI and hashed assets are public', () => {
+  const root = path.resolve('kiosk');
+  assert.equal(resolvePublicFile(root, '/'), path.join(root, 'web-app', 'index.html'));
+  assert.equal(resolvePublicFile(root, '/assets/index-abc123.js?x=1'), path.join(root, 'web-app', 'assets', 'index-abc123.js'));
+  for (const url of ['/main.js', '/preload.js', '/credentials.json', '/assets/../main.js', '/assets/%2e%2e/main.js', '/%zz', '/node_modules/socket.io-client/dist/socket.io.min.js']) assert.equal(resolvePublicFile(root, url), null, url);
+});
+test('launches require credentials and safe API/dashboard addresses', () => {
+  const payload = { token: 'test-token', applicationId: 'application', apiUrl: 'https://api.example.com', webOrigin: 'https://app.example.com' };
+  const encode = (p) => Buffer.from(JSON.stringify(p)).toString('base64');
+  assert.deepEqual(parseInitialization(encode(payload)), payload);
+  for (const apiUrl of ['http://public.example.com', 'file:///tmp', 'https://user:pass@example.com']) assert.throws(() => parseInitialization(encode({ ...payload, apiUrl })));
+  assert.throws(() => parseInitialization(encode({ ...payload, webOrigin: '' })));
+  assert.equal(validWebUrl('http://localhost:3000'), true);
+});

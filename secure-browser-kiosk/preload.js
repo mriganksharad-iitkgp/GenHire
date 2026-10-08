@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('init-from-deeplink');
         ipcRenderer.on('init-from-deeplink', callback);
     },
+    rendererReady: () => ipcRenderer.invoke('renderer-ready'),
     
     // Backend speech APIs: Google Standard TTS and Groq STT
     synthesizeSpeech: (text) => ipcRenderer.invoke('synthesize-speech', text),

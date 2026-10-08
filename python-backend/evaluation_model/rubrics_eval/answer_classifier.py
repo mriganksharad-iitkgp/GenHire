@@ -13,6 +13,7 @@ communication_evaluator.py).
 """
 
 from typing import Optional, Tuple, TypedDict
+import re
 
 try:
     from langdetect import detect, DetectorFactory, LangDetectException
@@ -69,7 +70,11 @@ class AnswerClassification(TypedDict):
 def _looks_like_non_answer(normalized: str) -> bool:
     if len(normalized) > _NON_ANSWER_MAX_LENGTH:
         return False
-    return any(phrase in normalized for phrase in _NON_ANSWER_PHRASES)
+    # "pass data", "skip null rows" and "not sure, but ..." are attempted
+    # answers. A substring such as "pass" must never classify them as junk.
+    normalized = re.sub(r"^(?:sorry|well|um|uh)[,\s]+", "", normalized)
+    normalized = normalized.strip(" .,!?:;")
+    return normalized in _NON_ANSWER_PHRASES
 
 
 def _looks_like_gibberish(text: str) -> bool:
@@ -87,8 +92,8 @@ def _looks_like_gibberish(text: str) -> bool:
     # English words/sentences.
     longest_run = 0
     current_run = 0
-    for c in letters:
-        if c in _VOWELS:
+    for c in text.lower():
+        if not c.isalpha() or c in _VOWELS:
             current_run = 0
         else:
             current_run += 1

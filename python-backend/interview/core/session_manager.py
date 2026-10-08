@@ -8,7 +8,10 @@ import sys
 import os
 import time
 import logging
+import math
+from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict, field
 import threading
@@ -32,6 +35,20 @@ from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
 
 logger = logging.getLogger(__name__)
+_EVALUATION_SLOTS = threading.BoundedSemaphore(8)
+
+
+def _plain_metadata(value):
+    """Question metadata is stored in MongoDB and returned as JSON."""
+    if hasattr(value, "__dataclass_fields__"):
+        value = asdict(value)
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {key: _plain_metadata(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_metadata(item) for item in value]
+    return value
 
 
 @dataclass
@@ -57,6 +74,11 @@ class InterviewSession:
     # Set when the interview is force-ended after exhausting LLM retries, so the
     # recruiter's report can distinguish "candidate disengaged" from "we broke".
     ended_early_reason: Optional[str] = None
+    question_generator: Optional[Any] = None
+    answer_lock: Any = field(default_factory=threading.RLock, repr=False)
+    evaluation_events: List[Any] = field(default_factory=list, repr=False)
+    activated_at: Optional[float] = None
+    final_evaluation: Optional[Dict[str, Any]] = None
 
 
 class InterviewSessionManager:
@@ -169,7 +191,20 @@ class InterviewSessionManager:
                 if not all(validation.values()):
                     return {"error": "Document validation failed", "validation": validation}
 
-            # Hardcoded first question for zero-lag initialization
+            # Each candidate owns mutable role banks, CV data and source metadata.
+            # Sharing this generator let a concurrent session replace another CV.
+            generator = QuestionGenerator(self.llm, config=self.config)
+            conversation_context = generator.initialize_conversation(
+                document_loader.get_cv_sections(), document_loader.get_jd_text(), use_llm=False
+            )
+            conversation_context.has_been_greeted = True
+            conversation_context.interview_phase = (
+                InterviewPhase.EXPERIENTIAL_QUESTIONS
+                if self.config.include_experiential_questions
+                else InterviewPhase.TECHNICAL_QUESTIONS
+            )
+
+            # Deterministic first question; no provider calls are on the startup path.
             first_question = "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
             first_metadata = {
                 "intent": "ICEBREAKER",
@@ -187,24 +222,18 @@ class InterviewSessionManager:
                 cv_path=cv_path,
                 jd_path=jd_path,
                 reference_paths=reference_paths,
-                conversation_context=None,
+                conversation_context=conversation_context,
                 current_question=first_question,
                 current_question_metadata=first_metadata,
                 proctoring_config=proctoring_config or {},
                 init_event=threading.Event(),
-                question_served_at=time.time(),
+                question_served_at=None,
+                question_generator=generator,
             )
 
             self.sessions[session_id] = session
 
-            # Start background thread to build context.
-            # Pass the already-created loader so the thread reuses the text
-            # that was already read from disk — no second file read needed.
-            threading.Thread(
-                target=self._initialize_context_background,
-                args=(session_id, document_loader),
-                daemon=True
-            ).start()
+            session.init_event.set()
 
             return {
                 "session_id": session_id,
@@ -216,7 +245,8 @@ class InterviewSessionManager:
                     "interview_phase": "INTRODUCTION",
                 },
                 "question_timeout_seconds": self.config.question_timeout_seconds,
-                "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
+                "question_deadline": None,
+                "setup_required": True,
                 # Single source of truth for the client's question counter —
                 # the frontend previously hardcoded its own copy of this.
                 "max_questions": self.config.max_questions,
@@ -241,8 +271,8 @@ class InterviewSessionManager:
             resume_sections = document_loader.get_cv_sections()
             job_description = document_loader.get_jd_text()
 
-            conversation_context = self.question_generator.initialize_conversation(
-                resume_sections, job_description
+            conversation_context = (session.question_generator or self.question_generator).initialize_conversation(
+                resume_sections, job_description, use_llm=False
             )
             # The hardcoded first question already serves as the greeting, so skip
             # the GREETING phase in the question generator to prevent a second greeting.
@@ -258,6 +288,41 @@ class InterviewSessionManager:
     def submit_answer(
         self, session_id: str, question: str, answer: str
     ) -> Dict[str, Any]:
+        session = self._get_session(session_id)
+        if not session:
+            return {"error": "Session not found"}
+        if not session.answer_lock.acquire(blocking=False):
+            return {"error": "An answer is already being processed", "error_code": "answer_in_progress"}
+        try:
+            if session.current_question and question.strip() != session.current_question.strip():
+                return {"error": "This question has already been answered. Refresh the current question before retrying.", "error_code": "stale_question", "current_question": session.current_question}
+            return self._submit_answer_locked(session_id, question, answer)
+        finally:
+            session.answer_lock.release()
+
+    def activate_session(self, session_id: str) -> Dict[str, Any]:
+        """Start pacing after device, identity and optional mobile checks finish."""
+        session = self._get_session(session_id)
+        if not session:
+            return {"error": "Session not found"}
+        with session.answer_lock:
+            if session.is_complete:
+                return {"error": "Interview is already complete"}
+            if session.activated_at is None:
+                session.activated_at = time.time()
+                session.question_served_at = session.activated_at
+            return {
+                "session_id": session_id,
+                "status": "active",
+                "first_question": session.current_question,
+                "question_timeout_seconds": self.config.question_timeout_seconds,
+                "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
+                "max_questions": self.config.max_questions,
+            }
+
+    def _submit_answer_locked(
+        self, session_id: str, question: str, answer: str
+    ) -> Dict[str, Any]:
         """Submit an answer and get evaluation/next question using natural conversation flow."""
         session = self._get_session(session_id)
         if not session:
@@ -271,9 +336,8 @@ class InterviewSessionManager:
         # answer to the previous question, and both question counters still
         # advance even though nothing new was actually asked.
         if (
-            session.conversation_context is not None
-            and session.current_question
-            and self.question_generator.user_requested_repeat(answer)
+            session.current_question
+            and (session.question_generator or self.question_generator).user_requested_repeat(answer)
         ):
             session.question_served_at = time.time()
             return {
@@ -281,11 +345,7 @@ class InterviewSessionManager:
                 "current_evaluation": None,
                 "repeated_question": True,
                 "next_question": session.current_question,
-                "question_metadata": (
-                    asdict(session.current_question_metadata)
-                    if hasattr(session.current_question_metadata, "__dataclass_fields__")
-                    else session.current_question_metadata
-                ) if session.current_question_metadata else None,
+                "question_metadata": _plain_metadata(session.current_question_metadata),
                 "conversation_context": {
                     "current_topic": session.conversation_context.current_topic,
                     "depth_level": session.conversation_context.depth_level.value,
@@ -337,11 +397,13 @@ class InterviewSessionManager:
                 try:
                     with ThreadPoolExecutor(max_workers=2) as evaluator_pool:
                         technical_future = evaluator_pool.submit(
+                            copy_context().run,
                             self.evaluation_system.evaluate_single_answer_fast,
                             question,
                             answer,
                         )
                         communication_future = evaluator_pool.submit(
+                            copy_context().run,
                             self.evaluation_system.evaluate_communication_score,
                             question,
                             answer,
@@ -358,10 +420,6 @@ class InterviewSessionManager:
                     logger.error(f"Evaluation failed [session={session_id}]: {e}", exc_info=True)
                     return provisional_evaluation
 
-            # Wait for background initialization if it's still running
-            if getattr(session, 'init_event', None):
-                session.init_event.wait(timeout=45.0)
-
             # Generate next question using natural conversation flow
             if session.conversation_context is None:
                 return {"error": "Conversation context not initialized"}
@@ -369,8 +427,12 @@ class InterviewSessionManager:
             # live path. Use the provisional score for adaptive topic selection.
 
             evaluation = provisional_evaluation.copy()
+            evaluation["evaluation_status"] = "complete" if answer_is_junk else "pending"
+            completed_evaluation = threading.Event()
+            session.evaluation_events.append(completed_evaluation)
 
             def bg_evaluate_and_update():
+                eval_token = CostTracker().set_session_context(session_id)
                 try:
                     eval_result = evaluate_answer()
                     evaluation.update(eval_result)
@@ -385,22 +447,36 @@ class InterviewSessionManager:
                         evaluation["ai_detection_raw"] = ai_result.get("raw_response") if ai_result else None
                 except Exception as e:
                     logger.error(f"Background evaluation failed [session={session_id}]: {e}", exc_info=True)
+                finally:
+                    evaluation["evaluation_status"] = (
+                        "complete" if evaluation.get("evaluation_method", "").startswith("rubrics-eval") else "unavailable"
+                    )
+                    completed_evaluation.set()
+                    CostTracker().clear_session_context(eval_token)
+                    _EVALUATION_SLOTS.release()
 
             # Skip the (two-LLM-call) background evaluation entirely for
             # pre-classified junk — there's nothing useful for the LLM to score,
             # and the deterministic provisional_evaluation above is already final.
             if not answer_is_junk:
-                threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
+                if _EVALUATION_SLOTS.acquire(blocking=False):
+                    threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
+                else:
+                    evaluation["evaluation_status"] = "unavailable"
+                    evaluation["reasoning"] = "Evaluation capacity was temporarily unavailable; this answer needs review."
+                    completed_evaluation.set()
+            else:
+                completed_evaluation.set()
 
             # Generate next question using natural conversation flow. Retry the
             # whole provider set a couple of times before giving up — a single
             # failure here previously ended the interview immediately even
             # though it may have been a transient blip across all providers.
             next_question, next_metadata, generation_error = None, None, None
-            MAX_QUESTION_GEN_RETRIES = 3
+            MAX_QUESTION_GEN_RETRIES = 0 if session.questions_asked + 1 >= self.config.max_questions else 1
             for attempt in range(MAX_QUESTION_GEN_RETRIES):
                 try:
-                    next_question, next_metadata = self.question_generator.get_next_question(
+                    next_question, next_metadata = (session.question_generator or self.question_generator).get_next_question(
                         session.conversation_context,
                         answer,
                         provisional_evaluation,
@@ -435,7 +511,7 @@ class InterviewSessionManager:
                         "question": question,
                         "answer": answer,
                         "evaluation": evaluation,
-                        "question_metadata": None,
+                        "question_metadata": _plain_metadata(session.current_question_metadata),
                         "timestamp": self._get_timestamp(),
                     }
                 )
@@ -456,17 +532,15 @@ class InterviewSessionManager:
             # logic (technical -> HR -> closing) and this termination check must
             # never be able to drift apart.
             session.questions_asked = session.conversation_context.question_count
+            if MAX_QUESTION_GEN_RETRIES == 0:
+                session.questions_asked += 1
             session.question_served_at = time.time()
             session.interview_data.append(
                 {
                     "question": question,
                     "answer": answer,
                     "evaluation": evaluation,
-                    "question_metadata": (
-                        asdict(session.current_question_metadata)
-                        if hasattr(session.current_question_metadata, "__dataclass_fields__")
-                        else session.current_question_metadata
-                    ) if session.current_question_metadata else None,
+                    "question_metadata": _plain_metadata(session.current_question_metadata),
                     "timestamp": self._get_timestamp(),
                 }
             )
@@ -495,7 +569,7 @@ class InterviewSessionManager:
                     "interview_complete": False,
                     "current_evaluation": evaluation,  # evaluation is already a dict
                     "next_question": next_question,
-                    "question_metadata": asdict(next_metadata) if hasattr(next_metadata, "__dataclass_fields__") else next_metadata,
+                    "question_metadata": _plain_metadata(next_metadata),
                     "conversation_context": {
                         "current_topic": (
                             session.conversation_context.current_topic
@@ -599,11 +673,7 @@ class InterviewSessionManager:
 
         return {
             "question": session.current_question,
-            "question_metadata": (
-                asdict(session.current_question_metadata)
-                if hasattr(session.current_question_metadata, "__dataclass_fields__")
-                else session.current_question_metadata
-            ) if session.current_question_metadata else None,
+            "question_metadata": _plain_metadata(session.current_question_metadata),
             "context": {
                 "current_topic": (
                     session.conversation_context.current_topic
@@ -635,8 +705,9 @@ class InterviewSessionManager:
         if not session:
             return {"error": "Session not found"}
 
-        session.is_complete = True
-        final_evaluation = self._generate_final_evaluation(session)
+        with session.answer_lock:
+            session.is_complete = True
+            final_evaluation = self._generate_final_evaluation(session)
 
         return {"session_ended": True, "final_evaluation": final_evaluation}
 
@@ -653,12 +724,10 @@ class InterviewSessionManager:
             return {"error": "No conversation data available"}
 
         # Analyze conversation patterns
-        answer_scores = [
-            item["evaluation"].get("answer_score", 0.0) for item in session.interview_data
-        ]
-        language_scores = [
-            item["evaluation"].get("language_score", 0.0) for item in session.interview_data
-        ]
+        verified = [item["evaluation"] for item in session.interview_data
+                    if item["evaluation"].get("evaluation_status") == "complete"]
+        answer_scores = [item.get("answer_score", 0.0) for item in verified]
+        language_scores = [item.get("language_score", 0.0) for item in verified]
         
         topics_explored = (
             session.conversation_context.topics_covered
@@ -691,8 +760,8 @@ class InterviewSessionManager:
                 else "unknown"
             ),
             "total_questions": session.questions_asked,
-            "average_answer_score": sum(answer_scores) / len(answer_scores) if answer_scores else 0,
-            "average_language_score": sum(language_scores) / len(language_scores) if language_scores else 0,
+            "average_answer_score": sum(answer_scores) / len(answer_scores) if answer_scores else None,
+            "average_language_score": sum(language_scores) / len(language_scores) if language_scores else None,
             "conversation_energy": (
                 session.conversation_context.conversation_energy
                 if session.conversation_context
@@ -706,23 +775,39 @@ class InterviewSessionManager:
 
     def _generate_final_evaluation(self, session: InterviewSession) -> Dict[str, Any]:
         """Generate comprehensive final evaluation."""
+        if session.final_evaluation is not None:
+            # A bounded finalization may precede the last evaluator. Rebuild
+            # only once evidence changed; do not freeze an unavailable result.
+            previous_pending = session.final_evaluation.get("pending_answers", 0)
+            still_pending = sum(item["evaluation"].get("evaluation_status") == "pending"
+                                for item in session.interview_data)
+            if not previous_pending or still_pending >= previous_pending:
+                return session.final_evaluation
         if not session.interview_data:
             return {"error": "No interview data available for evaluation"}
 
-        # Calculate aggregate scores
-        evaluations = [item["evaluation"] for item in session.interview_data]
+        # Do not persist a length-based placeholder while the last answer is
+        # still being scored. Share one wait budget across all answer workers.
+        wait_until = time.monotonic() + 5.0
+        for event in session.evaluation_events:
+            event.wait(max(0.0, wait_until - time.monotonic()))
+        all_evaluations = [dict(item["evaluation"]) for item in session.interview_data]
+        evaluations = [e for e in all_evaluations if e.get("evaluation_method") == "pre_classified"
+                       or (e.get("evaluation_method", "").startswith("rubrics-eval") and e.get("evaluation_status") != "pending")]
+        pending = sum(e.get("evaluation_status") == "pending" for e in all_evaluations)
+        score_status = "complete" if len(evaluations) == len(all_evaluations) else ("partial" if evaluations else "unavailable")
 
         avg_scores = {
             "answer_score": sum(
                 e.get("answer_score", e.get("technical_accuracy_score", 0))
                 for e in evaluations
             )
-            / len(evaluations),
+            / len(evaluations) if evaluations else None,
             "language_score": sum(
                 e.get("language_score", e.get("communication_score", 0))
                 for e in evaluations
             )
-            / len(evaluations),
+            / len(evaluations) if evaluations else None,
         }
 
         # Generate qualitative assessment
@@ -731,8 +816,9 @@ class InterviewSessionManager:
 
         Interview Data:
         - Questions asked: {session.questions_asked}
-        - Average Answer Score: {avg_scores['answer_score']:.2f} / 1.00
-        - Average Language Score: {avg_scores['language_score']:.2f} / 1.00
+        - Average Answer Score: {avg_scores['answer_score']} / 1.00
+        - Average Language Score: {avg_scores['language_score']} / 1.00
+        - Score coverage: {len(evaluations)} of {len(all_evaluations)} answers. Scoring status: {score_status}.
 
         Interview transcript:
         {session.interview_history}
@@ -755,21 +841,36 @@ class InterviewSessionManager:
         """
 
         try:
-            response = self.llm.complete(prompt)
+            if score_status != "complete":
+                raise RuntimeError("Answer evaluation is incomplete")
+            response = (session.question_generator or self.question_generator)._complete_llm(prompt)
             qualitative_assessment = response.text
         except Exception as e:
             logger.error(
                 f"Failed to generate qualitative assessment [session={session.session_id}]: {e}",
                 exc_info=True,
             )
-            qualitative_assessment = f"Error generating assessment: {e}"
+            qualitative_assessment = (
+                f"### Overall Assessment\n{session.questions_asked} answers were recorded. "
+                f"Verified rubric scores are available for {len(evaluations)} of {len(all_evaluations)} answers.\n\n"
+                "### Areas for Improvement\nReview the question and answer breakdown for specific feedback.\n\n"
+                "### Hiring Recommendation\nFurther Assessment Needed. The evaluation service did not produce a complete report."
+            )
 
-        return {
+        result = {
             "quantitative_scores": avg_scores,
             "qualitative_assessment": qualitative_assessment,
+            "score_status": score_status,
+            "scored_answers": len(evaluations),
+            "total_answers": len(all_evaluations),
+            "pending_answers": pending,
+            "per_question_evaluations": [
+                {"question": item["question"], "answer": item["answer"], "evaluation": evaluation}
+                for item, evaluation in zip(session.interview_data, all_evaluations)
+            ],
             "interview_metadata": {
                 "questions_asked": session.questions_asked,
-                "session_duration": "N/A",  # Could track actual duration
+                "session_duration": round(time.time() - session.activated_at, 1) if session.activated_at else 0,
                 "completion_status": (
                     "ended_early_technical_failure"
                     if session.ended_early_reason
@@ -778,6 +879,8 @@ class InterviewSessionManager:
                 "ended_early_reason": session.ended_early_reason,
             },
         }
+        session.final_evaluation = result
+        return result
 
     def _get_timestamp(self) -> str:
         """Get current timestamp."""
@@ -790,11 +893,7 @@ class InterviewSessionManager:
     ) -> Dict[str, Any]:
         """Convert single rubrics-eval score to the standard evaluation format."""
 
-        # Rubrics evaluation returns scores from 0-100, we need to normalize to 0-1
-        if score > 1.0:  # Assuming it's in 0-100 range
-            normalized_score = max(0.0, min(1.0, score / 100.0))
-        else:  # Already in 0-1 range
-            normalized_score = max(0.0, min(1.0, score))
+        normalized_score = self._normalize_rubric_score(score)
 
         # Generate basic reasoning based on score
         if normalized_score >= 0.8:
@@ -829,17 +928,8 @@ class InterviewSessionManager:
     ) -> Dict[str, Any]:
         """Convert technical and communication scores to the standard evaluation format."""
 
-        # Normalize technical score (rubrics evaluation returns 0-100)
-        if technical_score > 1.0:
-            technical_normalized = max(0.0, min(1.0, technical_score / 100.0))
-        else:
-            technical_normalized = max(0.0, min(1.0, technical_score))
-
-        # Normalize communication score (also 0-100)
-        if communication_score > 1.0:
-            communication_normalized = max(0.0, min(1.0, communication_score / 100.0))
-        else:
-            communication_normalized = max(0.0, min(1.0, communication_score))
+        technical_normalized = self._normalize_rubric_score(technical_score)
+        communication_normalized = self._normalize_rubric_score(communication_score)
 
         # Generate reasoning
         reasoning = f"Answer Score: {technical_score:.1f}/100, Language Score: {communication_score:.1f}/100"
@@ -854,6 +944,13 @@ class InterviewSessionManager:
             "reasoning": reasoning,
             "evaluation_method": "rubrics-eval-with-communication",
         }
+
+    @staticmethod
+    def _normalize_rubric_score(score):
+        # This provider's documented contract is always 0-100, including 1.
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
+            raise ValueError("Evaluator returned an invalid score")
+        return max(0.0, min(1.0, score / 100.0))
 
     def _fallback_evaluation(self, question: str, answer: str) -> Dict[str, Any]:
         """Provide a basic fallback evaluation when rubrics-eval is not available."""

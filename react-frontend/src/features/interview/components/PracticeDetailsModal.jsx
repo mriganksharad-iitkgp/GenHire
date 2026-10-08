@@ -111,7 +111,7 @@ const PracticeDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIc
                 <div className={styles.scoreInfo}>
                   <span className={styles.scoreLabel}>CV Match Score</span>
                   <div className={styles.scoreValue}>
-                    <span className={styles.scoreNumber}>{Math.round((session.cv_score || 0) * 100)}%</span>
+                    <span className={styles.scoreNumber}>{session.cv_score == null ? 'Unavailable' : `${Math.round(session.cv_score * 100)}%`}</span>
                     <div className={styles.scoreBar}>
                       <div 
                         className={styles.scoreBarFill} 
@@ -129,7 +129,7 @@ const PracticeDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIc
                 <div className={styles.scoreInfo}>
                   <span className={styles.scoreLabel}>Interview Performance</span>
                   <div className={styles.scoreValue}>
-                    <span className={styles.scoreNumber}>{session.interview_score || 0}%</span>
+                    <span className={styles.scoreNumber}>{session.interview_score == null ? 'Unavailable' : `${session.interview_score}%`}</span>
                     <div className={styles.scoreBar}>
                       <div 
                         className={styles.scoreBarFill} 
@@ -147,11 +147,11 @@ const PracticeDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIc
                 <div className={styles.scoreInfo}>
                   <span className={styles.scoreLabel}>Proctoring Score</span>
                   <div className={styles.scoreValue}>
-                    <span className={styles.scoreNumber}>{session.proctoring_score || 90}%</span>
+                    <span className={styles.scoreNumber}>{session.proctoring_score == null ? 'Unavailable' : `${session.proctoring_score}%`}</span>
                     <div className={styles.scoreBar}>
                       <div 
                         className={styles.scoreBarFill} 
-                        style={{ width: `${session.proctoring_score || 90}%`, background: '#f59e0b' }}
+                        style={{ width: `${session.proctoring_score ?? 0}%`, background: '#f59e0b' }}
                       ></div>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import os
 import uuid
+import threading
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from bson import ObjectId
@@ -14,6 +15,8 @@ from services.llm_fallback_service import default_model_for, get_provider_priori
 from services import interview_credit_service
 from payment_module.services.wallet_service import WalletService
 from payment_module.config.settings import PaymentConfig
+from services.interview_flow_service import percentage, result_payload, evaluation_percentage, cached_answer_result, schedule_evaluation_refresh, stop_companion
+from services.proctoring_service import build_proctoring_report
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ class PracticeController:
     def __init__(self, collections):
         self.collections = collections
         # Transient staging only (prompt .txt files the interview engine reads
-        # during a session) — rooted in the OS temp dir, never the app tree.
+        # during a session) â€” rooted in the OS temp dir, never the app tree.
         import tempfile
         self.upload_folder = os.path.join(tempfile.gettempdir(), "genhire_staging", "practice")
         self.cv_folder = os.path.join(self.upload_folder, "cv")
@@ -80,6 +83,19 @@ class PracticeController:
             self.interview_api = None
 
         self.wallet_service = WalletService(self.collections["users"].database)
+
+    def _score_cv_background(self, session_id, cv_text, jd_text):
+        from services.cv_scoring_service import CVScoringService
+        try:
+            result = CVScoringService().calculate_cv_score_from_text(cv_text, jd_text)
+            score = None if result.get("is_fallback") else percentage(result.get("total_score"))
+            update = {"cv_score": score / 100 if score is not None else None,
+                "similarity_score": score / 100 if score is not None else None,
+                "cv_score_status": "complete" if score is not None else "unavailable"}
+        except Exception:
+            logger.warning("Background practice CV scoring failed", exc_info=True)
+            update = {"cv_score": None, "cv_score_status": "unavailable"}
+        self.collections["practice_sessions"].update_one({"session_id": session_id}, {"$set": update})
 
     def start_practice(self, user_id, jd_file, role, difficulty, cv_id=None, proctoring_enabled=False):
         """
@@ -132,7 +148,7 @@ class PracticeController:
             cv_source = None
             selected_cv = None
 
-            # Priority order: Selected CV → Primary CV → Manual CV details
+            # Priority order: Selected CV â†’ Primary CV â†’ Manual CV details
             if cv_id:
                 # User explicitly selected a CV PDF
                 if self.cv_controller:
@@ -262,87 +278,18 @@ class PracticeController:
             )
 
             # Calculate CV score BEFORE starting interview (using CVScoringService - same as real applications)
-            cv_score = 75.0  # Default fallback score
-            try:
-                # Import CV service for scoring
-                from services.cv_scoring_service import CVScoringService
-
-                try:
-                    cv_service_for_scoring = CVScoringService()
-                except Exception as e:
-                    logger.warning(f"CVScoringService not available: {e}")
-                    cv_service_for_scoring = None
-
-                if cv_service_for_scoring:
-                    # Use CVScoringService for both PDF and profile CVs
-                    if cv_details:
-                        # Method 1: Use structured CV details (manual entry) with formatted JD
-                        logger.info(
-                            "Calculating CV score using AI with structured CV details"
-                        )
-                        job_data = {
-                            "title": self.role_names.get(
-                                role, role.replace("-", " ").title()
-                            ),
-                            "description": jd_text,
-                            "requirements": jd_text,
-                            "role": role,
-                        }
-                        scoring_result = cv_service_for_scoring.calculate_cv_score(
-                            cv_details, job_data
-                        )
-                        cv_score = scoring_result.get("total_score", 75.0)
-                        logger.info(
-                            f"CV score calculated using AI with structured data: {cv_score}%"
-                        )
-                    else:
-                        # Method 2: Use raw text (PDF CV) with AI-based text scoring
-                        logger.info(
-                            "Calculating CV score using AI with text-based analysis"
-                        )
-                        if (
-                            cv_text
-                            and jd_text
-                            and len(cv_text.strip()) > 0
-                            and len(jd_text.strip()) > 0
-                        ):
-                            scoring_result = (
-                                cv_service_for_scoring.calculate_cv_score_from_text(
-                                    cv_text, jd_text
-                                )
-                            )
-                            cv_score = scoring_result.get("total_score", 75.0)
-                            logger.info(
-                                f"CV score calculated using AI text analysis: {cv_score}%"
-                            )
-                        else:
-                            logger.warning(
-                                "CV or JD text is empty, using default score"
-                            )
-                            cv_score = 75.0
-                else:
-                    logger.warning(
-                        "CVScoringService not available, using default score"
-                    )
-                    cv_score = 75.0
-
-            except Exception as e:
-                logger.error(f"CV scoring failed, using default: {e}")
-                import traceback
-
-                traceback.print_exc()
-                cv_score = 75.0
-
-            # Convert to 0-1 range for storage (will be converted back to 0-100 for display)
-            if cv_score is None:
-                cv_score = 75.0
-            cv_score_normalized = cv_score / 100.0
+            # CV scoring runs after persistence, off the startup path.
+            cv_score = None
+            cv_score_normalized = None
 
             # Start interview session using the interview API
             session_result = self.interview_api.start_interview(
                 cv_file_path=cv_txt_path,
                 job_description_path=jd_txt_path,
                 reference_documents=[],
+                proctoring_config={"voice_detection": bool(proctoring_enabled),
+                    "object_detection": bool(proctoring_enabled), "eyeball_tracking": bool(proctoring_enabled),
+                    "gaze_heatmap": False, "ai_detection": False, "dual_camera": False},
             )
 
             if "error" in session_result:
@@ -376,7 +323,7 @@ class PracticeController:
 
             # Use pre-calculated CV score (normalized to 0-1 for storage)
             logger.info(
-                f"Practice session created: {session_id}, CV Score: {cv_score:.1f}% (normalized: {cv_score_normalized})"
+                f"Practice session created: {session_id}, CV Score: {cv_score} (normalized: {cv_score_normalized})"
             )
 
             # Save practice session to database with comprehensive structure (matching real interviews)
@@ -389,12 +336,18 @@ class PracticeController:
                 "jd_path": jd_txt_path,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
-                "status": "active",
+                "status": "setup",
                 "is_practice": True,
                 "similarity_score": cv_score_normalized,  # Pre-calculated CV-JD similarity (0-1)
                 "cv_score": cv_score_normalized,  # CV-JD match score (0-1)
                 "interview_score": None,  # Will be set when interview ends
-                "proctoring_score": 100,  # Default 100 for practice (no proctoring)
+                "proctoring_score": None,
+                "proctoring_status": "pending" if proctoring_enabled else "disabled",
+                "cv_score_status": "pending",
+                "dual_proctoring_required": False,
+                "proctoring_config": {"voice_detection": bool(proctoring_enabled),
+                    "object_detection": bool(proctoring_enabled), "eyeball_tracking": bool(proctoring_enabled),
+                    "gaze_heatmap": False, "ai_detection": False, "dual_camera": False},
                 "qa_pairs": [],
                 "transcript": [],  # Conversation transcript
                 "evaluation": None,  # Final evaluation
@@ -406,13 +359,13 @@ class PracticeController:
                 "usage_deduction": usage_deduction,
             }
 
-            # Anything failing after the debit must give the credits back —
+            # Anything failing after the debit must give the credits back â€”
             # the candidate never got a usable session.
             try:
                 self.collections["practice_sessions"].insert_one(practice_session)
 
                 # Get first question
-                question_result = self.interview_api.get_question(session_id)
+                question_result = {"question": session_result.get("first_question", "")}
                 if "error" in (question_result or {}):
                     raise RuntimeError(
                         f"Failed to generate first question: {question_result.get('error')}"
@@ -445,8 +398,14 @@ class PracticeController:
                     "error": "Failed to start practice interview. Your credits have been refunded.",
                 }, 500
 
+            threading.Thread(target=self._score_cv_background,
+                args=(session_id, cv_text, jd_text), daemon=True).start()
             return {
                 "session_id": session_id,
+                "status": "setup", "setup_required": True,
+                "dual_proctoring_required": False, "mobile_recording_enabled": False,
+                "cv_score_status": "pending",
+                "proctoring_config": practice_session["proctoring_config"],
                 "similarity_score": cv_score_normalized,  # Return normalized CV score (0-1)
                 "cv_score": cv_score,  # Return CV score as percentage (0-100) for display
                 "initial_questions": [question_result.get("question", "")],
@@ -493,6 +452,19 @@ class PracticeController:
             if not session:
                 return {"error": "Practice session not found"}, 404
 
+            if session.get("status") != "active":
+                cached = cached_answer_result(session, question, answer)
+                if cached:
+                    return cached, 200
+                return {"error": "Complete setup and start the interview before answering.",
+                    "error_code": "session_not_active"}, 409
+
+            if not isinstance(question, str) or not isinstance(answer, str) or len(question) > 12000 or len(answer) > 30000:
+                return {"error": "Question and answer must be text within the allowed length."}, 400
+            cached = cached_answer_result(session, question, answer)
+            if cached:
+                return cached, 200
+
             # Submit answer to interview API
             result = self.interview_api.submit_answer(session_id, question, answer)
 
@@ -525,6 +497,8 @@ class PracticeController:
 
             # Apply deep serialization to the result
             serializable_result = make_json_serializable(result)
+            if serializable_result.get("repeated_question"):
+                return serializable_result, 200
 
             # Update practice session with Q&A pair and transcript
             self.collections["practice_sessions"].update_one(
@@ -554,7 +528,8 @@ class PracticeController:
                             ]
                         },
                     },
-                    "$set": {"updated_at": datetime.utcnow()},
+                    "$set": {"updated_at": datetime.utcnow(), "last_answer": {
+                        "question": question, "answer": answer, "result": serializable_result}},
                 },
             )
 
@@ -566,7 +541,7 @@ class PracticeController:
                     {"session_id": session_id},
                     {
                         "$set": {
-                            "status": "completed",
+                            "status": "finishing",
                             "completed_at": datetime.utcnow(),
                             "evaluation": serializable_result.get("final_evaluation"),
                         }
@@ -585,9 +560,6 @@ class PracticeController:
     def end_practice(self, session_id, user_id):
         """End a practice interview session"""
         try:
-            if not self.interview_api:
-                return {"error": "Interview system not available"}, 500
-
             # Verify session belongs to user
             session = self.collections["practice_sessions"].find_one(
                 {"session_id": session_id, "user_id": user_id, "is_practice": True}
@@ -595,12 +567,19 @@ class PracticeController:
 
             if not session:
                 return {"error": "Practice session not found"}, 404
+            if session.get("status") in {"completed", "abandoned"}:
+                return result_payload(session), 200
+            from interview.runtime import live_sessions
+            if live_sessions.get(session_id):
+                live_sessions[session_id]["monitoring"] = False
+            stop_companion(session)
 
             # Zero-answer discard: if the candidate never gave a single
             # substantive answer, refund the practice credits and abandon the
             # session instead of producing an empty report.
             internal_answered = 0
-            _internal = self.interview_api.session_manager._get_session(session_id)
+            session_manager = self.interview_api.session_manager if self.interview_api else None
+            _internal = session_manager._get_session(session_id) if session_manager else None
             if _internal is not None and getattr(_internal, "interview_data", None):
                 internal_answered = sum(
                     1
@@ -612,7 +591,7 @@ class PracticeController:
                 for qa in (session.get("qa_pairs") or [])
                 if str((qa or {}).get("answer") or "").strip()
             )
-            if max(internal_answered, doc_answered) == 0 and session.get("status") == "active":
+            if max(internal_answered, doc_answered) == 0 and session.get("status") in {"setup", "active", "finishing"}:
                 refund = interview_credit_service.refund_practice_debit(
                     self.collections["users"].database,
                     session,
@@ -629,7 +608,9 @@ class PracticeController:
                         }
                     },
                 )
-                self.interview_api.session_manager.sessions.pop(session_id, None)
+                if session_manager:
+                    session_manager.sessions.pop(session_id, None)
+                live_sessions.pop(session_id, None)
                 CostTracker().end_session(session_id, clear_events=True)
                 refunded_credits = 0
                 if refund and refund.get("success"):
@@ -646,7 +627,12 @@ class PracticeController:
                 }, 200
 
             # End interview via API
-            result = self.interview_api.end_interview(session_id)
+            result = self.interview_api.end_interview(session_id) if self.interview_api else {
+                "final_evaluation": {"score_status": "unavailable", "final_score": None,
+                    "qualitative_assessment": "The interview service was interrupted. Your answers are retained for review."}}
+            from interview.runtime import live_sessions
+            if live_sessions.get(session_id):
+                live_sessions[session_id]["monitoring"] = False
             usage_summary = CostTracker().end_session(session_id, clear_events=True)
             usage_deduction = None
 
@@ -696,12 +682,12 @@ class PracticeController:
 
             # Get the session manager's internal session data to extract interview_data
             # This contains the complete Q&A pairs from the interview
-            session_manager = self.interview_api.session_manager
-            internal_session = session_manager._get_session(session_id)
+            internal_session = session_manager._get_session(session_id) if session_manager else None
 
             # Build proper transcript from interview_data (same as real interviews)
-            transcript = []
+            transcript = list(session.get("transcript") or [])
             if internal_session and hasattr(internal_session, "interview_data"):
+                transcript = []
                 for item in internal_session.interview_data:
                     # Add question from assistant
                     transcript.append(
@@ -717,9 +703,9 @@ class PracticeController:
             completed_at = datetime.utcnow()
 
             # STT time must reflect the candidate's SPOKEN answers, never
-            # wall-clock session duration — a practice tab left open (or a
+            # wall-clock session duration â€” a practice tab left open (or a
             # session finalized later) used to record days' worth of "audio
-            # seconds" and produce ₹28k/session rows in the cost statistics.
+            # seconds" and produce â‚¹28k/session rows in the cost statistics.
             tts_characters = sum(
                 len(((item.get("text") or item.get("content") or "")).strip())
                 for item in transcript
@@ -730,7 +716,7 @@ class PracticeController:
                 for item in transcript
                 if item.get("role") == "user"
             )
-            # ~4 chars/token, ~0.4 s of speech per token (≈150 wpm), 2 h cap.
+            # ~4 chars/token, ~0.4 s of speech per token (â‰ˆ150 wpm), 2 h cap.
             stt_seconds = min((answer_chars / 4.0) * 0.4, 7200.0)
 
             usage_summary = CostTracker().end_session(
@@ -772,56 +758,10 @@ class PracticeController:
                     idempotency_key=f"practice-session:{session_id}",
                 )
 
-            # Calculate interview score from evaluation (same logic as real interviews)
-            interview_score = 85  # Default score
-            if isinstance(final_evaluation, dict) and final_evaluation:
-                # Try to extract score from evaluation
-                try:
-                    if "quantitative" in final_evaluation and isinstance(
-                        final_evaluation["quantitative"], dict
-                    ):
-                        if (
-                            "average_relevance_score"
-                            in final_evaluation["quantitative"]
-                        ):
-                            avg_score = final_evaluation["quantitative"][
-                                "average_relevance_score"
-                            ]
-                            if isinstance(avg_score, (int, float)):
-                                interview_score = (
-                                    int(avg_score * 100)
-                                    if avg_score <= 1
-                                    else int(avg_score)
-                                )
-                    elif "quantitative_scores" in final_evaluation:
-                        quant_scores = final_evaluation["quantitative_scores"]
-                        if isinstance(quant_scores, (int, float)):
-                            interview_score = (
-                                int(quant_scores * 100)
-                                if quant_scores <= 1
-                                else int(quant_scores)
-                            )
-                        elif isinstance(quant_scores, dict):
-                            avg = (
-                                quant_scores.get("average")
-                                or quant_scores.get("overall")
-                                or list(quant_scores.values())[0]
-                                if quant_scores
-                                else 85
-                            )
-                            if isinstance(avg, (int, float)):
-                                interview_score = (
-                                    int(avg * 100) if avg <= 1 else int(avg)
-                                )
-                except Exception as e:
-                    logger.warning(
-                        f"Could not extract interview score from evaluation: {e}"
-                    )
-                    interview_score = 85  # Use default on error
-
-            # Calculate proctoring score (100 for practice - no actual proctoring)
-            proctoring_score = 100
-
+            interview_score = evaluation_percentage(final_evaluation)
+            from interview.runtime import live_sessions
+            proctoring_report = build_proctoring_report(live_sessions.get(session_id), session)
+            proctoring_score = proctoring_report.get("final_score")
             # Get CV score from session
             cv_score = session.get("cv_score", session.get("similarity_score", 0))
 
@@ -836,6 +776,8 @@ class PracticeController:
                         "evaluation": final_evaluation,
                         "interview_score": interview_score,
                         "proctoring_score": proctoring_score,
+                        "proctoring_report": proctoring_report,
+                        "proctoring_status": proctoring_report.get("status"),
                         "stt_seconds": stt_seconds,
                         "tts_characters": int(tts_characters or 0),
                         "usage_summary": usage_summary,
@@ -884,13 +826,22 @@ class PracticeController:
                 f"Practice interview {session_id} completed - CV: {cv_score}, Interview: {interview_score}%, Transcript messages: {len(transcript)}"
             )
 
+            if internal_session and final_evaluation.get("pending_answers"):
+                schedule_evaluation_refresh(session_manager, internal_session,
+                    self.collections["practice_sessions"])
+            elif session_manager:
+                session_manager.sessions.pop(session_id, None)
+            live_sessions.pop(session_id, None)
             return {
                 "status": "interview_ended",
                 "message": "Practice interview ended successfully",
                 "evaluation": final_evaluation,
                 "interview_score": interview_score,
                 "proctoring_score": proctoring_score,
-                "cv_score": cv_score,
+                "cv_score": percentage(cv_score, normalized=True),
+                "cv_score_status": session.get("cv_score_status"),
+                "proctoring_report": proctoring_report,
+                "proctoring_status": proctoring_report.get("status"),
                 "transcript": transcript,  # Return the formatted transcript
                 "usage_summary": usage_summary,
                 "usage_deduction": usage_deduction,
@@ -932,11 +883,12 @@ class PracticeController:
                 "role": session.get("role"),
                 "difficulty": session.get("difficulty"),
                 "status": session.get("status"),
-                "cv_score": int(
-                    (session.get("cv_score", session.get("similarity_score", 0))) * 100
-                ),  # Convert 0-1 to 0-100
+                "cv_score": percentage(session.get("cv_score"), normalized=True),
+                "cv_score_status": session.get("cv_score_status"),
                 "interview_score": session.get("interview_score", 0),
-                "proctoring_score": session.get("proctoring_score", 100),
+                "proctoring_score": session.get("proctoring_score"),
+                "proctoring_status": session.get("proctoring_status", "incomplete"),
+                "proctoring_report": session.get("proctoring_report") or {},
                 "evaluation": session.get("evaluation", {}),
                 "transcript": session.get("transcript", []),
                 "qa_pairs": session.get("qa_pairs", []),
@@ -983,7 +935,8 @@ class PracticeController:
                         "cv_score", session.get("similarity_score", 0)
                     ),
                     "interview_score": session.get("interview_score", 0),
-                    "proctoring_score": session.get("proctoring_score", 100),
+                    "proctoring_score": session.get("proctoring_score"),
+                    "proctoring_status": session.get("proctoring_status", "incomplete"),
                     "created_at": (
                         session.get("created_at").isoformat()
                         if session.get("created_at")

@@ -1,5 +1,45 @@
 # Production-Readiness Review — what's done, what's left
 
+## Interview update — 8 October 2026
+
+The interview implementation now includes recruiter-selected laptop/mobile
+proctoring, signed phone pairing with fresh camera/heartbeat checks, laptop
+camera/microphone/speaker checks, face capture, and explicit activation after
+setup. Web and kiosk share the same React interview runtime. Installation
+guidance appears before session creation; real interviews create the session
+inside the kiosk. Optional model downloads, eye calibration, recording
+conversion and practice CV scoring no longer block startup.
+
+Repeated start/answer/end requests preserve the session and stored results.
+Ownership gates cover REST and desktop sockets; a phone receives only a signed
+session capability. Scores use actual evaluation/detection evidence with
+pending, unavailable, disabled and partial coverage states. The completion
+screen and saved report expose interview/CV/proctoring scores, transcript,
+identity evidence and monitoring events. Missing voice/eyeball/gaze pipelines
+are reported as missing checks rather than silently counted as working.
+
+**Local validation:** 74 backend behavioral tests pass on Python 3.12, ten
+frontend contract tests and two kiosk security tests pass, lint has zero
+warnings/errors, both web/kiosk production bundles build, and a local Windows
+NSIS installer packages successfully. A local official
+YOLOv8n export validates in OpenCV and runs at 91 ms warm mean on blank frames
+on the development laptop. This does not establish footage accuracy or the
+production 5–10 second startup target.
+
+**Before enabling this in production:** provision the Git-ignored object
+artifact into the API image; build/test and publish updated kiosk installers;
+configure reachable HTTPS frontend/API origins and secrets; and run the
+two-device acceptance matrix in [interview-flow-audit.md](interview-flow-audit.md).
+Browser visual automation was unavailable in this session. Keep the current
+single-worker/sticky session topology: engines and live monitoring remain
+process-local. Restart recovery retains submitted answers and can finalize a
+report; it does not recreate a lost live interviewer.
+
+Implementation checklist: [interview-flow-plan.md](interview-flow-plan.md).
+Model setup: [proctoring-model-setup.md](proctoring-model-setup.md).
+The broader scorecard below is the August baseline and has not been fully
+re-audited for unrelated payment, infrastructure or account configuration.
+
 Honest scorecard as of **2026-08-06**, after the reorganization,
 billing/costing, go-live hardening, the **CRA → Vite** migration, and the
 **payment credit-reconciliation** hardening.
@@ -78,10 +118,10 @@ production-ready are we" — keep it current when flows change.
 
 ## Gaps that matter ❌ (ranked)
 
-1. **No automated test suite.** The manifest/smoke harness protects structure,
-   not behavior. *Add pytest (auth, credits, invite, export, **payment
-   verify/webhook** routes with a test DB) and React Testing Library smoke
-   tests; run both in GitHub Actions on every PR.*
+1. **Integration coverage and CI remain incomplete.** The backend now has 74
+   passing behavioral tests, plus frontend/kiosk contract regressions. Live
+   Mongo/GCS, hardware/media and payment verify/webhook integration still need
+   isolated test environments and CI execution on every PR.
 2. **Single-process scalability ceiling** — one eventlet worker, in-memory
    `live_sessions`, thread-based background jobs, in-memory rate limits.
    Fine to ~1k DAU; beyond that: *move rate limits + Socket.IO sessions to

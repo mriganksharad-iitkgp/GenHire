@@ -7,8 +7,7 @@
 # own requirements where applicable; evaluation_model is imported by the app
 # and its deps (pandas, matplotlib, langdetect) are included here.
 #
-# Deliberately absent (same as the previous freeze — prod already runs
-# without them, the code degrades gracefully): opencv-python, mediapipe,
+# Optional heavy identity/pose dependencies remain absent: mediapipe,
 # deepface, Flask-Limiter, torch/transformers.
 
 # --- Web framework & server ---
@@ -66,6 +65,7 @@ langdetect==1.0.9
 
 # --- Data & plotting (evaluation model, gaze heatmaps) ---
 numpy==1.26.4
+opencv-python-headless==4.11.0.86
 pandas==2.3.1
 matplotlib==3.10.5
 pillow==11.3.0

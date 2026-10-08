@@ -151,7 +151,7 @@ def create_app():
     app.json = ObjectIdSafeJSONProvider(app)
 
     # Initialize extensions (shared socketio instance from core.extensions)
-    socketio.init_app(app, cors_allowed_origins=allowed_origins)
+    socketio.init_app(app, cors_allowed_origins=app_config.origin_is_allowed)
 
     # Restrict CORS to known origins — a wildcard origin combined with
     # supports_credentials=True is invalid per the CORS spec.
@@ -159,10 +159,11 @@ def create_app():
         app,
         resources={
             r"/*": {
-                "origins": allowed_origins,
+                "origins": allowed_origins + [app_config.KIOSK_ORIGIN_PATTERN],
                 "allow_headers": [
                     "Content-Type",
                     "Authorization",
+                    "X-Mobile-Pairing-Token",
                     "Access-Control-Allow-Credentials",
                 ],
                 "supports_credentials": True,
@@ -198,29 +199,19 @@ def create_app():
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
-            response = app.make_default_options_response()
-            headers = response.headers
-            headers["Access-Control-Allow-Origin"] = request.headers.get("Origin", "*")
-            headers["Access-Control-Allow-Methods"] = (
-                "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-            )
-            headers["Access-Control-Allow-Headers"] = (
-                "Content-Type, Authorization, Access-Control-Allow-Credentials"
-            )
-            headers["Access-Control-Allow-Credentials"] = "true"
-            return response
+            return app.make_default_options_response()
 
     # Add CORS headers to all responses
     @app.after_request
     def after_request(response):
         origin = request.headers.get("Origin")
-        if origin:
+        if origin and app_config.origin_is_allowed(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = (
                 "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             )
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Mobile-Pairing-Token"
         return response
 
     # Initialize database

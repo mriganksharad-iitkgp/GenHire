@@ -3,3 +3,4 @@
 export const KIOSK_DOWNLOAD_URL =
   process.env.REACT_APP_KIOSK_DOWNLOAD_URL ||
   'https://storage.googleapis.com/genhire-downloads/Genhire.exe';
+export const KIOSK_MAC_DOWNLOAD_URL = process.env.REACT_APP_KIOSK_MAC_DOWNLOAD_URL || '';

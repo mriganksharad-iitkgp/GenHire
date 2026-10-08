@@ -66,7 +66,7 @@ def decode_image(image_bytes):
     DeepFace does not accept raw ``bytes`` — every caller that hands an image
     to DeepFace must go through this first.
     """
-    if not image_bytes or not deepface_available():
+    if not image_bytes:
         return None
     try:
         import cv2
@@ -97,11 +97,15 @@ def assess_face_image(image_bytes) -> dict:
             "error_code": "invalid_image",
             "message": "The captured image is too large. Please try again.",
         }
-    if not deepface_available():
-        return {"ok": True, "skipped": True, "face_count": None}
-
     frame = decode_image(image_bytes)
     if frame is None:
+        # OpenCV itself may be absent on a legacy deployment. Report the
+        # missing quality check instead of pretending it detected a face.
+        try:
+            import cv2  # noqa: F401
+            import numpy  # noqa: F401
+        except ImportError:
+            return {"ok": False, "error_code": "face_detection_unavailable", "message": "Face checking is temporarily unavailable. Please retry shortly.", "available": False}
         return {
             "ok": False,
             "error_code": "invalid_image",
@@ -109,20 +113,14 @@ def assess_face_image(image_bytes) -> dict:
         }
 
     try:
-        from deepface import DeepFace
-
-        faces = DeepFace.extract_faces(
-            img_path=frame,
-            detector_backend=FACE_DETECTOR_BACKEND,
-            enforce_detection=False,
-        )
-        real_faces = [
-            f for f in faces if float(f.get("confidence") or 0) > MIN_FACE_CONFIDENCE
-        ]
+        # Fast CPU quality gate must not initialize/download an identity
+        # network before the candidate can enter their interview.
+        from security_check import detect_faces
+        real_faces = detect_faces(frame)
     except Exception as exc:
-        # Detection itself failing must not lock candidates out.
+        # Never claim a face was registered when the quality gate did not run.
         logger.warning("Face detection failed during quality gate: %s", exc)
-        return {"ok": True, "skipped": True, "face_count": None}
+        return {"ok": False, "error_code": "face_detection_unavailable", "message": "Face checking is temporarily unavailable. Please retry shortly.", "available": False}
 
     if len(real_faces) == 0:
         return {
@@ -137,7 +135,7 @@ def assess_face_image(image_bytes) -> dict:
             "message": "Multiple faces detected. Please make sure only you are visible in the camera.",
             "face_count": len(real_faces),
         }
-    return {"ok": True, "face_count": 1}
+    return {"ok": True, "face_count": 1, "available": True}
 
 
 def verify_face_images(reference_bytes, candidate_bytes) -> dict:

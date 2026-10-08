@@ -62,7 +62,7 @@ class ApplicationController:
         Push a real-time `application_update` event to every room (user id)
         that should see this change live, instead of requiring the candidate
         or recruiter to refresh to notice it. Payload is intentionally slim
-        (mirrors what the frontend's mapApplication() reads) — never include
+        (mirrors what the frontend's mapApplication() reads) â€” never include
         cv_snapshot/jd_snapshot, which can be large.
 
         Best-effort: a socket emit failure must never break the underlying
@@ -136,7 +136,7 @@ class ApplicationController:
                 }, 403
 
         # Check if already applied. An invite skeleton (created with no CV yet) is
-        # NOT a real application — we update it in place when the candidate submits.
+        # NOT a real application â€” we update it in place when the candidate submits.
         existing_application = self.applications_collection.find_one(
             {"job_id": job_id, "student_id": user_id}
         )
@@ -166,7 +166,7 @@ class ApplicationController:
         if use_manual_cv:
             cv_id = None
 
-        # Priority order: Selected CV → Primary CV → Manual CV details
+        # Priority order: Selected CV â†’ Primary CV â†’ Manual CV details
         if not use_manual_cv and cv_id:
             # User explicitly selected a CV PDF
             if self.cv_controller:
@@ -288,7 +288,7 @@ class ApplicationController:
         # Pre-shortlisted (recruiter interview invite) candidates skip CV
         # scoring entirely: the recruiter already selected them, so the score
         # is shown as N/A and the recruiter decides after the interview. The
-        # CV itself is still required — the interview engine asks from it.
+        # CV itself is still required â€” the interview engine asks from it.
         if was_auto_shortlisted:
             candidate_fields.update(
                 {
@@ -334,7 +334,7 @@ class ApplicationController:
             )
 
         if was_auto_shortlisted:
-            # No scoring queue for pre-shortlisted invitees — score stays N/A.
+            # No scoring queue for pre-shortlisted invitees â€” score stays N/A.
             logger.info(
                 f"Skipping CV scoring for pre-shortlisted invite application {application_id}"
             )
@@ -378,7 +378,7 @@ class ApplicationController:
             rooms=(str(job.get("created_by", "")), str(user_id)),
         )
 
-        # Confirmation emails (fire-and-forget) — candidate gets a receipt,
+        # Confirmation emails (fire-and-forget) â€” candidate gets a receipt,
         # recruiter gets notified a new applicant came in. Neither blocks the
         # instant response below.
         try:
@@ -622,7 +622,7 @@ class ApplicationController:
                 if isinstance(app.get("updated_at"), datetime.datetime):
                     app["updated_at"] = app["updated_at"].isoformat()
                 # Pre-shortlisted invitees keep cv_score = None on purpose
-                # (shown as N/A) — the recruiter already selected them. An
+                # (shown as N/A) â€” the recruiter already selected them. An
                 # invite skeleton the candidate hasn't submitted yet (visible
                 # immediately for interview-type invites) must NOT get the
                 # legacy-data fallback either, or the recruiter sees a fake
@@ -692,7 +692,7 @@ class ApplicationController:
                     float(actual_cost or 0.0) if actual_cost is not None else None
                 )
 
-                # Combined "overall fit" score for recruiter sorting/filtering —
+                # Combined "overall fit" score for recruiter sorting/filtering â€”
                 # the average of whichever of cv_score/interview_score are
                 # numeric. Deliberately excludes proctoring_score: that's an
                 # interview-integrity signal, not a candidate-quality signal,
@@ -907,6 +907,9 @@ class ApplicationController:
             "final_score": report.get("final_score"),
             "proctoring_score": report.get("proctoring_score"),
             "proctoring_status": report.get("proctoring_status"),
+            "proctoring_report": report.get("proctoring_report") or {},
+            "cv_score": report.get("cv_score", app_doc.get("cv_score")),
+            "recording_parts": report.get("recording_parts") or [],
             "evaluation": report.get("evaluation"),
             "transcript": report.get(
                 "transcript", []
@@ -1120,7 +1123,7 @@ class ApplicationController:
 
     def check_cv_match_score(self, job_id, user_id, user_profile, cv_id=None, use_manual_cv=False):
         """Score a candidate's CV against a job WITHOUT creating an
-        application — lets a candidate check compatibility before applying.
+        application â€” lets a candidate check compatibility before applying.
         Mirrors apply_for_job's CV resolution (selected CV -> primary CV ->
         manual profile details) and background_processor's scoring method
         selection (structured cv_details when available, else raw cv_text)."""
@@ -1327,76 +1330,7 @@ class ApplicationController:
         except Exception as e:
             return {"error": f"Internal error: {str(e)}"}, 500
 
-    def update_interview_score(
-        self, application_id, user_id, user_type, interview_score
-    ):
-        """Update the interview score for an application"""
-        try:
-            # Validate application ID
-            try:
-                app_doc = self.applications_collection.find_one(
-                    {"_id": ObjectId(application_id)}
-                )
-            except Exception:
-                return {"error": "Invalid application ID"}, 400
-
-            if not app_doc:
-                return {"error": "Application not found"}, 404
-
-            # Authorization check
-            job = None
-            if user_type in ["candidate", "student"]:
-                if app_doc.get("student_id") != user_id:
-                    return {"error": "Unauthorized access"}, 403
-            elif user_type == "recruiter":
-                job = self.jobs_collection.find_one(
-                    {"_id": ObjectId(app_doc["job_id"])}
-                )
-                if not job or job.get("created_by") != user_id:
-                    return {"error": "Unauthorized access"}, 403
-            else:
-                return {"error": "Invalid user type"}, 403
-
-            # Update the interview score
-            update_result = self.applications_collection.update_one(
-                {"_id": ObjectId(application_id)},
-                {
-                    "$set": {
-                        "interview_score": interview_score,
-                        "updated_at": datetime.datetime.utcnow(),
-                    }
-                },
-            )
-
-            if update_result.modified_count > 0:
-                print(
-                    f"✅ Interview score updated for application {application_id}: {interview_score}%"
-                )
-
-                # Push the finished interview's score live, primarily so the
-                # recruiter's dashboard reflects it without a refresh.
-                if job is None:
-                    job = self.jobs_collection.find_one(
-                        {"_id": ObjectId(app_doc["job_id"])}
-                    )
-                app_doc["interview_score"] = interview_score
-                self._emit_application_update(
-                    "score_updated",
-                    app_doc,
-                    job=job,
-                    rooms=(
-                        str((job or {}).get("created_by", "")),
-                        str(app_doc.get("student_id", "")),
-                    ),
-                )
-
-                return {
-                    "message": "Interview score updated successfully",
-                    "interview_score": interview_score,
-                }, 200
-            else:
-                return {"error": "Failed to update interview score"}, 500
-
-        except Exception as e:
-            print(f"Error updating interview score: {e}")
-            return {"error": f"Failed to update interview score: {str(e)}"}, 500
+    def update_interview_score(self, application_id, user_id, user_type, interview_score):
+        """Legacy client score writes are retired; scores come from evaluation."""
+        return {"error": "Interview scores are generated by the server when the interview ends.",
+                "error_code": "client_score_updates_disabled"}, 410

@@ -38,6 +38,8 @@ from typing import Any, Dict, Optional
 from bson import ObjectId
 
 from payment_module.services.wallet_service import WalletService
+from services.interview_flow_service import evaluation_percentage, session_lock
+from services.proctoring_service import build_proctoring_report
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,8 @@ def count_answered_questions(session, fallback_doc: Optional[Dict[str, Any]] = N
             for qa in session.interview_data
             if str((qa or {}).get("answer") or "").strip()
         )
-    persisted = int((fallback_doc or {}).get("questions_answered_count") or 0)
+    persisted = max(int((fallback_doc or {}).get("questions_answered_count") or 0),
+        sum(bool(str((qa or {}).get("answer") or "").strip()) for qa in (fallback_doc or {}).get("qa_pairs", [])))
     return max(in_memory, persisted)
 
 
@@ -232,8 +235,14 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
     now = datetime.datetime.utcnow()
 
     try:
-        session.is_complete = True
-        final_evaluation = interview_manager._generate_final_evaluation(session)
+        if session is not None:
+            session.is_complete = True
+            final_evaluation = interview_manager._generate_final_evaluation(session)
+        else:
+            final_evaluation = doc.get("evaluation") or {
+                "score_status": "unavailable", "final_score": None,
+                "qualitative_assessment": "The interview was interrupted. Recorded answers are retained for review; AI scoring is unavailable.",
+                "per_question_evaluations": doc.get("qa_pairs") or []}
     except Exception as exc:
         logger.error(
             "[interview-credits] auto-finalize evaluation failed for %s: %s",
@@ -241,20 +250,15 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
             exc,
             exc_info=True,
         )
-        final_evaluation = {"error": "Failed to generate AI evaluation.", "final_score": 0}
+        final_evaluation = {"error": "Failed to generate AI evaluation.", "score_status": "unavailable", "final_score": None}
 
-    qs = (final_evaluation or {}).get("quantitative_scores", {})
-    answer_score = qs.get("answer_score")
-    language_score = qs.get("language_score")
-    if answer_score is not None or language_score is not None:
-        interview_score = round(
-            (float(answer_score or 0) * 0.7 + float(language_score or 0) * 0.3) * 100
-        )
-    else:
-        interview_score = int(final_evaluation.get("final_score") or 0)
+    interview_score = evaluation_percentage(final_evaluation)
 
-    transcript = []
-    for qa in getattr(session, "interview_data", []) or []:
+    transcript = list(doc.get("transcript") or [])
+    answers = getattr(session, "interview_data", []) or []
+    if answers:
+        transcript = []
+    for qa in answers:
         if qa.get("question"):
             transcript.append({"role": "assistant", "text": qa.get("question", "")})
         if qa.get("answer"):
@@ -266,8 +270,9 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
                 }
             )
 
-    proctoring_score = doc.get("proctoring_score")
-    proctoring_status = "complete" if isinstance(proctoring_score, (int, float)) else "incomplete"
+    proctoring_report = build_proctoring_report(None, doc)
+    proctoring_score = proctoring_report.get("final_score")
+    proctoring_status = proctoring_report.get("status")
 
     interviews.update_one(
         {"_id": doc["_id"]},
@@ -276,7 +281,9 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
                 "status": "completed",
                 "evaluation": final_evaluation,
                 "final_score": interview_score,
+                "proctoring_score": proctoring_score,
                 "proctoring_status": proctoring_status,
+                "proctoring_report": proctoring_report,
                 "transcript": transcript,
                 "auto_finalized": True,
                 "auto_finalized_reason": "abandoned_with_answers",
@@ -352,27 +359,34 @@ def run_refund_sweep_once(collections, interview_manager) -> Dict[str, int]:
     # --- Real interviews stuck in a non-terminal state past the TTL ---
     stale_real = collections["interviews"].find(
         {
-            "status": {"$in": ["active", "identity_blocked"]},
-            "created_at": {"$lt": cutoff},
+            "status": {"$in": ["setup", "active", "finishing", "identity_blocked"]},
+            "$or": [{"updated_at": {"$lt": cutoff}}, {"updated_at": {"$exists": False}, "created_at": {"$lt": cutoff}}],
         }
     )
     for doc in stale_real:
         try:
-            session = interview_manager.sessions.get(doc.get("session_id"))
-            answered = count_answered_questions(session, doc)
-            if session is not None and answered > 0:
-                finalize_stale_real_interview(collections, interview_manager, doc, session)
-                stats["real_finalized"] += 1
-            else:
-                reason = (
-                    "identity_blocked"
-                    if doc.get("status") == "identity_blocked"
-                    else "abandoned_no_answers"
-                )
-                refund_stale_real_interview(collections, doc, reason=reason)
-                stats["real_refunded"] += 1
-            # Drop finished/abandoned sessions from memory either way.
-            interview_manager.sessions.pop(doc.get("session_id"), None)
+            with session_lock(doc['session_id']):
+                # A candidate may have answered or finished after the cursor was read.
+                doc = collections['interviews'].find_one({
+                    '_id': doc['_id'], 'status': {'$in': ['setup', 'active', 'finishing', 'identity_blocked']},
+                    '$or': [{'updated_at': {'$lt': cutoff}}, {'updated_at': {'$exists': False}, 'created_at': {'$lt': cutoff}}]})
+                if not doc:
+                    continue
+                session = interview_manager.sessions.get(doc.get("session_id"))
+                answered = count_answered_questions(session, doc)
+                if answered > 0:
+                    finalize_stale_real_interview(collections, interview_manager, doc, session)
+                    stats["real_finalized"] += 1
+                else:
+                    reason = (
+                        "identity_blocked"
+                        if doc.get("status") == "identity_blocked"
+                        else "abandoned_no_answers"
+                    )
+                    refund_stale_real_interview(collections, doc, reason=reason)
+                    stats["real_refunded"] += 1
+                # Drop finished/abandoned sessions from memory either way.
+                interview_manager.sessions.pop(doc.get("session_id"), None)
         except Exception:
             logger.error(
                 "[interview-credits] sweep failed for interview %s",
@@ -382,45 +396,58 @@ def run_refund_sweep_once(collections, interview_manager) -> Dict[str, int]:
 
     # --- Practice sessions ---
     stale_practice = collections["practice_sessions"].find(
-        {"status": "active", "created_at": {"$lt": cutoff}}
+        {"status": {"$in": ["setup", "active", "finishing"]},
+            "$or": [{"updated_at": {"$lt": cutoff}}, {"updated_at": {"$exists": False}, "created_at": {"$lt": cutoff}}]}
     )
     for doc in stale_practice:
         try:
-            answered = sum(
-                1
-                for qa in (doc.get("qa_pairs") or [])
-                if str((qa or {}).get("answer") or "").strip()
-            )
-            now = datetime.datetime.utcnow()
-            if answered > 0:
-                # Substantive practice that was never ended: close it without a
-                # refund (the LLM session was consumed); per-answer feedback is
-                # already stored on the doc.
-                collections["practice_sessions"].update_one(
-                    {"_id": doc["_id"]},
-                    {
-                        "$set": {
-                            "status": "abandoned",
-                            "abandoned_reason": "abandoned_with_answers",
-                            "updated_at": now,
-                        }
-                    },
+            with session_lock(doc['session_id']):
+                # A candidate may have answered or finished after the cursor was read.
+                doc = collections['practice_sessions'].find_one({
+                    '_id': doc['_id'], 'status': {'$in': ['setup', 'active', 'finishing', 'identity_blocked']},
+                    '$or': [{'updated_at': {'$lt': cutoff}}, {'updated_at': {'$exists': False}, 'created_at': {'$lt': cutoff}}]})
+                if not doc:
+                    continue
+                answered = sum(
+                    1
+                    for qa in (doc.get("qa_pairs") or [])
+                    if str((qa or {}).get("answer") or "").strip()
                 )
-                stats["practice_closed"] += 1
-            else:
-                refund = refund_practice_debit(db, doc, reason="abandoned_no_answers")
-                collections["practice_sessions"].update_one(
-                    {"_id": doc["_id"]},
-                    {
-                        "$set": {
-                            "status": "abandoned",
-                            "abandoned_reason": "abandoned_no_answers",
-                            "credits_refund": refund,
-                            "updated_at": now,
-                        }
-                    },
-                )
-                stats["practice_refunded"] += 1
+                now = datetime.datetime.utcnow()
+                if answered > 0:
+                    # Substantive practice that was never ended: close it without a
+                    # refund (the LLM session was consumed); per-answer feedback is
+                    # already stored on the doc.
+                    collections["practice_sessions"].update_one(
+                        {"_id": doc["_id"]},
+                        {
+                            "$set": {
+                                "status": "completed",
+                                "auto_finalized_reason": "abandoned_with_answers",
+                                "evaluation": doc.get("evaluation") or {
+                                    "score_status": "unavailable", "final_score": None,
+                                    "qualitative_assessment": "This practice session was interrupted. Your recorded answers are retained for review.",
+                                    "per_question_evaluations": doc.get("qa_pairs") or []},
+                                "proctoring_report": build_proctoring_report(None, doc),
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                    stats["practice_closed"] += 1
+                else:
+                    refund = refund_practice_debit(db, doc, reason="abandoned_no_answers")
+                    collections["practice_sessions"].update_one(
+                        {"_id": doc["_id"]},
+                        {
+                            "$set": {
+                                "status": "abandoned",
+                                "abandoned_reason": "abandoned_no_answers",
+                                "credits_refund": refund,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                    stats["practice_refunded"] += 1
         except Exception:
             logger.error(
                 "[interview-credits] sweep failed for practice session %s",

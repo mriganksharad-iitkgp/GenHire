@@ -14,6 +14,7 @@ from utils.company_resolver import attach_company_info
 from services.usage_telemetry_service import record_usage_event
 from payment_module.config.settings import PaymentConfig
 from payment_module.services.wallet_service import WalletService
+from services.interview_flow_service import normalize_proctoring_config
 
 logger = logging.getLogger(__name__)
 
@@ -215,20 +216,10 @@ class JobController:
         else:
             minimum_cv_score = 50.0  # Default minimum CV score
 
-        # Proctoring configuration — defaults all enabled
-        default_proctoring = {
-            'voice_detection': True,
-            'object_detection': True,
-            'eyeball_tracking': True,
-            'gaze_heatmap': True,
-        }
-        raw_proctoring = job_data.get('proctoring_config')
-        if isinstance(raw_proctoring, dict):
-            proctoring_config = {
-                k: bool(raw_proctoring.get(k, True)) for k in default_proctoring
-            }
-        else:
-            proctoring_config = default_proctoring
+        try:
+            proctoring_config = normalize_proctoring_config(job_data.get('proctoring_config'))
+        except ValueError as exc:
+            return {'error': str(exc)}, 400
         
         # Preserve recruiter-entered title; derive canonical role separately for candidate filters
         job_title = re.sub(r"\s+", " ", str(job_data.get('title', ''))).strip()
@@ -428,10 +419,11 @@ class JobController:
                     except (ValueError, TypeError):
                         return {'error': 'Minimum CV score must be a valid number'}, 400
                 elif field == 'proctoring_config':
-                    raw_pc = job_data.get(field, {})
-                    if isinstance(raw_pc, dict):
-                        valid_keys = {'voice_detection', 'object_detection', 'eyeball_tracking', 'gaze_heatmap'}
-                        update_fields[field] = {k: bool(raw_pc.get(k, True)) for k in valid_keys}
+                    try:
+                        update_fields[field] = normalize_proctoring_config(
+                            job_data[field], base=job.get(field))
+                    except ValueError as exc:
+                        return {'error': str(exc)}, 400
                 elif field in {'skills'}:
                     update_fields[field] = normalize_list_field(job_data.get(field, []))
                 elif field in {'responsibilities', 'requirements', 'benefits'}:

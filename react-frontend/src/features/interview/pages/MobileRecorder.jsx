@@ -1,141 +1,130 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import io from "socket.io-client";
-import axios from "axios";
-import { proctoringConfig } from "../config/proctoring";
+import { Check, CircleAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { API_BASE } from "shared/api/client";
+import { interviewRequest, mediaMimeType, recordingPartId } from "../utils/session";
+import styles from "./InterviewExperience.module.css";
 
-const MobileRecorder = () => {
-  const { sessionId } = useParams();
-  const videoRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const [status, setStatus] = useState("Connecting...");
-  const [socket, setSocket] = useState(null);
+export default function MobileRecorder() {
+  const { sessionId } = useParams(); const location = useLocation();
+  const pairingToken = new URLSearchParams(location.search).get("pairing_token") || "";
+  const [status, setStatus] = useState("connecting"); const [error, setError] = useState(""); const [cameraReady, setCameraReady] = useState(false);
+  const [joined, setJoined] = useState(false); const [busy, setBusy] = useState(false);
+  const videoRef = useRef(null); const streamRef = useRef(null); const socketRef = useRef(null); const recorderRef = useRef(null);
+  const partsRef = useRef([]); const uploadingRef = useRef(false); const joinedRef = useRef(false); const wakeLockRef = useRef(null); const aliveRef = useRef(true);
+  const uploadRef = useRef(null); const statusRef = useRef(status); statusRef.current = status;
 
-  useEffect(() => {
-    // 1. Initialize Socket — always the real API URL (the fallback here was
-    // previously the literal string "process.env.REACT_APP_API_URL", which
-    // made the mobile companion dial a nonsense host whenever proctoring was
-    // disabled). This page is opened from a QR code without a JWT; the
-    // backend accepts tokenless connects for exactly this session-room flow.
-    const socketUrl = proctoringConfig.enabled
-      ? proctoringConfig.serverUrl
-      : process.env.REACT_APP_API_URL;
-    const newSocket = io(socketUrl);
-    setSocket(newSocket);
-
-    newSocket.emit("join_mobile_session", { session_id: sessionId });
-    setStatus("Waiting for interview to start...");
-
-    // 2. Setup Camera (Rear Camera)
-    const startCamera = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }, // Request back camera
-          audio: true,
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        return stream;
-      } catch (err) {
-        console.error("Camera access denied:", err);
-        setStatus("Error: Camera access denied");
-      }
-    };
-
-    const streamPromise = startCamera();
-
-    // 3. Listen for commands
-    newSocket.on("mobile_recording_action", async (data) => {
-      const stream = await streamPromise;
-
-      if (data.action === "start") {
-        setStatus("Recording...");
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        chunksRef.current = [];
-
-        mediaRecorderRef.current.ondataavailable = (e) => {
-          if (e.data.size > 0) chunksRef.current.push(e.data);
-        };
-
-        mediaRecorderRef.current.onstop = uploadRecording;
-        mediaRecorderRef.current.start(1000); // Save chunks every second
-      } else if (data.action === "stop") {
-        setStatus("Stopping & Uploading...");
-        if (
-          mediaRecorderRef.current &&
-          mediaRecorderRef.current.state !== "inactive"
-        ) {
-          mediaRecorderRef.current.stop();
-        }
-      }
-    });
-
-    const videoElement = videoRef.current;
-    return () => {
-      newSocket.disconnect();
-      // Cleanup stream (captured element, not the live ref, per hooks rules)
-      if (videoElement && videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach((track) => track.stop());
-      }
-    };
-    // uploadRecording is stable per-mount (assigned as the recorder's onstop
-    // inside this same effect); re-running the socket setup on its identity
-    // would reconnect mid-recording.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  const uploadRecording = async () => {
-    const blob = new Blob(chunksRef.current, { type: "video/webm" });
-    const formData = new FormData();
-    formData.append("recording", blob, "mobile_recording.webm");
-
+  const sendStatus = (override) => {
+    if (!joinedRef.current) return;
+    const stream = streamRef.current;
+    const live = (kind) => !!stream?.getTracks().some((track) => track.kind === kind && track.readyState === "live" && !track.muted);
+    socketRef.current?.emit("mobile_status_update", { session_id: sessionId, status: override || (document.hidden ? "camera_error" : recorderRef.current?.state === "recording" ? "recording" : stream ? "ready" : "connected"), camera_ready: !document.hidden && live("video"), microphone_ready: !document.hidden && live("audio") });
+  };
+  const upload = async () => {
+    if (uploadingRef.current || !partsRef.current.some((part) => !part.uploaded)) return; uploadingRef.current = true;
+    setStatus("uploading"); setError("");
     try {
-      // Note: Upload usually goes to main backend (app.py) because it handles storage/db updates
-      // Mobile recording upload was in app.py, so we keep it there or if we moved it?
-      // Checking app.py... yes, upload_mobile_recording is in app.py.
-      // So we KEEP localhost:5000 for uploads, but socket moves to proctoring server if enabled?
-      // Actually, app.py handles the "upload-mobile-recording" route.
-      // So this URL should remain pointing to main backend.
-      const uploadUrl = `${API_BASE}/interviews/${sessionId}/upload-mobile-recording`;
-      await axios.post(uploadUrl, formData);
-      setStatus("Upload Complete! You can close this tab.");
-      socket.emit("mobile_status_update", {
-        session_id: sessionId,
-        status: "uploaded",
-      });
-    } catch (error) {
-      setStatus("Upload Failed. Please try again.");
-      console.error(error);
-    }
+      for (const part of partsRef.current) {
+      if (part.uploaded) continue; const blob = part.blob; const form = new FormData();
+      form.append("recording", blob, `mobile-recording.${blob.type.includes("mp4") ? "mp4" : "webm"}`); form.append("pairing_token", pairingToken); form.append("recording_part", part.id);
+      await interviewRequest(API_BASE, `/interviews/${sessionId}/upload-mobile-recording`, null, { method: "POST", headers: { "X-Mobile-Pairing-Token": pairingToken }, body: form }, 120000);
+      part.uploaded = true; part.blob = null;
+      } setStatus("uploaded"); sendStatus("uploaded");
+    } catch (failure) { setStatus("upload_failed"); setError(failure.message); }
+    finally { uploadingRef.current = false; }
+  };
+  uploadRef.current = upload;
+  const startRecording = () => {
+    if (!streamRef.current || recorderRef.current?.state === "recording" || document.hidden) return;
+    try {
+      const mimeType = mediaMimeType("video"); const recorder = new MediaRecorder(streamRef.current, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 450000, audioBitsPerSecond: 24000 });
+      const chunks = []; recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType }); chunks.length = 0;
+        if (blob.size) partsRef.current.push({ id: recordingPartId(), blob, uploaded: false });
+        if (aliveRef.current && statusRef.current === "uploading") uploadRef.current();
+      };
+      recorder.start(2000); setStatus("recording"); sendStatus("recording");
+    } catch (failure) { setError(`Recording could not start: ${failure.message}. Reconnect your camera.`); setCameraReady(false); setStatus("camera_error"); sendStatus("camera_error"); }
   };
 
-  return (
-    <div
-      style={{
-        backgroundColor: "#000",
-        height: "100vh",
-        color: "#fff",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <h3>Secondary Camera</h3>
-      <p>{status}</p>
-      {/* Show preview so user knows what they are capturing */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        style={{ width: "80%", border: "2px solid green" }}
-      />
-    </div>
-  );
-};
+  useEffect(() => {
+    aliveRef.current = true;
+    if (!pairingToken) { setStatus("invalid"); setError("This link has no private pairing token. Scan the QR code shown on your laptop."); return; }
+    const socket = io(process.env.REACT_APP_API_URL || window.location.origin, { timeout: 8000, reconnection: true }); socketRef.current = socket;
+    socket.on("connect", () => {
+      socket.emit("join_mobile_session", { session_id: sessionId, pairing_token: pairingToken }, (response) => {
+        if (!aliveRef.current) return;
+        if (!response?.ok) { setStatus("invalid"); setError(response?.error || "This pairing link is invalid or expired. Refresh the QR code on your laptop."); return; }
+        joinedRef.current = true; setJoined(true); setError("");
+        if (response.terminal || ["completed", "abandoned", "discarded"].includes(response.session_status)) {
+          if (recorderRef.current?.state === "recording") { statusRef.current = "uploading"; setStatus("uploading"); recorderRef.current.stop(); }
+          else if (partsRef.current.some((part) => !part.uploaded)) uploadRef.current(); else setStatus("complete");
+          streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); setCameraReady(false); wakeLockRef.current?.release().catch(() => {}); return;
+        }
+        if (recorderRef.current?.state === "recording") setStatus("recording"); else setStatus(streamRef.current ? "ready" : "camera_needed");
+        sendStatus();
+      });
+    });
+    socket.on("disconnect", () => { joinedRef.current = false; setJoined(false); if (!["uploaded", "complete", "uploading"].includes(statusRef.current)) setStatus("reconnecting"); });
+    socket.on("connect_error", () => setStatus("reconnecting"));
+    socket.on("mobile_recording_action", (data) => {
+      if (data.action === "start") startRecording();
+      else if (data.action === "stop") {
+        if (recorderRef.current?.state === "recording") { statusRef.current = "uploading"; setStatus("uploading"); recorderRef.current.stop(); }
+        else if (partsRef.current.some((part) => !part.uploaded)) uploadRef.current(); else setStatus("complete");
+        streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); setCameraReady(false); wakeLockRef.current?.release().catch(() => {});
+      }
+    });
+    const heartbeat = setInterval(() => { if (streamRef.current && !["uploaded", "complete", "uploading", "upload_failed"].includes(statusRef.current)) sendStatus(); }, 5000);
+    const canvas = document.createElement("canvas"); canvas.width = 480; canvas.height = 360;
+    // A preview frame during setup proves the camera is actually capturing.
+    // The server records coverage/scoring only after interview activation.
+    const frames = setInterval(() => {
+      if (document.hidden || !joinedRef.current || !streamRef.current?.getVideoTracks().some((track) => track.readyState === "live" && !track.muted) || !videoRef.current || videoRef.current.readyState < 2) return;
+      canvas.getContext("2d").drawImage(videoRef.current, 0, 0, 480, 360);
+      socket.emit("mobile_proctoring_frame", { session_id: sessionId, image: canvas.toDataURL("image/jpeg", 0.5) });
+    }, 1000);
+    const visibility = async () => {
+      if (document.hidden) sendStatus("camera_error");
+      else if (streamRef.current) { sendStatus(); try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* power saving may block wake lock */ } }
+    };
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      aliveRef.current = false; clearInterval(heartbeat); clearInterval(frames); document.removeEventListener("visibilitychange", visibility);
+      sendStatus("disconnected"); socket.disconnect(); joinedRef.current = false;
+      if (recorderRef.current?.state === "recording") { recorderRef.current.onstop = null; recorderRef.current.stop(); }
+      streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); wakeLockRef.current?.release().catch(() => {});
+    };
+    // Session/token scope owns the socket; UI state must not interrupt recording.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, pairingToken]);
 
-export default MobileRecorder;
+  const enableCamera = async () => {
+    if (busy) return; setBusy(true); setError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Open this private link in a current Safari or Chrome browser. Camera access requires HTTPS.");
+      streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: { echoCancellation: true, noiseSuppression: true } });
+      if (!aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
+      streamRef.current = stream; videoRef.current.srcObject = stream; await videoRef.current.play();
+      stream.getTracks().forEach((track) => { track.onended = () => { setCameraReady(false); setStatus("camera_error"); setError("Your camera or microphone stopped. Enable it again to continue."); sendStatus("camera_error"); }; });
+      setCameraReady(true); setStatus("ready"); sendStatus("ready");
+      try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* display power policy belongs to the device */ }
+    } catch (failure) { setError(failure.name === "NotAllowedError" ? "Allow camera and microphone access in your browser settings, then retry." : failure.message); }
+    finally { setBusy(false); }
+  };
+  const title = { connecting: "Connecting your phone", reconnecting: "Reconnecting…", camera_needed: "Enable your second camera", camera_error: "Reconnect your second camera", ready: "Your second camera is ready", recording: "Interview monitoring is active", uploading: "Saving your recording", uploaded: "Recording saved", upload_failed: "Let's save your recording", complete: "Your interview has finished", invalid: "Scan a new private QR code" }[status];
+  return <main className={styles.shell}><section className={styles.centerCard} style={{ margin: "10px auto", maxWidth: 540 }}><span className={styles.brand}><ShieldCheck size={22} /> GenHire companion</span>
+    <span className={styles.eyebrow}>Phone · Second camera</span><h1>{title}</h1><p>Place your phone to show you, your laptop and your desk from the side. Keep this page open, your screen unlocked and your phone connected to power.</p>
+    <div className={styles.devicePreview}><video ref={videoRef} autoPlay muted playsInline className={styles.preview} style={{ transform: "none" }} aria-label="Phone camera preview" />{!cameraReady && <span className={styles.cameraPlaceholder}><Smartphone size={30} />Rear camera preview</span>}</div>
+    {error && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{error}</span></div>}
+    {!cameraReady && joined && !["uploaded", "complete", "uploading", "upload_failed", "invalid"].includes(status) && <button className={styles.primary} style={{ marginTop: 22 }} onClick={enableCamera} disabled={busy}>{busy ? "Opening camera…" : "Enable camera and microphone"}</button>}
+    {cameraReady && <p className={styles.good} style={{ marginTop: 20 }}><Check size={18} /> Camera connected · {joined ? "Laptop connected" : "Reconnecting to laptop"}</p>}
+    {status === "ready" && <p className={styles.note}>Continue on your laptop. Recording begins when your interview starts.</p>}{status === "recording" && <p className={styles.note}>Do not switch apps or lock your phone. Your laptop controls recording automatically.</p>}
+    {status === "upload_failed" && <button className={styles.primary} onClick={upload}>Retry recording upload</button>}
+    {["uploaded", "complete"].includes(status) && <p className={styles.note}>You can close this page now.</p>}{status === "uploading" && <p className={styles.note}>Keep this page open until your recording is saved.</p>}
+  </section></main>;
+}
