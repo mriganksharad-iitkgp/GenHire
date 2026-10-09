@@ -4,7 +4,12 @@ Run the subset touched by a change after each reorganization step; run the
 full list before merging/deploying. Every flow must behave exactly as before
 the reorganization — same pages, same redirects, same data.
 
-> Local runs talk to the live database — stick to reads where possible and
+> Most of this checklist is automated: `cd react-frontend && npm run test:e2e`
+> (see `react-frontend/e2e/README.md`). It runs against a throw-away local stack,
+> never the live database. What it cannot cover (real payments, speech, face
+> capture, the secure-browser kiosk) is listed there and stays manual.
+
+> Manual runs talk to the live database — stick to reads where possible and
 > reuse existing test accounts instead of creating new data.
 
 ## 1. Auth & session
