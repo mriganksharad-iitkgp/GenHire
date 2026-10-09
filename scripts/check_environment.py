@@ -80,8 +80,8 @@ def inspect_backend(values, production):
         warnings.append("RAZORPAY_WEBHOOK_SECRET is empty; verified webhook processing needs the configured signing secret")
     if production and values.get("RAZORPAY_KEY_ID", "").startswith("rzp_test_"):
         warnings.append("Razorpay is configured in test mode; live payments need a matching live key pair")
-    if production and not (values.get("GCS_SERVICE_ACCOUNT_JSON") or values.get("GCS_SERVICE_ACCOUNT_KEY")):
-        errors.append("GCS_SERVICE_ACCOUNT_JSON or GCS_SERVICE_ACCOUNT_KEY is required for storage signing")
+    # Cloud Run uses its attached service account through ADC. Explicit signing
+    # credentials remain supported for local development and legacy deployments.
     if values.get("GCS_SERVICE_ACCOUNT_JSON"):
         try:
             credential = json.loads(values["GCS_SERVICE_ACCOUNT_JSON"])

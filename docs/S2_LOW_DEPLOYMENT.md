@@ -132,12 +132,14 @@ in the browser bundle by the Vite configuration.
    in the revision's security settings. Confirm its Google API access.
    Existing explicit speech credentials remain supported if you retain them.
 
-   **Retain your working Cloud Storage configuration.** The storage module still
-   uses explicit signing credentials for signed URLs: keep `GCS_BUCKET_NAME`
-   and `GCS_SERVICE_ACCOUNT_JSON` or `GCS_SERVICE_ACCOUNT_KEY`. If storage
-   currently relies on `GOOGLE_APPLICATION_CREDENTIALS`, move that same secret
-   file path to `GCS_SERVICE_ACCOUNT_KEY` before unsetting it for ADC. Store JSON
-   keys in Secret Manager or mount a secret file; do not use a local Windows path.
+   **Use the Cloud Run identity for Cloud Storage.** Keep `GCS_BUCKET_NAME`
+   configured and leave `GCS_SERVICE_ACCOUNT_JSON`,
+   `GCS_SERVICE_ACCOUNT_KEY`, and `GOOGLE_APPLICATION_CREDENTIALS` empty in
+   production. The storage module uses ADC for uploads and IAM `signBlob` for
+   signed URLs. Grant the runtime service account `Storage Object Admin` and
+   `Service Account Token Creator` on the signing identity. Local development
+   may still use an explicit key file or JSON override; never use a local
+   Windows path in Cloud Run.
 5. Set `CORS_ORIGINS` and `FRONTEND_URL` to your actual Vercel/custom-domain
    frontend URL. The current production file uses `https://genhire.in` and allows
    that domain, its www origin and `https://gen-hire-gamma.vercel.app` in CORS.

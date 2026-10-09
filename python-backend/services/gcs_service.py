@@ -11,55 +11,59 @@ import logging
 from datetime import timedelta
 from google.cloud import storage
 from google.oauth2 import service_account
+import google.auth
+from google.auth.transport.requests import Request
 
 logger = logging.getLogger(__name__)
 
 _client = None
 _bucket = None
+_credentials = None
+_uses_adc = False
 
 
 def _get_client():
-    """Get or create a GCS client using service account credentials."""
-    global _client
+    """Get or create a GCS client using ADC or local development credentials."""
+    global _client, _credentials, _uses_adc
     if _client is not None:
         return _client
 
     import json
-    
-    # Check for direct JSON string in env var
+
     key_json = os.getenv("GCS_SERVICE_ACCOUNT_JSON")
     if key_json and key_json.strip().startswith("{"):
         try:
             creds_dict = json.loads(key_json)
-            credentials = service_account.Credentials.from_service_account_info(creds_dict)
-            _client = storage.Client(credentials=credentials, project=credentials.project_id)
+            _credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            _client = storage.Client(credentials=_credentials, project=_credentials.project_id)
             return _client
         except Exception as e:
             logger.error(f"Failed to parse GCS_SERVICE_ACCOUNT_JSON: {e}")
 
     key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not key_path:
-        raise RuntimeError("GCS_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS not set")
-
-    # If the key_path itself is a JSON string
-    if key_path.strip().startswith("{"):
+    if key_path and key_path.strip().startswith("{"):
         try:
             creds_dict = json.loads(key_path)
-            credentials = service_account.Credentials.from_service_account_info(creds_dict)
-            _client = storage.Client(credentials=credentials, project=credentials.project_id)
+            _credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            _client = storage.Client(credentials=_credentials, project=_credentials.project_id)
             return _client
         except Exception as e:
             logger.error(f"Failed to parse JSON from GCS_SERVICE_ACCOUNT_KEY: {e}")
 
-    if not os.path.isabs(key_path):
-        # Resolve relative to backend root
-        key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), key_path)
+    if key_path:
+        if not os.path.isabs(key_path):
+            key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), key_path)
+        if not os.path.exists(key_path):
+            raise FileNotFoundError(f"Service account key file not found: {key_path}")
+        _credentials = service_account.Credentials.from_service_account_file(key_path)
+        _client = storage.Client(credentials=_credentials, project=_credentials.project_id)
+        return _client
 
-    if not os.path.exists(key_path):
-        raise FileNotFoundError(f"Service account key file not found: {key_path}")
-
-    credentials = service_account.Credentials.from_service_account_file(key_path)
-    _client = storage.Client(credentials=credentials, project=credentials.project_id)
+    _credentials, project_id = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    _uses_adc = True
+    _client = storage.Client(credentials=_credentials, project=project_id)
     return _client
 
 
@@ -91,8 +95,9 @@ def is_gcs_configured():
 
         key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if not key_path:
-            return False
-            
+            google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            return True
+
         if key_path.strip().startswith("{"):
             return True
 
@@ -175,10 +180,27 @@ def generate_signed_url(gcs_path, expiration_minutes=60):
         bucket = _get_bucket()
         blob = bucket.blob(gcs_path)
 
+        signing_options = {}
+        if _uses_adc:
+            if _credentials is None:
+                raise RuntimeError("GCS credentials were not initialized")
+            _credentials.refresh(Request())
+            service_account_email = getattr(_credentials, "service_account_email", None)
+            if not service_account_email:
+                raise RuntimeError(
+                    "The ADC identity cannot sign URLs; configure a service account "
+                    "runtime identity with Service Account Token Creator permission"
+                )
+            signing_options = {
+                "service_account_email": service_account_email,
+                "access_token": _credentials.token,
+            }
+
         url = blob.generate_signed_url(
             version="v4",
             expiration=timedelta(minutes=expiration_minutes),
             method="GET",
+            **signing_options,
         )
         return url
     except Exception as e:

@@ -225,7 +225,7 @@ def create_app():
     if not gcs_service.is_gcs_configured():
         raise RuntimeError(
             "Google Cloud Storage is not configured (GCS_BUCKET_NAME + "
-            "GOOGLE_APPLICATION_CREDENTIALS/GCS_SERVICE_ACCOUNT_KEY). "
+            "the Cloud Run service identity or local GCS credentials). "
             "GCS is mandatory — all uploads are stored there, with no local fallback."
         )
     print("[OK] GCS storage configured (mandatory, no local fallback)")
