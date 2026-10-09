@@ -69,3 +69,13 @@
 .lockIcon {
   margin-right: 6px;
 }
+
+
+.card { margin-top:0; border-radius:20px; border-color:var(--portal-border); padding:24px; box-shadow:var(--portal-shadow); }
+.card h3 { font-size:18px; color:var(--portal-text); }
+.hint,.lockedNote { font-size:13px; line-height:1.65; }
+.uploadButton { min-height:42px; border-radius:11px; background:var(--portal-gradient); font-size:13px; padding:10px 16px; }
+.uploadButton:hover:not(:disabled) { background:var(--portal-primary); }
+.uploadButton:disabled { background:var(--portal-gradient); opacity:.55; }
+.uploadButton:focus-visible { outline:3px solid #a5b4fc; outline-offset:3px; }
+.fileInput { max-width:100%; font-size:13px; }

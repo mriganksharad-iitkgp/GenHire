@@ -11,6 +11,20 @@ import contextlib
 import io
 import os
 
+if __name__ == "__main__":
+    from core.runtime import ensure_local_runtime
+    ensure_local_runtime()
+    from config.env_loader import load_environment
+    from core.runtime import check_local_port
+    load_environment()
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        try:
+            check_local_port(int(os.getenv("PORT", "5000")))
+        except ValueError as error:
+            raise SystemExit("PORT must be an integer between 1 and 65535.") from error
+
+_dev_reloader = os.environ.get("GENHIRE_DEV_RELOAD", "1") != "0"
+
 # `python app.py` with the Werkzeug auto-reloader always runs this module
 # TWICE per process generation: once as a disposable "watcher" process (which
 # builds a throwaway Flask app — connecting to Mongo, registering blueprints,
@@ -46,7 +60,7 @@ import os
 #     lifetime, duplicating every scheduled sweep/cleanup alongside the
 #     subprocess's real ones.
 _is_disposable_reloader_watcher = (
-    __name__ == "__main__" and os.environ.get("WERKZEUG_RUN_MAIN") != "true"
+    __name__ == "__main__" and _dev_reloader and os.environ.get("WERKZEUG_RUN_MAIN") != "true"
 )
 
 if _is_disposable_reloader_watcher:
@@ -79,7 +93,7 @@ if __name__ == "__main__":
             debug=True,
             host="0.0.0.0",
             port=int(os.getenv("PORT", "5000")),
-            use_reloader=True,
+            use_reloader=_dev_reloader,
         )
     finally:
         jobs_runner.stop_all()

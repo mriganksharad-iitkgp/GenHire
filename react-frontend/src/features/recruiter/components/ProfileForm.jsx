@@ -1,146 +1,22 @@
-import React from 'react';
-import styles from 'features/recruiter/pages/RecruiterDashboard.module.css';
+import React from "react";
+import styles from "features/recruiter/pages/RecruiterDashboard.module.css";
 
-const ProfileForm = ({ companyProfile, isEditing, onChange, onSave, onCancel, onDeleteAccount }) => (
-  <div className={styles.profileForm}>
-    <div className={styles.formGroup}>
-      <label>Account Email</label>
-      <input
-        type="email"
-        value={companyProfile.email}
-        disabled
-        className={styles.disabledField}
-        title="Email cannot be changed"
-      />
-      <small style={{ color: '#888', fontSize: '12px' }}>This is the email used to sign in. It cannot be changed.</small>
-    </div>
-
-    <div className={styles.formRow}>
-      <div className={styles.formGroup}>
-        <label>Company Name</label>
-        <input 
-          type="text"
-          value={companyProfile.companyName}
-          onChange={(e) => onChange({...companyProfile, companyName: e.target.value})}
-          disabled={!isEditing}
-          className={!isEditing ? styles.disabledField : ''}
-        />
-      </div>
-      <div className={styles.formGroup}>
-        <label>Industry</label>
-        <input 
-          type="text"
-          value={companyProfile.industry}
-          onChange={(e) => onChange({...companyProfile, industry: e.target.value})}
-          disabled={!isEditing}
-          className={!isEditing ? styles.disabledField : ''}
-        />
-      </div>
-    </div>
-
-    <div className={styles.formRow}>
-      <div className={styles.formGroup}>
-        <label>Location</label>
-        <input 
-          type="text"
-          value={companyProfile.location}
-          onChange={(e) => onChange({...companyProfile, location: e.target.value})}
-          disabled={!isEditing}
-          className={!isEditing ? styles.disabledField : ''}
-        />
-      </div>
-      <div className={styles.formGroup}>
-        <label>Company Size</label>
-        <select 
-          value={companyProfile.size}
-          onChange={(e) => onChange({...companyProfile, size: e.target.value})}
-          disabled={!isEditing}
-          className={!isEditing ? styles.disabledField : ''}
-        >
-          <option value="1-10 employees">1-10 employees</option>
-          <option value="11-50 employees">11-50 employees</option>
-          <option value="51-100 employees">51-100 employees</option>
-          <option value="100-500 employees">100-500 employees</option>
-          <option value="500+ employees">500+ employees</option>
-        </select>
-      </div>
-    </div>
-
-    <div className={styles.formGroup}>
-      <label>Website</label>
-      <input 
-        type="url"
-        value={companyProfile.website}
-        onChange={(e) => onChange({...companyProfile, website: e.target.value})}
-        disabled={!isEditing}
-        className={!isEditing ? styles.disabledField : ''}
-      />
-    </div>
-
-    <div className={styles.formGroup}>
-      <label>Company Description</label>
-      <textarea 
-        value={companyProfile.description}
-        onChange={(e) => onChange({...companyProfile, description: e.target.value})}
-        rows="4"
-        disabled={!isEditing}
-        className={!isEditing ? styles.disabledField : ''}
-      />
-    </div>
-
-    <div className={styles.formActions}>
-      {isEditing ? (
-        <>
-          <button className={styles.primaryButton} onClick={onSave}>
-            <i className="fa fa-save"></i> Save Changes
-          </button>
-          <button className={styles.secondaryButton} onClick={onCancel}>
-            <i className="fa fa-times"></i> Cancel
-          </button>
-        </>
-      ) : (
-        <p style={{ color: '#666', margin: 0 }}>
-          <i className="fa fa-info-circle"></i> Click "Edit Profile" to modify company information
-        </p>
-      )}
-    </div>
-
-    {/* Account Settings Section */}
-    <div className={styles.formGroup} style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
-      <h4 style={{ margin: '0 0 15px 0', color: '#dc3545' }}><i className="fa fa-cog"></i> Danger Zone</h4>
-      <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '15px' }}>
-        Once you delete your account, there is no going back. Please be certain.
-      </p>
-      <button 
-        type="button" 
-        onClick={onDeleteAccount} 
-        style={{ 
-          padding: '10px 20px', 
-          backgroundColor: 'white', 
-          color: '#dc3545', 
-          border: '1px solid #dc3545', 
-          borderRadius: '4px', 
-          cursor: 'pointer',
-          fontWeight: '500',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          transition: 'all 0.2s'
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = '#dc3545';
-          e.currentTarget.style.color = 'white';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'white';
-          e.currentTarget.style.color = '#dc3545';
-        }}
-      >
-        <i className="fa fa-trash" aria-hidden="true"></i>
-        Delete Account
-      </button>
-    </div>
-  </div>
-);
-
-export default ProfileForm;
+export default function ProfileForm({ companyProfile, isEditing, onChange, onSave, onCancel, onDeleteAccount }) {
+  const fields = [["email","Account email","email"],["companyName","Company name","text"],["industry","Industry","text"],["location","Location","text"],["size","Company size","select"],["website","Website","url"]];
+  return <div className={styles.profileForm}>
+    {isEditing ? <form onSubmit={event => { event.preventDefault(); onSave(); }}>
+      <div className={styles.companyFields}>{fields.map(([key,label,type]) => <div className={styles.formGroup} key={key}>
+        <label htmlFor={`company-${key}`}>{label}</label>
+        {type === "select" ? <select id={`company-${key}`} value={companyProfile[key] || ""} onChange={event => onChange({...companyProfile,[key]:event.target.value})}><option value="">Select company size</option>{["1-10 employees","11-50 employees","51-100 employees","100-500 employees","500+ employees"].map(size => <option key={size}>{size}</option>)}</select> : <input id={`company-${key}`} type={type} value={companyProfile[key] || ""} disabled={key === "email"} onChange={event => onChange({...companyProfile,[key]:event.target.value})} />}
+        {key === "email" && <small>Your sign-in email cannot be changed.</small>}
+      </div>)}</div>
+      <div className={styles.formGroup}><label htmlFor="company-description">Company description</label><textarea id="company-description" value={companyProfile.description || ""} onChange={event => onChange({...companyProfile,description:event.target.value})} rows={5} /></div>
+      <div className={styles.formActions}><button className={styles.primaryButton} type="submit"><i className="fa fa-check" aria-hidden="true" /> Save Changes</button><button className={styles.secondaryButton} type="button" onClick={onCancel}>Cancel</button></div>
+    </form> : <>
+      <div className={styles.companyIdentity}><span className={styles.companyMark} aria-hidden="true"><i className="fa fa-building-o" /></span><div><h2>{companyProfile.companyName || "Your company"}</h2><p>{[companyProfile.industry,companyProfile.location].filter(Boolean).join(" / ") || "Add your company details to introduce your team."}</p></div></div>
+      <dl className={styles.companyFields}>{fields.filter(([key]) => key !== "companyName").map(([key,label]) => <div className={styles.companyField} key={key}><dt>{label}</dt><dd>{key === "website" && /^https?:\/\//i.test(companyProfile[key] || "") ? <a href={companyProfile[key]} target="_blank" rel="noreferrer">{companyProfile[key]}</a> : companyProfile[key] || "Not provided"}</dd></div>)}</dl>
+      <section className={styles.companyDescription}><h3>About the company</h3><p>{companyProfile.description || "Add a description to tell candidates about your company and culture."}</p></section>
+    </>}
+    <section className={styles.accountSettings}><div><h3>Account settings</h3><p>Deleting your account is permanent.</p></div><button type="button" className={styles.dangerButton} onClick={onDeleteAccount}>Delete Account</button></section>
+  </div>;
+}

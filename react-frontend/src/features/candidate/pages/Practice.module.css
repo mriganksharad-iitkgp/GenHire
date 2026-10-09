@@ -5,12 +5,12 @@
 /* Import and reuse Dashboard design system variables */
 /* Using same design tokens as Dashboard.module.css */
 
-:root {
-  --primary-50: #eff6ff;
-  --primary-100: #dbeafe;
-  --primary-500: #3b82f6;
-  --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
+.practiceContainer {
+  --primary-50: #eef2ff;
+  --primary-100: #e0e7ff;
+  --primary-500: #6366f1;
+  --primary-600: #4f46e5;
+  --primary-700: #4338ca;
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
@@ -1287,3 +1287,31 @@ body.dark .detailsButton:hover,
     opacity: 1;
   }
 }
+
+/* Same compact scale and palette as the candidate jobs workspace. */
+.practiceContainer { padding-top: 0; min-height: calc(100svh - 80px); background: var(--portal-backdrop); color: var(--portal-text); font-family: Inter,system-ui,sans-serif; }
+.content { max-width: 1280px; padding: 28px 24px 48px; min-width: 0; }
+.practiceContent { gap: 22px; }
+.section { border: 1px solid var(--portal-border); border-radius: 20px; background: var(--portal-surface); padding: 24px; margin-bottom: 22px; box-shadow: var(--portal-shadow); }
+.sectionTitle { font-size: 19px; margin: 0 0 20px; gap: 10px; }
+.sectionTitle i { color: var(--portal-primary); }
+.rolesGrid { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }
+.roleCard { padding: 20px 14px; border: 1px solid var(--portal-border); border-radius: 15px; box-shadow: none; background: #fff; }
+.roleCard:hover { transform: translateY(-2px); border-color: #c7c5f7; box-shadow: 0 6px 18px #6366f110; }
+.roleCard.selected { background: var(--portal-primary-soft); border-color: var(--portal-accent); box-shadow: none; }
+.roleIcon { width: 44px; height: 44px; margin: 0 auto 12px; background: var(--portal-gradient); border-radius: 12px; font-size: 22px; }
+.roleCard h4 { font-size: 14px; line-height: 1.5; margin: 0; }
+.selectedBadge { color: var(--portal-primary); }
+.difficultyCard { border-radius: 14px; padding: 18px; box-shadow: none; }
+.uploadCard { padding: 20px; border: 1px solid var(--portal-border); border-radius: 15px; }
+.uploadArea { border-color: #c7c5f7; background: #fafaff; border-radius: 12px; padding: 20px; }
+.uploadLabel i { color: var(--portal-primary); font-size: 26px; }
+.uploadLabel,.uploadSubtext { font-size: 13px; }
+.actionSection { padding: 24px; border: 1px solid #dddafa; border-radius: 20px; background: linear-gradient(120deg,#eef2ff,#f3efff); box-shadow: none; }
+.startButton,.startButton:hover:not(:disabled) { background: var(--portal-gradient); color: #fff; font-size: 14px; min-height: 46px; padding: 12px 22px; border-radius: 12px; box-shadow: 0 4px 14px #6366f120; transform: none; }
+.historyGrid { gap: 18px; } .applicationCard { padding: 22px; border-radius: 18px; border-color: var(--portal-border); box-shadow: var(--portal-shadow); }
+.reportButton,.reportButton:hover { background: var(--portal-gradient); color: #fff; }
+.detailsButton,.cvButton { color: var(--portal-primary); border-color: var(--portal-border); }
+.practiceContainer button:focus-visible,.roleCard:focus-visible,.difficultyCard:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+@media (max-width:900px) { .rolesGrid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width:600px) { .content { padding: 20px 16px 36px; } .section { padding: 20px; } .rolesGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } .difficultyGrid { grid-template-columns: 1fr; } .uploadSection { grid-template-columns: 1fr; } .startButton { width: 100%; } }

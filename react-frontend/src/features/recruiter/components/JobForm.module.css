@@ -1,0 +1,101 @@
+/* Shared create/edit job form. Tokens come from the current landing palette. */
+.modalOverlay { position:fixed; inset:0; background:#0f172a80; display:flex; justify-content:center; align-items:center; z-index:10050; padding:20px; backdrop-filter:blur(4px); }
+.modalContent { width:min(100%,960px); max-height:calc(100dvh - 40px); overflow-y:auto; overscroll-behavior:contain; background:var(--portal-surface); color:var(--portal-text); border:1px solid var(--portal-border); border-radius:20px; box-shadow:0 20px 70px #0f172a26; }
+.modalHeader { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; padding:20px 24px; background:linear-gradient(115deg,#eef2ff,#f3efff); border-bottom:1px solid #dddafa; gap:16px; }
+.modalHeader h2 { font-size:22px; line-height:1.3; font-weight:700; margin:0; color:var(--portal-text); }
+.closeButton { display:grid; place-items:center; flex-shrink:0; width:36px; height:36px; border:0; background:transparent; color:var(--portal-secondary); cursor:pointer; border-radius:8px; }
+.closeButton:hover { background:#e0e7ff; color:var(--portal-primary); }
+.jobForm { padding:24px; }
+.formGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.formGroup { display:flex; flex-direction:column; min-width:0; gap:8px; margin-bottom:20px; }
+.formGrid .formGroup { margin-bottom:0; }
+.formGroup label { font-size:13px; font-weight:600; line-height:1.5; color:var(--portal-text); }
+.smartInput,.enhancedInput,.enhancedSelect,.enhancedTextarea,.smartTextarea,.skillInput,.aiInput,.statusSelect { width:100%; min-width:0; min-height:44px; padding:11px 12px; font-size:14px; line-height:1.5; font-family:inherit; color:var(--portal-text); background:white; border:1px solid var(--portal-border); border-radius:10px; box-sizing:border-box; }
+.smartTextarea,.enhancedTextarea { min-height:120px; resize:vertical; }
+.smartInput::placeholder,.smartTextarea::placeholder,.enhancedInput::placeholder,.enhancedTextarea::placeholder,.aiInput::placeholder,.skillInput::placeholder { font-size:inherit; color:var(--portal-muted); }
+.inputWithDropdown { position:relative; min-width:0; }
+.inputWithDropdown input { padding-right:42px; }
+.dropdownToggle { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:32px; height:32px; padding:6px; border:0; background:transparent; color:var(--portal-muted); cursor:pointer; border-radius:6px; }
+.suggestionDropdown { position:absolute; top:100%; left:0; right:0; z-index:4; max-height:220px; overflow-y:auto; background:white; border:1px solid var(--portal-border); border-radius:10px; box-shadow:0 8px 24px #0f172a1a; margin-top:4px; }
+.suggestionItem { padding:10px 12px; font-size:13px; color:var(--portal-secondary); cursor:pointer; }
+.suggestionItem:hover { color:var(--portal-primary); background:var(--portal-primary-soft); }
+.helpText,.aiSubtext { font-size:12px; line-height:1.65; color:var(--portal-muted); margin:0; }
+.smartIndicator,.autoFilled,.optional { margin-left:8px; padding:3px 6px; color:var(--portal-primary); background:var(--portal-primary-soft); font-size:10px; font-weight:500; border-radius:5px; }
+.optional { background:#f1f5f9; color:var(--portal-muted); }
+.templateSection { background:var(--portal-bg); border:1px solid var(--portal-border); border-radius:14px; padding:18px; margin-bottom:20px; }
+.templateHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.templateHeader h3 { margin:0; font-size:17px; font-weight:650; color:var(--portal-text); }
+.toggleTemplates { background:white; color:var(--portal-secondary); border:1px solid var(--portal-border); border-radius:8px; padding:8px 10px; font-size:12px; cursor:pointer; }
+.templateGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.templateCard { border:1px solid var(--portal-border); background:white; border-radius:12px; padding:16px; cursor:pointer; box-shadow:var(--portal-shadow); }
+.templateCard:hover { border-color:var(--portal-accent); background:#fafaff; }
+.templateIcon { color:var(--portal-primary); font-size:22px; margin-bottom:12px; }
+.templateContent h4 { margin:0 0 5px; font-size:14px; color:var(--portal-text); }
+.templateContent p { font-size:12px; color:var(--portal-muted); margin:0 0 8px; }
+.templateSalary { font-size:10px; line-height:1.5; color:var(--portal-primary); background:var(--portal-primary-soft); padding:3px 6px; border-radius:5px; display:inline-block; }
+.aiSection { background:var(--portal-primary-soft); border:1px solid #c7d2fe; padding:20px; border-radius:14px; margin-bottom:24px; }
+.aiHeader { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
+.aiHeader h3 { font-size:18px; margin:0; color:var(--portal-primary); }
+.aiHeader i { color:var(--portal-primary); }
+.aiBadge { padding:4px 8px; background:var(--portal-gradient); color:white; border-radius:6px; font-size:10px; }
+.aiSubtext { margin-bottom:14px; color:var(--portal-secondary); }
+.aiInputRow { display:flex; gap:10px; align-items:stretch; }
+.aiInput { flex:1; }
+.aiGenerateButton,.generateButton,.submitButton,.updateButton,.cancelButton { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 16px; font-size:13px; font-weight:600; border-radius:10px; border:1px solid transparent; cursor:pointer; font-family:inherit; line-height:1.4; }
+.aiGenerateButton,.generateButton,.submitButton,.updateButton { background:var(--portal-gradient); color:white; }
+.aiGenerateButton:hover:not(:disabled),.generateButton:hover:not(:disabled),.submitButton:hover:not(:disabled),.updateButton:hover:not(:disabled) { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; }
+.aiGenerateButton:disabled,.submitButton:disabled,.updateButton:disabled { opacity:.6; cursor:wait; }
+.cancelButton { background:white; color:var(--portal-secondary); border-color:var(--portal-border); }
+.cancelButton:hover { background:var(--portal-primary-soft); color:var(--portal-primary); }
+.formActions { margin-top:24px; padding-top:20px; border-top:1px solid var(--portal-border); display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+.textAreasSection { display:grid; gap:20px; margin-top:24px; }
+.textAreasSection .formGroup { margin:0; }
+.skillsContainer { position:relative; margin-top:20px; }
+.skillTags { display:flex; gap:8px; flex-wrap:wrap; padding:12px; background:var(--portal-bg); border:1px solid var(--portal-border); border-radius:10px; min-height:44px; margin-bottom:10px; }
+.skillTag { display:inline-flex; align-items:center; gap:8px; padding:5px 9px; font-size:12px; font-weight:500; color:var(--portal-primary); background:var(--portal-primary-soft); border:1px solid #e0e7ff; border-radius:7px; }
+.removeSkill { border:0; background:transparent; color:inherit; width:20px; height:20px; border-radius:4px; cursor:pointer; }
+.popularSkills { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:var(--portal-muted); }
+.popularSkillButton { border:1px solid var(--portal-border); background:white; border-radius:6px; padding:5px 8px; font-size:11px; color:var(--portal-primary); cursor:pointer; }
+.fileUploadSection { margin-top:14px; }
+.fileUploadBox { position:relative; margin-top:14px; }
+.fileInput { position:absolute; width:1px; height:1px; opacity:0; }
+.fileInputLabel { display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center; padding:24px 16px; background:#fafaff; border:1px dashed #c7d2fe; border-radius:10px; text-align:center; color:var(--portal-secondary); font-size:13px; cursor:pointer; }
+.fileInputLabel i { font-size:26px; color:var(--portal-accent); }
+.fileInputLabel small { font-size:12px; color:var(--portal-muted); }
+.uploadedFile { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:12px; background:white; border:1px solid var(--portal-border); border-radius:10px; }
+.fileInfo { display:flex; gap:10px; align-items:center; min-width:0; }
+.fileDetails { min-width:0; }
+.fileName { font-size:13px; overflow-wrap:anywhere; color:var(--portal-text); }
+.fileSize { font-size:11px; color:var(--portal-muted); }
+.removeFileButton { background:#fff1f2; color:var(--portal-danger); border:1px solid #fecaca; border-radius:6px; padding:6px 8px; cursor:pointer; }
+.aiError { color:var(--portal-danger); font-size:12px; margin-top:10px; }
+.proctoringSection { display:flex; flex-direction:column; gap:10px; padding:16px; border:1px solid var(--portal-border); border-radius:12px; background:var(--portal-bg); }
+.creditWarning { display:flex; align-items:flex-start; gap:8px; padding:10px 12px; background:#fffbeb; color:#92400e; border:1px solid #fde68a; border-radius:8px; font-size:12px; line-height:1.6; }
+.proctoringToggle { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background:white; border:1px solid var(--portal-border); border-radius:10px; }
+.proctoringInfo { display:flex; align-items:center; gap:12px; min-width:0; }
+.proctoringIcon { width:24px; flex-shrink:0; font-size:18px; color:var(--portal-primary); text-align:center; }
+.proctoringInfo strong { display:block; font-size:13px; font-weight:600; color:var(--portal-text); margin-bottom:3px; }
+.proctoringInfo p { margin:0; font-size:12px; line-height:1.6; color:var(--portal-secondary); }
+.toggleSwitch { position:relative; display:inline-block; width:44px; height:26px; flex-shrink:0; }
+.toggleSwitch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; }
+.slider { position:absolute; inset:0; background:#cbd5e1; border-radius:26px; cursor:pointer; transition:background .15s; }
+.slider::before { position:absolute; content:""; width:20px; height:20px; left:3px; top:3px; background:white; border-radius:50%; box-shadow:0 1px 3px #0f172a26; transition:transform .15s; }
+.toggleSwitch input:checked + .slider { background:var(--portal-gradient); }
+.toggleSwitch input:checked + .slider::before { transform:translateX(18px); }
+.toggleSwitch input:focus-visible + .slider { outline:3px solid var(--portal-accent); outline-offset:3px; }
+.checkboxInput { width:16px; height:16px; accent-color:var(--portal-primary); }
+.statusContainer { display:flex; flex-direction:column; gap:8px; }
+.statusInfo small { font-size:12px; line-height:1.6; }
+.formFooter { margin-top:24px; }
+.formProgress { margin-bottom:16px; }
+.progressLabel,.progressText { font-size:12px; color:var(--portal-muted); }
+.progressBar { margin-top:8px; height:5px; background:#e2e8f0; border-radius:5px; overflow:hidden; }
+.progressFill { height:100%; background:var(--portal-gradient); }
+.quickStats { display:flex; gap:16px; flex-wrap:wrap; }
+.stat { font-size:12px; color:var(--portal-muted); }
+.actionButtons { display:flex; gap:10px; justify-content:flex-end; }
+.spinner { animation:spin 1s linear infinite; }
+.modalContent button:focus-visible,.modalContent input:focus-visible,.modalContent textarea:focus-visible,.modalContent select:focus-visible { outline:3px solid var(--portal-accent); outline-offset:2px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media(max-width:800px) { .templateGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .modalOverlay { padding:12px; }.modalContent { max-height:calc(100dvh - 24px); }.modalHeader,.jobForm { padding:18px; }.formGrid { grid-template-columns:minmax(0,1fr); }.aiInputRow { flex-direction:column; }.aiSection { padding:16px; }.templateHeader { align-items:flex-start; }.templateGrid { gap:8px; }.templateCard { padding:12px; }.smartInput,.enhancedInput,.enhancedSelect,.enhancedTextarea,.smartTextarea,.skillInput,.aiInput,.statusSelect { font-size:16px; } }

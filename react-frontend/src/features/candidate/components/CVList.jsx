@@ -152,7 +152,7 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
         <h4>
           <i className="fa fa-list"></i> Uploaded CVs ({cvList.length})
         </h4>
-        <small>Click to view in new tab</small>
+        <small>Select a CV to preview</small>
       </div>
 
       <div className={styles.list}>
@@ -161,6 +161,8 @@ const CVList = ({ onCVClick, showToast, refreshTrigger = 0 }) => {
             key={cv.cv_id}
             className={`${styles.cvCard} ${cv.is_primary ? styles.primary : ''}`}
             onClick={() => handleCVClick(cv)}
+            role="button" tabIndex={0} aria-label={`Preview ${cv.filename || 'uploaded CV'}`}
+            onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); handleCVClick(cv); } }}
           >
             <div className={styles.cvIcon}>
               <i className="fa fa-file-pdf-o"></i>

@@ -1,3 +1,4 @@
+import AuthShell from "features/auth/components/AuthShell";
 import React, { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
@@ -82,28 +83,28 @@ const ResetPassword = () => {
 
   if (!token) {
     return (
-      <div className={styles.loginContainer}>
-        <div className={styles.loginCard}>
+      <AuthShell title="Your workspace awaits." accent="Continue with confidence." description="Manage your account access and return to your hiring or interview workspace.">
+        <div className={`${styles.loginCard} ${styles.signupCard}`}>
           <div className={styles.logoSection}>
-            <h1>Invalid Link</h1>
+            <h1>Reset link unavailable</h1>
             <p>This password reset link is invalid or has expired.</p>
           </div>
           <button
             className={styles.loginButton}
             onClick={() => navigate("/forgot-password")}
           >
-            Request New Link
+            Request a new link
           </button>
         </div>
-      </div>
+    </AuthShell>
     );
   }
 
   return (
-    <div className={styles.loginContainer}>
-      <div className={styles.loginCard}>
+    <AuthShell title="Your workspace awaits." accent="Continue with confidence." description="Manage your account access and return to your hiring or interview workspace.">
+      <div className={`${styles.loginCard} ${styles.signupCard}`}>
         <div className={styles.logoSection}>
-          <h1>Reset Password</h1>
+          <h1>Set a new password</h1>
           <p>Enter your new password below.</p>
         </div>
 
@@ -171,11 +172,11 @@ const ResetPassword = () => {
             className={styles.loginButton}
             disabled={isLoading}
           >
-            {isLoading ? "Resetting..." : "Reset Password"}
+            {isLoading ? "Resetting..." : "Set a new password"}
           </button>
         </form>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

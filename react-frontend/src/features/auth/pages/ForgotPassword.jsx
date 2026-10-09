@@ -1,3 +1,4 @@
+import AuthShell from "features/auth/components/AuthShell";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import styles from "./Login.module.css";
@@ -34,10 +35,10 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className={styles.loginContainer}>
-      <div className={styles.loginCard}>
+    <AuthShell title="Your workspace awaits." accent="Continue with confidence." description="Manage your account access and return to your hiring or interview workspace.">
+      <div className={`${styles.loginCard} ${styles.signupCard}`}>
         <div className={styles.logoSection}>
-          <h1>Forgot Password</h1>
+          <h1>Reset your password</h1>
           <p>
             Enter your email address and we'll send you a link to reset your
             password.
@@ -71,17 +72,17 @@ const ForgotPassword = () => {
             className={styles.loginButton}
             disabled={isLoading}
           >
-            {isLoading ? "Sending..." : "Send Reset Link"}
+            {isLoading ? "Sending..." : "Send reset link"}
           </button>
         </form>
 
         <div className={styles.registerSection}>
           <p>
-            Remember your password? <Link to="/login">Back to Login</Link>
+            Remember your password? <Link to="/login">Return to sign in</Link>
           </p>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

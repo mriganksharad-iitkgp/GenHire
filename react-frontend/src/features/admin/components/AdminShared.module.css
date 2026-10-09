@@ -656,3 +656,5 @@
     overflow-x: auto;
   }
 }
+
+.card { border-radius:20px; box-shadow:var(--portal-shadow); }.cardHeader { background:var(--portal-primary-soft); }.primaryButton { background:var(--portal-gradient); color:white; }.primaryButton:hover:not(:disabled) { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; }

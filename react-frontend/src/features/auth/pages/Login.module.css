@@ -821,3 +821,15 @@ body.dark .sessionExpiredBanner,
     outline-color: #a5b4fc;
   }
 }
+
+/* Scoped candidate signup controls: match the refreshed login scale. */
+.signupCard { background:transparent; border:0; box-shadow:none; border-radius:0; padding:16px 0; max-width:420px; width:100%; animation:none; color:var(--portal-text); }
+.signupCard .logoSection { text-align:left; margin-bottom:24px; }.signupCard .logoSection h1 { background:none; -webkit-text-fill-color:currentColor; color:var(--portal-text); font-size:32px; font-weight:650; margin:14px 0 10px; letter-spacing:-1.2px; }.signupCard .logoSection p { font-size:14px; color:var(--portal-muted); max-width:none; margin:0; }
+.formEyebrow { color:var(--portal-muted); letter-spacing:1.8px; font-size:10px; font-weight:700; }
+.signupCard .userTypeTabs { padding:5px; gap:3px; margin-bottom:24px; border-radius:12px; background:var(--portal-primary-soft); }.signupCard .tabButton { padding:11px 5px; font-size:12px; border:1px solid transparent; border-radius:8px; gap:6px; color:var(--portal-muted); }.signupCard .activeTab { border-color:var(--portal-border); color:var(--portal-primary); background:white; box-shadow:0 2px 5px #20305309; }
+.signupCard .loginForm { gap:18px; }.signupCard .inputGroup { gap:9px; min-width:0; }.signupCard .inputGroup label { font-size:13px; letter-spacing:0; color:var(--portal-text); }.signupCard .inputGroup input { width:100%; min-width:0; height:49px; min-height:49px; padding:0 14px; font-size:14px; border:1px solid var(--portal-border); border-radius:10px; color:var(--portal-text); background:white; }.signupCard .inputGroup input::placeholder { font-size:inherit; color:var(--portal-muted); }
+.signupCard .passwordInputWrapper input { padding-right:48px; }.signupCard .passwordToggle { right:7px; width:36px; height:36px; padding:8px; color:var(--portal-muted); }
+.signupCard .loginButton { border-radius:10px; min-height:48px; padding:12px 14px; font-size:14px; margin-top:0; background:var(--portal-gradient); color:white; box-shadow:0 5px 13px #6366f11a; }.signupCard .loginButton:hover:not(:disabled) { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; transform:none; }.signupCard .loginButton:disabled { opacity:.6; }.signupCard .loginButton::before { display:none; }
+.signupCard .divider { margin:20px 0; }.signupCard .divider span { font-size:11px; }.signupCard .oauthSection { margin-top:0; }.signupCard .googleBtn { width:100%; height:47px; padding:10px 14px; font-size:14px; border-radius:10px; color:var(--portal-text); background:white; border-color:var(--portal-border); }
+.signupCard .registerSection { margin-top:20px; padding-top:0; border-top:0; color:var(--portal-muted); font-size:13px; }.signupCard .registerSection a { color:var(--portal-primary); }.signupCard .errorMessage,.signupCard .successMessage { font-size:13px; padding:12px 14px; line-height:1.6; }
+@media (max-width:600px) { .signupCard .inputGroup input { font-size:16px; } }

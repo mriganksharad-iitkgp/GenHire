@@ -1,3 +1,4 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 /**
  * SubscriptionPlans - Dedicated page for wallet recharge management
  * Clean, decoupled architecture using custom hooks and components
@@ -10,7 +11,6 @@ import {
   PlanCard,
   PaymentHistory,
   ArrowLeftIcon,
-  StarIcon,
   GridIcon,
   ClockIcon,
   AlertCircleIcon,
@@ -381,13 +381,7 @@ const SubscriptionPlans = () => {
             <ArrowLeftIcon />
             Back to Dashboard
           </button>
-          <div className={styles.headerText}>
-            <h1>
-              <StarIcon />
-              Recruiter Recharge Packs
-            </h1>
-            <p>Top up your wallet with non-expiring recruiter credits</p>
-          </div>
+          <PortalPageHeader title="Recharge your wallet" eyebrow="Recruiter credits" icon="fa-credit-card" subtitle="Review recharge packs, available credits and transaction history." />
         </header>
 
         {/* Tab Navigation */}

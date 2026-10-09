@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 
+import { legacyCandidateApplications } from "shared/components/layout/navigation";
 import Layout from "shared/components/layout/Layout";
 import ProtectedRoute from "app/ProtectedRoute";
 import { AdminLayoutOutlet } from "features/admin/components/AdminLayout";
@@ -20,6 +21,12 @@ function LegacyRedirect({ to }) {
 // Lazy-loaded pages (paths update as pages move into features/)
 const Login = React.lazy(() => import("features/auth/pages/Login"));
 const Profile = React.lazy(() => import("features/candidate/pages/Profile"));
+const Applications = React.lazy(() => import("features/candidate/pages/Applications"));
+function CandidateProfileRoute() {
+  const location = useLocation();
+  const destination = legacyCandidateApplications(location);
+  return destination ? <Navigate to={destination} replace /> : <Profile />;
+}
 const Dashboard = React.lazy(() => import("features/candidate/pages/Dashboard"));
 const Interview = React.lazy(() => import("features/interview/pages/Interview"));
 const JobDetails = React.lazy(() => import("features/candidate/pages/JobDetails"));
@@ -132,16 +139,17 @@ export default function AppRoutes() {
         >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/team" element={<TeamPage />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile" element={<CandidateProfileRoute />} />
           <Route path="/practice" element={<Practice />} />
           <Route path="/jobs/:jobId" element={<JobDetails />} />
+          <Route path="/applications" element={<Applications />} />
           <Route path="/applications/:applicationId" element={<ApplicationView />} />
         </Route>
 
         <Route path="/interviews/:interviewId" element={<Interview />} />
 
         {/* Legacy paths (renamed 2026-07) — emails/bookmarks keep working */}
-        <Route path="/recruiter-dashboard" element={<Navigate to="/recruiter/dashboard" replace />} />
+        <Route path="/recruiter-dashboard" element={<LegacyRedirect to="/recruiter/dashboard" />} />
         <Route path="/subscription" element={<Navigate to="/recruiter/subscription" replace />} />
         <Route path="/job/:jobId" element={<LegacyRedirect to="/jobs/:jobId" />} />
         <Route path="/application/:applicationId" element={<LegacyRedirect to="/applications/:applicationId" />} />

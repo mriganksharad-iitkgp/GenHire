@@ -1,10 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { XCircle, Home, RefreshCw, HelpCircle } from "lucide-react";
+import { getUser } from "shared/utils/session";
 import styles from "./PaymentCancel.module.css";
 
 const PaymentCancel = () => {
   const navigate = useNavigate();
+  const user = getUser(); const recruiter = (user?.userType || user?.user_type) === "recruiter";
+  const dashboard = !user ? "/login" : recruiter ? "/recruiter/dashboard" : (user.userType || user.user_type) === "admin" ? "/admin" : "/dashboard";
 
   return (
     <div className={styles.container}>
@@ -33,8 +36,7 @@ const PaymentCancel = () => {
         <h1 className={styles.title}>Payment Cancelled</h1>
         <p className={styles.subtitle}>Your payment was not completed</p>
         <p className={styles.description}>
-          Don't worry! No charges have been made to your account. You can try
-          again or return to the dashboard.
+          The checkout was not completed. Review your wallet history before trying again. If you see a bank debit, check its status with your payment provider.
         </p>
 
         {/* Info Box */}
@@ -54,27 +56,21 @@ const PaymentCancel = () => {
 
         {/* Action Buttons */}
         <div className={styles.buttonGroup}>
-          <button onClick={() => navigate(-1)} className={styles.primaryButton}>
+          <button onClick={() => navigate(!user ? "/login" : recruiter ? "/recruiter/subscription" : "/candidate/subscription")} className={styles.primaryButton}>
             <RefreshCw className={styles.buttonIcon} />
             Try Again
           </button>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate(dashboard)}
             className={styles.secondaryButton}
           >
             <Home className={styles.buttonIcon} />
-            Go to Dashboard
+            Return to dashboard
           </button>
         </div>
 
         {/* Footer Note */}
-        <p className={styles.footer}>
-          Having trouble?{" "}
-          <a href="/support" className={styles.supportLink}>
-            Contact support
-          </a>{" "}
-          for assistance
-        </p>
+        <p className={styles.footer}>Review recharge history for the confirmed transaction status.</p>
       </div>
     </div>
   );

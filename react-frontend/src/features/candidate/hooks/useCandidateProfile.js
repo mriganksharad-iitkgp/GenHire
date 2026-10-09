@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getProfile,
   updateProfile,
@@ -28,14 +28,18 @@ export default function useCandidateProfile(toast) {
   const [cvPath, setCvPath] = useState(null);
   const [cvDetails, setCvDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [uploadingCV, setUploadingCV] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const profile = await loadProfileCached(false, getProfile);
-      if (!profile) return;
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) throw new Error("Profile data unavailable");
       setBio({
         name: profile.name || "",
         email: profile.email || "",
@@ -43,12 +47,12 @@ export default function useCandidateProfile(toast) {
         location: profile.location || "",
         title: profile.title || "",
         about: profile.about || "",
-        skills: profile.skills || [],
+        skills: Array.isArray(profile.skills) ? profile.skills : typeof profile.skills === "string" ? profile.skills.split(",").map(skill => skill.trim()).filter(Boolean) : [],
       });
       if (profile.cv_path) setCvPath(profile.cv_path);
       if (profile.cv_details) setCvDetails(profile.cv_details);
     } catch (e) {
-      console.error(e);
+      setError("We could not load your profile. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -59,6 +63,8 @@ export default function useCandidateProfile(toast) {
   }, [load]);
 
   const save = useCallback(async () => {
+    if (savingRef.current) return false;
+    savingRef.current = true; setSaving(true);
     try {
       await updateProfile(bio);
       updateCachedProfile(prev => ({ ...(prev || {}), ...bio }));
@@ -67,7 +73,7 @@ export default function useCandidateProfile(toast) {
     } catch (e) {
       toast?.("Failed to update profile", "error");
       return false;
-    }
+    } finally { savingRef.current = false; setSaving(false); }
   }, [bio, toast, updateCachedProfile]);
 
   const uploadCvFile = useCallback(
@@ -159,6 +165,9 @@ export default function useCandidateProfile(toast) {
     cvDetails,
     setCvDetails,
     loading,
+    error,
+    saving,
+    reload: load,
     uploadingCV,
     uploadingPhoto,
     load,

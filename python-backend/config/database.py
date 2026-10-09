@@ -2,6 +2,7 @@ import os
 from pymongo import MongoClient
 from middleware.rate_limiter import env_int
 from config.env_loader import load_environment
+from config.indexes import ensure_application_identity_index
 
 load_environment()
 
@@ -144,11 +145,7 @@ class DatabaseConfig:
             # Matches the very common "does this candidate already have an
             # application for this job" lookup used throughout
             # application_controller.py / invite_service.py.
-            applications.create_index(
-                [('job_id', 1), ('student_id', 1)], name='uq_applications_job_student',
-                unique=True,
-                partialFilterExpression={'job_id': {'$type': 'string'}, 'student_id': {'$type': 'string'}},
-            )
+            ensure_application_identity_index(applications)
             applications.create_index(
                 [('processing_status', 1), ('scoring_next_retry_at', 1), ('scoring_lease_until', 1)],
                 name='idx_applications_scoring_work',
@@ -156,7 +153,8 @@ class DatabaseConfig:
         except Exception as e:
             raise RuntimeError(
                 "Critical application indexes could not be ensured. Audit legacy duplicates "
-                "with scripts/admin/audit_application_duplicates.py before rollout."
+                "with scripts/admin/audit_application_duplicates.py before rollout. "
+                f"Cause: {type(e).__name__}; database code: {getattr(e, 'code', 'not available')}."
             ) from None
 
         try:

@@ -1,7 +1,9 @@
+import AuthStory from "../components/AuthStory";
+import AuthBrand from "../components/AuthBrand";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useGoogleLogin } from "@react-oauth/google";
-import { Eye, EyeOff, ArrowRight, Sparkles, BriefcaseBusiness, ShieldCheck, UserRound } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, BriefcaseBusiness, ShieldCheck, UserRound } from "lucide-react";
 import styles from "./LoginExperience.module.css";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { setToken, setUser } from "shared/utils/session";
@@ -119,29 +121,15 @@ const Login = () => {
 
   return (
     <main className={styles.layout}>
-      <aside className={styles.storyPanel}>
-        <Link to="/" className={styles.brand}><span className={styles.brandMark}>G</span> GenHire</Link>
-        <div className={styles.storyCopy}>
-          <span className={styles.eyebrow}><Sparkles size={15} aria-hidden="true" /> A better way forward</span>
-          <h1>{userType === "recruiter" ? <>Find the people.<br /><em>Build the future.</em></> : userType === "admin" ? <>Keep things moving.<br /><em>With confidence.</em></> : <>Your next chapter.<br /><em>Starts with you.</em></>}</h1>
-          <p>{userType === "recruiter" ? "Bring applications, interviews and candidate insights into one thoughtful hiring journey." : userType === "admin" ? "One workspace to support your people and keep your hiring operations running smoothly." : "Explore opportunities, practice your interview and bring your experience to the conversation."}</p>
-        </div>
-        <div className={styles.illustration} aria-hidden="true">
-          <div className={styles.orbit} /><div className={styles.orbitInner} />
-          <div className={styles.interviewCard}>
-            <div className={styles.cardHeader}><span className={styles.avatar}><UserRound size={24} /></span><div><strong>A conversation that counts</strong><small>Practice at your own pace</small></div><span className={styles.liveDot} /></div>
-            <div className={styles.waveform}>{[20, 34, 48, 26, 58, 40, 66, 32, 50, 24, 44, 62, 28, 46, 36, 22].map((height, index) => <span key={index} style={{ "--bar-height": `${height}px`, "--delay": `${index * 0.12}s` }} />)}</div>
-            <div className={styles.cardFooter}><span>Listen. Reflect. Grow.</span><span className={styles.sparkBadge}><Sparkles size={14} /> AI interview practice</span></div>
-          </div>
-          <div className={styles.floatingCard}><span className={styles.checkBadge}><ShieldCheck size={21} /></span><div><strong>Your journey, connected</strong><small>Profile &rarr; Apply &rarr; Interview</small></div></div>
-          <span className={styles.sparkOne}>+</span><span className={styles.sparkTwo}>+</span>
-        </div>
-        <p className={styles.storyFooter}>Prepared candidates. Thoughtful hiring.</p>
-      </aside>
+      <AuthStory
+        title={userType === "recruiter" ? "Find the people." : userType === "admin" ? "Keep things moving." : "Your next chapter."}
+        accent={userType === "recruiter" ? "Build the future." : userType === "admin" ? "With confidence." : "Starts with you."}
+        description={userType === "recruiter" ? "Bring applications, interviews and candidate insights into one thoughtful hiring journey." : userType === "admin" ? "One workspace to support your people and keep your hiring operations running smoothly." : "Explore opportunities, practice your interview and bring your experience to the conversation."}
+      />
 
       <section className={styles.formPanel} aria-labelledby="login-title">
         <div className={styles.formCard}>
-          <Link to="/" className={styles.mobileBrand}><span className={styles.brandMark}>G</span> GenHire</Link>
+          <AuthBrand className={styles.mobileBrand} />
           <span className={styles.formEyebrow}>YOUR WORKSPACE AWAITS</span>
           <h2 id="login-title">Welcome back.</h2>
           <p className={styles.formIntro}>Sign in to pick up where you left off.</p>

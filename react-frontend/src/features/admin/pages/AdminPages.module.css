@@ -1,6 +1,6 @@
 /* Admin Pages Shared Styles */
-:root {
-  --admin-bg: #f8fafc;
+.pageContainer {
+  --admin-bg: #f8f9fe;
   --admin-sidebar: #0f172a;
   --admin-card: #ffffff;
   --admin-border: #e2e8f0;
@@ -1146,3 +1146,6 @@
     width: 100%;
   }
 }
+
+.pageHeader { padding:24px; border:1px solid var(--portal-border); border-radius:20px; background:linear-gradient(115deg,#eef2ff,#f3efff); margin-bottom:24px; }.pageHeader h1 { font-size:28px; letter-spacing:-.7px; }.pageHeader p { color:var(--portal-secondary); font-size:14px; line-height:1.6; }
+@media (max-width:600px) { .pageHeader { padding:20px; }.pageHeader h1 { font-size:24px; } }

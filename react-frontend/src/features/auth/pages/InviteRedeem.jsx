@@ -8,7 +8,7 @@ const containerStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)",
+  background: "var(--portal-backdrop)",
   padding: "32px 16px",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -16,10 +16,10 @@ const containerStyle = {
 
 const cardStyle = {
   background: "#ffffff",
-  borderRadius: 14,
+  borderRadius: 20,
   width: "100%",
   maxWidth: 460,
-  boxShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
+  boxShadow: "var(--portal-shadow)",
   padding: 32,
   boxSizing: "border-box",
   textAlign: "center",
@@ -51,7 +51,7 @@ const errorStyle = {
 const primaryBtnStyle = {
   width: "100%",
   padding: "12px 16px",
-  background: "#4F46E5",
+  background: "var(--portal-gradient)",
   color: "#ffffff",
   border: "none",
   borderRadius: 8,
@@ -105,9 +105,9 @@ const InviteRedeem = () => {
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>
-        <h1 style={headingStyle}>Welcome to GenHire</h1>
+        <h1 style={headingStyle}>Open your invitation</h1>
         <p style={subStyle}>
-          {error ? "We hit a snag." : "Signing you in..."}
+          {error ? "Unable to open your invitation." : "Signing you in..."}
         </p>
 
         {error && (

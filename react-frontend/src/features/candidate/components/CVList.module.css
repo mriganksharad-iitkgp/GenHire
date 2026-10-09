@@ -330,3 +330,13 @@
     gap: 4px;
   }
 }
+
+
+.cvCard { border-width:1px; border-radius:12px; background:#fafaff; padding:12px; flex-wrap:wrap; }
+.cvCard.primary { background:var(--portal-primary-soft); border-color:#c7c5f7; box-shadow:none; }
+.cvIcon { width:32px; height:36px; font-size:17px; background:var(--portal-gradient); }
+.cvInfo { min-width:100px; }
+.cvFileName { font-size:13px; }
+.primaryBadge { background:var(--portal-primary-soft); color:var(--portal-primary); }
+.cvActions { margin-left:auto; }
+.primaryButton { border-color:#c7c5f7; color:var(--portal-primary); }

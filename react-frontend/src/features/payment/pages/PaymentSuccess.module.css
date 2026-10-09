@@ -299,3 +299,7 @@
     opacity: 0.5;
   }
 }
+
+/* Payment status uses the same workspace surface; status icons retain meaning. */
+.container { background:var(--portal-backdrop); padding:24px 16px; overflow:auto; }.backgroundElements,.confettiContainer,.iconPing,.iconPulseCircle { display:none; }.card { max-width:560px; width:100%; padding:32px; border:1px solid var(--portal-border); border-radius:20px; box-shadow:var(--portal-shadow); }.card:hover { transform:none; }.title { color:var(--portal-text); font-size:28px; background:none; -webkit-text-fill-color:currentColor; }.subtitle,.description { color:var(--portal-secondary); font-size:14px; line-height:1.7; }.primaryButton { background:var(--portal-gradient); color:white; min-height:44px; font-size:14px; }.primaryButton:hover { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; transform:none; }.secondaryButton { border-color:var(--portal-border); color:var(--portal-primary); min-height:44px; font-size:14px; }.primaryButton:focus-visible,.secondaryButton:focus-visible { outline:3px solid var(--portal-accent); outline-offset:3px; }.transactionId { overflow-wrap:anywhere; }
+@media (max-width:600px) { .card { padding:24px; }.title { font-size:24px; }.buttonGroup { flex-direction:column; } }

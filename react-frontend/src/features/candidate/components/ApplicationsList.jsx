@@ -78,9 +78,10 @@ export default function ApplicationsList({
     setCurrentPage(1);
   }, [companyFilter, statusFilter, jobTypeFilter, locationFilter, dateRangeFilter]);
 
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedApplications = sorted.slice(startIndex, startIndex + itemsPerPage);
   const totalPages = Math.ceil(sorted.length / itemsPerPage);
+  const visiblePage = Math.min(currentPage, Math.max(1, totalPages));
+  const startIndex = (visiblePage - 1) * itemsPerPage;
+  const paginatedApplications = sorted.slice(startIndex, startIndex + itemsPerPage);
 
   const getButtonsForStatus = (statusKey) => {
     const s = String(statusKey || "").toLowerCase();
@@ -95,7 +96,7 @@ export default function ApplicationsList({
 
   return (
     <section className={styles.applicationsSection}>
-      <h2>Job Applications</h2>
+      <div className={styles.listHeading}><h2>Application history</h2><span>{sorted.length} {sorted.length === 1 ? "application" : "applications"}</span></div>
 
       {/* ── Filters ─────────────────────────────────────────────── */}
       <div className={styles.applicationFilters}>
@@ -211,7 +212,7 @@ export default function ApplicationsList({
                 <div className={styles.applicationHeader}>
                   <div className={styles.companyAvatar}>
                     <img
-                      src={app.logo || "../android-chrome-192x192.png"}
+                      src={app.logo || "/android-chrome-192x192.png"}
                       alt={app.company}
                     />
                   </div>
@@ -220,7 +221,7 @@ export default function ApplicationsList({
                     <div className={styles.companySubtle}>at {app.company}</div>
                   </div>
                   <div className={styles.headerBadges}>
-                    <span className={`${styles.statusBadge} ${styles[statusKey]}`}>
+                    <span data-status={statusKey} className={`${styles.statusBadge} ${styles[statusKey] || ""}`}>
                       {app.status}
                     </span>
                   </div>
@@ -246,7 +247,7 @@ export default function ApplicationsList({
                     )}
                     <div className={styles.metaItem}>
                       <i className="fa fa-calendar" />
-                      <span>Applied {new Date(app.appliedDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
+                      <span>Applied {Number.isNaN(new Date(app.appliedDate).getTime()) ? 'date unavailable' : new Date(app.appliedDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                     </div>
                   </div>
                   {(app.department || app.jobType) && (
@@ -397,7 +398,7 @@ export default function ApplicationsList({
 
       {sorted.length > 0 && (
         <Pagination
-          currentPage={currentPage}
+          currentPage={visiblePage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
           totalItems={sorted.length}

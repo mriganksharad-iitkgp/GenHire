@@ -1,3 +1,4 @@
+import AuthShell from "features/auth/components/AuthShell";
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
@@ -38,10 +39,10 @@ const VerifyEmail = () => {
   }, [searchParams, navigate]);
 
   return (
-    <div className={styles.loginContainer}>
-      <div className={styles.loginCard}>
+    <AuthShell title="Your workspace awaits." accent="Continue with confidence." description="Manage your account access and return to your hiring or interview workspace.">
+      <div className={`${styles.loginCard} ${styles.signupCard}`}>
         <div className={styles.logoSection}>
-          <h1>Email Verification</h1>
+          <h1>Verify your email</h1>
         </div>
 
         <div style={{ textAlign: "center", padding: "2rem 0" }}>
@@ -57,7 +58,7 @@ const VerifyEmail = () => {
             <>
               <div style={{ fontSize: "4rem", color: "#10b981" }}>✓</div>
               <h2 style={{ color: "#10b981", marginTop: "1rem" }}>
-                Success!
+                Email verified
               </h2>
               <p>{message}</p>
               <p style={{ fontSize: "0.9rem", color: "#666", marginTop: "1rem" }}>
@@ -76,13 +77,13 @@ const VerifyEmail = () => {
                 onClick={() => navigate("/login")}
                 style={{ marginTop: "1.5rem" }}
               >
-                Go to Login
+                Return to sign in
               </button>
             </>
           )}
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

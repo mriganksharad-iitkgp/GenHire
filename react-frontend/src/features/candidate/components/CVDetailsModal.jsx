@@ -11,7 +11,7 @@ const CVDetailsModal = ({ isOpen, onClose, cvDetails }) => {
           <h2>
             <i className="fa fa-file-text-o"></i> Profile CV Details
           </h2>
-          <button className={styles.closeButton} onClick={onClose}>
+          <button className={styles.closeButton} onClick={onClose} aria-label="Close CV dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>

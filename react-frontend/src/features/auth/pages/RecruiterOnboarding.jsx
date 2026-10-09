@@ -1,3 +1,4 @@
+import AuthShell from "../components/AuthShell";
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useGoogleLogin } from "@react-oauth/google";
@@ -338,7 +339,7 @@ const RecruiterOnboarding = () => {
   });
 
   return (
-    <div className={styles.container}>
+    <AuthShell wide title="Build your next team." accent="Start with a connection." description="Create your hiring workspace and turn applications into meaningful conversations.">
       <div className={styles.onboardingCard}>
         {/* Header */}
         <div className={styles.header}>
@@ -807,7 +808,7 @@ const RecruiterOnboarding = () => {
           <p>Looking to find a job instead? <Link to="/register">Register as Candidate</Link></p>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

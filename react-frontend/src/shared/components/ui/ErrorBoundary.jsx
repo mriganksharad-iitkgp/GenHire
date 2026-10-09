@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import styles from './ErrorBoundary.module.css';
 
 class ErrorBoundary extends React.Component {
@@ -37,9 +36,9 @@ class ErrorBoundary extends React.Component {
               >
                 Reload Page
               </button>
-              <Link to="/" className={styles.homeBtn}>
+              <a href="/" className={styles.homeBtn}>
                 Go to Homepage
-              </Link>
+              </a>
             </div>
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <details className={styles.errorDetails}>

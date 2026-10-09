@@ -1,3 +1,4 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Toast from "shared/components/ui/Toast";
@@ -10,7 +11,7 @@ import { companyLabel } from "shared/constants/company";
 import useSavedJobs from "features/candidate/hooks/useSavedJobs";
 import styles from "./Dashboard.module.css";
 import { getToken, getUser, isLoggedIn } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { API_BASE, authedFetch } from "shared/api/client";
 
 const Dashboard = () => {
 	const navigate = useNavigate();
@@ -99,7 +100,7 @@ const Dashboard = () => {
 
 			// Use cached data if available
 			const jobs = await loadJobsCached(force, async () => {
-				const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs`, {
+				const response = await authedFetch(`${API_BASE}/jobs`, {
 					headers: {
 						'Authorization': `Bearer ${token}`,
 						'Content-Type': 'application/json'
@@ -143,7 +144,7 @@ const Dashboard = () => {
 
 			// Use cached data if available
 			const apps = await loadApplicationsCached(force, async () => {
-				const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+				const response = await authedFetch(`${API_BASE}/applications`, {
 					headers: {
 						'Authorization': `Bearer ${token}`,
 						'Content-Type': 'application/json'
@@ -201,7 +202,7 @@ const Dashboard = () => {
 		
 		try {
 			const token = getToken();
-			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
+			const response = await authedFetch(`${API_BASE}/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -443,7 +444,7 @@ const Dashboard = () => {
 			// This is the confirmation step (second click)
 			setWithdrawingJobId(jobId);
 			
-			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
+			const response = await authedFetch(`${API_BASE}/jobs/${jobId}/withdraw`, {
 				method: 'DELETE',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -715,13 +716,7 @@ const Dashboard = () => {
 	return (
 		<div className={styles.dashboardContainer}>
 			<div className={styles.content}>
-				<div className={styles.welcomeSection}>
-					<h2>Find Your Dream Job at Top Companies</h2>
-					<p>
-						Discover exciting career opportunities and be part of
-						innovative teams transforming the industry.
-					</p>
-				</div>
+				<PortalPageHeader title="Open positions" eyebrow="Your career workspace" icon="fa-briefcase" subtitle="Discover opportunities that fit your skills, save roles and take your next step." />
 
 				<div className={styles.jobFilters}>
 					<div className={styles.searchBarWrapper}>
@@ -729,6 +724,7 @@ const Dashboard = () => {
 						<input
 							ref={searchInputRef}
 							type="text"
+							aria-label="Search positions, skills, companies or locations"
 							placeholder="Search for positions, skills, companies, or locations..."
 							value={String(searchQuery ?? "")}
 							onChange={(e) => setSearchQuery(String(e.target.value ?? ""))}
@@ -841,7 +837,7 @@ const Dashboard = () => {
 
 					<div className={styles.filterOptions}>
 						<select
-							value={typeFilter}
+							aria-label="Job type" value={typeFilter}
 							onChange={(e) => setTypeFilter(e.target.value)}
 							className={styles.filterSelect}
 						>
@@ -853,7 +849,7 @@ const Dashboard = () => {
 						</select>
 
 						<select
-							value={locationFilter}
+							aria-label="Location" value={locationFilter}
 							onChange={(e) => setLocationFilter(e.target.value)}
 							className={styles.filterSelect}
 						>
@@ -866,7 +862,7 @@ const Dashboard = () => {
 						</select>
 
 						<select
-							value={experienceFilter}
+							aria-label="Experience level" value={experienceFilter}
 							onChange={(e) =>
 								setExperienceFilter(e.target.value)
 							}
@@ -879,7 +875,7 @@ const Dashboard = () => {
 						</select>
 
 						<select
-						value={jobRoleFilter}
+						aria-label="Job role" value={jobRoleFilter}
 						onChange={(e) => setJobRoleFilter(e.target.value)}
 						className={styles.filterSelect}
 					>
@@ -892,7 +888,7 @@ const Dashboard = () => {
 					</select>
 
 						<select
-							value={companyFilter}
+							aria-label="Company" value={companyFilter}
 							onChange={(e) => setCompanyFilter(e.target.value)}
 							className={styles.filterSelect}
 						>
@@ -905,7 +901,7 @@ const Dashboard = () => {
 						</select>
 
 						<select
-							value={skillsFilter}
+							aria-label="Skill" value={skillsFilter}
 							onChange={(e) => setSkillsFilter(e.target.value)}
 							className={styles.filterSelect}
 						>

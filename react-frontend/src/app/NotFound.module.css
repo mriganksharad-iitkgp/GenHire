@@ -102,3 +102,5 @@
 		font-size: 24px;
 	}
 }
+
+.notFoundContainer { min-height:100svh; height:auto; padding:24px 16px; background:var(--portal-backdrop); }.content { max-width:520px; border-radius:20px; border:1px solid var(--portal-border); box-shadow:var(--portal-shadow); }.content h1 { color:var(--portal-primary); font-size:80px; }.content h2 { color:var(--portal-text); font-size:26px; }.content p { color:var(--portal-secondary); font-size:14px; line-height:1.7; }.homeButton { background:var(--portal-gradient); border-radius:10px; color:white; }.homeButton:hover { color:white; background:linear-gradient(135deg,#4f46e5,#7c3aed); }

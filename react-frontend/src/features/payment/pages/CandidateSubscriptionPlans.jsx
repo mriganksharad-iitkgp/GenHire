@@ -1,3 +1,4 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
@@ -6,7 +7,6 @@ import {
   PlanCard,
   PaymentHistory,
   ArrowLeftIcon,
-  StarIcon,
   GridIcon,
   ClockIcon,
   AlertCircleIcon,
@@ -318,13 +318,7 @@ const CandidateSubscriptionPlans = () => {
             <ArrowLeftIcon />
             Back to Dashboard
           </button>
-          <div className={styles.headerText}>
-            <h1>
-              <StarIcon />
-              Candidate Recharge Packs
-            </h1>
-            <p>Top up your wallet with non-expiring credits for practice interviews</p>
-          </div>
+          <PortalPageHeader title="Recharge your wallet" eyebrow="Candidate credits" icon="fa-credit-card" subtitle="Review recharge packs, available credits and transaction history." />
         </header>
 
         <TabNav activeView={activeView} onChangeView={setActiveView} />

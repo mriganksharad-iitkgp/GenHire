@@ -8,9 +8,9 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 	const getStatusInfo = (status) => {
 		const statusMap = {
 			draft: { color: '#6b7280', label: 'Draft', description: 'Job is being prepared' },
-			active: { color: '#10b981', label: 'Active', description: 'Job is live and accepting applications' },
-			paused: { color: '#f59e0b', label: 'Paused', description: 'Job is temporarily stopped' },
-			closed: { color: '#ef4444', label: 'Closed', description: 'Job is closed, no longer accepting applications' }
+			active: { color: '#047857', label: 'Active', description: 'Job is live and accepting applications' },
+			paused: { color: '#92400e', label: 'Paused', description: 'Job is temporarily stopped' },
+			closed: { color: '#b91c1c', label: 'Closed', description: 'Job is closed, no longer accepting applications' }
 		};
 		const normalizedStatus = String(status || 'draft').toLowerCase();
 		return statusMap[normalizedStatus] || statusMap.draft;
@@ -49,7 +49,7 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 							>
 								<i className="fa fa-edit"></i>
 							</button>
-							<button className={styles.closeButton} onClick={onClose}>
+							<button className={styles.closeButton} onClick={onClose} aria-label="Close dialog">
 								<i className="fa fa-times"></i>
 							</button>
 						</div>

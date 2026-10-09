@@ -47,9 +47,13 @@ OpenAI API key. The OpenAI-compatible SDK is retained to call DeepSeek.
 
 ## Environment files
 
-`python-backend/.env` was updated while preserving existing secrets. There was
-no local `.env.production`, so a **placeholder production reference** was created.
-Do not deploy it without filling its placeholders or configuring the platform env.
+`python-backend/.env` preserves the existing local values. All eight local,
+production and example files are now grouped and documented. The private
+production files use the supplied Cloud Run URL and `https://genhire.in`;
+`REDIS_URL` is still required before production startup. The primary DeepSeek
+key, payment webhook signing secret and object-detection weights also need
+configuration for those features. See [environment configuration](environment-configuration.md)
+for validation and exact import instructions.
 
 Tracked references:
 
@@ -133,8 +137,8 @@ in the browser bundle by the Vite configuration.
    file path to `GCS_SERVICE_ACCOUNT_KEY` before unsetting it for ADC. Store JSON
    keys in Secret Manager or mount a secret file; do not use a local Windows path.
 5. Set `CORS_ORIGINS` and `FRONTEND_URL` to your actual Vercel/custom-domain
-   frontend URL. Keep any other required origins. The production reference has
-   `YOUR-FRONTEND` placeholders because no deployment URLs were supplied.
+   frontend URL. The current production file uses `https://genhire.in` and allows
+   that domain, its www origin and `https://gen-hire-gamma.vercel.app` in CORS.
    Keep `PAYMENT_SUCCESS_URL` and `PAYMENT_CANCEL_URL` on your production
    frontend domain too.
 6. Build/deploy the updated repository using your existing Cloud Build/Cloud Run
@@ -154,8 +158,8 @@ No AI provider keys or LLM model variables belong on Vercel.
 Keep/update these public build values in the frontend project's Production env:
 
 ```dotenv
-REACT_APP_API_URL=https://YOUR-BACKEND.run.app
-REACT_APP_API_BASE=https://YOUR-BACKEND.run.app/api
+REACT_APP_API_URL=https://hrtech-628047232128.europe-west1.run.app
+REACT_APP_API_BASE=https://hrtech-628047232128.europe-west1.run.app/api
 REACT_APP_GOOGLE_CLIENT_ID=YOUR_EXISTING_OAUTH_CLIENT_ID
 REACT_APP_KIOSK_DOWNLOAD_URL=YOUR_UPDATED_INSTALLER_URL
 ```
@@ -284,3 +288,21 @@ requires your configured accounts after deployment.
 The standalone FastAPI sample in `python-backend/cv_jd_processing/` is not
 imported by the deployed Flask app and retains its independent legacy setup.
 The deployed CV scoring path is `services/cv_scoring_service.py` and uses S2.
+
+## Local backend startup
+
+After moving the workspace, activation scripts may still point to its old path.
+Use the local launcher to select the complete backend Python environment:
+
+```bash
+cd /d/Projects/GenHire/python-backend
+python dev.py --check
+python dev.py --no-reload
+```
+
+Direct `python app.py` performs the same environment preflight. Python 3.11/3.12
+matches the pinned backend dependencies. See [the startup audit](interview-theme-runtime-plan.md)
+for environment repair, compatible application indexes and verification. No S2
+provider prices were changed by the startup fix. The subsequent environment
+organization filled production URLs and retained provider settings; see the
+[environment guide](environment-configuration.md) for remaining required values.

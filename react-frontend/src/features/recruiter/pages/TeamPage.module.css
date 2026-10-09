@@ -221,3 +221,24 @@
     padding: 8px 20px 56px;
   }
 }
+
+.recruiterWrapper { padding-top:80px; }.recruiterWrapper .heroPanel { background:linear-gradient(135deg,#eef2ff,#ede9fe); border:1px solid #ddd6fe; box-shadow:none; border-radius:16px; padding:28px 30px; }.recruiterWrapper .kicker { color:var(--portal-primary); }.recruiterWrapper .title { font-size:clamp(26px,3vw,32px); }.recruiterWrapper .subtitle { font-size:14px; color:var(--portal-secondary); }.recruiterWrapper .card { border-color:var(--portal-border); box-shadow:var(--portal-shadow); }.recruiterWrapper .card:hover { transform:translateY(-2px); border-color:#c7d2fe; }
+@media (max-width:600px) { .recruiterWrapper .heroPanel { padding:24px; } }
+
+/* Both candidate and recruiter Team use the landing palette. */
+.teamPage { background: var(--portal-backdrop); min-height: calc(100svh - 80px); color: var(--portal-text); font-family: Inter,system-ui,sans-serif; }
+.hero { max-width:1280px; margin:auto; padding:28px 24px 0; }
+.hero > header { margin-bottom:0; }
+.gridSection { max-width:1280px; margin:auto; padding:24px 24px 48px; }
+.grid { max-width:none; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; }
+.card { border-radius:20px; padding:24px 20px; box-shadow:var(--portal-shadow); border-color:var(--portal-border); gap:14px; }
+.card:hover { border-color:#c7c5f7; box-shadow:0 8px 24px #6366f110; transform:translateY(-2px); }
+.avatarWrap { width:80px; height:80px; border-color:#dddafa; box-shadow:0 4px 12px #6366f11a; }
+.avatarInitials { font-size:26px; }
+.name { font-size:16px; color:var(--portal-text); }
+.contribution { font-size:13px; line-height:1.75; color:var(--portal-secondary); }
+.linkedInOverlay { background:#4f46e5; }
+.linkedInOverlay:focus-visible { opacity:1; outline:3px solid #c4b5fd; outline-offset:-3px; }
+@media(max-width:1000px) { .grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:700px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .hero { padding:20px 16px 0; } .gridSection { padding:20px 16px 36px; } }
+@media(max-width:460px) { .grid { grid-template-columns:1fr; } }

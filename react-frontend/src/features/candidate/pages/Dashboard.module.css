@@ -3,12 +3,12 @@
    =================================== */
 
 /* Design System Variables */
-:root {
-  --primary-50: #eff6ff;
-  --primary-100: #dbeafe;
-  --primary-500: #3b82f6;
-  --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
+.dashboardContainer {
+  --primary-50: #eef2ff;
+  --primary-100: #e0e7ff;
+  --primary-500: #6366f1;
+  --primary-600: #4f46e5;
+  --primary-700: #4338ca;
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
@@ -1501,3 +1501,43 @@ body.dark .closedBadge,
     padding: var(--spacing-md);
   }
 }
+
+/* Landing-derived portal layout; Layout already reserves the navbar. */
+.dashboardContainer { padding-top: 0; min-height: calc(100svh - 80px); background: var(--portal-backdrop); color: var(--portal-text); font-family: Inter,system-ui,sans-serif; }
+.content { max-width: 1280px; padding: 28px 24px 48px; min-width: 0; }
+.jobFilters { padding: 20px; border: 1px solid var(--portal-border); border-radius: 20px; box-shadow: var(--portal-shadow); margin-bottom: 24px; }
+.searchBarWrapper { max-width: none; width: 100%; margin: 0 0 18px; }
+.searchBar { height: 48px; max-width: none; width: 100%; margin: 0; border: 1px solid var(--portal-border); border-radius: 12px; box-shadow: none; }
+.searchBar input { min-width: 0; font-size: 14px; padding: 12px 16px; }
+.searchButton,.searchButton:hover { background: var(--portal-gradient); color: #fff; width: 52px; padding: 12px; }
+.filterOptions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); max-width: none; gap: 12px; }
+.filterSelect { width: 100%; min-width: 0; min-height: 44px; padding: 10px 13px; border: 1px solid var(--portal-border); border-radius: 10px; font-size: 13px; box-shadow: none; color: var(--portal-secondary); }
+.jobListings { margin-top: 0; }
+.jobListings > h3 { font-size: 20px; margin: 24px 0 18px; }
+.jobListings > h3::before { background: var(--portal-accent); }
+.jobSection { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin-bottom: 24px; }
+.jobSectionHeader { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+.jobSectionHeaderAvailable { color: var(--portal-success); } .jobSectionHeaderApplied { color: var(--portal-primary); }
+.jobCard { border: 1px solid var(--portal-border); border-radius: 20px; box-shadow: var(--portal-shadow); margin: 0; display: flex; flex-direction: column; }
+.jobCard::before { height: 3px; background: var(--portal-gradient); }
+.jobCard:hover { transform: none; border-color: #c7c5f7; box-shadow: 0 8px 26px #6366f110; }
+.jobMain { padding: 22px; flex: 1; }
+.jobTitle { font-size: 19px; line-height: 1.45; margin-bottom: 8px; }
+.jobTitleSection { margin-bottom: 16px; }
+.companyInfo,.jobDetails { gap: 10px; font-size: 12px; }
+.companyName { color: var(--portal-primary); font-size: 13px; }
+.jobDetails { margin-bottom: 16px; flex-wrap: wrap; }
+.jobType { background: var(--portal-primary-soft); color: var(--portal-primary); padding: 6px 9px; font-size: 11px; }
+.jobDescription { font-size: 14px; line-height: 1.65; margin: 12px 0; }
+.jobSkills { gap: 7px; margin: 14px 0 0; } .skillTag { font-size: 11px; padding: 5px 9px; border-radius: 8px; }
+.jobActions { display: flex; gap: 9px; flex-wrap: wrap; padding: 16px 22px; background: #fafaff; }
+.jobActions button { width: auto; min-height: 42px; border-radius: 11px; padding: 10px 12px; font-size: 13px; flex: 1 1 auto; box-shadow: none; }
+.applyButton,.applyButton:hover { background: var(--portal-gradient); color: #fff; border-color: transparent; }
+.viewButton,.viewButton:hover,.saveButton,.saveButton:hover { color: var(--portal-primary); border: 1px solid var(--portal-border); background: #fff; transform: none; }
+.viewTabActive,.viewTabActive:hover { color: var(--portal-primary); border-color: var(--portal-accent); }
+.dashboardContainer button:focus-visible,.filterSelect:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 2px; }
+@media (max-width:800px) { .jobSection { grid-template-columns: 1fr; } .filterOptions { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width:520px) { .content { padding: 20px 16px 36px; } .jobFilters { padding: 16px; } .filterOptions { grid-template-columns: 1fr; } .searchBar input,.filterSelect { font-size: 16px; } .jobMain { padding: 20px; } .jobActions { padding: 16px 20px; } }
+
+.jobDescription { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.jobTitle,.companyName,.jobLocation { overflow-wrap:anywhere; }

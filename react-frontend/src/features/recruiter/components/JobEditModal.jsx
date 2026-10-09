@@ -1,8 +1,9 @@
+import { PROCTORING_OPTIONS } from "shared/constants/proctoringOptions";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
-import styles from './JobEditModal.module.css';
-import proctoringStyles from './JobCreationModal.module.css';
+import styles from './JobForm.module.css';
+import proctoringStyles from './JobForm.module.css';
 
 // Predefined data for auto-suggestions
 const COMMON_SKILLS = [
@@ -44,9 +45,9 @@ const SALARY_RANGES = [
 // Job status workflow with one-way progression
 const JOB_STATUSES = [
   { value: 'draft', label: 'Draft', description: 'Job is being prepared', color: '#6b7280' },
-  { value: 'active', label: 'Active', description: 'Job is live and accepting applications', color: '#10b981' },
-  { value: 'paused', label: 'Paused', description: 'Job is temporarily stopped', color: '#f59e0b' },
-  { value: 'closed', label: 'Closed', description: 'Job is closed, no longer accepting applications', color: '#ef4444' }
+  { value: 'active', label: 'Active', description: 'Job is live and accepting applications', color: '#047857' },
+  { value: 'paused', label: 'Paused', description: 'Job is temporarily stopped', color: '#92400e' },
+  { value: 'closed', label: 'Closed', description: 'Job is closed, no longer accepting applications', color: '#b91c1c' }
 ];
 
 const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, showToast }) => {
@@ -245,7 +246,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
         requirements: jobData.requirements.split('\n').filter(item => item.trim()),
         benefits: jobData.benefits.split('\n').filter(item => item.trim()),
         status: jobData.status,
-        proctoring_config: jobData.proctoring_config
+        proctoring_config: jobData.proctoring_config,
+        gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap)
       });
       
       onClose();
@@ -306,7 +308,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
-          <h2>✏️ Edit Job Details</h2>
+          <h2>Edit job</h2>
           <button onClick={handleCancel} className={styles.closeButton} aria-label="Close">
             ×
           </button>
@@ -319,7 +321,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup}>
               <label>
                 Job Title
-                <span className={styles.smartIndicator}>✨ Smart</span>
+                <span className={styles.smartIndicator}> Suggestions</span>
               </label>
               <input
                 type="text"
@@ -336,7 +338,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup} ref={dropdownRefs.department}>
               <label>
                 Department
-                <span className={styles.autoFilled}>🎯 Auto-fill</span>
+                <span className={styles.autoFilled}> Suggestions</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -375,7 +377,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup} ref={dropdownRefs.location}>
               <label>
                 Location
-                <span className={styles.autoFilled}>🌍 Global</span>
+                <span className={styles.autoFilled}> Locations</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -430,7 +432,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup} ref={dropdownRefs.experience}>
               <label>
                 Experience Level
-                <span className={styles.autoFilled}>📈 Smart</span>
+                <span className={styles.autoFilled}> Suggestions</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -469,7 +471,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup} ref={dropdownRefs.salary}>
               <label>
                 Salary Range
-                <span className={styles.autoFilled}>💰 Market</span>
+                <span className={styles.autoFilled}> Salary guide</span>
               </label>
               <div className={styles.inputWithDropdown}>
                 <input
@@ -508,7 +510,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup} ref={dropdownRefs.status}>
               <label>
                 Job Status
-                <span className={styles.smartIndicator}>🟢 Workflow</span>
+                <span className={styles.smartIndicator}> Status</span>
               </label>
               <div className={styles.statusContainer}>
                 <select
@@ -538,7 +540,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <div className={styles.formGroup}>
               <label>
                 Minimum CV Score
-                <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span>
+                <span className={styles.smartIndicator}> Screening threshold</span>
               </label>
               <input
                 type="number"
@@ -551,29 +553,22 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                 className={styles.smartInput}
               />
               <div className={styles.helpText}>
-                🤖 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
+                 Applications with CV scores ≥ this threshold will be automatically shortlisted. Changes affect new applications only.
               </div>
             </div>
 
-            {/* Proctoring Configuration */}
+            {/* Interview monitoring */}
             <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
-              <label>🛡️ Proctoring Configuration</label>
+              <label> Interview monitoring</label>
               <div className={proctoringStyles.proctoringSection}>
                 <div className={proctoringStyles.creditWarning}>
                   <i className="fa fa-exclamation-triangle"></i>
                     Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
                 </div>
-                {[
-                  { key: 'dual_camera', label: 'Require laptop + mobile cameras', desc: 'Candidates pair a phone to show their workspace. Both cameras must be ready before the interview starts.', icon: '📱' },
-                  { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
-                  { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
-                  { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
-                  { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
-                  { key: 'ai_detection', label: 'AI Answer Detection', desc: 'Detects high probability usage of LLMs like ChatGPT in candidate answers', icon: '🤖' },
-                ].map(opt => (
+                {PROCTORING_OPTIONS.map(opt => (
                   <div key={opt.key} className={proctoringStyles.proctoringToggle}>
                     <div className={proctoringStyles.proctoringInfo}>
-                      <span className={proctoringStyles.proctoringIcon}>{opt.icon}</span>
+                      <span className={proctoringStyles.proctoringIcon}><i className={`fa ${opt.icon}`} aria-hidden="true" /></span>
                       <div>
                         <strong>{opt.label}</strong>
                         <p>{opt.desc}</p>
@@ -581,6 +576,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                     </div>
                     <label className={proctoringStyles.toggleSwitch}>
                       <input
+                        aria-label={opt.label}
                         type="checkbox"
                         checked={jobData.proctoring_config?.[opt.key] ?? !['dual_camera', 'ai_detection'].includes(opt.key)}
                         onChange={(e) => setJobData(prev => ({
@@ -597,26 +593,10 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                 ))}
               </div>
               <div className={styles.helpText}>
-                AI JD generation costs 10 credits. Manual job edits cost 0 credits. Disabled modules show "Not enabled" in reports.
+                AI drafting costs 10 credits. Manual edits are free. Disabled monitoring checks are labelled in reports.
               </div>
             </div>
 
-            {/* Gaze Proctoring */}
-            <div className={styles.formGroup}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  name="gaze_proctoring"
-                  checked={jobData.gaze_proctoring}
-                  onChange={handleInputChange}
-                  className={styles.checkboxInput}
-                />
-                Enable Gaze Heat Map Proctoring
-              </label>
-              <div className={styles.helpText} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
-                <i className="fa fa-exclamation-triangle"></i> Warning: proctoring ON means 50 credits per candidate; OFF means 30 credits.
-              </div>
-            </div>
 
           </div>
 
@@ -624,7 +604,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div className={styles.formGroup} ref={dropdownRefs.skills}>
             <label>
               Required Skills
-              <span className={styles.smartIndicator}>🎯 AI-Powered</span>
+              <span className={styles.smartIndicator}> Suggestions</span>
             </label>
             <div className={styles.skillsContainer}>
               <div className={styles.skillTags}>
@@ -669,7 +649,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div className={styles.formGroup}>
             <label>
               Job Description
-              <span className={styles.smartIndicator}>📝 Smart</span>
+              <span className={styles.smartIndicator}> Suggestions</span>
             </label>
             <textarea
               name="description"
@@ -685,7 +665,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div className={styles.formGroup}>
             <label>
               Key Responsibilities
-              <span className={styles.autoFilled}>📋 Auto-list</span>
+              <span className={styles.autoFilled}> Auto-list</span>
             </label>
             <textarea
               name="responsibilities"
@@ -701,7 +681,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div className={styles.formGroup}>
             <label>
               Requirements
-              <span className={styles.autoFilled}>✅ Auto-list</span>
+              <span className={styles.autoFilled}> Auto-list</span>
             </label>
             <textarea
               name="requirements"
@@ -717,7 +697,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div className={styles.formGroup}>
             <label>
               Benefits & Perks
-              <span className={styles.optional}>💎 Optional</span>
+              <span className={styles.optional}> Optional</span>
             </label>
             <textarea
               name="benefits"
@@ -751,7 +731,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                 </>
               ) : (
                 <>
-                  💾 Update Job
+                   Update Job
                 </>
               )}
             </button>

@@ -4,6 +4,9 @@ import { getToken } from "shared/utils/session";
 import { normalizeStatus, statusLabel, applicationStatusLabel } from "shared/utils/applicationStatus";
 
 const CandidateCard = ({ application, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
+  const candidateName = String(application.student_name || application.candidate_name || "Candidate");
+  const appliedDate = application.applied_at ? new Date(application.applied_at) : null;
+  const appliedLabel = appliedDate && Number.isFinite(appliedDate.getTime()) ? appliedDate.toLocaleDateString('en-IN', { timeZone:'Asia/Kolkata' }) : "Not available";
   const cvScorePct = (typeof application.cv_score === 'number')
     ? Math.round(application.cv_score)
     : (typeof application.similarity_score === 'number' ? Math.round(application.similarity_score * 100) : null);
@@ -86,10 +89,10 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
     <div className={styles.candidateCard}>
       <div className={styles.candidateInfo}>
         <div className={styles.candidateAvatar}>
-          {application.student_name.split(' ').map(n => n[0]).join('')}
+          {candidateName.trim().split(/\s+/).slice(0,2).map(n => n[0]).join('')}
         </div>
         <div className={styles.candidateDetails}>
-          <h3>{application.student_name}</h3>
+          <h3>{candidateName}</h3>
           <p>{application.student_email}</p>
           <p>{application.student_profile?.phone || 'No phone provided'}</p>
           <span className={styles.jobBadge}>{application.job_title}</span>
@@ -114,7 +117,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
         <div className={styles.scoreItem}>
           <span className={styles.scoreLabel}>Applied</span>
           <span className={styles.scoreText}>
-            {new Date(application.applied_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+            {appliedLabel}
           </span>
         </div>
         {identityChip && (
@@ -174,7 +177,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
       </div>
 
       <div className={styles.candidateMeta}>
-        <p><i className="fa fa-calendar" aria-hidden="true"></i> Applied: {new Date(application.applied_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+        <p><i className="fa fa-calendar" aria-hidden="true"></i> Applied: {appliedLabel}</p>
         <p><i className="fa fa-briefcase" aria-hidden="true"></i> {application.student_profile?.experience || 'No experience listed'}</p>
         <p><i className="fa fa-map-marker" aria-hidden="true"></i> {application.student_profile?.location || 'No location provided'}</p>
       </div>
@@ -185,7 +188,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
           value={normalizeStatus(application.status)}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
           title={`Current: ${applicationStatusLabel(application)} - Can only progress forward`}
-          aria-label={`Update application status for ${application.student_name}`}
+          aria-label={`Update application status for ${candidateName}`}
         >
           {availableStatuses.map(status => (
             <option key={status} value={status}>
@@ -211,7 +214,9 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
             const url = token ? `${base}?token=${encodeURIComponent(token)}` : base;
             window.open(url, '_blank', 'noopener');
           }}
-          aria-label={`View CV for ${application.student_name}`}
+          disabled={!application.cv_url}
+          title={!application.cv_url ? "No CV document available" : "Open CV document"}
+          aria-label={`View CV for ${candidateName}`}
         >
           <i className="fa fa-file-pdf-o" aria-hidden="true"></i> View CV
         </button>

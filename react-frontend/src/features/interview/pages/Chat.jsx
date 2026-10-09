@@ -358,14 +358,14 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const back = () => {
     if (uploadStatus === "uploading") return;
     if (uploadStatus === "error" && !window.confirm("Your report is saved, but your recording has not uploaded. Leave without saving this recording?")) return;
-    navigate(isPractice ? "/practice" : "/profile#applications");
+    navigate(isPractice ? "/practice" : "/applications");
   };
   const renderVideo = () => <video ref={bindVideo} autoPlay playsInline muted className={styles.preview} aria-label="Your camera preview" />;
   const renderError = (message) => message && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{message}</span></div>;
   const step = phase === "devices" ? 0 : phase === "face" ? 1 : phase === "phone" ? 2 : 3;
   if (["loading", "start_failed", "ending", "end_failed", "recovery_failed"].includes(phase)) return <main className={styles.shell}><div className={styles.centerCard}>
     <span className={styles.brand}><ShieldCheck size={20} /> GenHire interview</span>{["loading", "ending"].includes(phase) && <div className={styles.spinner} />}
-    <h1>{phase === "loading" ? "Preparing your interview" : phase === "ending" ? "Your answers are saved" : phase === "end_failed" ? "Let's finish your report" : phase === "recovery_failed" ? "Let's keep your saved answers" : "We couldn't open this interview"}</h1>
+    <h1>{phase === "loading" ? "Preparing your interview" : phase === "ending" ? "Your answers are saved" : phase === "end_failed" ? "Complete your report" : phase === "recovery_failed" ? "Recover your saved answers" : "Unable to open the interview"}</h1>
     <p>{phase === "loading" ? "Loading your role and question. Device checks come next." : phase === "ending" ? "Generating your evaluation. Your recording uploads separately." : "Retry to continue with the same session."}</p>{renderError(error)}
     {["end_failed", "recovery_failed"].includes(phase) && <button className={styles.primary} onClick={finish}>{phase === "recovery_failed" ? "Finish with saved answers" : "Retry report generation"}</button>}{phase === "start_failed" && <button className={styles.primary} onClick={() => window.location.reload()}>Retry</button>}
     <button className={styles.textButton} disabled={uploadStatus === "uploading"} onClick={back}>Back to {isPractice ? "practice" : "applications"}</button>
@@ -382,12 +382,12 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     </section></main>;
   }
   if (phase !== "active") return <main className={styles.shell}><div className={styles.setupLayout}>
-    <aside className={styles.setupAside}><span className={styles.brand}><ShieldCheck size={22} /> GenHire</span><span className={styles.eyebrow}>{isPractice ? "Practice interview" : "Your next opportunity"}</span><h1>A few checks.<br />Then your best interview.</h1><p>We check your devices once, capture your face, and get you straight into the conversation.</p>
+    <aside className={styles.setupAside}><span className={styles.brand}><ShieldCheck size={22} /> GenHire</span><span className={styles.eyebrow}>{isPractice ? "Practice interview" : "Your next opportunity"}</span><h1>Prepare for your interview</h1><p>Check your camera, microphone and speakers, register your face, then start your interview.</p>
       <ol className={styles.steps}>{["Laptop checks", "Face registration", ...(dualRequired ? ["Connect your phone"] : []), "Start interview"].map((label, index) => { const position = !dualRequired && index === 2 ? 3 : index; return <li key={label} className={position === step ? styles.currentStep : position < step ? styles.doneStep : ""}><span>{position < step ? <Check size={16} /> : index + 1}</span>{label}</li>; })}</ol>
       <div className={styles.privacyNote}><ShieldCheck size={20} /><p>Your camera remains visible. Monitoring warnings are recorded for review; a warning alone is not a decision about your performance.</p></div>
     </aside><section className={styles.setupCard}>
-      <span className={styles.eyebrow}>{phase === "devices" ? "Step 1 · Your laptop" : phase === "face" ? "Step 2 · Face registration" : phase === "phone" ? "Step 3 · Second camera" : "Everything is ready"}</span>
-      <h2>{phase === "devices" ? "Make sure we can see and hear you" : phase === "face" ? "Center your face in the preview" : phase === "phone" ? "Connect your mobile camera" : "Meet your AI interviewer"}</h2>
+      <span className={styles.eyebrow}>{phase === "devices" ? "Step 1 · Your laptop" : phase === "face" ? "Step 2 · Face registration" : phase === "phone" ? "Step 3 · Second camera" : "Ready to begin"}</span>
+      <h2>{phase === "devices" ? "Check your devices" : phase === "face" ? "Center your face in the preview" : phase === "phone" ? "Connect your mobile camera" : "Start your interview"}</h2>
       <p>{phase === "devices" ? "Allow camera and microphone access, speak a short sentence, then check your speakers." : phase === "face" ? "Sit in good light with only your face visible. We'll capture one image for this session." : phase === "phone" ? "Your recruiter requires a second view. Scan this private QR code on your phone, enable its camera, and leave the page open." : "The interviewer asks one question at a time. Take a moment to think, answer naturally, and use Send answer whenever you're finished."}</p>
       {phase === "devices" && <><div className={styles.devicePreview}>{renderVideo()}{!cameraReady && <span className={styles.cameraPlaceholder}><Camera size={32} />Camera preview</span>}</div>
         <div className={styles.deviceRow}><Camera size={20} /><span>Camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Ready" : "Waiting for permission"}</strong></div><div className={styles.deviceRow}><Mic size={20} /><span>Microphone <span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></span><strong className={micReady ? styles.good : ""}>{micReady ? "Sound detected" : "Say a short sentence"}</strong></div>

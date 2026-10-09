@@ -1,9 +1,10 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
 import styles from "./RecruiterCostStatistics.module.css";
 import { getToken } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { request } from "shared/api/client";
 import {
   addMonths,
   buildContinuousMonthlySeries,
@@ -11,17 +12,19 @@ import {
   getMaxMonthToAllowed,
 } from "shared/utils/monthRange";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
-
 const RecruiterCostStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [costData, setCostData] = useState(null);
   const [error, setError] = useState(null);
+  const [attempt, setAttempt] = useState(0);
   const [monthFrom, setMonthFrom] = useState("");
   const [monthTo, setMonthTo] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     const fetchData = async () => {
       setLoading(true);
       setError(null);
@@ -34,36 +37,26 @@ const RecruiterCostStatistics = () => {
           return;
         }
 
-        const response = await authedFetch(
-          `${API_BASE_URL}/api/recruiter/cost-statistics?period=month`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        const data = await response.json();
-
-        if (data.success) {
-          setCostData(data.data);
-        } else {
-          setCostData(generateFallbackData());
+        const data = await request("/recruiter/cost-statistics?period=month", { signal:controller.signal });
+        if (cancelled) return;
+        if (!data?.success || !data.data || typeof data.data !== "object" || Array.isArray(data.data)) {
+          throw new Error("Usage data is unavailable.");
         }
+        setCostData(data.data);
       } catch (err) {
-        if (err.status !== 401) {
-          setCostData(generateFallbackData());
-        }
+        if (cancelled) return;
+        setError(err.status === 401 ? "Your session has expired. Please sign in again." : controller.signal.aborted ? "Loading your usage data took too long. Please retry." : "We could not load your usage data. Please retry.");
       } finally {
-        setLoading(false);
+        clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+    return () => { cancelled = true; clearTimeout(timeout); controller.abort(); };
+  }, [attempt]);
 
-  const generateFallbackData = () => {
+  const emptyUsageModel = () => {
     const today = new Date();
 
     return {
@@ -96,7 +89,7 @@ const RecruiterCostStatistics = () => {
     };
   };
 
-  const safeCostData = costData || generateFallbackData();
+  const safeCostData = costData || emptyUsageModel();
 
   // Plan & interview data
   const plan = safeCostData.plan || {};
@@ -245,9 +238,11 @@ const RecruiterCostStatistics = () => {
       <>
         <Navbar userType="recruiter" />
         <div className={styles.pageWrapper}>
-          <div className={styles.errorContainer}>
-            <p>{error || "Please login to view your usage dashboard"}</p>
-          </div>
+          <section className={styles.errorContainer} role="alert">
+            <h2>Unable to load usage</h2>
+            <p>{error || "Please sign in to view your usage dashboard."}</p>
+            {getToken() ? <button onClick={() => setAttempt(value => value + 1)}>Retry</button> : <button onClick={() => navigate("/login")}>Sign in</button>}
+          </section>
         </div>
       </>
     );
@@ -263,14 +258,7 @@ const RecruiterCostStatistics = () => {
       <div className={styles.pageWrapper}>
         <div className={styles.usageDashboard}>
           {/* Page Header */}
-          <div className={styles.pageHeader}>
-            <div className={styles.headerContent}>
-              <h1>Usage Dashboard</h1>
-              <p>
-                Welcome, {costData.recruiter?.name || "Recruiter"} - {planName}
-              </p>
-            </div>
-          </div>
+          <PortalPageHeader title="Cost statistics" eyebrow="Your recruiter wallet" icon="fa-line-chart" subtitle="Track recruitment credits, wallet activity and the cost of your hiring pipeline." />
 
           {/* Overview Cards */}
           <div className={styles.overviewCards}>

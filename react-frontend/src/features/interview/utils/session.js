@@ -49,8 +49,19 @@ export function reconcileAnswer(session, question, answer) {
     question: current, questionCount: session.question_count || 1 };
 }
 
+// Reports from older sessions can contain text, JSON null or arrays.
+export function parseEvaluation(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch { return { summary: value }; }
+}
+
 export function interviewScore(result = {}) {
-  const evaluation = result.evaluation || {};
+  if (!result || typeof result !== "object") return null;
+  const evaluation = parseEvaluation(result.evaluation);
   const scores = evaluation.quantitative_scores;
   return scorePercent(result.interview_score ?? result.final_score ?? evaluation.final_score ??
     evaluation.quantitative?.average_relevance_score ??

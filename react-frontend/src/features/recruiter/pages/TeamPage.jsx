@@ -1,3 +1,4 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState } from "react";
 import styles from "./TeamPage.module.css";
 
@@ -70,27 +71,7 @@ const TeamMemberAvatar = ({ member }) => {
     .slice(0, 2)
     .toUpperCase();
 
-  const gradients = [
-    "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)", // Indigo to Purple
-    "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)", // Cyan to Blue
-    "linear-gradient(135deg, #f97316 0%, #ec4899 100%)", // Orange to Pink
-    "linear-gradient(135deg, #10b981 0%, #059669 100%)", // Emerald to Teal
-    "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", // Amber to Orange
-    "linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)", // Pink to Purple
-    "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", // Blue to Dark Blue
-    "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)", // Teal to Dark Teal
-  ];
-
-  const hashString = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return Math.abs(hash);
-  };
-
-  const gradientIndex = hashString(member.name) % gradients.length;
-  const gradient = gradients[gradientIndex];
+  const gradient = "var(--portal-gradient)";
 
   if (imgFailed || !member.imageUrl) {
     return (
@@ -119,18 +100,7 @@ const TeamMemberAvatar = ({ member }) => {
 const TeamPage = () => {
   return (
     <div className={styles.teamPage}>
-      <section className={styles.hero}>
-        <div className={styles.heroPanel}>
-          <div className={styles.heroContent}>
-          {/* <span className={styles.kicker}>Team</span> */}
-          <h1 className={styles.title}>Meet the Developers</h1>
-          <p className={styles.subtitle}>
-            This team shipped the core platform, from HR workflows and proctoring to
-            GenAI evaluation, CV-JD matching, payments, and production readiness.
-          </p>
-          </div>
-        </div>
-      </section>
+      <div className={styles.hero}><PortalPageHeader title="Meet the Developers" eyebrow="The people behind GenHire" icon="fa-users" subtitle="Our team builds the recruitment workflows, AI interviews, evaluation and proctoring that bring GenHire together." /></div>
 
       <section className={styles.gridSection}>
         <div className={styles.grid}>

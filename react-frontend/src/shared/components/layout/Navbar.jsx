@@ -1,3 +1,4 @@
+import { navigationItems, navigationActive } from "./navigation";
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import styles from "./Navbar.module.css";
@@ -29,6 +30,8 @@ const Navbar = ({ userType = "candidate" }) => {
     }
   })();
   const isInviteOnly = !!(cachedUser && (cachedUser.is_invite_only || cachedUser.isInviteOnly));
+
+  const links = navigationItems(userType, isInviteOnly);
 
   // Load user data (profile photo and name) once on mount
   useEffect(() => {
@@ -63,13 +66,25 @@ const Navbar = ({ userType = "candidate" }) => {
     };
 
     document.addEventListener("mousedown", handleClickOutside);
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
+  useEffect(() => {
+    setUserMenuOpen(false); setMobileMenuOpen(false);
+  }, [location.pathname, location.search, location.hash]);
+
+  useEffect(() => {
+    const closeOnEscape = (event) => { if (event.key === "Escape") { setUserMenuOpen(false); setMobileMenuOpen(false); } };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, []);
+
+
   return (
-    <header className={styles.navbar}>
+    <header className={`${styles.navbar} ${userType === "recruiter" ? styles.recruiterNavbar : ""}`}>
       <div className={styles.navContainer}>
         <div className={styles.navBrand}>
           <Link
@@ -90,88 +105,9 @@ const Navbar = ({ userType = "candidate" }) => {
           </Link>
         </div>
 
-        <nav className={styles.navLinks}>
-          {userType === "recruiter" ? (
-            <>
-              <Link
-                to="/recruiter/dashboard"
-                className={`${styles.navLink} ${
-                  location.pathname === "/recruiter/dashboard"
-                    ? styles.active
-                    : ""
-                }`}
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/recruiter/cost-statistics"
-                className={`${styles.navLink} ${
-                  location.pathname === "/recruiter/cost-statistics"
-                    ? styles.active
-                    : ""
-                }`}
-              >
-                Cost Statistics
-              </Link>
-              <Link
-                to="/recruiter/team"
-                className={`${styles.navLink} ${
-                  location.pathname === "/recruiter/team" ? styles.active : ""
-                }`}
-              >
-                Team
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/dashboard"
-                className={`${styles.navLink} ${
-                  location.pathname === "/dashboard" ? styles.active : ""
-                }`}
-              >
-                Open Positions
-              </Link>
-              <Link
-                to="/profile#applications"
-                className={`${styles.navLink} ${
-                  location.pathname === "/profile" ? styles.active : ""
-                }`}
-              >
-                My Applications
-              </Link>
-              {!isInviteOnly && (
-                <Link
-                  to="/practice"
-                  className={`${styles.navLink} ${
-                    location.pathname === "/practice" ? styles.active : ""
-                  }`}
-                >
-                  Practice
-                </Link>
-              )}
-              {!isInviteOnly && (
-                <Link
-                  to="/candidate/cost-statistics"
-                  className={`${styles.navLink} ${
-                    location.pathname === "/candidate/cost-statistics" ? styles.active : ""
-                  }`}
-                >
-                  Cost Statistics
-                </Link>
-              )}
-              {!isInviteOnly && (
-                <Link
-                  to="/team"
-                  className={`${styles.navLink} ${
-                    location.pathname === "/team" ? styles.active : ""
-                  }`}
-                >
-                  Team
-                </Link>
-              )}
-            </>
-          )}
+        <nav className={styles.navLinks} aria-label={userType === "recruiter" ? "Recruiter sections" : "Candidate sections"}>
+          {links.map(item => <Link key={item.id} to={item.to} aria-current={navigationActive(item, location) ? "page" : undefined}
+            className={`${styles.navLink} ${navigationActive(item, location) ? styles.active : ""}`}>{item.label}</Link>)}
         </nav>
 
         <div className={styles.navActions}>
@@ -182,6 +118,8 @@ const Navbar = ({ userType = "candidate" }) => {
           <div className={styles.userDropdown} ref={userMenuRef}>
             <button
               className={styles.userButton}
+              aria-expanded={userMenuOpen}
+              aria-label="Account menu"
               onClick={() => setUserMenuOpen(!userMenuOpen)}
             >
               <div className={styles.avatar}>
@@ -216,7 +154,7 @@ const Navbar = ({ userType = "candidate" }) => {
                       Dashboard
                     </Link>
                     <Link
-                      to="/recruiter-dashboard?tab=profile"
+                      to="/recruiter/dashboard?tab=profile"
                       className={styles.dropdownItem}
                       onClick={() => setUserMenuOpen(false)}
                     >
@@ -227,29 +165,17 @@ const Navbar = ({ userType = "candidate" }) => {
                 ) : (
                   <>
                     <Link
-                      to="/profile#bio"
+                      to="/profile"
                       className={styles.dropdownItem}
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        // Force navigation even if already on profile page
-                        if (window.location.pathname === "/profile") {
-                          window.location.hash = "#bio";
-                        }
-                      }}
+                      onClick={() => setUserMenuOpen(false)}
                     >
                       <i className="fa fa-user"></i>
                       My Profile
                     </Link>
                     <Link
-                      to="/profile#applications"
+                      to="/applications"
                       className={styles.dropdownItem}
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        // Force navigation even if already on profile page
-                        if (window.location.pathname === "/profile") {
-                          window.location.hash = "#applications";
-                        }
-                      }}
+                      onClick={() => setUserMenuOpen(false)}
                     >
                       <i className="fa fa-file-text"></i>
                       My Applications
@@ -269,7 +195,9 @@ const Navbar = ({ userType = "candidate" }) => {
         <button 
           className={styles.mobileMenuBtn}
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle mobile menu"
+          aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="workspace-menu"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {mobileMenuOpen ? (
@@ -282,30 +210,11 @@ const Navbar = ({ userType = "candidate" }) => {
       </div>
 
       {/* Mobile Nav Drawer */}
-      <div className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
+      <div id="workspace-menu" hidden={!mobileMenuOpen} className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
         <div className={styles.mobileNavLinks}>
-          {userType === "recruiter" ? (
-            <>
-              <Link to="/recruiter/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
-              <Link to="/recruiter/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>
-              <Link to="/recruiter/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>
-              <div className={styles.mobileDivider}></div>
-              <Link to="/recruiter-dashboard?tab=profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Company Profile</Link>
-            </>
-          ) : (
-            <>
-              <Link to="/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Open Positions</Link>
-              <Link to="/profile#applications" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>My Applications</Link>
-              {!isInviteOnly && <Link to="/practice" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Practice</Link>}
-              {!isInviteOnly && <Link to="/candidate/cost-statistics" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Cost Statistics</Link>}
-              {!isInviteOnly && <Link to="/team" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>Team</Link>}
-              <div className={styles.mobileDivider}></div>
-              <Link to="/profile#bio" className={styles.mobileNavLink} onClick={() => {
-                setMobileMenuOpen(false);
-                if (window.location.pathname === "/profile") window.location.hash = "#bio";
-              }}>My Profile</Link>
-            </>
-          )}
+          {links.map(item => <Link key={item.id} to={item.to} aria-current={navigationActive(item, location) ? "page" : undefined}
+            className={`${styles.mobileNavLink} ${navigationActive(item, location) ? styles.active : ""}`} onClick={() => setMobileMenuOpen(false)}>{item.label}</Link>)}
+          <div className={styles.mobileDivider} />
           <button className={styles.mobileNavLink} onClick={() => { setMobileMenuOpen(false); handleLogout(); }}>
             <i className="fa fa-sign-out" style={{marginRight: '8px'}}></i> Logout
           </button>

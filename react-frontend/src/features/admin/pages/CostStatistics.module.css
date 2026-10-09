@@ -441,3 +441,5 @@
     grid-column: auto;
   }
 }
+
+.headerBlock { background:linear-gradient(115deg,#eef2ff,#f3efff); border:1px solid var(--portal-border); border-radius:20px; padding:24px; }.headerBlock h1 { font-size:28px; color:var(--portal-text); }.headerBlock p { font-size:14px; }.card { border-radius:18px; box-shadow:var(--portal-shadow); }.wrapper { padding:0; }

@@ -1,3 +1,4 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Toast from "shared/components/ui/Toast";
@@ -12,7 +13,7 @@ import { PRACTICE_ROLE_OPTIONS } from "shared/constants/jobTaxonomy";
 import styles from "./Practice.module.css";
 import { getToken } from "shared/utils/session";
 import KioskLaunchGuide, { openKiosk } from "features/interview/components/KioskLaunchGuide";
-import { authedFetch } from "shared/api/client";
+import { API_BASE, authedFetch } from "shared/api/client";
 
 const Practice = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const Practice = () => {
       id: "easy",
       label: "Easy",
       icon: "fa-leaf",
-      color: "#22c55e",
+      color: "#047857",
       bg: "#f0fdf4",
       border: "#86efac",
       desc: "Broad questions, forgiving pace — ideal for warming up or beginners.",
@@ -39,7 +40,7 @@ const Practice = () => {
       id: "hard",
       label: "Hard",
       icon: "fa-bolt",
-      color: "#ef4444",
+      color: "#b91c1c",
       bg: "#fef2f2",
       border: "#fca5a5",
       desc: "Challenging probing questions and tight pacing — sharpen under pressure.",
@@ -102,7 +103,7 @@ const Practice = () => {
     try {
       const token = getToken();
       const response = await authedFetch(
-        `${process.env.REACT_APP_API_URL}/api/practice/history`,
+        `${API_BASE}/practice/history`,
         {
           method: "GET",
           headers: {
@@ -127,7 +128,7 @@ const Practice = () => {
     try {
       const token = getToken();
       const response = await authedFetch(
-        `${process.env.REACT_APP_API_URL}/api/practice/${sessionId}/report`,
+        `${API_BASE}/practice/${sessionId}/report`,
         {
           method: "GET",
           headers: {
@@ -200,7 +201,7 @@ const Practice = () => {
 
       const token = getToken();
       const response = await authedFetch(
-        `${process.env.REACT_APP_API_URL}/api/practice/start`,
+        `${API_BASE}/practice/start`,
         {
           method: "POST",
           headers: {
@@ -292,7 +293,7 @@ const Practice = () => {
     if (session.cv_id) {
       try {
         const token = getToken();
-        const url = `${process.env.REACT_APP_API_URL}/api/cv/${session.cv_id}/preview`;
+        const url = `${API_BASE}/cv/${session.cv_id}/preview`;
 
         const response = await authedFetch(url, {
           headers: {
@@ -316,7 +317,7 @@ const Practice = () => {
       try {
         const token = getToken();
         const response = await authedFetch(
-          `${process.env.REACT_APP_API_URL}/api/cv-details`,
+          `${API_BASE}/cv-details`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -360,14 +361,7 @@ const Practice = () => {
       )}
 
       <div className={styles.content}>
-        <div className={styles.welcomeSection}>
-          <h2>Practice Interview Mode</h2>
-          <p>
-            Master your interview skills with AI-powered practice sessions.
-            Select a role, practice in a realistic environment, and receive
-            instant personalized feedback.
-          </p>
-        </div>
+        <PortalPageHeader title="Practice interviews" eyebrow="Your career workspace" icon="fa-comments-o" subtitle="Choose a role, prepare with a realistic AI interview and learn from your feedback." />
 
         <div className={styles.practiceContent}>
           {/* Role Selection */}
@@ -379,6 +373,8 @@ const Practice = () => {
               {roles.map((role) => (
                 <div
                   key={role.id}
+                  role="button" tabIndex={0} aria-pressed={selectedRole === role.id}
+                  onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedRole(role.id); } }}
                   className={`${styles.roleCard} ${selectedRole === role.id ? styles.selected : ""}`}
                   onClick={() => setSelectedRole(role.id)}
                 >
@@ -452,7 +448,7 @@ const Practice = () => {
             <h3 className={styles.sectionTitle}>
               <i className="fa fa-sliders"></i> Interview Difficulty
             </h3>
-            <div className={styles.difficultyGrid}>
+            <div className={styles.difficultyGrid} role="radiogroup" aria-label="Interview difficulty">
               {DIFFICULTIES.map((d) => {
                 const active = difficulty === d.id;
                 return (
@@ -464,7 +460,7 @@ const Practice = () => {
                     role="radio"
                     aria-checked={active}
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === " " && setDifficulty(d.id)}
+                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDifficulty(d.id); } }}
                   >
                     <div
                       className={styles.difficultyIcon}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase } from "./session.js";
+import { interviewRequest, interviewScore, parseEvaluation, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase } from "./session.js";
 
 test("score contract preserves unavailable, zero and genuine low percentages", () => {
   assert.equal(scorePercent(null), null); assert.equal(scorePercent(""), null); assert.equal(scorePercent("NaN"), null);
@@ -70,4 +70,13 @@ test("JSON and recording requests keep correct content type and auth", async (co
   await interviewRequest("/api", "/upload", null, { method: "POST", body: new FormData(), headers: { "X-Mobile-Pairing-Token": "signed" } });
   assert.equal(calls[0].options.headers.Authorization, "Bearer owner"); assert.equal(calls[0].options.headers["Content-Type"], "application/json");
   assert.equal(calls[1].options.headers["Content-Type"], undefined); assert.equal(calls[1].options.headers["X-Mobile-Pairing-Token"], "signed");
+});
+
+
+test("closed report and legacy evaluations never crash or fabricate scores", () => {
+  for (const report of [null, undefined, {}, {evaluation:null}, {evaluation:"null"}, {evaluation:"[]"}]) assert.equal(interviewScore(report), null);
+  for (const value of [null, undefined, [], "null", "[]", "", "42"]) assert.deepEqual(parseEvaluation(value), {});
+  assert.deepEqual(parseEvaluation("Legacy feedback"), {summary:"Legacy feedback"});
+  assert.deepEqual(parseEvaluation('{"summary":"Ready"}'), {summary:"Ready"});
+  assert.equal(interviewScore({interview_score:0,evaluation:"null"}), 0);
 });

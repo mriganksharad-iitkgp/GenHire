@@ -1,3 +1,5 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import { recruiterTab } from "shared/components/layout/navigation";
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
@@ -12,7 +14,6 @@ import InterviewReportModal from "features/interview/components/InterviewReportM
 import ProctoringResultModal from "features/interview/components/ProctoringResultModal";
 import DeleteAccountModal from "shared/components/account/DeleteAccountModal";
 import {
-  Tabs,
   SectionHeader,
   OverviewMetrics,
   JobsGrid,
@@ -34,7 +35,7 @@ import { getUser, setUser } from "shared/utils/session";
 
 const RecruiterDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState("overview");
+  const activeTab = recruiterTab(searchParams.toString());
   const { user, rejectionReason, refreshUser } = useAuth("recruiter");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -163,16 +164,6 @@ const RecruiterDashboard = () => {
 
   // provided by useApplications
 
-  useEffect(() => {
-    // Check URL parameters for active tab
-    const tabParam = searchParams.get("tab");
-    if (
-      tabParam &&
-      ["overview", "jobs", "candidates", "profile"].includes(tabParam)
-    ) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
 
   // replaced by useJobs
 
@@ -183,35 +174,8 @@ const RecruiterDashboard = () => {
   // provided by useJobs
 
   const getStatusColor = (status) => {
-    const s = String(status || "").toLowerCase();
-    switch (s) {
-      case "active":
-        return "#27ae60";
-      case "draft":
-        return "#f39c12";
-      case "paused":
-        return "#f59e0b";
-      case "closed":
-        return "#e74c3c";
-      case "scheduled":
-        return "#3498db";
-      case "screening_cleared":
-      case "selected": // legacy name for screening_cleared
-        return "#27ae60";
-      case "rejected":
-        return "#e74c3c";
-      case "interviewed":
-        return "#9b59b6";
-      case "pending":
-      case "pending interview":
-        return "#f39c12";
-      case "reviewed":
-        return "#3498db";
-      case "shortlisted":
-        return "#8e44ad";
-      default:
-        return "#95a5a6";
-    }
+    const colors = { active:"#047857", screening_cleared:"#047857", selected:"#047857", draft:"#64748b", paused:"#92400e", pending:"#92400e", "pending interview":"#92400e", closed:"#b91c1c", rejected:"#b91c1c", scheduled:"#4338ca", published:"#4338ca", reviewed:"#4338ca", shortlisted:"#6d28d9", interviewed:"#6d28d9" };
+    return colors[String(status || "").toLowerCase()] || "#64748b";
   };
 
   const displayStatus = (status) => {
@@ -395,12 +359,6 @@ const RecruiterDashboard = () => {
     }
   };
 
-  // Handle tab changes with URL updates
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
-
   // showToast defined earlier for hooks
 
   const removeToast = (id) => {
@@ -448,11 +406,11 @@ const RecruiterDashboard = () => {
   const handleViewJobCandidates = (job) => {
     const jobCandidates = getCandidatesForJob(job._id || job.id);
     // Switch to candidates tab and filter by this job
-    setActiveTab("candidates");
-    setSelectedPosition(job.title);
+    setSelectedPosition(String(job._id || job.id));
     // Update URL to reflect the change
-    searchParams.set("tab", "candidates");
-    setSearchParams(searchParams);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "candidates");
+    setSearchParams(nextParams);
     showToast(
       `Showing ${jobCandidates.length} candidates for ${job.title}`,
       "info"
@@ -715,20 +673,12 @@ const RecruiterDashboard = () => {
         onClose={() => setIsProctoringModalOpen(false)}
         report={reportData}
       />
-      {/* Navigation Tabs */}
-      <Tabs activeTab={activeTab} onChange={handleTabChange} />
 
       <div className={styles.mainContent}>
         {/* Tab Content */}
         {activeTab === "overview" && (
           <div className={styles.overviewSection}>
-            <div className={styles.welcomeSection}>
-              <h2>Dashboard Overview</h2>
-              <p>
-                Manage your job postings, track candidates, and monitor
-                recruitment progress
-              </p>
-            </div>
+            <PortalPageHeader title="Dashboard Overview" eyebrow="Your hiring workspace" icon="fa-line-chart" subtitle="Manage your openings, follow candidate progress and keep your hiring pipeline moving." />
 
             <OverviewMetrics
               jobPostingsCount={
@@ -748,7 +698,7 @@ const RecruiterDashboard = () => {
         {activeTab === "jobs" && (
           <div className={styles.jobsContent}>
             <SectionHeader
-              title="Job Postings Management"
+              title="Job Postings Management" subtitle="Create opportunities, manage your openings and connect with the right candidates." icon="fa-briefcase"
               actions={
                 <button
                   className={`${styles.primaryButton} ${
@@ -821,7 +771,7 @@ const RecruiterDashboard = () => {
 
         {activeTab === "candidates" && (
           <div className={styles.candidatesContent}>
-            <SectionHeader title="Candidate Management" />
+            <SectionHeader title="Candidate Management" subtitle="Review applicants, compare their scores and guide the next step in your hiring process." icon="fa-users" />
             <CandidatesFilters
               jobPostings={jobPostings}
               selectedPosition={selectedPosition}
@@ -865,7 +815,7 @@ const RecruiterDashboard = () => {
         {activeTab === "profile" && (
           <div className={styles.profileContent}>
             <SectionHeader
-              title="Company Profile"
+              title="Company Profile" subtitle="Introduce your company and keep the information candidates see up to date." icon="fa-building-o"
               actions={
                 !isEditingProfile ? (
                   <button
@@ -875,7 +825,7 @@ const RecruiterDashboard = () => {
                     <i className="fa fa-edit"></i> Edit Profile
                   </button>
                 ) : (
-                  <span style={{ color: "#4a90e2", fontWeight: 500 }}>
+                  <span style={{ color: "var(--portal-primary)", fontWeight: 500 }}>
                     <i className="fa fa-edit"></i> Editing Mode
                   </span>
                 )

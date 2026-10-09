@@ -23,6 +23,7 @@ const mapApplication = (a) => {
 
   return {
     id: a._id,
+    cv_id: a.cv_id,
     company: companyLabel(a.job_details?.company),
     logo: a.job_details?.logo || null,
     location: a.job_details?.location || null,
@@ -40,7 +41,7 @@ const mapApplication = (a) => {
     cvScore:
       typeof a.cv_score === "number"
         ? Math.round(a.cv_score)
-        : a.similarity_score
+        : typeof a.similarity_score === "number"
           ? Math.round(a.similarity_score * 100)
           : null,
     interviewScore:
@@ -53,7 +54,7 @@ const mapApplication = (a) => {
         : null,
     reportAvailable: !!a.report_available,
     interviews: [],
-    minimum_cv_score_required: a.minimum_cv_score_required || null,
+    minimum_cv_score_required: a.minimum_cv_score_required ?? null,
     auto_processed: a.auto_processed || false,
   };
 };
@@ -65,7 +66,8 @@ export default function useCandidateApplications(toast) {
     applicationsLoaded,
   } = useCandidateData();
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!applicationsLoaded);
+  const [error, setError] = useState(null);
   const toastRef = useRef(toast);
 
   // Keep latest toast in a ref without causing effect churn
@@ -89,6 +91,7 @@ export default function useCandidateApplications(toast) {
       inflightRef.current = true;
       lastLoadAtRef.current = now;
       setLoading(true);
+      setError(null);
 
       try {
         // Use cached data from context
@@ -100,6 +103,7 @@ export default function useCandidateApplications(toast) {
         const mapped = (apps || []).map(mapApplication);
         setApplications(mapped);
       } catch (e) {
+        setError("We could not load your applications. Please retry.");
         toastRef.current?.("Failed to load applications", "error");
       } finally {
         setLoading(false);
@@ -163,5 +167,5 @@ export default function useCandidateApplications(toast) {
     [applications],
   );
 
-  return { applications, loading, load, openReport, companies };
+  return { applications, loading, error, load, openReport, companies };
 }

@@ -47,7 +47,7 @@ const JDDetailsModal = ({ isOpen, onClose, session, getRoleName, getRoleIcon }) 
             <i className={`fa ${getRoleIcon?.(session.role) || roleInfo.icon || 'fa-briefcase'}`}></i>
             Job Description Details
           </h2>
-          <button className={styles.closeButton} onClick={onClose}>
+          <button className={styles.closeButton} onClick={onClose} aria-label="Close dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>

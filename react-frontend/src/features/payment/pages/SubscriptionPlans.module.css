@@ -762,3 +762,6 @@ body.dark .secureNote,
     display: none;
   }
 }
+
+.pageContainer { background:var(--portal-backdrop); }.content { max-width:1280px; padding:108px 24px 32px; }.tabNav { background:var(--portal-primary-soft); border-radius:12px; }.creditStatCard { border-radius:18px; border:1px solid var(--portal-border); box-shadow:var(--portal-shadow); }.pageHeader { margin-bottom:24px; }.headerText h1 { font-size:30px; }.headerText p { font-size:14px; }
+@media (max-width:600px) { .content { padding:96px 16px 24px; } }

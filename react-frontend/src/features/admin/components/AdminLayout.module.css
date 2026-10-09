@@ -1,7 +1,7 @@
 /* Admin Layout Styles */
-:root {
-  --admin-bg: #f8fafc;
-  --admin-sidebar: #0f172a;
+.adminContainer {
+  --admin-bg: #f8f9fe;
+  --admin-sidebar: #ffffff;
   --admin-card: #ffffff;
   --admin-border: #e2e8f0;
   --admin-text: #1e293b;
@@ -358,3 +358,10 @@
     padding-top: calc(60px + 0.75rem);
   }
 }
+
+/* Scoped admin workspace theme. */
+.adminContainer { background:var(--portal-backdrop); }.sidebar,.mobileHeader { background:var(--portal-surface); border-right:1px solid var(--portal-border); }
+.sidebarHeader,.adminInfo,.sidebarFooter { border-color:var(--portal-border); }.sidebarHeader h2,.mobileBrand h2,.adminName,.menuToggle { color:var(--portal-text); }.adminEmail { color:var(--portal-muted); }
+.navItem { color:var(--portal-secondary); font-size:14px; }.navItem:hover,.navItem.active { background:var(--portal-primary-soft); color:var(--portal-primary); }.navItem:focus-visible,.menuToggle:focus-visible { outline:3px solid var(--portal-accent); outline-offset:-3px; }
+.logoutButton { color:var(--portal-danger); background:#fef2f2; }.logoutButton:hover { color:#991b1b; background:#fee2e2; }.mainContent { padding:28px; }
+@media (max-width:768px) { .mainContent { padding:80px 16px 24px; }.mobileHeader { border-bottom:1px solid var(--portal-border); } }

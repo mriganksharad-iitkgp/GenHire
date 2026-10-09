@@ -5,7 +5,7 @@ import JobEditModal from "features/recruiter/components/JobEditModal";
 import CVSelectionModal from "features/candidate/components/CVSelectionModal";
 import styles from "./JobDetails.module.css";
 import { getToken, getUser } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { API_BASE, authedFetch } from "shared/api/client";
 import { useCandidateData } from "features/candidate/context/CandidateDataContext";
 import { checkCvMatchScore, getJdDownloadUrl } from "shared/api/endpoints";
 import { companyLabel } from "shared/constants/company";
@@ -126,7 +126,7 @@ const JobDetails = () => {
 			}
 			setIsLoading(true);
 			try {
-				const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
+				const res = await authedFetch(`${API_BASE}/jobs/${jobId}`, {
 					headers: {
 						Authorization: `Bearer ${token}`,
 					},
@@ -170,7 +170,7 @@ const JobDetails = () => {
 				// (no cv_snapshot, processing_status='awaiting_candidate'); we treat
 				// those as "not yet applied" so the Apply button stays available.
 				try {
-					const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/applications`, {
+					const res = await authedFetch(`${API_BASE}/applications`, {
 						headers: { Authorization: `Bearer ${token}` }
 					});
 					const appsRes = res;
@@ -333,7 +333,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		setIsApplying(false);
 		
 		try {
-			const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/apply`, {
+			const res = await authedFetch(`${API_BASE}/jobs/${jobId}/apply`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${token}`,
@@ -376,7 +376,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		// If this is the confirmation step
 		if (pendingWithdrawal) {
 			try {
-				const res = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}/withdraw`, {
+				const res = await authedFetch(`${API_BASE}/jobs/${jobId}/withdraw`, {
 					method: 'DELETE',
 					headers: {
 						'Authorization': `Bearer ${token}`,
@@ -420,7 +420,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				return;
 			}
 
-			const response = await authedFetch(`${process.env.REACT_APP_API_URL}/api/jobs/${jobId}`, {
+			const response = await authedFetch(`${API_BASE}/jobs/${jobId}`, {
 				method: 'PUT',
 				headers: {
 					'Authorization': `Bearer ${token}`,

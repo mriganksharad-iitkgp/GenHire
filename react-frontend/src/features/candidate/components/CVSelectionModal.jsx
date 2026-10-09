@@ -258,7 +258,7 @@ const CVSelectionModal = ({
                 : 'Applying for: '}
             <strong>{jobTitle}</strong>
           </p>
-          <button className={styles.closeButton} onClick={onClose}>
+          <button className={styles.closeButton} onClick={onClose} aria-label="Close CV dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>

@@ -225,7 +225,8 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
     
     setIsSaving(true);
     try {
-      await onSave(formData);
+      const saved = await onSave(formData);
+      if (saved === false) { setToast({message:"Unable to save CV details. Please retry.",type:"error"}); return; }
       setToast({
         message: 'CV details saved successfully!',
         type: 'success'
@@ -1245,7 +1246,7 @@ const CVDetailsForm = ({ onSave, existingData = null, onClose }) => {
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
           <h2><i className="fa fa-file-text"></i> CV Details Entry</h2>
-          <button type="button" onClick={onClose} className={styles.closeButton}>
+          <button type="button" onClick={onClose} className={styles.closeButton} aria-label="Close CV dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>

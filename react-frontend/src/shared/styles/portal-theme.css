@@ -1,0 +1,19 @@
+:root {
+  /* Shared portal/auth tokens derived from the existing landing palette. */
+  --portal-primary: #4f46e5;
+  --portal-accent: #6366f1;
+  --portal-purple: #8b5cf6;
+  --portal-gradient: linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+  --portal-primary-soft: #eef2ff;
+  --portal-text: #1e293b;
+  --portal-secondary: #475569;
+  --portal-muted: #64748b;
+  --portal-bg: #f8f9fe;
+  --portal-backdrop: radial-gradient(ellipse at top right,#ede9fe80,transparent 55%),#f8f9fe;
+  --portal-surface: #ffffff;
+  --portal-border: #e2e8f0;
+  --portal-success: #047857;
+  --portal-warning: #92400e;
+  --portal-danger: #b91c1c;
+  --portal-shadow: 0 4px 18px #4755690a;
+}

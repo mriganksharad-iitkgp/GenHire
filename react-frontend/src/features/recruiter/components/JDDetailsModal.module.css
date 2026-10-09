@@ -389,3 +389,24 @@ body.dark .modalFooter,
     text-align: center;
   }
 }
+
+/* Consistent light dialog shell in the current lavender/purple palette. */
+.modalOverlay { background:#0f172a80; padding:20px; }
+.modalContent { background:var(--portal-surface); color:var(--portal-text); border:1px solid var(--portal-border); border-radius:16px; box-shadow:0 20px 70px #0f172a26; width:100%; max-height:calc(100svh - 40px); overscroll-behavior:contain; }
+.modalHeader { color:var(--portal-text); background:var(--portal-primary-soft); padding:20px 24px; border-bottom:1px solid var(--portal-border); }
+.modalHeader h1,.modalHeader h2,.modalHeader h3 { color:var(--portal-text); background:none; -webkit-text-fill-color:currentColor; font-size:22px; font-weight:650; margin:0; line-height:1.3; }
+.modalHeader i,.modalHeader svg { color:var(--portal-primary); }.modalHeader .subtitle { color:var(--portal-muted); opacity:1; font-size:13px; }
+.closeButton,.editButton { color:var(--portal-secondary); background:transparent; border:0; width:36px; height:36px; flex-shrink:0; border-radius:8px; }.closeButton:hover,.editButton:hover { color:var(--portal-primary); background:#e0e7ff; transform:none; }.closeButton svg,.closeButton i { color:inherit; }
+.modalBody { padding:24px; }.modalHeader .headerContent { width:100%; gap:16px; }.jobTitle { font-size:26px; color:var(--portal-text); }.section h3 { font-size:18px; color:var(--portal-text); }
+@media (max-width:600px) { .modalOverlay { padding:12px; }.modalContent { max-height:calc(100svh - 24px); }.modalHeader,.modalBody { padding:18px; }.modalHeader h1,.modalHeader h2,.modalHeader h3 { font-size:20px; } }
+
+.modalHeader { background:linear-gradient(115deg,#eef2ff,#f3efff); }.modalContent { border-radius:20px; }.primaryButton { background:var(--portal-gradient); color:white; min-height:44px; font-size:14px; border-radius:10px; }.primaryButton:hover:not(:disabled) { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; }.primaryButton:focus-visible,.secondaryButton:focus-visible,.closeButton:focus-visible { outline:3px solid var(--portal-accent); outline-offset:3px; }
+
+/* Keep detail content aligned with the compact job forms. */
+.modalOverlay { z-index:10050; }
+.infoCard,.statCard,.roleCard { background:var(--portal-bg); border:1px solid var(--portal-border); border-radius:12px; box-shadow:none; }
+.infoIcon,.statIcon,.roleIcon { background:var(--portal-primary-soft); color:var(--portal-primary); box-shadow:none; }
+.skillTag,.skillCount { background:var(--portal-primary-soft); color:var(--portal-primary); border:1px solid #e0e7ff; font-size:12px; border-radius:8px; }
+.companyName,.description,.infoValue,.roleDescription,.footerText { color:var(--portal-secondary); }
+.description,.roleDescription { font-size:14px; line-height:1.75; }
+.sectionTitle { font-size:18px; }.jobTitle { font-size:26px; }

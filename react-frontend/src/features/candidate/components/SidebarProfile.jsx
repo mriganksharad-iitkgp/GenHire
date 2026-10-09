@@ -37,7 +37,7 @@ export default function SidebarProfile({
     <div className={styles.sidebar}>
       <div className={styles.profilePicSection}>
         <div className={styles.profilePic}>
-          <img key={photoUrl || 'default'} src={photoUrl || "../android-chrome-192x192.png"} alt="Profile" />
+          <img key={photoUrl || 'default'} src={photoUrl || "/android-chrome-192x192.png"} alt="Profile" />
         </div>
         <label className={styles.changePhotoBtn}>
           {isUploadingPhoto ? "Uploading..." : "Change Photo"}
@@ -67,13 +67,13 @@ export default function SidebarProfile({
               </label>
               {cvPath && (
                 <div className={styles.fileInfo}>
-                  <button type="button" onClick={onViewCV} className={styles.viewCVButton}>
+                  <button type="button" onClick={() => onViewCV()} className={styles.viewCVButton}>
                     View Uploaded CV
                   </button>
                 </div>
               )}
             </div>
-            <button type="submit" className={styles.uploadButton} disabled={uploadingCV}>
+            <button type="submit" className={styles.uploadButton} disabled={uploadingCV || !cvFileName}>
               {uploadingCV ? (
                 "Uploading..."
               ) : (
@@ -135,30 +135,7 @@ export default function SidebarProfile({
           <button 
             type="button" 
             onClick={onDeleteAccount} 
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              marginTop: '10px',
-              backgroundColor: 'white', 
-              color: '#dc3545', 
-              border: '1px solid #dc3545', 
-              borderRadius: '4px', 
-              cursor: 'pointer',
-              fontWeight: '500',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc3545';
-              e.currentTarget.style.color = 'white';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'white';
-              e.currentTarget.style.color = '#dc3545';
-            }}
+            className={styles.dangerButton}
           >
             <i className="fa fa-trash" aria-hidden="true"></i>
             Delete Account
@@ -170,8 +147,9 @@ export default function SidebarProfile({
         <CVDetailsForm
           existingData={cvDetails}
           onSave={async (formData) => {
-            await onSaveCvDetails(formData);
-            setShowCvDetailsForm(false);
+            const saved = await onSaveCvDetails(formData);
+            if (saved) setShowCvDetailsForm(false);
+            return saved;
           }}
           onClose={() => setShowCvDetailsForm(false)}
         />

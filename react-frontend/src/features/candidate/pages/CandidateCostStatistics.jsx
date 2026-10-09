@@ -1,9 +1,10 @@
+import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
 import styles from "features/recruiter/pages/RecruiterCostStatistics.module.css";
 import { getToken } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { request } from "shared/api/client";
 import {
   addMonths,
   buildContinuousMonthlySeries,
@@ -11,17 +12,17 @@ import {
   getMaxMonthToAllowed,
 } from "shared/utils/monthRange";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const CandidateCostStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [costData, setCostData] = useState(null);
   const [error, setError] = useState(null);
+  const [attempt, setAttempt] = useState(0);
   const [monthFrom, setMonthFrom] = useState("");
   const [monthTo, setMonthTo] = useState("");
   const navigate = useNavigate();
 
-  const generateFallbackData = () => ({
+  const emptyUsageModel = () => ({
     candidate: {
       name: "Candidate",
       email: "",
@@ -47,48 +48,41 @@ const CandidateCostStatistics = () => {
   });
 
   useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
       try {
         const token = getToken();
-
         if (!token) {
           setError("Please login to view your usage dashboard");
           setLoading(false);
           return;
         }
 
-        const response = await authedFetch(
-          `${API_BASE_URL}/api/candidate/cost-statistics`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        const data = await response.json();
-        if (data.success) {
-          setCostData(data.data);
-        } else {
-          setCostData(generateFallbackData());
+        const data = await request("/candidate/cost-statistics", { signal:controller.signal });
+        if (cancelled) return;
+        if (!data?.success || !data.data || typeof data.data !== "object" || Array.isArray(data.data)) {
+          throw new Error("Usage data is unavailable.");
         }
+        setCostData(data.data);
       } catch (err) {
-        if (err.status !== 401) {
-          setCostData(generateFallbackData());
-        }
+        if (cancelled) return;
+        setError(err.status === 401 ? "Your session has expired. Please sign in again." : controller.signal.aborted ? "Loading your usage data took too long. Please retry." : "We could not load your usage data. Please retry.");
       } finally {
-        setLoading(false);
+        clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+    return () => { cancelled = true; clearTimeout(timeout); controller.abort(); };
+  }, [attempt]);
 
-  const safeData = costData || generateFallbackData();
+  const safeData = costData || emptyUsageModel();
   const plan = safeData.plan || {};
 
   const creditsAllocated = Number(plan.credits_allocated ?? 0) || 0;
@@ -216,9 +210,7 @@ const CandidateCostStatistics = () => {
       <>
         <Navbar userType="candidate" />
         <div className={styles.pageWrapper}>
-          <div className={styles.errorContainer}>
-            <p>{error || "Please login to view your usage dashboard"}</p>
-          </div>
+          <section className={styles.errorContainer} role="alert"><h2>Unable to load usage</h2><p>{error || "Please sign in to view your usage dashboard."}</p>{getToken() ? <button onClick={() => setAttempt(value => value + 1)}>Retry</button> : <button onClick={() => navigate("/login")}>Sign in</button>}</section>
         </div>
       </>
     );
@@ -229,15 +221,7 @@ const CandidateCostStatistics = () => {
       <Navbar userType="candidate" />
       <div className={styles.pageWrapper}>
         <div className={styles.usageDashboard}>
-          <div className={styles.pageHeader}>
-            <div className={styles.headerContent}>
-              <h1>Practice Cost Statistics</h1>
-              <p>
-                Welcome, {safeData.candidate?.name || "Candidate"} —{" "}
-                {plan.name || "Candidate Wallet"}
-              </p>
-            </div>
-          </div>
+          <PortalPageHeader title="Cost statistics" eyebrow="Your candidate wallet" icon="fa-line-chart" subtitle="Track your practice credits, wallet balance and usage over time." />
 
           <div className={styles.overviewCards}>
             <div className={styles.overviewCard}>

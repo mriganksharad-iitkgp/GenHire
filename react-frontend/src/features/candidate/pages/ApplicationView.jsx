@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import styles from "./ApplicationView.module.css";
-import "./darkModeOverride.css";
-import "./emergency-fixes.css";
 import { getToken } from "shared/utils/session";
-import { authedFetch } from "shared/api/client";
+import { API_BASE, authedFetch } from "shared/api/client";
 import { companyLabel } from "shared/constants/company";
 
 const ApplicationView = () => {
@@ -36,12 +34,12 @@ const ApplicationView = () => {
 				try {
 					setIsLoading(true);
 					const res = await authedFetch(
-						`${process.env.REACT_APP_API_URL}/api/applications/${applicationId}`,
+						`${API_BASE}/applications/${applicationId}`,
 						{ headers: { Authorization: `Bearer ${token}` } }
 					);
 
 					if (!res.ok) {
-						navigate("/profile");
+						navigate("/applications");
 						return;
 					}
 
@@ -112,7 +110,7 @@ const ApplicationView = () => {
 						timeline,
 					});
 				} catch (e) {
-					navigate("/profile");
+					navigate("/applications");
 				} finally {
 					setIsLoading(false);
 				}
@@ -223,7 +221,7 @@ const ApplicationView = () => {
 				<p>Application not found.</p>
 				<button
 					className={styles.backButton}
-					onClick={() => navigate("/profile#applications")}
+					onClick={() => navigate("/applications")}
 				>
 					<i className="fa fa-arrow-left"></i> Back to Applications
 				</button>
@@ -237,10 +235,9 @@ const ApplicationView = () => {
 				<div className={styles.header}>
 					<button
 						className={styles.backButton}
-						onClick={() => navigate("/profile#applications")}
+						onClick={() => navigate("/applications")}
 					>
-						<i className="fa fa-arrow-left"></i> Back to
-						Applications
+						<i className="fa fa-arrow-left"></i> Back to Applications
 					</button>
 				</div>
 

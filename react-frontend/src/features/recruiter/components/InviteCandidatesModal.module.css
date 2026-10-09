@@ -380,3 +380,6 @@
   cursor: pointer;
 }
 .secondary:hover { background: #f3f4f6; }
+
+.modal { border:1px solid var(--portal-border); border-radius:16px; max-height:calc(100svh - 40px); }.header { background:var(--portal-primary-soft); }.headerText h2 { color:var(--portal-text); }.closeBtn { width:36px; height:36px; color:var(--portal-secondary); flex-shrink:0; }.closeBtn:hover { background:#e0e7ff; color:var(--portal-primary); }.toggleOption.active { color:var(--portal-primary); }.section textarea,.section input { font-size:14px; border-color:var(--portal-border); }
+@media (max-width:600px) { .modal { max-height:calc(100svh - 24px); }.overlay { padding:12px; } }

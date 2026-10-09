@@ -612,3 +612,16 @@ body.dark .dropdownItem.logout {
   border: 1px solid var(--dark-border) !important;
   box-shadow: var(--dark-shadow) !important;
 }
+
+/* Preserve the existing logo/white-navbar style, with compact section links. */
+.navBrand h1 { background:none; -webkit-text-fill-color:currentColor; color:#1e293b; font-size:24px; }
+.navLinks { gap:6px; }.navLink { white-space:nowrap; padding:10px 12px; font-size:13px; }.navLink.active { background:#eef2ff; color:#4f46e5; }.navLink:hover { background:#eef2ff; color:#4f46e5; transform:none; }.navLink.active::after { display:none; }
+.navContainer { gap:20px; }.navActions { flex-shrink:0; gap:12px; }.userButton { border:1px solid #e2e8f0; border-radius:10px; background:white; }.userName { max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.mobileDrawer[hidden] { display:none; }.mobileNavLink.active { background:#eef2ff; color:#4f46e5; border-radius:8px; }
+@media (max-width:1280px) { .recruiterNavbar .navLinks { display:none; }.recruiterNavbar .mobileMenuBtn { display:flex; }.recruiterNavbar .navActions { margin-left:auto; } }
+@media (max-width:1100px) { .navLinks { display:none; }.mobileMenuBtn { display:flex; }.navActions { margin-left:auto; }.userName { display:none; } }
+@media (max-width:768px) { .navContainer { height:80px; gap:12px; }.navActions,.recruiterNavbar .navActions { display:none; }.mobileMenuBtn { margin-left:auto; }.mobileDrawer { padding-top:96px; } }
+.navbar :is(a,button):focus-visible { outline:3px solid #6366f1; outline-offset:3px; }
+:global(body.dark) .navBrand h1 { color:#f8fafc; }.navbar { overflow:visible; }
+
+/* Six candidate sections need the same compact breakpoint as recruiters. */
+@media (max-width:1280px) { .navLinks { display:none; } .mobileMenuBtn { display:flex; } }

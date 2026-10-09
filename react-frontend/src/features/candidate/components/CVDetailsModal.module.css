@@ -331,3 +331,12 @@ body.dark .modalFooter,
     padding: 16px 20px;
   }
 }
+
+/* Candidate CV dialogs use the shared portal palette and control scale. */
+.modalContent { max-height:calc(100svh - 40px); border:1px solid var(--portal-border); border-radius:20px; }
+.modalHeader { padding:20px 24px; color:var(--portal-text); background:linear-gradient(120deg,#eef2ff,#f3efff); border-bottom:1px solid #dddafa; }
+.modalHeader h2 { font-size:22px; color:var(--portal-text); }
+.closeButton,.closeButton:hover { color:var(--portal-secondary); background:#fff; border:1px solid var(--portal-border); width:36px; height:36px; border-radius:9px; }
+.saveButton,.submitButton,.uploadButton { min-height:42px; background:var(--portal-gradient); color:#fff; border-radius:11px; font-size:13px; padding:10px 16px; }
+.saveButton:hover:not(:disabled),.submitButton:hover:not(:disabled),.uploadButton:hover:not(:disabled) { background:var(--portal-primary); color:#fff; transform:none; }
+@media(max-width:600px) { .modalHeader { padding:18px; } .modalHeader h2 { font-size:20px; } }

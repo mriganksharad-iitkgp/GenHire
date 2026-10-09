@@ -1,7 +1,8 @@
+import { PROCTORING_OPTIONS } from "shared/constants/proctoringOptions";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { generateJobWithAI } from 'shared/api/endpoints';
 import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
-import styles from './JobCreationModal.module.css';
+import styles from './JobForm.module.css';
 
 // Predefined data for auto-suggestions
 const JOB_TEMPLATES = {
@@ -293,7 +294,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
         benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
         status: 'draft',
         minimum_cv_score: ai.minimum_cv_score || 50,
-        gaze_proctoring: false,
+        gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap),
         proctoring_config: {
           ...DEFAULT_PROCTORING_CONFIG,
           ...(jobData.proctoring_config || {})
@@ -340,7 +341,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     }
   };
 
-  // Auto-generate content based on title
+  // Generate draft content based on title
   const handleTitleChange = (e) => {
     const title = e.target.value;
     handleInputChange(e);
@@ -399,7 +400,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     return date.toISOString().split('T')[0];
   };
 
-  // Auto-fill deadline if empty
+  // Suggestions deadline if empty
   useEffect(() => {
     if (isOpen && !jobData.deadline) {
       setJobData(prev => ({
@@ -456,7 +457,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
     setIsSubmitting(true);
     try {
-      const success = await onJobCreate(jobData, jdFile);
+      const success = await onJobCreate({ ...jobData, gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap) }, jdFile);
       if (success) {
         resetForm();
         onClose();
@@ -523,8 +524,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     <div className={styles.modalOverlay} onClick={handleOverlayClick}>
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
-          <h2>Create New Job Posting</h2>
-          <button className={styles.closeButton} onClick={handleCancel}>
+          <h2>Create job</h2>
+          <button type="button" className={styles.closeButton} onClick={handleCancel} aria-label="Close create job dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>
@@ -533,7 +534,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
           {/* Quick Templates Section */}
           <div className={styles.templateSection}>
             <div className={styles.templateHeader}>
-              <h3><i className="fa fa-bolt"></i> Quick Start Templates</h3>
+              <h3><i className="fa fa-bolt"></i> Job templates</h3>
               <button
                 type="button"
                 className={styles.toggleTemplates}
@@ -573,11 +574,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
           {/* AI Job Description Generator */}
           <div className={styles.aiSection}>
             <div className={styles.aiHeader}>
-              <h3><i className="fa fa-magic"></i> Create with AI</h3>
-              <span className={styles.aiBadge}>Powered by AI</span>
+              <h3><i className="fa fa-magic"></i> Draft a job description</h3>
+              <span className={styles.aiBadge}>AI assistance</span>
             </div>
             <p className={styles.aiSubtext}>
-              Describe the role in a few words, or upload an existing JD file — AI will parse it and fill the entire form for you instantly. You can also give both: the file supplies the content, your note adds instructions.
+              Describe the role or upload a job description to generate a draft. Review the details before publishing; your note can provide additional instructions.
             </p>
             <div className={styles.aiInputRow}>
               <input
@@ -653,7 +654,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
           </div>
 
           <div className={styles.formGrid}>
-            {/* Job Title with Smart Suggestions */}
+            {/* Job Title with Suggestions */}
             <div className={styles.formGroup}>
               <label>Job Title *</label>
               <input
@@ -750,10 +751,10 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               >
                 <option value="Full-time">Full-time</option>
                 <option value="Part-time">⏰ Part-time</option>
-                <option value="Contract">📝 Contract</option>
-                <option value="Internship">🎓 Internship</option>
+                <option value="Contract"> Contract</option>
+                <option value="Internship"> Internship</option>
                 <option value="Freelance">🆓 Freelance</option>
-                <option value="Remote">🌍 Remote</option>
+                <option value="Remote"> Remote</option>
               </select>
             </div>
 
@@ -791,7 +792,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               </div>
             </div>
 
-            {/* Salary with Smart Suggestions */}
+            {/* Salary with Suggestions */}
             <div className={styles.formGroup} ref={dropdownRefs.salary}>
               <label>Salary Range *</label>
               <div className={styles.inputWithDropdown}>
@@ -825,9 +826,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               </div>
             </div>
 
-            {/* Application Deadline with Smart Default */}
+            {/* Application Deadline with Suggestions Default */}
             <div className={styles.formGroup}>
-              <label>Application Deadline * <span className={styles.autoFilled}>✨ Auto-filled</span></label>
+              <label>Application Deadline * <span className={styles.autoFilled}> Suggested date</span></label>
               <input
                 type="date"
                 name="deadline"
@@ -837,13 +838,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 min={new Date().toISOString().split('T')[0]}
               />
               <div className={styles.helpText}>
-                📅 Default: 30 days from today
+                 Default: 30 days from today
               </div>
             </div>
 
             {/* Job Status */}
             <div className={styles.formGroup}>
-              <label>Job Status * <span className={styles.smartIndicator}>🟢 Workflow</span></label>
+              <label>Job Status * <span className={styles.smartIndicator}> Status</span></label>
               <select
                 name="status"
                 value={jobData.status}
@@ -851,17 +852,17 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 required
                 className={styles.enhancedSelect}
               >
-                <option value="draft">📝 Draft - Job is being prepared</option>
-                <option value="active">✅ Active - Ready to accept applications</option>
+                <option value="draft"> Draft - Job is being prepared</option>
+                <option value="active"> Active - Ready to accept applications</option>
               </select>
               <div className={styles.helpText}>
-                💡 Draft: Preview before publishing | Active: Live and accepting applications
+                 Draft: Preview before publishing | Active: Live and accepting applications
               </div>
             </div>
 
             {/* Minimum CV Score */}
             <div className={styles.formGroup}>
-              <label>Minimum CV Score * <span className={styles.smartIndicator}>🎯 Auto-Shortlist</span></label>
+              <label>Minimum CV Score * <span className={styles.smartIndicator}> Screening threshold</span></label>
               <input
                 type="number"
                 name="minimum_cv_score"
@@ -878,25 +879,18 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               </div>
             </div>
 
-            {/* Proctoring Configuration */}
+            {/* Interview monitoring */}
             <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
-              <label>🛡️ Proctoring Configuration</label>
+              <label> Interview monitoring</label>
               <div className={styles.proctoringSection}>
                 <div className={styles.creditWarning}>
                   <i className="fa fa-exclamation-triangle"></i>
                   Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
                 </div>
-                {[
-                  { key: 'dual_camera', label: 'Require laptop + mobile cameras', desc: 'Candidates pair a phone to show their workspace. Both cameras must be ready before the interview starts.', icon: '📱' },
-                  { key: 'voice_detection', label: 'Voice Activity Detection', desc: 'Tracks speech patterns, pauses, and off-camera audio cues', icon: '🎤' },
-                  { key: 'object_detection', label: 'Object Detection', desc: 'Detects phones, multiple people, and prohibited items via webcam', icon: '📷' },
-                  { key: 'eyeball_tracking', label: 'Eyeball Tracking', desc: 'Monitors gaze direction over time using iris position analysis', icon: '👁️' },
-                  { key: 'gaze_heatmap', label: 'Gaze Cloud Heatmap', desc: 'Generates a visual heatmap of where the candidate looked on screen', icon: '🗺️' },
-                  { key: 'ai_detection', label: 'AI Answer Detection', desc: 'Detects high probability usage of LLMs like ChatGPT in candidate answers', icon: '🤖' },
-                ].map(opt => (
+                {PROCTORING_OPTIONS.map(opt => (
                   <div key={opt.key} className={styles.proctoringToggle}>
                     <div className={styles.proctoringInfo}>
-                      <span className={styles.proctoringIcon}>{opt.icon}</span>
+                      <span className={styles.proctoringIcon}><i className={`fa ${opt.icon}`} aria-hidden="true" /></span>
                       <div>
                         <strong>{opt.label}</strong>
                         <p>{opt.desc}</p>
@@ -904,6 +898,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     </div>
                     <label className={styles.toggleSwitch}>
                       <input
+                        aria-label={opt.label}
                         type="checkbox"
                         checked={jobData.proctoring_config?.[opt.key] ?? DEFAULT_PROCTORING_CONFIG[opt.key]}
                         onChange={(e) => setJobData(prev => ({
@@ -921,13 +916,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 ))}
               </div>
               <div className={styles.helpText}>
-                AI JD generation costs 10 credits. Manual job creation costs 0 credits. Disabled proctoring modules show "Not enabled" in reports.
+                AI drafting costs 10 credits. Manual creation is free. Disabled monitoring checks are labelled in reports.
               </div>
             </div>
 
             {/* Skills with Tag System */}
             <div className={styles.formGroup} ref={dropdownRefs.skills}>
-              <label>Required Skills * <span className={styles.smartIndicator}>🏷️ Tags</span></label>
+              <label>Required Skills * <span className={styles.smartIndicator}> Skills</span></label>
               <div className={styles.skillsContainer}>
                 <div className={styles.skillTags}>
                   {jobData.skills.map((skill, index) => (
@@ -960,7 +955,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 />
               </div>
               <div className={styles.helpText}>
-                💡 Type to search skills, press Enter to add, or click suggestions
+                 Type to search skills, press Enter to add, or click suggestions
               </div>
               <div className={styles.popularSkills}>
                 <span>Popular: </span>
@@ -984,7 +979,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             <div className={styles.formGroup}>
               <label>
                 Job Description * 
-                <span className={styles.smartIndicator}>🧠 Smart</span>
+                <span className={styles.smartIndicator}> Suggestions</span>
                 {jobData.title && (
                   <button
                     type="button"
@@ -1001,7 +996,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.description}
                   >
-                    ✨ Auto-generate
+                     Generate draft
                   </button>
                 )}
               </label>
@@ -1039,7 +1034,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.responsibilities}
                   >
-                    ✨ Auto-generate
+                     Generate draft
                   </button>
                 )}
               </label>
@@ -1056,7 +1051,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                📄 Format: Use bullet points or line breaks for better readability
+                 Format: Use bullet points or line breaks for better readability
               </div>
             </div>
 
@@ -1080,7 +1075,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.requirements}
                   >
-                    ✨ Auto-generate
+                     Generate draft
                   </button>
                 )}
               </label>
@@ -1097,7 +1092,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                🎯 Include both technical and soft skills requirements
+                 Include the technical and communication skills required for this role.
               </div>
             </div>
 
@@ -1121,7 +1116,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                     }}
                     disabled={!jobData.title || !jobData.department || jobData.benefits}
                   >
-                    ✨ Auto-generate
+                     Generate draft
                   </button>
                 )}
               </label>
@@ -1139,7 +1134,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 className={styles.enhancedTextarea}
               />
               <div className={styles.helpText}>
-                🎆 Highlight unique perks that make your company stand out
+                 Highlight unique perks that make your company stand out
               </div>
             </div>
           </div>
