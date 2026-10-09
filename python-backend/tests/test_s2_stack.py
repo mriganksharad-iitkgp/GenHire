@@ -123,6 +123,13 @@ class ProviderTests(unittest.TestCase):
         Config.validate()
         self.assertIsNone(Config.OPENAI_API_KEY)
 
+    def test_evaluation_honors_disabled_tracing(self):
+        from evaluation_model.rubrics_eval.config import Config
+        with patch.dict(os.environ, {"LANGCHAIN_TRACING_V2": "false", "LANGCHAIN_ENDPOINT": "https://trace.example.test"}):
+            Config.load_from_environment()
+            self.assertEqual(os.environ["LANGCHAIN_TRACING_V2"], "false")
+            self.assertEqual(Config.LANGCHAIN_ENDPOINT, "https://trace.example.test")
+
 
 class UsageTests(unittest.TestCase):
     def setUp(self):

@@ -53,6 +53,7 @@ react-frontend/.env
 react-frontend/.env.production
 python-backend/.env
 python-backend/.env.production
+python-backend/.private/
 
 # ── Google Cloud / service account credentials ───────────────────────────────
 *-credentials.json

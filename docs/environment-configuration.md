@@ -6,6 +6,15 @@ separate settings; frontend values are public in the built website.
 For detailed Redis setup and the owner action checklist, start with
 [Required setup and rate limiting](required-setup-and-rate-limits.md).
 
+The [environment cleanup report](environment-cleanup.md) explains the current
+grouping, removed settings, blank-value requirements and private removal record.
+All four backend files have **178 settings in the same order**. The two Google
+ADC overrides retain local values but stay empty in production, as documented
+below. All four frontend files have the same **8 public settings in the same order**.
+DeepSeek, Groq and Gemini keys are grouped with the other external API secrets;
+model names and pricing estimates are separate. OpenAI and inactive Mailgun
+credentials, plus redundant provider/model aliases, have been removed.
+
 ## Files and current endpoints
 
 Each application has four files, with matching sections and per-setting comments:
@@ -105,7 +114,8 @@ with `--env-vars-file`. These workflows are documented in
 
 Do not add `PORT`: Cloud Run supplies it. The two local Google ADC overrides,
 `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_APPLICATION_CREDENTIALS_JSON`, are
-intentionally absent from both backend production files. Use the Cloud Run runtime
+present but intentionally empty in both backend production files. Empty values
+allow the configured Google clients to use the Cloud Run runtime
 service account for Google Standard TTS and enable its API/access. See
 [Cloud Run service identity](https://docs.cloud.google.com/run/docs/configuring/services/service-identity).
 
@@ -121,6 +131,9 @@ Never paste private credentials into chat or version control.
 Retain one Gunicorn worker and at most one Cloud Run instance while interview
 session state is process-local. Keep the existing deployment/build workflow; this
 configuration work does not deploy a revision or provision a Redis service.
+Also remove retired settings from the deployed service's existing variables and
+secret references: pasting updated assignments may leave old keys in place.
+Use the removal list in [environment cleanup](environment-cleanup.md).
 
 ## Vercel import
 

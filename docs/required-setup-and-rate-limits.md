@@ -83,8 +83,8 @@ creating the database. If you require GCP private networking, use section 4 inst
    password if constructing it yourself. Do not put Redis credentials into frontend
    files. Do not reuse production quotas from development: use a separate database
    or at least `RATE_LIMIT_NAMESPACE="genhire-local"` in local configuration.
-   Both current private files have the same namespace, so separate them if you
-   point both at one Redis database.
+   The current files use `genhire-local` and `genhire-production` respectively,
+   so local checks do not consume production quotas.
 5. In GCP **Secret Manager**, create a secret such as `genhire-redis-url` whose value
    is the raw connection URL, without dotenv's outer quotes. Grant the Cloud Run
    **runtime service account** `Secret Manager Secret Accessor` for this secret.
@@ -342,15 +342,14 @@ could not inspect provider dashboards.
 ## 11. Protect credentials in deployment build contexts
 
 The backend Dockerfile uses `COPY . /app`. Its current `.dockerignore` excludes
-private `.env` files but does not explicitly exclude the existing local
-`gcs-service-account.json`. Before building an image from a local workspace, add
-these exclusions to **python-backend/.dockerignore**:
+private `.env` files, local service-account/credential JSON files, virtual
+environments and `.private/` cleanup records. These protections are now in place;
+keep them when building from a local workspace. Relevant exclusions include:
 
 ```dockerignore
-gcs-service-account.json
 **/*service-account*.json
-credentials.json
-**/credentials.json
+**/*credentials*.json
+.private/
 ```
 
 Git ignores the real key file, so a repository checkout normally omits it; a local

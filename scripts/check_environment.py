@@ -7,7 +7,14 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 PLACEHOLDER = re.compile(r"(?i)(replace_with|your[-_ ]|placeholder|change[-_ ]?me|xxxx|<[^>]+>)")
-CLOUD_EXCLUSIONS = {"GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_APPLICATION_CREDENTIALS_JSON"}
+CLOUD_ADC_OVERRIDES = {"GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_APPLICATION_CREDENTIALS_JSON"}
+OBSOLETE_SETTINGS = {
+    "OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_CV_MODEL", "LLM_OPENAI_MODEL",
+    "FACE_MATCH_OPENAI_MODEL", "OPENAI_ADMIN_API_KEY", "OPENAI_CREDIT_BALANCE_USD",
+    "INFRA_MONTHLY_OPENAI_INR", "MAILGUN_API_KEY", "MAILGUN_DOMAIN",
+    "MAILGUN_FROM_EMAIL", "MAILGUN_FROM_NAME", "LLM_PRIMARY_PROVIDER",
+    "LLM_SECONDARY_PROVIDER", "LLM_TERTIARY_PROVIDER", "CV_SCORING_MODEL", "GROQ_CV_MODEL",
+}
 
 
 def read_config(path):
@@ -42,9 +49,11 @@ def inspect_backend(values, production):
         required += ["REDIS_URL"]
         if values.get("RATE_LIMIT_REQUIRE_REDIS") != "true":
             errors.append("RATE_LIMIT_REQUIRE_REDIS must be true in production")
-        for key in CLOUD_EXCLUSIONS | {"PORT"}:
-            if key in values:
-                errors.append(f"Omit {key} from the Cloud Run import file")
+        if "PORT" in values:
+            errors.append("Omit PORT from the Cloud Run import file")
+        for key in CLOUD_ADC_OVERRIDES:
+            if values.get(key):
+                errors.append(f"Keep {key} empty in production so Cloud Run uses its service identity")
     for key in required:
         if not values.get(key) or PLACEHOLDER.search(values[key]):
             errors.append(f"{key} is missing or contains a placeholder")
@@ -138,12 +147,14 @@ def audit(profile="local", schema_only=False):
                 continue
             maps[name], problems = read_config(path)
             errors += [folder + "/" + problem for problem in problems]
+            if folder == "python-backend":
+                for key in sorted(set(maps[name]) & OBSOLETE_SETTINGS):
+                    errors.append(f"{folder}/{name}: remove obsolete {key}; use the canonical provider settings")
         for active, example in [(".env", ".env.example"), (".env.production", ".env.production.example")]:
-            if set(maps[active]) != set(maps[example]):
-                errors.append(f"{folder}: {active}/{example} keys differ")
-        expected = set(maps[".env"]) - (CLOUD_EXCLUSIONS if folder == "python-backend" else set())
-        if expected != set(maps[".env.production"]):
-            errors.append(f"{folder}: local/production schema differs beyond documented Cloud Run exclusions")
+            if list(maps[active]) != list(maps[example]):
+                errors.append(f"{folder}: {active}/{example} keys or order differ")
+        if list(maps[".env"]) != list(maps[".env.production"]):
+            errors.append(f"{folder}: local/production keys or order differ")
         local_maps[folder], production_maps[folder] = maps[".env"], maps[".env.production"]
     if not schema_only:
         selected = production_maps if profile == "production" else local_maps

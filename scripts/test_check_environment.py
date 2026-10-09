@@ -31,6 +31,38 @@ class EnvironmentChecks(unittest.TestCase):
         errors, _ = checks.audit(schema_only=True)
         self.assertEqual(errors, [])
 
+    def test_cloud_adc_placeholders_must_be_empty_in_production(self):
+        empty = {"GOOGLE_APPLICATION_CREDENTIALS": "", "GOOGLE_APPLICATION_CREDENTIALS_JSON": ""}
+        errors, _ = checks.inspect_backend(empty, True)
+        self.assertFalse(any("Keep GOOGLE_APPLICATION_CREDENTIALS" in error for error in errors))
+        errors, _ = checks.inspect_backend({"GOOGLE_APPLICATION_CREDENTIALS": "C:/local/key.json"}, True)
+        self.assertTrue(any("Keep GOOGLE_APPLICATION_CREDENTIALS empty" in error for error in errors))
+
+    def test_schema_rejects_different_key_order(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for app in ("python-backend", "react-frontend"):
+                (root / app).mkdir()
+                for name in (".env", ".env.example", ".env.production", ".env.production.example"):
+                    content = 'A="1"\nB="2"\n' if name == ".env" else 'B="2"\nA="1"\n'
+                    (root / app / name).write_text(content, encoding="utf-8")
+            with patch.object(checks, "ROOT", root):
+                errors, _ = checks.audit(schema_only=True)
+            self.assertTrue(any("keys or order differ" in error for error in errors))
+
+    def test_obsolete_provider_settings_are_reported_without_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for app in ("python-backend", "react-frontend"):
+                (root / app).mkdir()
+                for name in (".env", ".env.example", ".env.production", ".env.production.example"):
+                    content = 'OPENAI_API_KEY="synthetic-private-value"\n' if app == "python-backend" else ''
+                    (root / app / name).write_text(content, encoding="utf-8")
+            with patch.object(checks, "ROOT", root):
+                errors, _ = checks.audit(schema_only=True)
+            self.assertTrue(any("obsolete OPENAI_API_KEY" in error for error in errors))
+            self.assertNotIn("synthetic-private-value", " ".join(errors))
+
     def test_matching_public_api_and_oauth_are_accepted(self):
         values = {"REACT_APP_API_URL":"https://api.example.test", "REACT_APP_API_BASE":"https://api.example.test/api", "REACT_APP_GOOGLE_CLIENT_ID":"public-client"}
         self.assertEqual(checks.inspect_frontend(values, {"GOOGLE_CLIENT_ID":"public-client"}, True), [])

@@ -21,8 +21,8 @@ class Config:
     ANSWER_GENERATION_TEMPERATURE: float = 0.7
 
     # LangChain Configuration
-    LANGCHAIN_TRACING_V2: str = "true"
-    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGCHAIN_TRACING_V2: str = os.getenv("LANGCHAIN_TRACING_V2", "false")
+    LANGCHAIN_ENDPOINT: str = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
     LANGCHAIN_API_KEY: Optional[str] = None
 
     # Default file paths (can be overridden)
@@ -35,6 +35,8 @@ class Config:
 
         cls.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         cls.LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+        cls.LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false")
+        cls.LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
 
         # Set environment variables for LangChain
         if cls.LANGCHAIN_TRACING_V2:

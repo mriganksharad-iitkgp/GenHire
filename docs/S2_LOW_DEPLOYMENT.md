@@ -120,13 +120,15 @@ in the browser bundle by the Vite configuration.
 3. Keep your existing MongoDB, JWT, payment, email, Cloud Storage and application
    secrets. Keep `INR_PER_USD` at your chosen reporting conversion rate.
    `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_CV_MODEL` and `LLM_OPENAI_MODEL`
-   are not used by the S2 chain. You may keep OpenAI admin billing settings to
-   report legacy spend, or unset them if you no longer want legacy billing queries.
+   are not used by the S2 chain and have been removed from the current environment
+   files, along with retired OpenAI billing settings. The Groq-hosted model still
+   uses its `openai/gpt-oss-20b` model name, authenticated with `GROQ_API_KEY`.
+   See [environment cleanup](environment-cleanup.md) for the full removal list.
 4. Enable the Google Cloud **Text-to-Speech API**, with billing. The speech
    service now supports the runtime service account through Application Default
    Credentials, so TTS does not need a downloaded private key on Cloud Run.
-   For this route, unset `GOOGLE_APPLICATION_CREDENTIALS` and
-   `GOOGLE_APPLICATION_CREDENTIALS_JSON`, and select the intended service account
+   For this route, keep `GOOGLE_APPLICATION_CREDENTIALS` and
+   `GOOGLE_APPLICATION_CREDENTIALS_JSON` empty in production, and select the intended service account
    in the revision's security settings. Confirm its Google API access.
    Existing explicit speech credentials remain supported if you retain them.
 

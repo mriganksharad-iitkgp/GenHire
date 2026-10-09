@@ -8,6 +8,12 @@ implemented today.
 
 ## Start here
 
+For configuration and deployment setup, follow
+[Required setup and rate limits](required-setup-and-rate-limits.md), then
+[Environment configuration](environment-configuration.md). See
+[Environment cleanup](environment-cleanup.md) for the current file grouping and
+removed settings.
+
 | You are... | Read |
 |---|---|
 | **New to the team** | [architecture.md](architecture.md) → [onboarding.md](onboarding.md) |

@@ -14,6 +14,15 @@ gpu_intensive_task/
 question_generation_tests/
 .env
 .env.*
+.private/
+credentials.json
+*-credentials.json
+*-service-account.json
+**/*service-account*.json
+**/*credentials*.json
+aptidude-*.json
+hr-tech-*.json
+genhire-*.json
 *.md
 !requirements.txt
 .vscode/
