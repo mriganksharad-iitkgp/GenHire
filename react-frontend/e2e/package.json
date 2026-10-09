@@ -1,0 +1,11 @@
+{
+  "name": "genhire-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests. Kept out of react-frontend's dependencies on purpose: mongodb-memory-server downloads a MongoDB binary in its postinstall, which must not run in the production (Vercel) install.",
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "mongodb": "^7.7.0",
+    "mongodb-memory-server": "^11.3.0"
+  }
+}
