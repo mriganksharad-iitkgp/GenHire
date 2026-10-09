@@ -25,7 +25,10 @@
     "build:kiosk": "vite build --config vite.kiosk.config.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
-    "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15"
+    "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15",
+    "test:e2e": "node e2e/harness/run.mjs",
+    "test:e2e:ai": "node e2e/harness/run.mjs --ai",
+    "test:e2e:ui": "node e2e/harness/run.mjs --ui"
   },
   "eslintConfig": {
     "extends": [
