@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import Modal from './Modal';
 import styles from './ConfirmDialog.module.css';
 
@@ -18,15 +18,22 @@ const ConfirmDialog = ({
   cancelText = 'Cancel',
   confirmVariant = 'danger', // 'danger' | 'primary'
   isLoading = false,
-}) => (
+}) => {
+  const headingId = useId();
+  const messageId = useId();
+  return (
   <Modal
     isOpen={isOpen}
     onClose={onClose}
     overlayClassName={styles.modalOverlay}
     contentClassName={styles.modalContent}
+    ariaLabelledBy={headingId}
+    ariaDescribedBy={messageId}
+    closeOnEsc={!isLoading}
+    closeOnOverlayClick={!isLoading}
   >
     <div className={styles.modalHeader}>
-      <h2>{title}</h2>
+      <h2 id={headingId}>{title}</h2>
       <button
         className={styles.closeButton}
         onClick={onClose}
@@ -38,7 +45,7 @@ const ConfirmDialog = ({
     </div>
 
     <div className={styles.modalBody}>
-      <p>{message}</p>
+      <p id={messageId}>{message}</p>
     </div>
 
     <div className={styles.modalActions}>
@@ -54,6 +61,7 @@ const ConfirmDialog = ({
       </button>
     </div>
   </Modal>
-);
+  );
+};
 
 export default ConfirmDialog;

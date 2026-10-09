@@ -1,130 +1,38 @@
 .modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 16px;
+  position: fixed; inset: 0; z-index: 11000; padding: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: #0f172a99; backdrop-filter: blur(4px);
 }
-
 .modalContent {
-  background: white;
-  border-radius: 8px;
-  width: 100%;
-  max-width: 460px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  animation: slideIn 0.2s ease-out;
+  width: min(460px,100%); max-height: calc(100dvh - 40px); overflow-y: auto;
+  background: var(--portal-surface); color: var(--portal-text); border: 1px solid var(--portal-border);
+  border-radius: 18px; box-shadow: 0 24px 70px #0f172a33; font-family: inherit;
 }
-
+.modalContent:focus { outline: none; }
 .modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid #eee;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 24px; border-bottom: 1px solid var(--portal-border);
+  background: linear-gradient(135deg,#eef2ff,#f5f3ff);
 }
-
-.modalHeader h2 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: #1f2933;
-}
-
+.modalHeader h2 { margin: 0; font-size: 20px; line-height: 1.4; color: var(--portal-text); }
 .closeButton {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: #666;
+  display: grid; place-items: center; flex-shrink: 0; min-width: 36px; min-height: 36px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--portal-secondary);
+  font: inherit; font-size: 25px; cursor: pointer;
 }
-
-.closeButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.closeButton:hover { background: #fff; }
+.modalBody { padding: 22px 24px; }
+.modalBody p { margin: 0; color: var(--portal-secondary); font-size: 14px; line-height: 1.7; }
+.modalActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 16px 24px 22px; }
+.cancelButton,.dangerButton,.primaryButton {
+  min-height: 44px; padding: 11px 16px; border-radius: 10px;
+  font-size: 13px; line-height: 1.5; font-weight: 600; font-family: inherit; cursor: pointer;
 }
-
-.modalBody {
-  padding: 20px 24px;
-}
-
-.modalBody p {
-  margin: 0;
-  color: #475569;
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-.modalActions {
-  padding: 16px 24px;
-  border-top: 1px solid #eee;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  background-color: #f9f9f9;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-
-.cancelButton {
-  padding: 8px 16px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  color: #333;
-}
-
-.cancelButton:hover:not(:disabled) {
-  background: #f0f0f0;
-}
-
-.dangerButton,
-.primaryButton {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.dangerButton {
-  background: #dc3545;
-}
-
-.dangerButton:hover:not(:disabled) {
-  background: #c82333;
-}
-
-.primaryButton {
-  background: #5b46f6;
-}
-
-.primaryButton:hover:not(:disabled) {
-  background: #4a37d9;
-}
-
-.dangerButton:disabled,
-.primaryButton:disabled,
-.cancelButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+.cancelButton { background: #fff; border: 1px solid var(--portal-border); color: var(--portal-secondary); }
+.cancelButton:hover { background: var(--portal-primary-soft); }
+.dangerButton,.primaryButton { border: 1px solid transparent; color: #fff; }
+.dangerButton { background: var(--portal-danger); }.dangerButton:hover { background: #991b1b; }
+.primaryButton { background: var(--portal-gradient); }.primaryButton:hover { background: var(--portal-primary); }
+.modalContent button:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+.modalContent button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 600px) { .modalOverlay { padding: 14px; }.modalActions { justify-content: stretch; }.modalActions button { flex: 1; } }

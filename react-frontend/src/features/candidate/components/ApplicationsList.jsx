@@ -22,6 +22,20 @@ const JOB_TYPE_OPTIONS = [
 
 const DATE_CUTOFF_DAYS = { week: 7, month: 30, quarter: 90, halfyear: 180 };
 
+function nextStep(app) {
+  if (app.processingStatus === "awaiting_candidate") return "Complete your profile and upload a CV to prepare this application for screening.";
+  if (app.scoringError) return "Your application is saved, but the CV assessment could not be completed. Check again later or contact the recruiter.";
+  if (app.processingStatus && app.processingStatus !== "completed") return "Your CV assessment is processing. You can refresh to check progress; you do not need to submit another application.";
+  switch (app.statusKey) {
+    case "shortlisted": return "You can now take your interview. Review your identity document in My Profile and prepare your camera, microphone and speakers before opening the secure browser.";
+    case "reviewed": return "The recruiter has reviewed your application. Check here for an interview invitation or a status update.";
+    case "interviewed": return "Your interview has been submitted. Review the available report while the recruiter considers the next step.";
+    case "screening_cleared": return "You have cleared screening. The employer will confirm any further steps.";
+    case "rejected": return "This application was not advanced. Review the available assessment details and explore other open positions.";
+    default: return "Your application has been submitted. Check here for assessment results and recruiter updates.";
+  }
+}
+
 export default function ApplicationsList({
   applications,
   companies,
@@ -96,6 +110,11 @@ export default function ApplicationsList({
 
   return (
     <section className={styles.applicationsSection}>
+      <div className={styles.applicationOverview} aria-label="Application overview">
+        <button className={styles.overviewCard} aria-pressed={!statusFilter} onClick={() => setStatusFilter("")}><span>All applications</span><strong>{applications.length}</strong></button>
+        <button className={styles.overviewCard} aria-pressed={statusFilter === "shortlisted"} onClick={() => setStatusFilter(statusFilter === "shortlisted" ? "" : "shortlisted")}><span>Ready for interview</span><strong>{applications.filter(app => app.statusKey === "shortlisted").length}</strong></button>
+        <div className={styles.overviewCard}><span>Reports available</span><strong>{applications.filter(app => app.reportAvailable).length}</strong></div>
+      </div>
       <div className={styles.listHeading}><h2>Application history</h2><span>{sorted.length} {sorted.length === 1 ? "application" : "applications"}</span></div>
 
       {/* ── Filters ─────────────────────────────────────────────── */}
@@ -266,6 +285,7 @@ export default function ApplicationsList({
                   )}
                 </div>
 
+                <p className={styles.nextStep}><strong>Next step</strong>{nextStep(app)}{(statusKey === "shortlisted" || app.processingStatus === "awaiting_candidate") && <Link to="/profile">Review my profile <i className="fa fa-arrow-right" aria-hidden="true" /></Link>}</p>
                 <div className={styles.applicationActions}>
                   <div className={styles.scoresRow}>
                     {app.scoringError ? (
@@ -388,11 +408,11 @@ export default function ApplicationsList({
             );
           })
         ) : (
-          <p className={styles.noApplications}>
-            {hasActiveFilters
-              ? "No applications match the selected filters."
-              : "No job applications yet."}
-          </p>
+          <div className={styles.noApplications}>
+            <h3>{hasActiveFilters ? "No applications match the selected filters." : "No job applications yet."}</h3>
+            <p>{hasActiveFilters ? "Adjust or clear your filters to see your application history." : "Explore open positions and apply with a CV that reflects your experience."}</p>
+            {hasActiveFilters ? <button className={styles.ghostButton} onClick={onClearFilters}>Clear Filters</button> : <Link className={styles.primaryButton} to="/dashboard">Explore open positions</Link>}
+          </div>
         )}
       </div>
 

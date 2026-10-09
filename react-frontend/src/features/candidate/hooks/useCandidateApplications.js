@@ -82,10 +82,7 @@ export default function useCandidateApplications(toast) {
     async (force = false) => {
       // Throttle to at most once per 500ms and avoid parallel calls
       const now = Date.now();
-      if (
-        !force &&
-        (inflightRef.current || now - lastLoadAtRef.current < 500)
-      ) {
+      if (inflightRef.current || (!force && now - lastLoadAtRef.current < 500)) {
         return;
       }
       inflightRef.current = true;
@@ -124,6 +121,14 @@ export default function useCandidateApplications(toast) {
       setApplications(mapped);
     }
   }, [load, applicationsLoaded, cachedApplications]);
+
+  // The secure browser opens in another application. Refresh authoritative
+  // status on return instead of retaining the cached shortlisted state.
+  useEffect(() => {
+    const onReturn = () => { if (!document.hidden) load(true); };
+    document.addEventListener("visibilitychange", onReturn);
+    return () => document.removeEventListener("visibilitychange", onReturn);
+  }, [load]);
 
   // Poll for updates when there are pending/processing/retrying applications
   // Cap at 2 minutes (24 polls × 5s) to avoid infinite polling

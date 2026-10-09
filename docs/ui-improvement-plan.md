@@ -107,3 +107,20 @@ verification includes 44 portal checks and 16 frontend contracts.
 
 See [the backend and remaining UI audit](interview-theme-runtime-plan.md) for the
 startup fix, commands, index protection, full test results and kiosk packaging.
+
+## Interview and application usability follow-up
+
+- [x] Separate spoken and typed answers so typing cannot trigger the voice silence timer.
+- [x] Protect unsent recordings and typed drafts when changing answer format.
+- [x] Show the backend question deadline without changing timing or billing rules.
+- [x] Add camera/microphone/connection recovery and phone QR refresh for the existing interview session.
+- [x] Make recording upload failures and unsafe leaving clear, with themed confirmations.
+- [x] Refresh applications after returning from the secure browser; retain cards on refresh failure.
+- [x] Add application overview, status-specific next steps and useful empty states.
+- [x] Improve shared dialog focus, keyboard, nesting, fullscreen and scroll behavior.
+- [x] Verify real-component behavior, responsive styles, lint and web/kiosk compilation.
+
+See [the interview usability explanation and release checklist](interview-usability-improvements.md)
+for the flow changes, verification limits and the installer rebuild required for
+users of an already installed secure browser. The landing theme and environment
+files remain unchanged.

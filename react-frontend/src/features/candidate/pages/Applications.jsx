@@ -33,8 +33,9 @@ export default function Applications() {
     else setLaunchApplication(app);
   };
   return <div className={styles.profileContainer}><div className={styles.pageContent}>
-    <PortalPageHeader title="My Applications" eyebrow="Your opportunities" icon="fa-file-text-o" subtitle="Track your progress, take shortlisted interviews and review your results in one place." actions={<Link to="/dashboard">Explore jobs <i className="fa fa-arrow-right" aria-hidden="true" /></Link>} />
-    {error ? <div className={styles.loadingState} role="alert"><p>{error}</p><button className={styles.primaryButton} onClick={() => load(true)}>Retry</button></div> : loading && !applications.length ? <div aria-label="Loading applications" role="status">{Array.from({length:3}, (_,i) => <SkeletonCard key={i} variant="job" />)}</div> : <ApplicationsList
+    <PortalPageHeader title="My Applications" eyebrow="Your opportunities" icon="fa-file-text-o" subtitle="Track your progress, take shortlisted interviews and review your results in one place." actions={<><button className={styles.ghostButton} onClick={() => load(true)} disabled={loading} aria-label="Refresh applications"><i className={`fa fa-refresh ${loading ? "fa-spin" : ""}`} aria-hidden="true" />{loading ? "Refreshing..." : "Refresh"}</button><Link to="/dashboard">Explore jobs <i className="fa fa-arrow-right" aria-hidden="true" /></Link></>} />
+    {error && <div className={styles.loadingState} role="alert"><p>{error}{applications.length > 0 && " Your previously loaded applications are shown below."}</p><button className={styles.primaryButton} onClick={() => load(true)} disabled={loading}>Retry</button></div>}
+    {loading && !applications.length ? <div aria-label="Loading applications" role="status">{Array.from({length:3}, (_,i) => <SkeletonCard key={i} variant="job" />)}</div> : (!error || applications.length > 0) && <ApplicationsList
       applications={applications} companies={companies} locations={locations}
       companyFilter={filters.company} statusFilter={filters.status} jobTypeFilter={filters.jobType} locationFilter={filters.location} dateRangeFilter={filters.dateRange}
       setCompanyFilter={setFilter("company")} setStatusFilter={setFilter("status")} setJobTypeFilter={setFilter("jobType")} setLocationFilter={setFilter("location")} setDateRangeFilter={setFilter("dateRange")}

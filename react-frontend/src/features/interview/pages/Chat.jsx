@@ -6,7 +6,9 @@ import { Camera, Check, ChevronRight, CircleAlert, Headphones, Mic, ShieldCheck,
 import { API_BASE } from "shared/api/client";
 import { getToken } from "shared/utils/session";
 import ConfirmDialog from "shared/components/ui/ConfirmDialog";
+import Modal from "shared/components/ui/Modal";
 import InterviewReportModal from "../components/InterviewReportModal";
+import AnswerComposer from "../components/AnswerComposer";
 import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase, transcriptionAudio } from "../utils/session";
 import styles from "./InterviewExperience.module.css";
 
@@ -41,6 +43,12 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const [question, setQuestion] = useState(""); const [questionCount, setQuestionCount] = useState(1); const [speechState, setSpeechState] = useState("idle");
   const [hasSpoken, setHasSpoken] = useState(false); const [answerCountdown, setAnswerCountdown] = useState(THINK_SECONDS);
   const [draft, setDraft] = useState(""); const [pendingAnswer, setPendingAnswer] = useState(null); const [elapsed, setElapsed] = useState(0);
+  const [answerMode, setAnswerMode] = useState("voice"); const answerModeRef = useRef("voice");
+  const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [modeToConfirm, setModeToConfirm] = useState("text");
+  const modeConfirmRef = useRef(false);
+  const [questionDeadline, setQuestionDeadline] = useState(null); const [questionRemaining, setQuestionRemaining] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [audioRetryAvailable, setAudioRetryAvailable] = useState(false); const recordedAnswerRef = useRef(null);
   const [result, setResult] = useState(null); const [uploadStatus, setUploadStatus] = useState("idle"); const [showReport, setShowReport] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false); const [pauseReason, setPauseReason] = useState("");
@@ -51,7 +59,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const archivePartsRef = useRef([]); const archiveUploadRef = useRef(false); const submitRequestRef = useRef(false);
   const startedAtRef = useRef(null); const answerStartRef = useRef(0); const lastSpeechRef = useRef(0);
   const spokeRef = useRef(false); const processingRef = useRef(false); const pauseRef = useRef(""); const submitRecordingRef = useRef(null);
-  const actionsRef = useRef({}); const lastWarningRef = useRef({});
+  const actionsRef = useRef({}); const lastWarningRef = useRef({}); const draftRef = useRef(draft); draftRef.current = draft;
   const request = useCallback((path, options = {}, timeout = 15000) => interviewRequest(apiBase, path, getToken(), options, timeout), [apiBase]);
   const isPractice = isPracticeSession(location, session || {}); const dualRequired = session?.dual_proctoring_required === true;
   const maxQuestions = session?.max_questions || 10; const phoneUrl = mobilePairingUrl(session, webOrigin);
@@ -87,6 +95,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         const merged = { ...existing, ...data }; setSession(merged); sessionRef.current = merged;
         try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ...merged, application_id: merged.application_id || location.state?.applicationId })); } catch { /* restricted storage must not prevent an interview */ }
         setQuestion(merged.current_question || merged.initial_questions?.[0] || existing?.initial_questions?.[0] || ""); setQuestionCount(merged.question_count || 1);
+        setQuestionDeadline(merged.question_deadline ?? null);
         if (terminalPhase(merged)) { setResult(merged); setPhase(terminalPhase(merged)); }
         else if (merged.interview_complete) actionsRef.current.finish();
         else if (merged.engine_available === false) { setError("This session's live interviewer is unavailable. Finish with your saved answers, then return to your dashboard. Your submitted answers will be retained."); setPhase("recovery_failed"); }
@@ -132,7 +141,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       if (!analyserRef.current) return; analyserRef.current.getByteTimeDomainData(samples);
       const level = microphoneLevel(samples); setMicLevel(level);
       if (level >= 4) { setMicReady(true); if (answerRecorderRef.current?.state === "recording" && !pauseRef.current) { spokeRef.current = true; setHasSpoken(true); lastSpeechRef.current = Date.now(); } }
-      if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || answerRecorderRef.current?.state !== "recording") return;
+      if (phaseRef.current !== "active" || answerModeRef.current !== "voice" || modeConfirmRef.current || pauseRef.current || processingRef.current || answerRecorderRef.current?.state !== "recording") return;
       const remaining = spokeRef.current ? SILENCE_SECONDS - (Date.now() - lastSpeechRef.current) / 1000 : THINK_SECONDS - (Date.now() - answerStartRef.current) / 1000;
       setAnswerCountdown(Math.max(0, Math.ceil(remaining)));
       if (remaining <= 0 || Date.now() - answerStartRef.current > 180000) submitRecordingRef.current?.(!spokeRef.current);
@@ -176,6 +185,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   }, []);
   const beginListening = useCallback(() => {
     if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || !streamRef.current || answerRecorderRef.current?.state === "recording") return;
+    if (answerModeRef.current === "text") { setSpeechState("idle"); return; }
     try { const stream = new MediaStream(streamRef.current.getAudioTracks()); const mimeType = mediaMimeType("audio"); const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       recordedAnswerRef.current = null; setAudioRetryAvailable(false); answerChunksRef.current = []; recorder.ondataavailable = (event) => { if (event.data.size) answerChunksRef.current.push(event.data); }; answerRecorderRef.current = recorder;
       spokeRef.current = false; setHasSpoken(false); answerStartRef.current = Date.now(); lastSpeechRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); recorder.start(1000); setSpeechState("listening");
@@ -218,6 +228,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       await socketAcknowledgement(socketRef.current, "start_proctoring", { session_id: session.session_id });
       if (dualRequired) await socketAcknowledgement(socketRef.current, "control_mobile_recording", { session_id: session.session_id, action: "start" });
       if (data.current_question) { setQuestion(data.current_question); questionRef.current = data.current_question; }
+      setQuestionDeadline(data.question_deadline ?? session.question_deadline ?? null);
       startArchive(); phaseRef.current = "active"; setPhase("active"); setPauseReason(""); pauseRef.current = "";
       startedAtRef.current = Date.now() - elapsed * 1000; speak(questionRef.current);
     } catch (failure) { setError(failure.message); } finally { setBusy(false); }
@@ -260,6 +271,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/answer`, { method: "POST", body: JSON.stringify({ question: submittedQuestion, answer }) }, 20000);
       setPendingAnswer(null); setDraft(""); recordedAnswerRef.current = null; setAudioRetryAvailable(false); if (data.interview_complete) { processingRef.current = false; await finish(); return; }
       if (!data.next_question) throw new Error("The next question is unavailable. Please retry your saved answer."); setQuestion(data.next_question); questionRef.current = data.next_question;
+      setQuestionDeadline(data.question_deadline ?? null);
       setQuestionCount((count) => data.progress?.questions_asked != null ? data.progress.questions_asked + 1 : data.repeated_question ? count : count + 1); processingRef.current = false;
       speak(data.next_question);
     } catch (failure) {
@@ -272,6 +284,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         if (recovered.finish) { setPendingAnswer(null); processingRef.current = false; await finish(); return; }
         if (recovered.accepted && recovered.question) {
           setQuestion(recovered.question); questionRef.current = recovered.question; setQuestionCount(recovered.questionCount);
+          setQuestionDeadline(latest.question_deadline ?? null);
           setPendingAnswer(null); setDraft(""); processingRef.current = false; notify("Your answer was saved. Continuing with the next question."); speak(recovered.question); return;
         }
         if (latest.engine_available === false) { setError("The live interviewer is unavailable. End with your saved answers to generate your report."); actionsRef.current.pause("The interviewer connection could not be restored. You can finish with your saved answers."); return; }
@@ -288,8 +301,27 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     } catch (failure) { processingRef.current = false; setAudioRetryAvailable(!!recordedAnswerRef.current?.size); setError(failure.message); setSpeechState("idle"); }
   }, [request, stopAnswer, submitAnswer]);
   submitRecordingRef.current = submitRecording;
+  const changeAnswerMode = async (mode) => {
+    if (processingRef.current || pauseRef.current || mode === answerModeRef.current) return;
+    answerModeRef.current = mode; setAnswerMode(mode); modeConfirmRef.current = false; setShowModeConfirm(false);
+    stopPlayback(); processingRef.current = true;
+    try {
+      await stopAnswer();
+      recordedAnswerRef.current = null; setAudioRetryAvailable(false); setHasSpoken(false); spokeRef.current = false;
+      setSpeechState("idle");
+    } finally { processingRef.current = false; }
+    if (mode === "voice") beginListening();
+  };
+  const requestAnswerMode = mode => {
+    if (mode === answerModeRef.current || processingRef.current || pauseRef.current) return;
+    if ((mode === "text" && (hasSpoken || audioRetryAvailable)) || (mode === "voice" && draft.trim())) {
+      modeConfirmRef.current = true; setModeToConfirm(mode); setShowModeConfirm(true);
+    }
+    else changeAnswerMode(mode);
+  };
   const pause = useCallback(async (reason) => {
-    if (pauseRef.current || phaseRef.current !== "active") return; pauseRef.current = reason; setPauseReason(reason); stopPlayback(); const blob = await stopAnswer();
+    if (pauseRef.current || phaseRef.current !== "active") return; pauseRef.current = reason; setPauseReason(reason);
+    modeConfirmRef.current = false; setShowModeConfirm(false); stopPlayback(); const blob = await stopAnswer();
     if (blob?.size && spokeRef.current) actionsRef.current.interruptedAudio = blob; setSpeechState("idle");
   }, [stopAnswer, stopPlayback]);
   actionsRef.current.pause = pause;
@@ -307,19 +339,41 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     if (actionsRef.current.interruptedAudio) {
       setSpeechState("transcribing"); processingRef.current = true;
       try { const audio = await transcriptionAudio(actionsRef.current.interruptedAudio, streamRef.current); const data = await request("/speech/transcribe", { method: "POST", body: JSON.stringify({ ...audio, session_id: session.session_id }) }, 35000);
-        setDraft(data.transcript || ""); actionsRef.current.interruptedAudio = null; setError("Your interrupted answer has been restored. Review and send it, or record the question again.");
+        setDraft(data.transcript || ""); answerModeRef.current = "text"; setAnswerMode("text"); actionsRef.current.interruptedAudio = null; setError("Your interrupted answer has been restored. Review and send it, or record the question again.");
       } catch (failure) { setError(failure.message); } finally { processingRef.current = false; setSpeechState("idle"); }
-    } else if (pendingAnswer !== null) setSpeechState("idle"); else speak(questionRef.current);
+    } else if (pendingAnswer !== null || draftRef.current.trim() || answerModeRef.current === "text") setSpeechState("idle"); else speak(questionRef.current);
   };
+  const refreshPhoneLink = async () => {
+    if (busy) return; setBusy(true); setDeviceError("");
+    try {
+      const latest = await request(`/interviews/${session.session_id}/session`);
+      if (terminalPhase(latest) || latest.engine_available === false) throw new Error("This interview is no longer available. Finish with your saved answers to return safely.");
+      if (!latest.mobile_pairing_token) throw new Error("A phone pairing link is unavailable. Please retry.");
+      setSession(previous => ({ ...previous, mobile_pairing_token: latest.mobile_pairing_token }));
+    } catch (failure) { setDeviceError(failure.message); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => {
+    if (phase !== "active" || !Number.isFinite(questionDeadline)) { setQuestionRemaining(null); return; }
+    const update = () => setQuestionRemaining(Math.max(0, Math.ceil(questionDeadline - Date.now() / 1000)));
+    update(); const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [phase, questionDeadline]);
   useEffect(() => {
     if (phase !== "active") return; const tick = setInterval(() => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)), 1000);
     const violation = (type) => { if (pauseRef.current) return; notify("Keep this interview window in view. Leaving the interview is recorded for review.", type); socketRef.current?.emit("proctoring_violation", { session_id: sessionRef.current.session_id, type }); };
     const visibility = () => { if (document.hidden) violation("tab_switch"); }; const fullscreen = () => { if (!document.fullscreenElement && !window.electronAPI) violation("fullscreen_exit"); };
-    const beforeUnload = (event) => { event.preventDefault(); event.returnValue = ""; }; const offline = () => pause("You are offline. Reconnect to continue; submitted answers are saved.");
+    const offline = () => pause("You are offline. Reconnect to continue; submitted answers are saved.");
     window.electronAPI?.onAppSwitched(() => violation("window_blur"));
-    document.addEventListener("visibilitychange", visibility); document.addEventListener("fullscreenchange", fullscreen); window.addEventListener("beforeunload", beforeUnload); window.addEventListener("offline", offline);
-    return () => { clearInterval(tick); document.removeEventListener("visibilitychange", visibility); document.removeEventListener("fullscreenchange", fullscreen); window.removeEventListener("beforeunload", beforeUnload); window.removeEventListener("offline", offline); };
+    document.addEventListener("visibilitychange", visibility); document.addEventListener("fullscreenchange", fullscreen); window.addEventListener("offline", offline);
+    return () => { clearInterval(tick); document.removeEventListener("visibilitychange", visibility); document.removeEventListener("fullscreenchange", fullscreen); window.removeEventListener("offline", offline); };
   }, [phase, notify, pause]);
+  useEffect(() => {
+    if (!["active", "ending", "end_failed", "recovery_failed"].includes(phase) && !["uploading", "error"].includes(uploadStatus)) return;
+    const beforeUnload = event => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [phase, uploadStatus]);
   useEffect(() => {
     if (!window.electronAPI) return;
     if (phase === "active") window.electronAPI.enableKiosk(); else window.electronAPI.disableKiosk();
@@ -357,11 +411,14 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
 
   const back = () => {
     if (uploadStatus === "uploading") return;
-    if (uploadStatus === "error" && !window.confirm("Your report is saved, but your recording has not uploaded. Leave without saving this recording?")) return;
+    if (uploadStatus === "error") { setShowLeaveConfirm(true); return; }
     navigate(isPractice ? "/practice" : "/applications");
   };
   const renderVideo = () => <video ref={bindVideo} autoPlay playsInline muted className={styles.preview} aria-label="Your camera preview" />;
   const renderError = (message) => message && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{message}</span></div>;
+  const leaveConfirm = <ConfirmDialog isOpen={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)} onConfirm={() => navigate(isPractice ? "/practice" : "/applications")}
+    title="Leave without uploading the recording?" message="Your report is saved. The recording is still on this device and will be lost if you leave. You can cancel and retry the upload."
+    confirmText="Leave without recording" />;
   const step = phase === "devices" ? 0 : phase === "face" ? 1 : phase === "phone" ? 2 : 3;
   if (["loading", "start_failed", "ending", "end_failed", "recovery_failed"].includes(phase)) return <main className={styles.shell}><div className={styles.centerCard}>
     <span className={styles.brand}><ShieldCheck size={20} /> GenHire interview</span>{["loading", "ending"].includes(phase) && <div className={styles.spinner} />}
@@ -369,7 +426,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     <p>{phase === "loading" ? "Loading your role and question. Device checks come next." : phase === "ending" ? "Generating your evaluation. Your recording uploads separately." : "Retry to continue with the same session."}</p>{renderError(error)}
     {["end_failed", "recovery_failed"].includes(phase) && <button className={styles.primary} onClick={finish}>{phase === "recovery_failed" ? "Finish with saved answers" : "Retry report generation"}</button>}{phase === "start_failed" && <button className={styles.primary} onClick={() => window.location.reload()}>Retry</button>}
     <button className={styles.textButton} disabled={uploadStatus === "uploading"} onClick={back}>Back to {isPractice ? "practice" : "applications"}</button>
-  </div></main>;
+  {leaveConfirm}</div></main>;
   if (["completed", "discarded"].includes(phase)) {
     const report = { ...session, ...result, session_id: session?.session_id, cv_score: scorePercent(result?.cv_score ?? session?.cv_score ?? (session?.similarity_score == null ? null : session.similarity_score * 100)) };
     return <main className={styles.shell}><section className={styles.resultCard}><div className={styles.successIcon}><Check size={30} /></div><span className={styles.eyebrow}>{isPractice ? "Practice feedback" : "Interview complete"}</span>
@@ -379,7 +436,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         {result?.proctoring_status === "incomplete" && <p className={styles.note}>Monitoring coverage was incomplete. The report explains which checks were available.</p>}<button className={styles.primary} onClick={() => setShowReport(true)}>View evaluation and transcript <ChevronRight size={18} /></button></>}
       {uploadStatus === "uploading" && <p className={styles.note} role="status">Recording upload is in progress. Keep this page open until it finishes.</p>}{uploadStatus === "success" && <p className={styles.note}>Your recording was saved.</p>}{uploadStatus === "error" && <div className={styles.error}>Your report is saved, but the recording upload failed. <button onClick={uploadArchive}>Retry upload</button></div>}
       <button className={styles.textButton} disabled={uploadStatus === "uploading"} onClick={back}>Back to {isPractice ? "practice" : "applications"}</button><InterviewReportModal apiBase={apiBase} isOpen={showReport} onClose={() => setShowReport(false)} report={report} cvScore={report.cv_score} interviewScore={interviewScore(result)} />
-    </section></main>;
+    {leaveConfirm}</section></main>;
   }
   if (phase !== "active") return <main className={styles.shell}><div className={styles.setupLayout}>
     <aside className={styles.setupAside}><span className={styles.brand}><ShieldCheck size={22} /> GenHire</span><span className={styles.eyebrow}>{isPractice ? "Practice interview" : "Your next opportunity"}</span><h1>Prepare for your interview</h1><p>Check your camera, microphone and speakers, register your face, then start your interview.</p>
@@ -396,19 +453,50 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       {phase === "face" && <><div className={styles.facePreview}>{renderVideo()}<span className={styles.faceGuide} /></div><p className={styles.note}>{isPractice ? "This capture is used only for practice monitoring." : "Your capture is compared with your uploaded identity card in the background and included in the evaluation report."}</p>{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase("devices")}>Back</button><button className={styles.primary} onClick={captureFace} disabled={busy}>{busy ? "Capturing face…" : "Capture my face"}<Camera size={18} /></button></div></>}
       {phase === "phone" && <><div className={styles.phonePairing}>{phoneUrl ? <div className={styles.qr}><QRCode value={phoneUrl} size={172} /></div> : <div className={styles.error}>The private phone link is unavailable. Reload this session to refresh it.</div>}<div><Smartphone size={30} /><h3>{phone.ready ? "Phone camera is ready" : "Waiting for your phone"}</h3><p>Place it beside you, aimed at you, your laptop and desk. Keep it plugged in and turn off auto-lock.</p><span className={`${styles.badge} ${phone.ready ? styles.goodBadge : ""}`}>{phone.ready ? "Camera and microphone connected" : phone.status === "connected" ? "Phone connected · enable its camera" : "Scan the QR code"}</span></div></div><p className={styles.note}>This private link grants access only to this interview's companion camera.</p><button className={styles.primary} disabled={!phone.ready} onClick={() => setPhase("ready")}>Continue <ChevronRight size={18} /></button></>}
       {phase === "ready" && <><div className={styles.readySummary}><Check size={18} /> Camera, microphone and speakers checked<br /><Check size={18} /> Face captured{dualRequired && <><br /><Check size={18} /> Second camera {phone.ready ? "ready" : "disconnected"}</>}</div><label className={styles.consent}><input type="checkbox" checked={rulesAccepted} onChange={(event) => setRulesAccepted(event.target.checked)} /><span>I'm in a quiet, well-lit place and have time to finish. I'll keep my face visible, stay in this window and use no outside help{dualRequired ? ". My phone is positioned only as the required second camera" : ""}.</span></label><p className={styles.note}>{maxQuestions} questions · Usually 15–20 minutes · Your answer starts after the interviewer finishes speaking.</p>
-        {!connected && renderError("Connecting to interview monitoring. Check your internet connection if this takes more than a few seconds.")}{dualRequired && !phone.ready && renderError("Your phone disconnected. Reopen its companion page before starting.")}{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase(dualRequired ? "phone" : "face")}>Back</button><button className={styles.primary} onClick={activate} disabled={busy || !rulesAccepted || !connected || (dualRequired && !phone.ready)}>{busy ? "Starting…" : "Start interview"}<ChevronRight size={18} /></button></div></>}
+        {!connected && renderError("Connecting to interview monitoring. Check your internet connection if this takes more than a few seconds.")}{dualRequired && !phone.ready && renderError("Your phone disconnected. Reopen its companion page before starting.")}{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase(dualRequired ? "phone" : "face")}>Back</button><button className={styles.primary} onClick={activate} disabled={busy || !deviceReady || !rulesAccepted || !connected || (dualRequired && !phone.ready)}>{busy ? "Starting…" : "Start interview"}<ChevronRight size={18} /></button></div></>}
     </section></div></main>;
 
-  return <main className={styles.interviewShell}><header className={styles.interviewHeader}><span className={styles.brand}><ShieldCheck size={22} /> GenHire <small>{isPractice ? "Practice" : "Interview"}</small></span><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
+  return <main className={styles.interviewShell}><header className={styles.interviewHeader}><span className={styles.brand}><ShieldCheck size={22} /> GenHire <small>{isPractice ? "Practice" : "Interview"}</small></span><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack} role="progressbar" aria-label="Interview question progress" aria-valuemin={1} aria-valuemax={maxQuestions} aria-valuenow={Math.min(questionCount, maxQuestions)}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
     {warning && <div className={styles.warning} role="status"><CircleAlert size={20} /><div><strong>Monitoring notice {warningCount ? `· ${warningCount}` : ""}</strong><p>{warning.message}</p></div><button onClick={() => setWarning(null)} aria-label="Dismiss monitoring notice">×</button></div>}
     <section className={styles.interviewGrid}><article className={styles.conversation}><div className={styles.interviewerBadge}><span>A</span><div><strong>Alex</strong><small>Your AI interviewer</small></div><i className={speechState === "speaking" ? styles.speakingDot : ""} /></div><span className={styles.eyebrow}>{speechState === "thinking" ? "Preparing your next question" : "Let's talk about your experience"}</span><h1 className={styles.question}>{question}</h1>
-      <div className={styles.conversationStatus} aria-live="polite">{speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Turning your answer into text…" : speechState === "thinking" ? "Your answer is being saved…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Finished? Sending in ${answerCountdown}s of silence` : "Listening to your answer" : answerCountdown <= 15 ? `Answer when ready · moving on in ${answerCountdown}s` : "Take a moment, then answer naturally" : "Ready when you are"}</div>{renderError(error)}
+      <div className={styles.conversationStatus} aria-live="polite">{answerMode === "text" && speechState === "idle" ? "Type your answer, then select Send text answer" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Turning your answer into text…" : speechState === "thinking" ? "Your answer is being saved…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Finished? Sending in ${answerCountdown}s of silence` : "Listening to your answer" : answerCountdown <= 15 ? `Answer when ready · moving on in ${answerCountdown}s` : "Take a moment, then answer naturally" : "Ready when you are"}</div>{renderError(error)}
       {pendingAnswer !== null && <div className={styles.savedAnswer}><p>Your answer is preserved for retry.</p><button className={styles.primary} disabled={!!pauseReason || speechState === "thinking"} onClick={() => submitAnswer(pendingAnswer.answer)}>Retry saved answer</button></div>}
-      <div className={styles.answerActions}>{audioRetryAvailable && <button className={styles.secondary} disabled={!!pauseReason || ["thinking", "transcribing"].includes(speechState)} onClick={() => submitRecording(false, true)}>Retry transcription</button>}<button className={styles.primary} disabled={speechState !== "listening" || !!pauseReason} onClick={() => submitRecording(false)}><Mic size={18} />Send answer</button><button className={styles.secondary} disabled={["transcribing", "thinking"].includes(speechState) || !!pauseReason} onClick={async () => { await stopAnswer(); speak(question); }}>Repeat question</button>{speechState === "listening" && !hasSpoken && <button className={styles.textButton} onClick={() => { answerStartRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); }}>More thinking time</button>}{speechState === "idle" && pendingAnswer === null && <button className={styles.secondary} disabled={!!pauseReason} onClick={beginListening}>Record answer</button>}</div>
-      <details className={styles.textAnswer} open={!!draft}><summary>Prefer to type, or having audio trouble?</summary><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type your answer here…" aria-label="Text answer" disabled={!!pauseReason || ["thinking", "transcribing"].includes(speechState)} /><button className={styles.secondary} disabled={!draft.trim() || !!pauseReason || ["thinking", "transcribing"].includes(speechState)} onClick={async () => { processingRef.current = true; stopPlayback(); await stopAnswer(); submitAnswer(draft.trim()); }}>Send text answer</button></details>
-    </article><aside className={styles.monitorPanel}><div className={styles.candidatePreview}>{renderVideo()}<span>You</span></div><h3><ShieldCheck size={19} /> Interview monitoring</h3><div className={styles.monitorRow}><span>Laptop camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Connected" : "Reconnect"}</strong></div><div className={styles.monitorRow}><span>Microphone</span><span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></div>{dualRequired && <div className={styles.monitorRow}><span>Phone camera</span><strong className={phone.ready ? styles.good : ""}>{phone.ready ? "Connected" : "Reconnect"}</strong></div>}<div className={styles.monitorRow}><span>Live checks</span><strong>{!connected ? "Reconnecting" : proctoring?.available === false ? "Limited coverage" : proctoring?.analyzed_frames > 0 ? "Active" : "Connecting"}</strong></div>
+      {questionRemaining !== null && <p className={styles.questionClock}>Question time remaining <strong>{formatTime(questionRemaining)}</strong>{questionRemaining === 0 && <span>Time limit reached. Submit to continue.</span>}</p>}
+      <AnswerComposer mode={answerMode} onModeChange={requestAnswerMode} speechState={speechState} paused={!!pauseReason}
+        pendingAnswer={pendingAnswer} audioRetryAvailable={audioRetryAvailable} hasSpoken={hasSpoken} draft={draft} onDraftChange={setDraft}
+        onSendText={async () => { processingRef.current = true; stopPlayback(); await stopAnswer(); submitAnswer(draft.trim()); }}
+        onSendVoice={() => submitRecording(false)} onRetryAudio={() => submitRecording(false, true)}
+        onRepeat={async () => { await stopAnswer(); speak(question); }} onRecord={beginListening}
+        onMoreTime={() => { answerStartRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); }} />
+    </article><aside className={styles.monitorPanel}><div className={styles.candidatePreview}>{!pauseReason && renderVideo()}<span>You</span></div><h3><ShieldCheck size={19} /> Interview monitoring</h3><div className={styles.monitorRow}><span>Laptop camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Connected" : "Reconnect"}</strong></div><div className={styles.monitorRow}><span>Microphone</span><span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></div>{dualRequired && <div className={styles.monitorRow}><span>Phone camera</span><strong className={phone.ready ? styles.good : ""}>{phone.ready ? "Connected" : "Reconnect"}</strong></div>}<div className={styles.monitorRow}><span>Live checks</span><strong>{!connected ? "Reconnecting" : proctoring?.available === false ? "Limited coverage" : proctoring?.analyzed_frames > 0 ? "Active" : "Connecting"}</strong></div>
       {proctoring?.capabilities?.object_detection === false && <p className={styles.note}>Object detection is unavailable. Camera recording and other available checks continue.</p>}<p className={styles.note}>Keep your face visible and your desk clear. Only the paired phone used for monitoring is permitted.</p><button className={styles.endButton} disabled={["transcribing", "thinking"].includes(speechState)} onClick={() => setShowEndConfirm(true)}>End interview</button></aside></section>
-    {pauseReason && <div className={styles.pauseOverlay}><div className={styles.centerCard}><CircleAlert size={32} /><h2>Let's reconnect</h2><p>{pauseReason}</p><p className={styles.note}>Submitted answers are saved. Your interrupted answer stays on this device.</p>{renderError(deviceError)}<button className={styles.primary} onClick={resume} disabled={!connected || (dualRequired && !phone.ready) || busy}>{busy ? "Checking devices…" : "Resume interview"}</button><button className={styles.textButton} onClick={() => setShowEndConfirm(true)}>End with saved answers</button></div></div>}
-    <ConfirmDialog isOpen={showEndConfirm} onClose={() => setShowEndConfirm(false)} onConfirm={finish} title="Finish this interview?" message="Your submitted answers will be evaluated. An answer currently being recorded will not be submitted. Use Send answer first if you want to include it." confirmText="Finish interview" />
+    <Modal isOpen={!!pauseReason} closeOnEsc={false} closeOnOverlayClick={false}
+      overlayClassName={styles.pauseOverlay} contentClassName={`${styles.centerCard} ${styles.reconnectCard}`} ariaLabelledBy="reconnect-title">
+      <CircleAlert size={30} /><h2 id="reconnect-title">Reconnect your devices</h2><p>{pauseReason}</p>
+      <p className={styles.note}>Submitted answers are saved. Your interrupted answer and typed draft stay on this device. The question time limit continues during reconnection.</p>
+      <div className={styles.recoveryPreview}>{pauseReason && renderVideo()}</div>
+      <dl className={styles.recoveryChecks}>
+        <div><dt>Monitoring connection</dt><dd>{connected ? "Connected" : "Reconnecting"}</dd></div>
+        <div><dt>Laptop camera</dt><dd>{cameraReady ? "Ready" : "Needs permission or reconnection"}</dd></div>
+        <div><dt>Microphone</dt><dd>{micReady ? "Sound detected" : "Speak a short sentence"}<span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></dd></div>
+        {dualRequired && <div><dt>Phone camera</dt><dd>{phone.ready ? "Ready" : "Reopen the companion page"}</dd></div>}
+      </dl>
+      {!connected && <button className={styles.secondary} onClick={() => socketRef.current?.connect()}>Retry connection</button>}
+      {(!cameraReady || !micReady) && <button className={styles.secondary} onClick={enableDevices} disabled={busy}>{busy ? "Checking devices..." : "Retry device checks"}</button>}
+      {dualRequired && !phone.ready && <div className={styles.recoveryPhone}>
+        <p>Reopen the companion page on your phone, allow camera access and keep the screen unlocked. Scan this code again if the link expired.</p>
+        {phoneUrl && <div className={styles.qr}><QRCode value={phoneUrl} size={140} /></div>}
+        <button className={styles.secondary} onClick={refreshPhoneLink} disabled={busy}>Refresh phone pairing code</button>
+      </div>}
+      {renderError(deviceError)}
+      <button className={styles.primary} onClick={resume} disabled={!connected || !deviceReady || (dualRequired && !phone.ready) || busy}>{busy ? "Checking devices..." : "Resume interview"}</button>
+      <button className={styles.textButton} onClick={() => setShowEndConfirm(true)}>End with saved answers</button>
+    </Modal>
+    <ConfirmDialog isOpen={showEndConfirm} onClose={() => setShowEndConfirm(false)} onConfirm={finish} title="Finish this interview?"
+      message={draft.trim() ? "Your typed draft has not been submitted. Cancel and choose Send text answer to include it. Finishing evaluates only your submitted answers." : "Your submitted answers will be evaluated. An answer currently being recorded will not be submitted. Use Send answer first if you want to include it."} confirmText="Finish interview" />
+    <ConfirmDialog isOpen={showModeConfirm} onClose={() => { modeConfirmRef.current = false; lastSpeechRef.current = Date.now(); setShowModeConfirm(false); }}
+      onConfirm={() => changeAnswerMode(modeToConfirm)} title={modeToConfirm === "text" ? "Switch to a typed answer?" : "Switch to a spoken answer?"}
+      message={modeToConfirm === "text" ? "The current spoken recording has not been submitted. Switching discards that recording so you can type this answer instead. Your previously submitted answers stay saved." : "Your typed draft has not been submitted. Switching starts automatic voice capture. Submit your draft first to include it, or switch to answer this question aloud."}
+      confirmText={modeToConfirm === "text" ? "Switch to typing" : "Switch to speaking"} confirmVariant="primary" />
   </main>;
 }

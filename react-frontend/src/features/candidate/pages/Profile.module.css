@@ -83,6 +83,14 @@
 .scoreThreshold { display: flex; gap: 7px; font-size: 11px; } .thresholdLabel { color: var(--portal-muted); } .pass { color: var(--portal-success); } .fail { color: var(--portal-danger); }
 .actionsRight { display: flex; flex-wrap: wrap; gap: 9px; }
 .noApplications { text-align: center; padding: 44px 24px; background: var(--portal-surface); border: 1px dashed #c7c5f7; border-radius: 18px; color: var(--portal-secondary); font-size: 14px; }
+.noApplications h3 { margin:0 0 10px; font-size:18px; color:var(--portal-text); }.noApplications p { line-height:1.7; margin-bottom:20px; }
+.applicationOverview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:22px; }
+.overviewCard { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:18px 20px; border:1px solid var(--portal-border); border-radius:14px; color:var(--portal-secondary); background:var(--portal-surface); font-family:inherit; text-align:left; }
+.overviewCard span { font-size:12px; }.overviewCard strong { font-size:26px; line-height:1.2; color:var(--portal-text); }
+button.overviewCard { cursor:pointer; }button.overviewCard[aria-pressed="true"] { background:var(--portal-primary-soft); border-color:#c7d2fe; }button.overviewCard:focus-visible { outline:3px solid #a5b4fc; outline-offset:3px; }
+.nextStep { display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:13px 16px; border-radius:10px; background:var(--portal-bg); color:var(--portal-secondary); font-size:13px; line-height:1.7; margin:14px 0 0; }
+.nextStep strong { color:var(--portal-primary); font-size:12px; }.nextStep a { color:var(--portal-primary); font-weight:600; text-decoration:none; }
+@media (max-width:600px) { .applicationOverview { gap:8px; }.overviewCard { padding:12px 10px; }.overviewCard span { font-size:11px; }.overviewCard strong { font-size:22px; } }
 .previewModal { width: min(920px,100%); max-height: 90svh; overflow: auto; border-radius: 18px; background: var(--portal-surface); padding: 22px; box-shadow: 0 24px 70px #0f172a40; }
 .previewHeader { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
 .previewHeader h2 { margin: 0; font-size: 20px; color: var(--portal-text); }
