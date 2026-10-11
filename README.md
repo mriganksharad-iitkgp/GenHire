@@ -9,6 +9,8 @@ their own further hiring rounds.
 
 ## What's in this repository
 
+Start with [contex.md](contex.md) for the current technology map, deployment identities, Secret Manager configuration, and active versus legacy components.
+
 | Folder | What it is | Stack |
 |---|---|---|
 | [`python-backend/`](python-backend/) | The API and all business logic: auth, jobs, applications, the AI interview engine, proctoring, payments, emails | Python 3.11, Flask (app factory), Flask-SocketIO, MongoDB (PyMongo), LLM chain (DeepSeek → Gemini → Groq), Groq Whisper STT + Google Standard TTS, Google Cloud Storage (mandatory — all artifacts), Razorpay, ZeptoMail/Mailgun |

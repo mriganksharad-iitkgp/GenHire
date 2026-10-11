@@ -52,8 +52,18 @@ class CounterStore:
             raise StoreUnavailable()
         if self.redis is None or self.redis_url != url:
             import redis
-            self.redis = redis.Redis.from_url(url, socket_timeout=0.5,
-                                             socket_connect_timeout=0.5, health_check_interval=30)
+            # Remote TLS setup can take several seconds. Bound connection and
+            # command waits separately instead of failing healthy Redis at 500ms.
+            connect_timeout = env_int('REDIS_CONNECT_TIMEOUT_MS', 5000, 100, 30000) / 1000
+            socket_timeout = env_int('REDIS_SOCKET_TIMEOUT_MS', 2000, 100, 30000) / 1000
+            # Fail promptly on an outage; redis-py's automatic retries multiply
+            # these waits and stall protected requests.
+            from redis.backoff import NoBackoff
+            from redis.retry import Retry
+            self.redis = redis.Redis.from_url(
+                url, socket_timeout=socket_timeout,
+                socket_connect_timeout=connect_timeout, health_check_interval=30,
+                retry=Retry(NoBackoff(), 0))
             self.redis_url = url
         return self.redis
 
@@ -195,8 +205,13 @@ def install_request_protection(app):
     if shared_store_required():
         try:
             store._client().ping()
-        except Exception:
-            raise RuntimeError('Request protection requires reachable REDIS_URL in production') from None
+        except Exception as exc:
+            # Include the failure class for Cloud Run diagnostics, never its text
+            # (which can contain the Redis URL/password).
+            raise RuntimeError(
+                'Request protection requires reachable REDIS_URL in production '
+                f'({type(exc).__name__}); check TLS, secret access and Redis timeouts'
+            ) from None
     lock = threading.Lock()
     active = {}
     capacities = {

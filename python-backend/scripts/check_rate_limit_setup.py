@@ -18,7 +18,8 @@ def load_profile(profile):
     from dotenv import dotenv_values
     name = ".env.production" if profile == "production" else ".env"
     values = dotenv_values(BACKEND / name, interpolate=False)
-    for key in ("REDIS_URL", "RATE_LIMIT_NAMESPACE", "RATE_LIMIT_REQUIRE_REDIS"):
+    for key in ("REDIS_URL", "REDIS_CONNECT_TIMEOUT_MS", "REDIS_SOCKET_TIMEOUT_MS",
+                "RATE_LIMIT_NAMESPACE", "RATE_LIMIT_REQUIRE_REDIS"):
         if key not in os.environ and values.get(key) is not None:
             os.environ[key] = values[key]
 

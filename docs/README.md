@@ -8,6 +8,12 @@ implemented today.
 
 ## Start here
 
+For a newcomer or AI agent, read [the current stack context](../contex.md) first.
+It includes the owner's Cloud Run/Secret Manager deployment notes and distinguishes active code from optional or legacy integrations.
+
+For the current backend outage and login/CORS failure, follow
+[Backend startup and login recovery](backend-startup-and-login-recovery.md).
+
 For configuration and deployment setup, follow
 [Required setup and rate limits](required-setup-and-rate-limits.md), then
 [Environment configuration](environment-configuration.md). See

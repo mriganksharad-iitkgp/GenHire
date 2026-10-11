@@ -19,6 +19,13 @@ system_bp = Blueprint("system", __name__)
 
 
 def create_system_routes(db):
+    # Cloud Run's HTTP probe talks directly to the container over HTTP. A 302
+    # HTTPS redirect would count as success without checking dependencies.
+    try:
+        from flask_talisman import Talisman
+        probe_options = Talisman()(force_https=False)
+    except ImportError:
+        probe_options = lambda view: view
     health_lock = threading.Lock()
     health_cache = {"expires": 0, "payload": {"status": "checking"}, "status": 503}
     @system_bp.route("/")
@@ -31,6 +38,7 @@ def create_system_routes(db):
     # database with a short timeout; a slow/unreachable DB now reports 503
     # instead of a false "healthy".
     @system_bp.route("/health", methods=["GET"])
+    @probe_options
     def health_check():
         if health_cache["expires"] > time.monotonic():
             return jsonify(health_cache["payload"]), health_cache["status"]

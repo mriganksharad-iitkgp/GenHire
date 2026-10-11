@@ -41,12 +41,15 @@ def read_config(path):
     return values, errors
 
 
-def inspect_backend(values, production):
+def inspect_backend(values, production, allow_runtime_secrets=False):
     errors, warnings = [], []
     required = ["MONGODB_URI", "DATABASE_NAME", "FLASK_SECRET_KEY", "JWT_SECRET_KEY",
                 "INVITE_TOKEN_SECRET", "FRONTEND_URL", "CORS_ORIGINS", "GCS_BUCKET_NAME"]
     if production:
-        required += ["REDIS_URL"]
+        if allow_runtime_secrets and not values.get("REDIS_URL"):
+            warnings.append("REDIS_URL is deferred to Cloud Run Secret Manager; verify genhire-redis-url is injected at runtime")
+        else:
+            required += ["REDIS_URL"]
         if values.get("RATE_LIMIT_REQUIRE_REDIS") != "true":
             errors.append("RATE_LIMIT_REQUIRE_REDIS must be true in production")
         if "PORT" in values:
@@ -59,6 +62,10 @@ def inspect_backend(values, production):
             errors.append(f"{key} is missing or contains a placeholder")
     if production and values.get("REDIS_URL") and not values["REDIS_URL"].startswith(("redis://", "rediss://")):
         errors.append("REDIS_URL must use redis:// or rediss://")
+    for key in ("REDIS_CONNECT_TIMEOUT_MS", "REDIS_SOCKET_TIMEOUT_MS"):
+        value = values.get(key, "")
+        if not value.isdigit() or not 100 <= int(value) <= 30000:
+            errors.append(f"{key} must be an integer between 100 and 30000 milliseconds")
     for key, value in values.items():
         if key.startswith("RATE_LIMIT_") and key.endswith(("_CALLS", "_WINDOW_SECONDS")) or key.endswith("_MAX_INFLIGHT"):
             if not value.isdigit() or int(value) < 1:
@@ -133,7 +140,7 @@ def inspect_frontend(values, backend, production):
     return errors
 
 
-def audit(profile="local", schema_only=False):
+def audit(profile="local", schema_only=False, allow_runtime_secrets=False):
     errors, warnings = [], []
     local_maps = {}
     production_maps = {}
@@ -159,7 +166,7 @@ def audit(profile="local", schema_only=False):
     if not schema_only:
         selected = production_maps if profile == "production" else local_maps
         backend = selected["python-backend"]
-        problems, notices = inspect_backend(backend, profile == "production")
+        problems, notices = inspect_backend(backend, profile == "production", allow_runtime_secrets)
         errors += ["backend: " + problem for problem in problems]
         warnings += ["backend: " + notice for notice in notices]
         errors += ["frontend: " + problem for problem in inspect_frontend(selected["react-frontend"], backend, profile == "production")]
@@ -170,8 +177,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", choices=["local", "production"], default="local")
     parser.add_argument("--schema-only", action="store_true", help="Check key parity and syntax without requiring deployment credentials")
+    parser.add_argument("--allow-runtime-secrets", action="store_true", help="Allow blank production REDIS_URL supplied separately by Cloud Run Secret Manager; does not verify the deployed reference")
     args = parser.parse_args()
-    errors, warnings = audit(args.profile, args.schema_only)
+    errors, warnings = audit(args.profile, args.schema_only, args.allow_runtime_secrets)
     for message in warnings:
         print("NOTICE " + message)
     for message in errors:

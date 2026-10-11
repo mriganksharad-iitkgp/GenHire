@@ -3,7 +3,8 @@ GCS Service - Google Cloud Storage utility for file uploads/downloads.
 
 Handles CV PDFs, JD PDFs, and other file uploads.
 Uses signed URLs for secure, time-limited access.
-Falls back to local storage if GCS is not configured.
+Cloud Run uses its attached service identity; local development can use a key file.
+GCS is mandatory for application startup; there is no local upload fallback.
 """
 
 import os
@@ -83,28 +84,18 @@ def _get_bucket():
 
 
 def is_gcs_configured():
-    """Check if GCS is properly configured."""
+    """Resolve the same credentials used for uploads, including Cloud Run ADC.
+
+    Client initialization validates credentials without listing/writing objects.
+    Bucket permissions still need an actual storage operation to verify them.
+    """
     try:
-        bucket_name = os.getenv("GCS_BUCKET_NAME")
-        if not bucket_name:
+        if not os.getenv("GCS_BUCKET_NAME", "").strip():
             return False
-            
-        key_json = os.getenv("GCS_SERVICE_ACCOUNT_JSON")
-        if key_json and key_json.strip().startswith("{"):
-            return True
-
-        key_path = os.getenv("GCS_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not key_path:
-            google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-            return True
-
-        if key_path.strip().startswith("{"):
-            return True
-
-        if not os.path.isabs(key_path):
-            key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), key_path)
-        return os.path.exists(key_path)
-    except Exception:
+        return _get_client() is not None
+    except Exception as exc:
+        # Credential exception messages may contain paths or private JSON.
+        logger.warning("GCS credentials unavailable (%s)", type(exc).__name__)
         return False
 
 

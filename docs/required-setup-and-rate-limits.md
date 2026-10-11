@@ -1,5 +1,15 @@
 # Required owner setup: Redis, rate limits and remaining services
 
+**11 October recovery update:** the Cloud Run worker logs confirm an old image
+crashing on its explicit GCS credential requirement. Follow
+[Backend startup and login recovery](backend-startup-and-login-recovery.md) first.
+The workspace supports Cloud Run ADC and local Redis has been verified. The
+owner reports production Redis is injected from Secret Manager
+`genhire-redis-url:latest`; `REDIS_URL=""` in `.env.production` is intentional.
+DeepSeek/production webhook values are populated. The table below is
+the original 9 October audit, not the current credential state. Mobile recording
+and deployment/model checks remain relevant.
+
 Audit date: **9 October 2026 (IST)**. Follow the actions below before considering
 production ready. The audit inspected the current private configuration and source;
 it did not authenticate to your provider dashboards, deploy resources or spend credits.
@@ -71,10 +81,11 @@ creating the database. If you require GCP private networking, use section 4 inst
    would reset limits. Monitor capacity and command quotas; write rejection or a
    suspended database makes protected requests unavailable.
    [Eviction behavior](https://upstash.com/docs/redis/features/eviction).
-4. Put the real URL in **python-backend/.env.production**, retaining these settings:
+4. For this deployment, keep **python-backend/.env.production** free of the Redis
+   password; Secret Manager supplies the real URL at runtime. Retain these settings:
 
    ```dotenv
-   REDIS_URL="rediss://default:REPLACE_WITH_URL_ENCODED_PASSWORD@REPLACE_WITH_ENDPOINT:REPLACE_WITH_PORT"
+   REDIS_URL="" # Intentional file blank; Cloud Run injects genhire-redis-url:latest
    RATE_LIMIT_REQUIRE_REDIS="true"
    RATE_LIMIT_NAMESPACE="genhire-production"
    ```
@@ -102,8 +113,9 @@ creating the database. If you require GCP private networking, use section 4 inst
 8. Validate configuration, then deploy the backend through your existing pipeline.
    Read the new revision's startup logs. A successful revision must boot and reach
    Redis. Keep TLS certificate validation; fix certificate/hostname issues rather
-   than disabling validation. The current Redis connection/read timeout is **0.5
-   seconds**, so choose a nearby service and verify it from the backend network.
+   than disabling validation. Current defaults are **5 seconds to connect** and
+   **2 seconds to read**, configured by `REDIS_CONNECT_TIMEOUT_MS` and
+   `REDIS_SOCKET_TIMEOUT_MS`; verify from the backend network.
 
 No new Redis SDK/package is required: the backend already declares and installs
 `redis`. The service must permit writable Lua scripts and the commands used by

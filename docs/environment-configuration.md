@@ -8,7 +8,7 @@ For detailed Redis setup and the owner action checklist, start with
 
 The [environment cleanup report](environment-cleanup.md) explains the current
 grouping, removed settings, blank-value requirements and private removal record.
-All four backend files have **178 settings in the same order**. The two Google
+All four backend files have **180 settings in the same order**. The two Google
 ADC overrides retain local values but stay empty in production, as documented
 below. All four frontend files have the same **8 public settings in the same order**.
 DeepSeek, Groq and Gemini keys are grouped with the other external API secrets;
@@ -50,7 +50,7 @@ were invented, and validation prints setting names rather than secret values.
 
 | Setting | Requirement |
 | --- | --- |
-| `REDIS_URL` | **Required for production startup.** Supply a reachable `redis://` or `rediss://` connection from your Redis service. Keep `RATE_LIMIT_REQUIRE_REDIS=true`. Private networking/TLS/authentication must match that service. |
+| `REDIS_URL` | **Required at runtime.** This deployment injects Upstash through Secret Manager `genhire-redis-url:latest`; a blank production file is intentional. Preserve the secret reference, remove conflicting ordinary variables, and keep `RATE_LIMIT_REQUIRE_REDIS=true`. |
 | `DEEPSEEK_API_KEY` | Needed to use the configured primary provider. Without it, the DeepSeek route is unavailable; the configured Gemini/Groq fallbacks remain. |
 | `RAZORPAY_WEBHOOK_SECRET` | Needed for verified webhook processing. Use the signing secret configured for this webhook, not the Razorpay API key secret. The old placeholder was not copied into production. |
 | Object-detection artifact | The default local `models/proctoring/yolov8n.onnx` already exists. Include it in the deployed image; it is gitignored and a fresh clone does not contain it. An explicit model-path setting is optional when using the default location. |
@@ -92,16 +92,24 @@ From the repository root, with Python 3.11 or newer:
 ```bash
 python scripts/check_environment.py --schema-only
 python scripts/check_environment.py --profile local
-python scripts/check_environment.py --profile production
+python scripts/check_environment.py --profile production --allow-runtime-secrets
 ```
 
 The checker covers all eight files, duplicate assignments, key parity, production
 URLs, OAuth agreement, required configuration, public frontend secret exclusion
-and numeric rate/capacity settings. A production check currently fails until
-`REDIS_URL` is supplied. Passing validation does not prove network access, account
+and numeric rate/capacity settings. `--allow-runtime-secrets` permits only a blank
+production `REDIS_URL` and reports its required Secret Manager injection; the
+default strict check still rejects a missing URL. Passing does not prove the
+secret reference exists, network access, account
 permissions, available model quota, successful payments or physical device checks.
 
 ## Cloud Run import
+
+For this deployment, retain the `REDIS_URL` reference to Secret Manager
+`genhire-redis-url:latest`. The production file keeps a blank assignment for schema
+parity; omit that assignment from ordinary-variable imports, or remove the parsed
+ordinary variable and restore its secret reference before saving the revision.
+Never replace the secret reference with the file's empty value.
 
 Use **python-backend/.env.production** after resolving the required settings.
 For your existing service, open its edit/redeploy configuration, then the container
@@ -119,14 +127,18 @@ allow the configured Google clients to use the Cloud Run runtime
 service account for Google Standard TTS and enable its API/access. See
 [Cloud Run service identity](https://docs.cloud.google.com/run/docs/configuring/services/service-identity).
 
-Cloud Storage currently needs explicit signing credentials. The private production
-file contains `GCS_SERVICE_ACCOUNT_JSON` from the existing local signing file;
-its example contains no key. Prefer a Secret Manager reference for that variable
-or a mounted key file under `GCS_SERVICE_ACCOUNT_KEY`. Do not deploy a local Windows
-path. The decoded JSON must retain its private-key newlines; copying the entire
-dotenv assignment through the import parser preserves escaping. If entering a
-single value manually, use the decoded JSON, without dotenv's outer quote layer.
-Never paste private credentials into chat or version control.
+Cloud Storage uses the attached Cloud Run service identity through Application
+Default Credentials. Keep `GCS_BUCKET_NAME` set and leave the explicit credential
+overrides empty on Cloud Run; never import a local Windows file path. Grant the
+runtime identity bucket object access and `iam.serviceAccounts.signBlob` for signed
+file links. See [the storage identity guide](https://docs.cloud.google.com/run/docs/securing/service-identity)
+and [signed URL permissions](https://docs.cloud.google.com/storage/docs/access-control/signing-urls-with-helpers).
+Local development can retain its configured service-account file.
+
+If the backend returns 503 and login reports CORS errors, first follow
+[Backend startup and login recovery](backend-startup-and-login-recovery.md).
+The deployed image must contain the ADC storage support; changing environment
+values alone does not repair an old image that requires a credential file.
 
 Retain one Gunicorn worker and at most one Cloud Run instance while interview
 session state is process-local. Keep the existing deployment/build workflow; this

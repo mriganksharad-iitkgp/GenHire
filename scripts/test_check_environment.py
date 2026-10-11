@@ -11,6 +11,27 @@ spec.loader.exec_module(checks)
 
 
 class EnvironmentChecks(unittest.TestCase):
+    def test_runtime_redis_secret_requires_explicit_file_audit_opt_in(self):
+        values = {"REDIS_URL": ""}
+        strict, _ = checks.inspect_backend(values, True)
+        deferred, notices = checks.inspect_backend(values, True, allow_runtime_secrets=True)
+        self.assertTrue(any("REDIS_URL is missing" in error for error in strict))
+        self.assertFalse(any("REDIS_URL is missing" in error for error in deferred))
+        self.assertTrue(any("Secret Manager" in notice for notice in notices))
+        errors, _ = checks.inspect_backend({"REDIS_URL": "https://invalid.test"}, True, allow_runtime_secrets=True)
+        self.assertTrue(any("REDIS_URL must use" in error for error in errors))
+
+    def test_redis_timeout_bounds_match_runtime_and_do_not_expose_values(self):
+        for value in ("0", "99", "30001", "private-invalid-value"):
+            errors, _ = checks.inspect_backend({"REDIS_CONNECT_TIMEOUT_MS": value}, False)
+            self.assertTrue(any("REDIS_CONNECT_TIMEOUT_MS" in error for error in errors))
+            if value == "private-invalid-value":
+                self.assertNotIn(value, " ".join(errors))
+        errors, _ = checks.inspect_backend({
+            "REDIS_CONNECT_TIMEOUT_MS": "5000", "REDIS_SOCKET_TIMEOUT_MS": "2000"}, False)
+        self.assertFalse(any("REDIS_CONNECT_TIMEOUT_MS" in error or "REDIS_SOCKET_TIMEOUT_MS" in error
+                             for error in errors))
+
     def test_required_error_never_contains_credential_value(self):
         private_value = "mongodb+srv://user:YOUR-private-password@host/database"
         errors, _ = checks.inspect_backend({"MONGODB_URI": private_value}, True)

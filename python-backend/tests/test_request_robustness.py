@@ -155,6 +155,35 @@ class RequestProtectionTests(unittest.TestCase):
                 client.post("/jobs/one/apply")
         self.assertEqual(app.extensions["request_protection"]["active"]["requests"], 0)
 
+    def test_production_redis_boot_failure_is_actionable_without_credentials(self):
+        with patch.dict(os.environ, {"RATE_LIMIT_REQUIRE_REDIS": "true"}), patch.object(
+                limits.store, "_client", side_effect=TimeoutError("rediss://user:private-password@host")):
+            with self.assertRaises(RuntimeError) as caught:
+                self.app()
+        self.assertIn("TimeoutError", str(caught.exception))
+        self.assertNotIn("private-password", str(caught.exception))
+        self.assertNotIn("rediss://", str(caught.exception))
+
+    def test_redis_remote_tls_budget_is_bounded_and_has_no_automatic_retries(self):
+        import redis
+        with patch.dict(os.environ, {
+                "REDIS_URL": "rediss://test-only", "REDIS_CONNECT_TIMEOUT_MS": "5000",
+                "REDIS_SOCKET_TIMEOUT_MS": "2000"}), patch.object(redis.Redis, "from_url") as connect:
+            limits.CounterStore()._client()
+        options = connect.call_args.kwargs
+        self.assertEqual(options["socket_connect_timeout"], 5)
+        self.assertEqual(options["socket_timeout"], 2)
+        self.assertEqual(options["retry"].get_retries(), 0)
+
+    def test_invalid_timeout_does_not_create_a_redis_connection(self):
+        import redis
+        with patch.dict(os.environ, {
+                "REDIS_URL": "rediss://test-only", "REDIS_CONNECT_TIMEOUT_MS": "0"}), patch.object(
+                redis.Redis, "from_url") as connect:
+            with self.assertRaises(ValueError):
+                limits.CounterStore()._client()
+        connect.assert_not_called()
+
     def test_configured_redis_outage_never_creates_local_counters(self):
         counter = limits.CounterStore()
         counter.redis_url = "redis://test-only"
