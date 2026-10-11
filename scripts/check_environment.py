@@ -56,7 +56,9 @@ def inspect_backend(values, production, allow_runtime_secrets=False):
             errors.append("Omit PORT from the Cloud Run import file")
         for key in CLOUD_ADC_OVERRIDES:
             if values.get(key):
-                errors.append(f"Keep {key} empty in production so Cloud Run uses its service identity")
+                errors.append(f"Keep {key} empty in the production profile and omit it from Cloud Run variables for its service identity")
+        if "GOOGLE_APPLICATION_CREDENTIALS" in values and not values.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            warnings.append("Omit GOOGLE_APPLICATION_CREDENTIALS from Cloud Run variables, including blank assignments; an empty SDK path blocks ADC in older images")
     for key in required:
         if not values.get(key) or PLACEHOLDER.search(values[key]):
             errors.append(f"{key} is missing or contains a placeholder")

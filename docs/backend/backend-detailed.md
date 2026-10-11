@@ -188,7 +188,7 @@ Defined in `python-backend/.env.example`. The important ones:
 | `SIGNUP_BONUS_CREDITS`, `CANDIDATE_PRACTICE_CREDITS`, `CANDIDATE_PRACTICE_PROCTORED_CREDITS`, `RECRUITER_AI_JD_CREDITS`, `RECRUITER_REAL_INTERVIEW_CREDITS`, `RECRUITER_REAL_INTERVIEW_PROCTORED_CREDITS` | Credit pricing (defaults 100 / 30 / 50 / 10 / 30 / 50) |
 | `FACE_VERIFICATION_MODE` | `enforce` (default) / `monitor` / `off`. `off` skips identity capture+scoring entirely; identity never blocks an interview either way. Not in `.env.example` — set it explicitly if you need it. |
 | `INTERVIEW_ABANDON_TTL_MINUTES`, `INTERVIEW_REFUND_SWEEP_INTERVAL_MINUTES` | Refund sweeper: how long an "active" session may idle before it's treated as abandoned (default 120, floor 15), and sweep frequency (default 15, floor 5) |
-| `GCS_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` | Cloud Storage — **mandatory**, the app refuses to boot without it |
+| `GCS_BUCKET_NAME`, Cloud Run service identity or local credentials | Cloud Storage — **mandatory**; omit `GOOGLE_APPLICATION_CREDENTIALS` on Cloud Run, since an empty SDK file override blocks ADC |
 | `RECRUITER_INVITE_CREDITS_PER_CANDIDATE` | Bulk-invite price (default 1 credit/candidate; failed emails auto-refund) |
 | `ZEPTOMAIL_PER_EMAIL_COST_INR` | Per-email price for the admin cost page's usage-based email line (default 0.015) |
 | `GCP_BILLING_EXPORT_BQ_TABLE`, `OPENAI_ADMIN_API_KEY` | Real billing fetch for the admin cost page |

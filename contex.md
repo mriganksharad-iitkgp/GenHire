@@ -1,7 +1,7 @@
 # GenHire technology and deployment context
 
-Reviewed against the repository and the owner's deployment notes on 11 October 2026; each bullet explains one component or responsibility.
-Deployment notes describe reported cloud configuration, not a fresh verification of IAM, secret access, or production health.
+Reviewed against the repository and deployment notes on 11 October 2026, with deployment identity/configuration checked on 12 October; each bullet explains one responsibility.
+Reported cloud access is distinguished from read-only inspection; production application health and runtime secret access still require verification.
 This file contains architecture context and public identifiers only; credential values belong in private configuration or Secret Manager.
 
 ## 1. Product and application boundaries
@@ -27,7 +27,10 @@ This file contains architecture context and public identifiers only; credential 
 - Cloud Run supplies `PORT`; the existing Docker command explicitly binds 8080, so changing the service port requires aligning that command.
 - The owner's deployment notes and earlier build screenshot describe a Google Cloud Build build, push, and Cloud Run deployment pipeline.
 - The reported Cloud Build trigger is `genhire-main-deploy`; its complete trigger configuration is external to this repository.
-- Container image storage and push occur in the deployment pipeline; confirm its actual registry rather than infer it from cost-estimate settings.
+- The 12 October deploy log identifies `genhire-backend@hr-tech-2026.iam.gserviceaccount.com` as the build's deploying identity.
+- Cloud Build's deployer needs `roles/iam.serviceAccountUser` on the runtime account; the scoped grant resolved the 12 October attachment failure.
+- [Deployment recovery](docs/backend-startup-and-login-recovery.md) contains the scoped IAM grant and retry steps; changing dotenv cannot repair this permission.
+- The inspected image is stored in Artifact Registry `europe-west1-docker.pkg.dev/hr-tech-2026/cloud-run-source-deploy/hrtech/hrtech`.
 - Google Cloud Logging holds worker-startup tracebacks and HTTP request logs needed to diagnose failed Cloud Run revisions.
 - The repository's [keep-warm workflow](.github/workflows/keep-backend-warm.yml) pings `/health` every five minutes as a best-effort cold-start mitigation.
 - Keep one Gunicorn worker and at most one Cloud Run instance until process-local interview and socket state is redesigned for shared execution.
@@ -35,8 +38,8 @@ This file contains architecture context and public identifiers only; credential 
 ## 3. Google identity, storage, and secret injection
 
 - Bucket `gs://genhireuploads` is the configured application artifact bucket; `GCS_BUCKET_NAME` uses the name without `gs://`.
-- `genhire-backend@hr-tech-2026.iam.gserviceaccount.com` is the intended runtime identity reported in the deployment notes.
-- A previous deployment used the default Compute Engine identity; verify the actual Cloud Run revision identity before relying on the intended account.
+- `genhire-backend@hr-tech-2026.iam.gserviceaccount.com` is the runtime identity confirmed by read-only Cloud Run inspection on 12 October.
+- Recovery revision `hrtech-00149-5dg` uses image `879f473…`, serves all traffic, and passes health/auth-preflight after removing the blank SDK credential override.
 - Application Default Credentials, or ADC, lets Google SDKs authenticate using Cloud Run's attached identity without a bundled private key.
 - The owner reports bucket-scoped `roles/storage.objectAdmin` for application object operations.
 - The owner reports `roles/iam.serviceAccountTokenCreator` on the runtime account for IAM-backed signed URLs.
@@ -44,13 +47,13 @@ This file contains architecture context and public identifiers only; credential 
 - The owner reports Cloud Run, Storage, IAM Credentials, Text-to-Speech, Speech, and Secret Manager APIs enabled.
 - Upstash supplies the hosted Redis database accessed by the backend over TLS/TCP using a `rediss://` URL.
 - Secret Manager secret `genhire-redis-url` stores the full Redis connection URL, including its authentication information.
-- Cloud Run maps `genhire-redis-url` version `latest` to the runtime environment variable `REDIS_URL`, according to the owner.
+- Cloud Run maps `genhire-redis-url` version `latest` to `REDIS_URL`, confirmed by read-only configuration inspection on 12 October.
 - `REDIS_URL=""` in backend `.env.production` is intentional because the production credential is injected separately at runtime.
 - Preserve that secret reference and remove any conflicting ordinary `REDIS_URL` assignment when importing production variables.
 - Secret content must be the raw connection URL, without a `REDIS_URL=` prefix, dotenv quotes, or an added newline.
 - The owner reports secret-scoped `roles/secretmanager.secretAccessor` for the intended runtime identity.
 - Updating an environment-injected secret requires a new revision or instance using the selected version; verify the effective deployment after rotation.
-- Production Google credential override fields stay empty so a laptop file path cannot override Cloud Run ADC.
+- Production profiles retain blank Google credential placeholders; omit the SDK file override from Cloud Run because an empty value breaks ADC, and startup now normalizes blanks.
 - Local `python-backend/gcs-service-account.json` is a private development credential file, excluded from Git and Docker; its contents do not belong here.
 
 ## 4. Repository and configuration conventions
@@ -349,6 +352,7 @@ This file contains architecture context and public identifiers only; credential 
 - Frontend `useRazorpay` starts checkout using server-issued payment data and handles success/failure responses.
 - Razorpay webhook processing verifies its configured signing secret; the webhook secret is distinct from the API key secret.
 - `wallet_service.py` maintains credit balances and ledger transactions with idempotency keys.
+- Signup bonuses are granted during registration; the pending startup fix moves duplicate historical account scans to `scripts/migrations/backfill_signup_bonuses.py`.
 - `credit_service.py` connects business operations to credit charging/refunding conventions.
 - `interview_credit_service.py` manages interview debit/refund lifecycle and abandon handling with refund keys that prevent double refunds.
 - `interview_quota_service.py` tracks plan/free interview usage; practice quotas have a separate candidate service.

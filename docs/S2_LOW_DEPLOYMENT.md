@@ -128,14 +128,16 @@ in the browser bundle by the Vite configuration.
    service now supports the runtime service account through Application Default
    Credentials, so TTS does not need a downloaded private key on Cloud Run.
    For this route, keep `GOOGLE_APPLICATION_CREDENTIALS` and
-   `GOOGLE_APPLICATION_CREDENTIALS_JSON` empty in production, and select the intended service account
+   `GOOGLE_APPLICATION_CREDENTIALS_JSON` blank in the production file for schema
+   parity, but omit both from Cloud Run's deployed variables; an empty SDK path
+   prevents ADC discovery in older images. Select the intended service account
    in the revision's security settings. Confirm its Google API access.
    Existing explicit speech credentials remain supported if you retain them.
 
    **Use the Cloud Run identity for Cloud Storage.** Keep `GCS_BUCKET_NAME`
    configured and leave `GCS_SERVICE_ACCOUNT_JSON`,
-   `GCS_SERVICE_ACCOUNT_KEY`, and `GOOGLE_APPLICATION_CREDENTIALS` empty in
-   production. The storage module uses ADC for uploads and IAM `signBlob` for
+   `GCS_SERVICE_ACCOUNT_KEY` unconfigured in production, and omit the SDK
+   `GOOGLE_APPLICATION_CREDENTIALS` variable entirely. The storage module uses ADC for uploads and IAM `signBlob` for
    signed URLs. Grant the runtime service account `Storage Object Admin` and
    `Service Account Token Creator` on the signing identity. Local development
    may still use an explicit key file or JSON override; never use a local

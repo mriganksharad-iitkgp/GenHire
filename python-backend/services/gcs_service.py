@@ -14,6 +14,7 @@ from google.cloud import storage
 from google.oauth2 import service_account
 import google.auth
 from google.auth.transport.requests import Request
+from config.env_loader import normalize_google_credential_overrides
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def _get_client():
     if _client is not None:
         return _client
 
+    normalize_google_credential_overrides()
     import json
 
     key_json = os.getenv("GCS_SERVICE_ACCOUNT_JSON")

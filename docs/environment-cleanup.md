@@ -1,7 +1,7 @@
 # Environment cleanup and import checklist
 
-Updated 11 October 2026 (IST). Configuration files were reorganized locally;
-no Cloud Run or Vercel deployment was changed.
+Updated 12 October 2026 (IST). Configuration files retain their matching schema;
+the startup recovery is documented in [the recovery guide](backend-startup-and-login-recovery.md).
 
 ## Files to use
 
@@ -12,10 +12,12 @@ no Cloud Run or Vercel deployment was changed.
 
 All four files for each application have exactly the same keys and order.
 Backend production includes `GOOGLE_APPLICATION_CREDENTIALS` and
-`GOOGLE_APPLICATION_CREDENTIALS_JSON` as active, empty assignments: keep these
-local Google authentication overrides empty on Cloud Run. The current Google
-clients ignore empty overrides and use the attached service account for speech/billing,
-including Cloud Storage. Signed URLs also require `iam.serviceAccounts.signBlob`.
+`GOOGLE_APPLICATION_CREDENTIALS_JSON` as active, empty assignments for schema
+parity. Omit these assignments from Cloud Run's ordinary variables. The SDK
+file-path override must be absent: setting it to an empty string makes google-auth
+fail before discovering the attached identity. Updated startup normalizes blank
+overrides for speech/billing and Cloud Storage. Signed URLs also require
+`iam.serviceAccounts.signBlob`.
 `PORT` is omitted because Cloud Run supplies it. Do not import a Windows file path.
 
 The backend groups runtime URLs, MongoDB, authentication, external API keys,

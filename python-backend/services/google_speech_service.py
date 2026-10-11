@@ -6,12 +6,14 @@ from google.cloud import speech
 from google.cloud import texttospeech
 import logging
 from interview.core.cost_tracker import CostTracker
+from config.env_loader import normalize_google_credential_overrides
 
 logger = logging.getLogger(__name__)
 
 
 class GoogleSpeechService:
     def __init__(self):
+        normalize_google_credential_overrides()
         self.cost_tracker = CostTracker()
         self.stt_provider = os.getenv("STT_PROVIDER", "groq").strip().lower()
         self.stt_model = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")

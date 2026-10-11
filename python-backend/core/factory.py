@@ -3,7 +3,7 @@
 create_app() builds the Flask app in the exact phase order the old
 module-level app.py used: Sentry → Flask + secrets/limits → Talisman/Limiter →
 JSON provider → Socket.IO → CORS + request hooks + error handler → database →
-wallet bootstrap → background jobs → blueprints → socket handlers.
+background jobs → blueprints → socket handlers.
 
 Module-level import order below also mirrors the old app.py deliberately
 (blueprints before load_environment(), the google.cloud.speech probe before
@@ -61,7 +61,6 @@ from controllers.admin_controller import AdminController
 try:
     from payment_module.routes import payment_bp, init_payment_routes
     from payment_module.services.subscription_service import SubscriptionService
-    from payment_module.services.wallet_service import WalletService
 
     PAYMENT_MODULE_AVAILABLE = True
     print("[OK] Payment module loaded successfully")
@@ -69,7 +68,6 @@ except ImportError as e:
     print(f"[WARN] Payment module not available: {e}")
     PAYMENT_MODULE_AVAILABLE = False
     SubscriptionService = None
-    WalletService = None
 
 # Load environment variables
 load_environment()
@@ -214,7 +212,6 @@ def create_app():
     # Initialize database
     db = db_config.connect()
     collections = db_config.get_collections()
-    users_collection = collections["users"]
 
     # GCS is REQUIRED (owner decision): every persistent artifact — CVs, JDs,
     # ID cards, interview/mobile recordings, gaze artifacts — lives in Cloud
@@ -230,16 +227,9 @@ def create_app():
         )
     print("[OK] GCS storage configured (mandatory, no local fallback)")
 
-    if PAYMENT_MODULE_AVAILABLE and WalletService:
-        try:
-            granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(
-                users_collection
-            )
-            print(
-                f"[OK] Startup wallet signup bonus bootstrap complete. Granted={granted}, skipped={skipped}"
-            )
-        except Exception as e:
-            print(f"[WARN] Startup wallet bonus bootstrap skipped: {e}")
+    # Signup grants happen at registration. Legacy wallet backfills are explicit
+    # maintenance (scripts/migrations/backfill_signup_bonuses.py), never a
+    # blocking all-user scan on every worker boot.
 
     # Interview runtime state (session manager singleton, live proctoring
     # session store, upload folders, gaze recorder) — one instance per process.

@@ -462,6 +462,7 @@ class WalletService:
         return self.get_transactions(owner_id, audience, limit=limit, kind="recharges")
 
     def bootstrap_signup_bonus_for_all_users(self, users_collection) -> Tuple[int, int]:
+        """Explicit legacy backfill; never call during HTTP worker startup."""
         granted = 0
         skipped = 0
         # Invite-only (burner) accounts are excluded: they're sponsored by the

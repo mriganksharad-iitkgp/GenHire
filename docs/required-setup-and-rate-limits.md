@@ -1,5 +1,16 @@
 # Required owner setup: Redis, rate limits and remaining services
 
+**12 October recovery update:** revision `hrtech-00149-5dg` now serves 100% of
+traffic and returns HTTP 200 for health and Google-auth preflight. Removing the
+empty ordinary `GOOGLE_APPLICATION_CREDENTIALS` variable restored attached
+identity discovery; the HTTP startup probe and Redis secret reference are in
+place. Pending workspace fixes prevent blank overrides and remove duplicate
+wallet scans that made cold startup take minutes. Deploy those source changes
+and verify actual login. Follow
+[Backend startup and login recovery](backend-startup-and-login-recovery.md)
+for the verified result, source deployment steps and recovery commands. The
+guide retains the resolved `actAs` repair separately.
+
 **11 October recovery update:** the Cloud Run worker logs confirm an old image
 crashing on its explicit GCS credential requirement. Follow
 [Backend startup and login recovery](backend-startup-and-login-recovery.md) first.

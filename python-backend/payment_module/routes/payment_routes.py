@@ -42,19 +42,11 @@ def init_payment_routes(db):
 
     from ..controllers.plan_controller import PlanController
     from ..controllers.subscription_controller import SubscriptionController
-    from ..services.wallet_service import WalletService
 
     _plan_controller = PlanController(db)
     _subscription_controller = SubscriptionController(db)
-    try:
-        granted, skipped = WalletService(db).bootstrap_signup_bonus_for_all_users(
-            db["users"]
-        )
-        logger.info(
-            f"Wallet signup bonus bootstrap complete. Granted={granted}, skipped={skipped}"
-        )
-    except Exception as e:
-        logger.warning(f"Signup bonus bootstrap skipped: {e}")
+    # Do not run historical account migrations while registering HTTP routes.
+    # New-account grants remain in AuthController's registration paths.
 
     # Payment and webhook controllers require Razorpay keys
     try:

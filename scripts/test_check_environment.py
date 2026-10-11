@@ -54,8 +54,9 @@ class EnvironmentChecks(unittest.TestCase):
 
     def test_cloud_adc_placeholders_must_be_empty_in_production(self):
         empty = {"GOOGLE_APPLICATION_CREDENTIALS": "", "GOOGLE_APPLICATION_CREDENTIALS_JSON": ""}
-        errors, _ = checks.inspect_backend(empty, True)
+        errors, notices = checks.inspect_backend(empty, True)
         self.assertFalse(any("Keep GOOGLE_APPLICATION_CREDENTIALS" in error for error in errors))
+        self.assertTrue(any("Omit GOOGLE_APPLICATION_CREDENTIALS from Cloud Run" in notice for notice in notices))
         errors, _ = checks.inspect_backend({"GOOGLE_APPLICATION_CREDENTIALS": "C:/local/key.json"}, True)
         self.assertTrue(any("Keep GOOGLE_APPLICATION_CREDENTIALS empty" in error for error in errors))
 

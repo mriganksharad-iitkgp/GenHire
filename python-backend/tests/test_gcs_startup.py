@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from services import gcs_service as gcs
 from google.auth.exceptions import DefaultCredentialsError
+from google.auth import _default
+from google.auth.credentials import AnonymousCredentials
 
 
 class StorageStartupTests(unittest.TestCase):
@@ -38,6 +40,17 @@ class StorageStartupTests(unittest.TestCase):
         with patch.dict(os.environ, {"GCS_BUCKET_NAME": ""}), patch.object(gcs.google.auth, "default") as adc:
             self.assertFalse(gcs.is_gcs_configured())
         adc.assert_not_called()
+
+    def test_empty_override_uses_real_adc_discovery_for_cloud_run(self):
+        credentials = AnonymousCredentials()
+        with patch.object(_default, "_get_gcloud_sdk_credentials", return_value=(None, None)), \
+                patch.object(_default, "_get_gae_credentials", return_value=(None, None)), \
+                patch.object(_default, "_get_gce_credentials", return_value=(credentials, "test-project")) as metadata, \
+                patch.object(gcs.storage, "Client") as create:
+            self.assertTrue(gcs.is_gcs_configured())
+        metadata.assert_called_once()
+        create.assert_called_once_with(credentials=credentials, project="test-project")
+        self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", os.environ)
 
     def test_missing_credentials_fail_without_disclosing_exception(self):
         with patch.object(gcs.google.auth, "default", side_effect=DefaultCredentialsError("private-value")), \

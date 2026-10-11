@@ -51,8 +51,9 @@ frontend lint and production web build. No native app/real camera test occurred.
 All eight files now use matching groups and commented settings. Existing local
 values were preserved; production URLs use the supplied Cloud Run service and
 custom domain, with the stable Vercel alias allowed by CORS. Local/production
-schemas differ only by the two documented Google ADC overrides omitted for Cloud
-Run. Private credentials stay in ignored files; example references contain none.
+schemas now have matching keys/order, including blank Google ADC placeholders;
+omit the SDK overrides from Cloud Run's deployed variables. Private credentials
+stay in ignored files; example references contain none.
 
 Schema and local configuration checks pass. Production validation reports one
 required missing setting, REDIS_URL, plus notices for the missing primary DeepSeek

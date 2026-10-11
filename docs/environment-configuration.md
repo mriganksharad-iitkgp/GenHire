@@ -9,7 +9,7 @@ For detailed Redis setup and the owner action checklist, start with
 The [environment cleanup report](environment-cleanup.md) explains the current
 grouping, removed settings, blank-value requirements and private removal record.
 All four backend files have **180 settings in the same order**. The two Google
-ADC overrides retain local values but stay empty in production, as documented
+ADC overrides retain local values but stay empty in the production files, as documented
 below. All four frontend files have the same **8 public settings in the same order**.
 DeepSeek, Groq and Gemini keys are grouped with the other external API secrets;
 model names and pricing estimates are separate. OpenAI and inactive Mailgun
@@ -105,6 +105,15 @@ permissions, available model quota, successful payments or physical device check
 
 ## Cloud Run import
 
+Deploy permissions are separate from dotenv values. The first 12 October build
+was denied `iam.serviceAccounts.actAs`; its retry succeeded. Revision
+`hrtech-00148-667` then crashed because an empty SDK credential-file override
+blocked identity discovery. That variable has now been removed: recovery
+revision `hrtech-00149-5dg` passes health and Google-auth preflight. Follow
+[Backend startup and login recovery](backend-startup-and-login-recovery.md)
+for the remaining cold-start source fixes and verification. Keep the SDK
+override absent during future imports. The guide retains the IAM repair.
+
 For this deployment, retain the `REDIS_URL` reference to Secret Manager
 `genhire-redis-url:latest`. The production file keeps a blank assignment for schema
 parity; omit that assignment from ordinary-variable imports, or remove the parsed
@@ -122,14 +131,18 @@ with `--env-vars-file`. These workflows are documented in
 
 Do not add `PORT`: Cloud Run supplies it. The two local Google ADC overrides,
 `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_APPLICATION_CREDENTIALS_JSON`, are
-present but intentionally empty in both backend production files. Empty values
-allow the configured Google clients to use the Cloud Run runtime
-service account for Google Standard TTS and enable its API/access. See
+present but intentionally empty in both backend production files. These values
+are placeholders for schema parity: omit these two assignments from Cloud Run's
+ordinary-variable imports. In particular, remove `GOOGLE_APPLICATION_CREDENTIALS`
+entirely rather than setting it to `""`; google-auth treats the empty value as a
+file path. Updated backend startup normalizes these blanks before Google clients
+run, but the previously deployed image needs the variable removed explicitly.
+Use the attached runtime account for Google Standard TTS and enable its API/access. See
 [Cloud Run service identity](https://docs.cloud.google.com/run/docs/configuring/services/service-identity).
 
 Cloud Storage uses the attached Cloud Run service identity through Application
-Default Credentials. Keep `GCS_BUCKET_NAME` set and leave the explicit credential
-overrides empty on Cloud Run; never import a local Windows file path. Grant the
+Default Credentials. Keep `GCS_BUCKET_NAME` set and omit the SDK credential
+overrides on Cloud Run; never import a local Windows file path. Grant the
 runtime identity bucket object access and `iam.serviceAccounts.signBlob` for signed
 file links. See [the storage identity guide](https://docs.cloud.google.com/run/docs/securing/service-identity)
 and [signed URL permissions](https://docs.cloud.google.com/storage/docs/access-control/signing-urls-with-helpers).
@@ -137,12 +150,14 @@ Local development can retain its configured service-account file.
 
 If the backend returns 503 and login reports CORS errors, first follow
 [Backend startup and login recovery](backend-startup-and-login-recovery.md).
-The deployed image must contain the ADC storage support; changing environment
-values alone does not repair an old image that requires a credential file.
+The image must support ADC storage, and the SDK file override must be absent.
+An older image without ADC needs a source deployment; the blank SDK override
+has been removed from the current recovery revision `hrtech-00149-5dg`.
 
 Retain one Gunicorn worker and at most one Cloud Run instance while interview
 session state is process-local. Keep the existing deployment/build workflow; this
-configuration work does not deploy a revision or provision a Redis service.
+the latest runtime recovery changed only the credential override and startup
+probe, preserving the Redis secret reference and existing image.
 Also remove retired settings from the deployed service's existing variables and
 secret references: pasting updated assignments may leave old keys in place.
 Use the removal list in [environment cleanup](environment-cleanup.md).
