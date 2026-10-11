@@ -160,7 +160,7 @@ class GoogleSpeechService:
         )
 
         try:
-            response = self.speech_client.recognize(config=config, audio=audio)
+            response = self.speech_client.recognize(config=config, audio=audio, timeout=20, retry=None)
             transcript = ""
             for result in response.results:
                 transcript += result.alternatives[0].transcript
@@ -242,7 +242,8 @@ class GoogleSpeechService:
 
         try:
             response = self.tts_client.synthesize_speech(
-                input=synthesis_input, voice=voice, audio_config=audio_config
+                input=synthesis_input, voice=voice, audio_config=audio_config,
+                timeout=4, retry=None,
             )
             self.cost_tracker.add_tts_usage(
                 "interview_tts", len(text), session_id=session_id

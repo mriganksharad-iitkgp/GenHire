@@ -21,6 +21,6 @@ COPY . /app
 ENV PORT=8080
 EXPOSE 8080
 
-# Use gunicorn with eventlet for Flask-SocketIO
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app", "--worker-class", "eventlet", "--workers", "1"]
+# Native threads keep camera analysis and gRPC from starving Socket.IO heartbeats.
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]
 

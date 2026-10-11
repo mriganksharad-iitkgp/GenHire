@@ -7,6 +7,7 @@
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@mediapipe/tasks-vision": "0.10.32",
     "@react-oauth/google": "^0.12.2",
     "axios": "^1.8.4",
     "chart.js": "^4.5.0",
@@ -19,6 +20,11 @@
     "socket.io-client": "^4.8.1"
   },
   "scripts": {
+    "postinstall": "node scripts/prepare-face-assets.mjs",
+    "predev": "node scripts/prepare-face-assets.mjs",
+    "prestart": "node scripts/prepare-face-assets.mjs",
+    "prebuild": "node scripts/prepare-face-assets.mjs",
+    "prebuild:kiosk": "node scripts/prepare-face-assets.mjs",
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
@@ -26,7 +32,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
     "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15",
-    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/shared/components/layout/navigation.test.mjs",
+    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/features/interview/utils/faceCapture.test.mjs src/shared/components/layout/navigation.test.mjs",
     "test:portals": "node scripts/portal-smoke.mjs",
     "test:interview-ui": "node scripts/interview-usability-smoke.mjs"
   },
@@ -56,11 +62,11 @@
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.21.5",
     "eslint": "^8.57.1",
     "eslint-config-react-app": "^7.0.1",
-    "vite": "^5.4.11",
     "jsdom": "^30.1.2",
-    "esbuild": "^0.21.5",
-    "postcss": "8.5.1"
+    "postcss": "8.5.1",
+    "vite": "^5.4.11"
   }
 }

@@ -13,6 +13,7 @@ export function scorePercent(value) {
 }
 
 export function terminalPhase(session = {}) {
+  if (["terminated", "interview_terminated"].includes(session.status)) return "terminated";
   if (["completed", "interview_ended"].includes(session.status)) return "completed";
   if (["abandoned", "discarded", "interview_discarded"].includes(session.status)) return "discarded";
   return null;
@@ -144,7 +145,7 @@ export async function interviewRequest(apiBase, path, token, options = {}, timeo
     }
     return data;
   } catch (error) {
-    if (error.name === "AbortError") throw new Error("The server is taking longer than expected. Your saved answers are safe. Please retry.");
+    if (error.name === "AbortError") { const timeoutError = new Error("The server is taking longer than expected. Please retry."); timeoutError.code = "request_timeout"; throw timeoutError; }
     throw error;
   } finally { clearTimeout(timeout); }
 }

@@ -9,7 +9,7 @@ to start inline at import time:
 
 start_all() honors GENHIRE_DISABLE_JOBS=1 (set by tooling such as
 scripts/route_manifest.py) so importing the app for inspection doesn't spawn
-worker threads. Note: with a single eventlet worker these are in-process
+worker threads. Note: with a single Gunicorn worker these are in-process
 threads; they do not scale across multiple workers/containers.
 """
 
@@ -49,17 +49,23 @@ def start_all(collections, interview_manager):
     )
     interview_refund_sweeper.start()
     logger.info("[OK] Interview credit-refund sweeper started")
+    from services.interview_integrity_service import IntegrityWatchdog
+    integrity_watchdog = IntegrityWatchdog(collections)
+    integrity_watchdog.start()
 
     _handles.update(
         background_processor=background_processor,
         invite_cleanup_scheduler=invite_cleanup_scheduler,
         interview_refund_sweeper=interview_refund_sweeper,
+        integrity_watchdog=integrity_watchdog,
     )
     return _handles
 
 
 def stop_all():
     """Stop every started worker (dev-server shutdown path)."""
+    if _handles.get("integrity_watchdog"):
+        _handles["integrity_watchdog"].stop()
     background_processor = _handles.get("background_processor")
     if background_processor is not None:
         logger.info("Shutting down background processor...")

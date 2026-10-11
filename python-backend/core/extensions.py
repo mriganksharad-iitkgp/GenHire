@@ -11,4 +11,7 @@ the re-export shim at python-backend/extensions.py.
 """
 from flask_socketio import SocketIO
 
-socketio = SocketIO(cors_allowed_origins="*")
+# Native OpenCV and Google gRPC calls must not block an eventlet green-thread
+# hub. Match Gunicorn's single-process gthread deployment explicitly, even
+# when eventlet remains installed for legacy tooling.
+socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")

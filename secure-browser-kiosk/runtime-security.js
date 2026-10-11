@@ -5,7 +5,7 @@ function resolvePublicFile(root, requestUrl) {
         // Decode before normalization so encoded traversal cannot evade checks.
         const pathname = decodeURIComponent(String(requestUrl).split('?')[0]);
         const resource = pathname === '/' ? '/index.html' : pathname;
-        if (resource !== '/index.html' && !/^\/assets\/[a-zA-Z0-9_-]+\.(?:js|css|svg|png|woff2?)$/.test(resource)) return null;
+        if (resource !== '/index.html' && !/^\/assets\/[a-zA-Z0-9_-]+\.(?:js|css|svg|png|woff2?|wasm|tflite)$/.test(resource)) return null;
         const publicRoot = path.resolve(root, 'web-app');
         const target = path.resolve(publicRoot, `.${resource}`);
         return target.startsWith(`${publicRoot}${path.sep}`) ? target : null;

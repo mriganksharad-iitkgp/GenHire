@@ -15,6 +15,7 @@ from contextvars import copy_context
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict, field
 import threading
+import tempfile
 
 from evaluation_model.rubrics_eval.evaluation_system import EvaluationSystem
 from evaluation_model.rubrics_eval.answer_classifier import (
@@ -30,6 +31,7 @@ from .prompt_based_question_generator import (
     ConversationContext,
     QuestionMetadata,
     InterviewPhase,
+    ConversationDepth,
 )
 from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
@@ -257,6 +259,73 @@ class InterviewSessionManager:
             return {"error": f"Failed to create session: {str(e)}"}
         finally:
             cost_tracker.clear_session_context(token)
+
+    def checkpoint(self, session_id):
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+        return _plain_metadata({
+            "current_question": session.current_question,
+            "current_question_metadata": session.current_question_metadata,
+            "question_served_at": session.question_served_at,
+            "activated_at": session.activated_at,
+            "questions_asked": session.questions_asked,
+            "is_complete": session.is_complete,
+            "interview_data": session.interview_data,
+            "conversation_context": session.conversation_context,
+        })
+
+    def restore_session(self, doc, cv_text, jd_text):
+        """Rehydrate a trusted owned Mongo checkpoint without a debit/provider call."""
+        session_id = doc["session_id"]
+        if session_id in self.sessions:
+            return self.sessions[session_id]
+        saved = doc.get("engine_checkpoint") or {}
+        # Old active sessions may use their persisted last response; never
+        # silently restart their question sequence at the introduction.
+        last = (doc.get("last_answer") or {}).get("result") or {}
+        question = saved.get("current_question") or last.get("next_question")
+        if not question and doc.get("status") == "active" and doc.get("qa_pairs"):
+            raise ValueError("The saved current question is missing; submitted answers are retained.")
+        generator = QuestionGenerator(self.llm, config=self.config)
+        with tempfile.TemporaryDirectory(prefix="genhire-restore-") as directory:
+            cv_path, jd_path = os.path.join(directory, "cv.txt"), os.path.join(directory, "jd.txt")
+            for path, content in ((cv_path, cv_text), (jd_path, jd_text)):
+                with open(path, "w", encoding="utf-8") as output:
+                    output.write(content)
+            loader = DocumentLoader(cv_path, jd_path, [])
+            context = generator.initialize_conversation(loader.get_cv_sections(), loader.get_jd_text(), use_llm=False)
+        for key, value in (saved.get("conversation_context") or {}).items():
+            if hasattr(context, key):
+                if key == "depth_level":
+                    value = ConversationDepth(value)
+                elif key == "interview_phase":
+                    value = InterviewPhase(value)
+                setattr(context, key, value)
+        context.has_been_greeted = True
+        if not saved.get("conversation_context"):
+            context.interview_phase = InterviewPhase.EXPERIENTIAL_QUESTIONS if self.config.include_experiential_questions else InterviewPhase.TECHNICAL_QUESTIONS
+            context.question_count = len(doc.get("qa_pairs") or [])
+            context.previous_answers = [item.get("answer", "") for item in doc.get("qa_pairs") or []]
+        session = InterviewSession(session_id=session_id, cv_path=doc.get("cv_path", ""),
+            jd_path=doc.get("jd_path", ""), reference_paths=[], conversation_context=context,
+            current_question=question or "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?",
+            current_question_metadata=saved.get("current_question_metadata") or {"source": "restored", "topic_area": "General"},
+            interview_data=saved.get("interview_data") or doc.get("qa_pairs") or [],
+            questions_asked=saved.get("questions_asked", len(doc.get("qa_pairs") or [])),
+            is_complete=saved.get("is_complete", False), proctoring_config=doc.get("proctoring_config") or {},
+            question_generator=generator, init_event=threading.Event(),
+            question_served_at=saved.get("question_served_at") or (last.get("question_deadline") - self.config.question_timeout_seconds if last.get("question_deadline") else None),
+            activated_at=saved.get("activated_at"))
+        session.init_event.set()
+        # Evaluations that belonged to a killed worker cannot remain pending
+        # forever. Preserve their answers and explicitly mark unavailable work.
+        for item in session.interview_data:
+            if (item.get("evaluation") or {}).get("evaluation_status") == "pending":
+                item["evaluation"]["evaluation_status"] = "unavailable"
+        self.sessions[session_id] = session
+        CostTracker().start_session(session_id)
+        return session
 
     def _initialize_context_background(self, session_id: str, document_loader) -> None:
         """Background task to initialize the conversation context.

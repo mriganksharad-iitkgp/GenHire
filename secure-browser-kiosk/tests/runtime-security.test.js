@@ -6,6 +6,9 @@ test('only the bundled UI and hashed assets are public', () => {
   const root = path.resolve('kiosk');
   assert.equal(resolvePublicFile(root, '/'), path.join(root, 'web-app', 'index.html'));
   assert.equal(resolvePublicFile(root, '/assets/index-abc123.js?x=1'), path.join(root, 'web-app', 'assets', 'index-abc123.js'));
+  for (const name of ['vision_wasm_internal.wasm', 'blaze_face_short_range.tflite']) {
+    assert.equal(resolvePublicFile(root, '/assets/' + name), path.join(root, 'web-app', 'assets', name));
+  }
   for (const url of ['/main.js', '/preload.js', '/credentials.json', '/assets/../main.js', '/assets/%2e%2e/main.js', '/%zz', '/node_modules/socket.io-client/dist/socket.io.min.js']) assert.equal(resolvePublicFile(root, url), null, url);
 });
 test('launches require credentials and safe API/dashboard addresses', () => {

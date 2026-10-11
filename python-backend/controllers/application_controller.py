@@ -501,7 +501,7 @@ class ApplicationController:
             app_ids_str = [str(app["_id"]) for app in applications]
             all_interviews = list(self.interviews_collection.find({
                 "application_id": {"$in": app_ids_str},
-                "status": "completed"
+                "status": {"$in": ["completed", "terminated"]}
             }).sort("updated_at", -1))
             
             interviews_by_app = {}
@@ -619,7 +619,7 @@ class ApplicationController:
             app_ids_str = [str(app["_id"]) for app in applications]
             all_interviews = list(self.interviews_collection.find({
                 "application_id": {"$in": app_ids_str},
-                "status": "completed"
+                "status": {"$in": ["completed", "terminated"]}
             }).sort("updated_at", -1))
 
             interviews_by_app = {}
@@ -898,7 +898,7 @@ class ApplicationController:
         # whether report exists
         app_doc["report_available"] = (
             self.interviews_collection.find_one(
-                {"application_id": app_doc["_id"], "status": "completed"}
+                {"application_id": app_doc["_id"], "status": {"$in": ["completed", "terminated"]}}
             )
             is not None
         )
@@ -929,7 +929,7 @@ class ApplicationController:
         report = self.interviews_collection.find_one(
             {
                 "application_id": application_id,
-                "status": "completed",
+                "status": {"$in": ["completed", "terminated"]},
             },
             sort=[("updated_at", -1)],
         )
@@ -939,6 +939,9 @@ class ApplicationController:
         # Return complete report with transcript and proctoring details
         payload = {
             "session_id": report.get("session_id"),
+            "status": report.get("status"),
+            "termination_reason": report.get("termination_reason"),
+            "integrity": report.get("integrity") or {},
             "final_score": report.get("final_score"),
             "proctoring_score": report.get("proctoring_score"),
             "proctoring_status": report.get("proctoring_status"),

@@ -130,6 +130,9 @@ def process_camera_frame(data, source="desktop"):
         state["last_frame_at"][source] = now
         from security_check import analyze_frame, decode_frame
         frame = decode_frame(data.get("image"))
+        if source == "desktop":
+            collection.update_one({"_id": doc["_id"], "status": "active"}, {"$set": {
+                "desktop_monitoring.frame_at": datetime.datetime.now(datetime.timezone.utc)}})
         reference = state.get("registered_face_np")
         if reference is None:
             reference = state.get("registered_face")
@@ -152,7 +155,7 @@ def process_camera_frame(data, source="desktop"):
         if now - state.get("last_persist_at", -5) >= 5:
             if doc:
                 report = build_proctoring_report(state, doc)
-                collection.update_one({"_id": doc["_id"]}, {"$set": {
+                collection.update_one({"_id": doc["_id"], "status": "active"}, {"$set": {
                     "proctoring_report": report, "proctoring_score": report["final_score"],
                     "proctoring_status": report["status"], "proctoring_updated_at": datetime.datetime.now(datetime.timezone.utc),
                 }})
@@ -185,8 +188,14 @@ def handle_proctoring_violation(data):
     with state.setdefault("analysis_lock", threading.Lock()):
         alert = record_manual_violation(state, data.get("type"))
     if alert:
+        from services import interview_integrity_service as integrity
+        collection, doc = owner_session(data["session_id"], context.get("user_id"))
+        if not doc:
+            return {"ok": False, "error_code": "session_ended"}
+        policy = integrity.reconcile(collection, doc, {"desktop": data.get("type")})
         socketio.emit("proctoring_alert", alert, room=data["session_id"])
-    return {"ok": bool(alert)}
+        return {"ok": True, "integrity": policy}
+    return {"ok": False, "error_code": "invalid_violation"}
 
 
 @socketio.on("stop_proctoring")

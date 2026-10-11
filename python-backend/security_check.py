@@ -47,6 +47,9 @@ def detect_faces(frame):
     import cv2
     with _detector_lock:
         if _face_detector is None:
+            # Each Cloud Run container has a bounded CPU budget. Do not let
+            # each camera check spawn an additional OpenCV worker pool.
+            cv2.setNumThreads(1)
             _face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
             if _face_detector.empty():
                 _face_detector = None
@@ -160,7 +163,11 @@ def analyze_frame(current_frame, registered_face_img=None, config=None, source="
         capabilities["object_detection"] = available
         if sum(obj["class"] == "person" for obj in objects) > 1 and not any(v["type"] == "multiple_faces" for v in violations):
             violations.append({"type": "multiple_faces", "message": "Multiple people detected. The interview space must be private."})
-        if any(obj["class"] == "cell phone" for obj in objects):
+        phone_count = sum(obj["class"] == "cell phone" for obj in objects)
+        # The required companion is an approved phone, not an automatic flag.
+        # Object detection cannot identify its owner; additional visible phones
+        # remain review signals, never a machine-only cheating conclusion.
+        if phone_count > (1 if config.get("dual_camera") else 0):
             violations.append({"type": "phone_detected", "message": "A phone is visible. Keep additional phones away from your interview workspace."})
         others = sorted({obj["class"] for obj in objects if obj["class"] not in {"person", "cell phone"}})
         if others:

@@ -1,6 +1,6 @@
 {
   "name": "genhire",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "description": "GenHire secure interview browser",
   "main": "main.js",
   "scripts": {
@@ -15,6 +15,7 @@
     "start:webgazer-test": "electron ./test-webgazer",
     "smoke:gaze": "npx --yes serve@14 . -l 3333",
     "test": "node --test tests/*.test.js",
+    "test:face-runtime": "electron scripts/face-runtime-smoke.cjs",
     "build": "electron-builder --win",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",

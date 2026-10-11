@@ -53,6 +53,7 @@ const mapApplication = (a) => {
         ? Math.round(a.proctoring_score)
         : null,
     reportAvailable: !!a.report_available,
+    interviewAttemptLocked: a.interview_attempt_locked === true,
     interviews: [],
     minimum_cv_score_required: a.minimum_cv_score_required ?? null,
     auto_processed: a.auto_processed || false,

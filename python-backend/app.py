@@ -23,7 +23,8 @@ if __name__ == "__main__":
         except ValueError as error:
             raise SystemExit("PORT must be an integer between 1 and 65535.") from error
 
-_dev_reloader = os.environ.get("GENHIRE_DEV_RELOAD", "1") != "0"
+_local_development = os.getenv("FLASK_ENV", "development").strip().lower() != "production"
+_dev_reloader = _local_development and os.environ.get("GENHIRE_DEV_RELOAD", "1") != "0"
 
 # `python app.py` with the Werkzeug auto-reloader always runs this module
 # TWICE per process generation: once as a disposable "watcher" process (which
@@ -85,15 +86,23 @@ else:
 
 if __name__ == "__main__":
     from jobs import runner as jobs_runner
+    from core.development_server import DevelopmentRequestHandler
 
     try:
-        # socketio.run instead of app.run to enable the WebSocket eventlet server
+        # socketio.run enables simple-websocket in the native-thread local server.
         socketio.run(
             app,
-            debug=True,
+            debug=_local_development,
+            # The interactive debugger turns WebSocket's normal connection-
+            # closing signal into a false HTTP 500 in the local threaded server.
+            use_debugger=False,
+            request_handler=DevelopmentRequestHandler,
             host="0.0.0.0",
             port=int(os.getenv("PORT", "5000")),
             use_reloader=_dev_reloader,
+            # Also allow local IDE/piped invocations without a terminal. Cloud
+            # Run uses Gunicorn and never executes this development-server path.
+            allow_unsafe_werkzeug=_local_development,
         )
     finally:
         jobs_runner.stop_all()

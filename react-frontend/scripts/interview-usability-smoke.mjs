@@ -17,8 +17,13 @@ for (const key of ["window", "document", "navigator", "sessionStorage", "localSt
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 win.scrollTo = () => {};
+win.document.documentElement.requestFullscreen = async () => {
+  Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => document.documentElement });
+};
+win.document.exitFullscreen = async () => { delete document.fullscreenElement; };
 Object.defineProperty(win.HTMLVideoElement.prototype, "videoWidth", { get: () => 640 });
 Object.defineProperty(win.HTMLVideoElement.prototype, "videoHeight", { get: () => 480 });
+Object.defineProperty(win.HTMLVideoElement.prototype, "currentTime", { get: () => performance.now() / 1000 });
 Object.defineProperty(win.HTMLMediaElement.prototype, "readyState", { get: () => 4 });
 win.HTMLMediaElement.prototype.play = async () => {};
 win.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
@@ -37,6 +42,14 @@ let root, compiled, currentLocation, passes = 0;
 let apiCalls, dualRequired, micSound, recordings, currentStream, socket, serverStatus;
 let answerFailure, uploadFailure, applicationsFailure, applicationStatus, applicationProcessingStatus, pairingVersion;
 let mediaRequests, mediaFailure, audioSuspended, identityCaptured, socketEvents;
+let detectedFaces = [], detectionUnavailable = false;
+globalThis.__faceDetectorFixture = {
+  FilesetResolver: { forVisionTasks: async () => ({}) },
+  FaceDetector: { createFromOptions: async () => {
+    if (detectionUnavailable) throw new Error("fixture unavailable");
+    return { detectForVideo: () => ({ detections: detectedFaces }), close() {} };
+  } },
+};
 const now = Date.now;
 
 function track(kind) { return { kind, readyState: "live", muted: false, onended: null, stop() { this.readyState = "ended"; }, getSettings: () => ({ sampleRate: 48000 }) }; }
@@ -89,7 +102,7 @@ globalThis.fetch = win.fetch = async (url, options = {}) => {
     status = answerFailure ? 503 : 200;
     data = answerFailure ? { error: "Temporary answer service failure" } : { next_question: "What did you learn?", progress: { questions_asked: 1 }, question_deadline: Date.now() / 1000 + 300 };
   }
-  if (pathname.endsWith("/end")) { serverStatus = "completed"; data = { status: "completed", interview_score: 0, cv_score: 0, proctoring_score: 0 }; }
+  if (pathname.endsWith("/end")) { data = serverStatus === "terminated" ? { status: "interview_terminated", message: "The monitoring policy ended this attempt. You cannot repeat this interview for the same application." } : { status: "completed", interview_score: 0, cv_score: 0, proctoring_score: 0 }; serverStatus = data.status; }
   if (pathname.endsWith("/upload-recording")) status = uploadFailure ? 503 : 200;
   if (pathname.endsWith("/applications")) {
     status = applicationsFailure ? 503 : 200;
@@ -113,6 +126,7 @@ async function mount(component, options = {}) {
   Date.now = now; renderErrors = []; apiCalls = []; dualRequired = options.dual || false; micSound = true; recordings = [];
   serverStatus = "setup"; answerFailure = false; uploadFailure = false; applicationsFailure = false; applicationStatus = "shortlisted"; applicationProcessingStatus = options.processingStatus || "completed"; pairingVersion = 1;
   mediaRequests = 0; mediaFailure = options.mediaFailure || false; audioSuspended = options.audioSuspended || false; identityCaptured = options.identityCaptured !== false; socketEvents = [];
+  detectedFaces = options.faces || []; detectionUnavailable = options.detectionUnavailable || false;
   sessionStorage.clear(); sessionStorage.setItem("companyxyz-token", "fixture-token");
   sessionStorage.setItem("companyxyz-user", JSON.stringify({ user_type: "candidate", userType: "candidate" }));
   root = createRoot(document.getElementById("root"));
@@ -144,6 +158,8 @@ try {
     plugins: [{ name: "socket-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^socket.io-client$/ }, () => ({ path: "socket", namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: "export const io=(...args)=>globalThis.__interviewTestSocket(...args);export default io;", loader: "js" }));
+      plugin.onResolve({ filter: /^@mediapipe\/tasks-vision$/ }, () => ({ path: "face-detector", namespace: "face-fixture" }));
+      plugin.onLoad({ filter: /.*/, namespace: "face-fixture" }, () => ({ contents: "export const {FaceDetector,FilesetResolver}=globalThis.__faceDetectorFixture;", loader: "js" }));
       // Native Node imports the CJS wrapper; Vite unwraps its default export.
       // The named export is the same real QR component, not a visual stub.
       plugin.onResolve({ filter: /^react-qr-code$/ }, args => args.namespace === "qr-interop" ? { path: args.path, external: true } : { path: args.path, namespace: "qr-interop" });
@@ -162,11 +178,37 @@ try {
     assert.ok(document.querySelector('[role="dialog"]')); assert.ok(text().includes("Can you hear the test sound?"));
     assert.equal(apiCalls.filter(call => call.url.endsWith("/activate")).length, 0);
     await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
-    assert.ok(button("Capture my face")); await click(button("Capture my face"));
+    assert.ok(button("Take photo manually")); await click(button("Take photo manually"));
+    assert.ok(text().includes("Review your photo"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 0);
+    await click(button("Use photo and continue"));
     assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 1);
     await click(document.querySelector('input[type="checkbox"]')); micSound = false; await click(button("Start interview"));
     const activation = apiCalls.find(call => call.url.endsWith("/activate"));
     assert.deepEqual(JSON.parse(activation.options.body), { camera_ready: true, microphone_ready: true, speaker_ready: true });
+  });
+  await check("a centered face is captured automatically, can be retaken, and uploads only after confirmation", async () => {
+    const centered = { boundingBox: { originX: 210, originY: 100, width: 200, height: 220 } };
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { identityCaptured: false, faces: [centered] }); await settle(180);
+    await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
+    await settle(1700);
+    assert.ok(text().includes("Review your photo")); assert.ok(document.querySelector('img[alt="Your captured face"]'));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 0);
+    await click(button("Retake photo")); assert.ok(text().includes("Center your face in the preview"));
+    detectedFaces = [centered, centered]; await settle(500); assert.ok(text().includes("Only you should be visible"));
+    assert.ok(!button("Use photo and continue")); detectedFaces = [centered]; await settle(1700);
+    await click(button("Use photo and continue"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 1);
+    assert.ok(button("Start interview"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/speech/synthesize")).length, 1);
+  });
+  await check("unavailable local detection keeps a manual photo and retake path", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { identityCaptured: false, detectionUnavailable: true }); await settle(180);
+    await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
+    assert.ok(text().includes("Automatic capture is unavailable")); assert.ok(!button("Take photo manually").disabled);
+    await click(button("Take photo manually")); await click(button("Retake photo")); await click(button("Take photo manually"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 0);
+    await click(button("Use photo and continue")); assert.ok(button("Start interview"));
   });
   await check("permission denial offers an explicit retry without repeated automatic popups", async () => {
     await mount(e(compiled.Chat, { interviewId: "ui-session" }), { mediaFailure: true }); await settle(180);
@@ -257,6 +299,22 @@ try {
     await click(button("Retry device checks")); await settle(180); assert.ok(!button("Resume interview").disabled);
     micSound = false; await click(button("Resume interview")); assert.ok(!text().includes("Reconnect your devices"));
     assert.ok(document.querySelector("#typed-answer"));
+  });
+  await check("server monitoring loss pauses the interview with an authoritative interruption count", async () => {
+    await activeInterview();
+    await act(async () => socket.fire("interview_integrity", { session_id: "ui-session", count: 4, limit: 5, recovery_seconds: 60,
+      losses: { mobile: { message: "Phone monitoring stopped." } } })); await settle();
+    assert.ok(text().includes("Interruption 4 of 5"));
+    assert.ok(text().includes("Reconnect your devices"));
+    assert.ok(text().includes("Restore monitoring within 60 seconds"));
+  });
+  await check("the fifth server interruption stops recording and shows a terminal result without retry", async () => {
+    await activeInterview(); serverStatus = "terminated";
+    await act(async () => socket.fire("interview_integrity", { session_id: "ui-session", count: 5, limit: 5, terminated: true })); await settle();
+    assert.ok(text().includes("This interview attempt has ended"));
+    assert.ok(text().includes("cannot repeat this interview"));
+    assert.ok(!button("Resume interview")); assert.ok(!button("Start interview"));
+    assert.ok(recordings.every(recorder => recorder.state === "inactive"));
   });
   await check("failed recording uploads warn before closing and offer themed leave or retry", async () => {
     await activeInterview(); await click(button("Type answer")); await typeAnswer("Submitted answer."); await click(button("Send text answer"));

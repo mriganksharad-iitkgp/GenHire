@@ -23,8 +23,8 @@ This file contains architecture context and public identifiers only; credential 
 - Cloud Run service `hrtech` in `europe-west1` runs the containerized Python backend.
 - `https://hrtech-628047232128.europe-west1.run.app` is the configured public backend origin.
 - [python-backend/Dockerfile](python-backend/Dockerfile) builds on `python:3.11-slim` and installs the pinned Python dependencies.
-- Gunicorn 23 runs the Flask WSGI application with one eventlet worker listening on port 8080 in the current Docker command.
-- Cloud Run supplies `PORT`; the existing Docker command explicitly binds 8080, so changing the service port requires aligning that command.
+- Gunicorn 23 uses one gthread worker with 32 native threads in the pending 12 October source fix, avoiding native vision/gRPC stalls in eventlet.
+- Cloud Run supplies `PORT`; Docker uses `gunicorn.conf.py`, which binds that port and defaults to 5000 for local shell startup.
 - The owner's deployment notes and earlier build screenshot describe a Google Cloud Build build, push, and Cloud Run deployment pipeline.
 - The reported Cloud Build trigger is `genhire-main-deploy`; its complete trigger configuration is external to this repository.
 - The 12 October deploy log identifies `genhire-backend@hr-tech-2026.iam.gserviceaccount.com` as the build's deploying identity.
@@ -163,7 +163,7 @@ This file contains architecture context and public identifiers only; credential 
 - `core/config.py` centralizes configuration access; `core/runtime.py` handles runtime concerns used by startup.
 - `core/extensions.py` owns the shared Socket.IO instance and avoids circular imports through the app entry point.
 - Flask-SocketIO 5.5 connects backend socket handlers to realtime clients.
-- eventlet supplies the cooperative networking worker used by the current production Gunicorn command.
+- Flask-SocketIO explicitly selects threading with simple-websocket; the inspected deployed image still used eventlet before the pending source deployment.
 - Flask-CORS handles allowed cross-origin browser API calls; CORS does not make an unavailable worker healthy.
 - Flask-Talisman applies security headers and configured HTTPS enforcement, with a deliberate HTTP exception for `/health` probes.
 - `ObjectIdSafeJSONProvider` serializes MongoDB ObjectIds into JSON-compatible responses.
@@ -284,8 +284,12 @@ This file contains architecture context and public identifiers only; credential 
 - Rubric generation, answer generation/evaluation, and communication evaluation are separate modules in that evaluation package.
 - `answer_classifier.py` distinguishes answer types and uses langdetect when language detection is available.
 - pandas supports evaluation data processing; matplotlib supports evaluation visualizations where those utilities are invoked.
+- MongoDB source snapshots and engine checkpoints restore owned interviews with their question, answers and deadline without another debit.
+- `interview_integrity_service.py` stores five-interruption lockouts and runs a five-second coverage watchdog with a 60-second recovery window.
+- Phone monitoring requires a front camera, microphone, visible page and fresh frames; wake lock helps but a website cannot block OS app switching.
 - [Chat.jsx](react-frontend/src/features/interview/pages/Chat.jsx) is the current shared interview UI for the website and packaged kiosk renderer.
 - Pre-interview phases guide device access, microphone/speaker checks, face capture, and optional paired-phone readiness before answering.
+- MediaPipe Tasks Vision and bundled BlazeFace/WASM assets guide local automatic capture with a 1.2-second stable hold, review and retake.
 - Answer controls support voice and typed responses with confirmation/recovery behavior when changing modes.
 - Recording/transcription and submission failures preserve retryable answers instead of discarding the participant's work immediately.
 - Visibility, connection, and device checks can pause/recover the experience; session termination and report handling have explicit states.
@@ -329,7 +333,7 @@ This file contains architecture context and public identifiers only; credential 
 
 ## 20. Electron secure browser
 
-- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.2, Electron 40, and electron-builder packaging with explicit media consent.
+- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.4, Electron 40, and electron-builder packaging with explicit media consent.
 - `main.js` owns windows, single-instance handling, protocol registration, speech IPC, and kiosk lifecycle controls.
 - The `secure-interview://` custom protocol carries validated interview launch context from the website into the installed app.
 - `runtime-security.js` validates launch/external URLs and renderer paths; installer code signing is not enforced by the current build configuration.

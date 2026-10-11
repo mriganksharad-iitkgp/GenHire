@@ -15,12 +15,17 @@ export default function MobileRecorder() {
   const partsRef = useRef([]); const uploadingRef = useRef(false); const joinedRef = useRef(false); const wakeLockRef = useRef(null); const aliveRef = useRef(true);
   const uploadRef = useRef(null); const statusRef = useRef(status); statusRef.current = status;
   const cameraRequestRef = useRef(false); const permissionAttemptedRef = useRef(false);
+  const fullscreenWantedRef = useRef(false);
+  const [awakeNotice, setAwakeNotice] = useState("");
+  const [integrity, setIntegrity] = useState(null);
 
   const sendStatus = useCallback((override) => {
     if (!joinedRef.current) return;
     const stream = streamRef.current;
     const live = (kind) => !!stream?.getTracks().some((track) => track.kind === kind && track.readyState === "live" && !track.muted);
-    socketRef.current?.emit("mobile_status_update", { session_id: sessionId, status: override || (document.hidden ? "camera_error" : recorderRef.current?.state === "recording" ? "recording" : stream ? "ready" : "connected"), camera_ready: !document.hidden && live("video"), microphone_ready: !document.hidden && live("audio") });
+    const viewReady = !document.hidden && (!fullscreenWantedRef.current || !!document.fullscreenElement);
+    socketRef.current?.emit("mobile_status_update", { session_id: sessionId, status: override || (!viewReady ? "camera_error" : recorderRef.current?.state === "recording" ? "recording" : stream ? "ready" : "connected"), camera_ready: viewReady && live("video"), microphone_ready: viewReady && live("audio"), page_visible: !document.hidden,
+      facing_mode: stream?.getVideoTracks()[0]?.getSettings().facingMode || (stream ? "user" : null) });
   }, [sessionId]);
   const upload = async () => {
     if (uploadingRef.current || !partsRef.current.some((part) => !part.uploaded)) return; uploadingRef.current = true;
@@ -42,6 +47,7 @@ export default function MobileRecorder() {
       const mimeType = mediaMimeType("video"); const recorder = new MediaRecorder(streamRef.current, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 450000, audioBitsPerSecond: 24000 });
       const chunks = []; recorderRef.current = recorder;
       recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onerror = () => { setError("Phone recording stopped. Reconnect your camera immediately."); sendStatus("camera_error"); };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: recorder.mimeType }); chunks.length = 0;
         if (blob.size) partsRef.current.push({ id: recordingPartId(), blob, uploaded: false });
@@ -54,7 +60,7 @@ export default function MobileRecorder() {
   useEffect(() => {
     aliveRef.current = true;
     if (!pairingToken) { setStatus("invalid"); setError("This link has no private pairing token. Scan the QR code shown on your laptop."); return; }
-    const socket = io(process.env.REACT_APP_API_URL || window.location.origin, { timeout: 8000, reconnection: true }); socketRef.current = socket;
+    const socket = io(process.env.REACT_APP_API_URL || window.location.origin, { transports: ["websocket", "polling"], tryAllTransports: true, timeout: 8000, reconnection: true }); socketRef.current = socket;
     socket.on("connect", () => {
       socket.emit("join_mobile_session", { session_id: sessionId, pairing_token: pairingToken }, (response) => {
         if (!aliveRef.current) return;
@@ -71,6 +77,7 @@ export default function MobileRecorder() {
     });
     socket.on("disconnect", () => { joinedRef.current = false; setJoined(false); if (!["uploaded", "complete", "uploading"].includes(statusRef.current)) setStatus("reconnecting"); });
     socket.on("connect_error", () => setStatus("reconnecting"));
+    socket.on("interview_integrity", (data) => { setIntegrity(data); if (data.losses?.mobile) setError(data.losses.mobile.message); else setError(""); });
     socket.on("mobile_recording_action", (data) => {
       if (data.action === "start") startRecording();
       else if (data.action === "stop") {
@@ -92,9 +99,16 @@ export default function MobileRecorder() {
       if (document.hidden) sendStatus("camera_error");
       else if (streamRef.current) { sendStatus(); try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* power saving may block wake lock */ } }
     };
+    const leaving = () => sendStatus("camera_error");
+    const fullscreen = () => sendStatus();
+    const preventLeave = (event) => { if (recorderRef.current?.state === "recording" || partsRef.current.some(part => !part.uploaded)) { event.preventDefault(); event.returnValue = ""; } };
     document.addEventListener("visibilitychange", visibility);
+    document.addEventListener("fullscreenchange", fullscreen);
+    window.addEventListener("pagehide", leaving); window.addEventListener("offline", leaving); window.addEventListener("beforeunload", preventLeave);
     return () => {
       aliveRef.current = false; clearInterval(heartbeat); clearInterval(frames); document.removeEventListener("visibilitychange", visibility);
+      document.removeEventListener("fullscreenchange", fullscreen);
+      window.removeEventListener("pagehide", leaving); window.removeEventListener("offline", leaving); window.removeEventListener("beforeunload", preventLeave);
       sendStatus("disconnected"); socket.disconnect(); joinedRef.current = false;
       if (recorderRef.current?.state === "recording") { recorderRef.current.onstop = null; recorderRef.current.stop(); }
       streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); wakeLockRef.current?.release().catch(() => {});
@@ -108,12 +122,13 @@ export default function MobileRecorder() {
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Open this private link in a current Safari or Chrome browser. Camera access requires HTTPS.");
       streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: { echoCancellation: true, noiseSuppression: true } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: { echoCancellation: true, noiseSuppression: true } });
       if (!aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream; videoRef.current.srcObject = stream; await videoRef.current.play();
-      stream.getTracks().forEach((track) => { track.onended = () => { setCameraReady(false); setStatus("camera_error"); setError("Your camera or microphone stopped. Enable it again to continue."); sendStatus("camera_error"); }; });
+      stream.getTracks().forEach((track) => { track.onended = track.onmute = () => { setCameraReady(false); setStatus("camera_error"); setError("Your camera or microphone stopped. Enable it again to continue."); sendStatus("camera_error"); }; track.onunmute = () => { setCameraReady(true); sendStatus(); }; });
       setCameraReady(true); setStatus("ready"); sendStatus("ready");
-      try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* display power policy belongs to the device */ }
+      try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); if (!wakeLockRef.current) setAwakeNotice("Automatic screen wake is unavailable. Disable auto-lock in your phone settings and keep this page visible."); }
+      catch { setAwakeNotice("Your phone declined automatic screen wake. Disable auto-lock and keep it connected to power."); }
     } catch (failure) { setError(failure.name === "NotAllowedError" ? "Allow camera and microphone access in your browser settings, then retry." : failure.message); }
     finally { cameraRequestRef.current = false; if (aliveRef.current) setBusy(false); }
   }, [sendStatus]);
@@ -124,8 +139,15 @@ export default function MobileRecorder() {
   const title = { connecting: "Connecting your phone", reconnecting: "Reconnecting…", camera_needed: "Enable your second camera", camera_error: "Reconnect your second camera", ready: "Your second camera is ready", recording: "Interview monitoring is active", uploading: "Saving your recording", uploaded: "Recording saved", upload_failed: "Let's save your recording", complete: "Your interview has finished", invalid: "Scan a new private QR code" }[status];
   return <main className={styles.shell}><section className={styles.centerCard} style={{ margin: "10px auto", maxWidth: 540 }}><span className={styles.brand}><ShieldCheck size={22} /> GenHire companion</span>
     <span className={styles.eyebrow}>Phone · Second camera</span><h1>{title}</h1><p>Place your phone to show you, your laptop and your desk from the side. Keep this page open, your screen unlocked and your phone connected to power.</p>
-    <div className={styles.devicePreview}><video ref={videoRef} autoPlay muted playsInline className={styles.preview} style={{ transform: "none" }} aria-label="Phone camera preview" />{!cameraReady && <span className={styles.cameraPlaceholder}><Smartphone size={30} />Rear camera preview</span>}</div>
+    <div className={styles.devicePreview}><video ref={videoRef} autoPlay muted playsInline className={styles.preview} aria-label="Phone front camera preview" />{!cameraReady && <span className={styles.cameraPlaceholder}><Smartphone size={30} />Front camera preview</span>}</div>
+    <p className={styles.note}>Use the front camera and position the phone beside you. Leaving this page, locking the screen or losing camera access pauses the interview. Five interruptions end this attempt; restore monitoring within 60 seconds. Your phone browser cannot prevent app switching or manual screen lock.</p>
+    {integrity && <p role="status">Interruptions: {integrity.count} of {integrity.limit}{integrity.terminated ? " · Interview ended" : ""}</p>}
     {error && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{error}</span></div>}
+    {awakeNotice && <p className={styles.note}>{awakeNotice}</p>}
+    {cameraReady && typeof document.documentElement.requestFullscreen === "function" && <button className={styles.secondary} onClick={async () => {
+      try { await document.documentElement.requestFullscreen(); fullscreenWantedRef.current = true; sendStatus(); }
+      catch { setError("Fullscreen was declined. Keep the monitoring page visible and the screen unlocked."); }
+    }}>Keep monitoring fullscreen</button>}
     {busy && <p className={styles.note} role="status">Allow camera and microphone access in your browser's permission prompt.</p>}
     {!cameraReady && joined && error && !["uploaded", "complete", "uploading", "upload_failed", "invalid"].includes(status) && <button className={styles.primary} style={{ marginTop: 22 }} onClick={enableCamera} disabled={busy}>{busy ? "Opening camera…" : "Retry camera and microphone"}</button>}
     {cameraReady && <p className={styles.good} style={{ marginTop: 20 }}><Check size={18} /> Camera connected · {joined ? "Laptop connected" : "Reconnecting to laptop"}</p>}

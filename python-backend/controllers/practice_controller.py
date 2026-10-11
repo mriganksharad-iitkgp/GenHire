@@ -334,6 +334,8 @@ class PracticeController:
                 "difficulty": difficulty,
                 "cv_path": cv_txt_path,
                 "jd_path": jd_txt_path,
+                "source_documents": {"cv_text": cv_text, "jd_text": jd_text},
+                "engine_checkpoint": self.interview_api.session_manager.checkpoint(session_id),
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
                 "status": "setup",
@@ -452,6 +454,13 @@ class PracticeController:
             if not session:
                 return {"error": "Practice session not found"}, 404
 
+            from services import interview_integrity_service as integrity
+            policy = integrity.check_health(self.collections["practice_sessions"], session)
+            if policy["terminated"] or policy["losses"]:
+                return {"error": "Restore interview monitoring before answering.", "error_code": "monitoring_required", "integrity": policy}, 409
+            from routes.interview_routes import _restore_engine
+            _restore_engine(session, self.interview_api.session_manager)
+
             if session.get("status") != "active":
                 cached = cached_answer_result(session, question, answer)
                 if cached:
@@ -528,7 +537,7 @@ class PracticeController:
                             ]
                         },
                     },
-                    "$set": {"updated_at": datetime.utcnow(), "last_answer": {
+                    "$set": {"updated_at": datetime.utcnow(), "engine_checkpoint": self.interview_api.session_manager.checkpoint(session_id), "last_answer": {
                         "question": question, "answer": answer, "result": serializable_result}},
                 },
             )
@@ -567,8 +576,14 @@ class PracticeController:
 
             if not session:
                 return {"error": "Practice session not found"}, 404
-            if session.get("status") in {"completed", "abandoned"}:
+            if session.get("status") in {"completed", "abandoned", "terminated"}:
                 return result_payload(session), 200
+            claimed = self.collections["practice_sessions"].update_one({"_id": session["_id"], "status": {"$in": ["setup", "active"]}},
+                {"$set": {"status": "finishing"}})
+            if not claimed.matched_count:
+                latest = self.collections["practice_sessions"].find_one({"_id": session["_id"]})
+                if latest and latest.get("status") == "terminated":
+                    return result_payload(latest), 200
             from interview.runtime import live_sessions
             if live_sessions.get(session_id):
                 live_sessions[session_id]["monitoring"] = False

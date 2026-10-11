@@ -1,4 +1,113 @@
-# Interview setup fixes and kiosk 1.2.2
+# Interview setup, automatic face capture and kiosk 1.2.4
+
+Updated 12 October 2026. For the current five-interruption rule, front camera,
+session restoration and real-device acceptance checklist, follow
+[Interview monitoring policy](interview-monitoring-policy.md). Backend/frontend changes require deployment; the
+rebuilt kiosk includes its own bundled UI and must be installed separately.
+
+## Automatic capture and retake
+
+Camera permission and laptop checks warm the locally bundled MediaPipe Tasks
+Vision 0.10.32 detector, WASM runtime and BlazeFace model. One centered face at
+a useful distance, held steady for **1.2 seconds**, triggers one local snapshot.
+Movement, no face or multiple faces reset the hold. Candidates review the image,
+choose **Retake photo**, or approve **Use photo and continue**. No photo reaches
+the backend before approval. A failed save retains the chosen photo for retry.
+**Take photo manually** is available immediately, including if detection fails.
+
+Images are bounded to 640×480 JPEG. The existing server quality gate still
+requires one face. Identity-card comparison remains background/advisory work;
+a delayed result for an earlier photo cannot overwrite a retake. Required
+camera, microphone, speaker and signed phone-readiness checks remain enforced.
+
+## Delay and connection fixes
+
+The supplied logs show **WORKER TIMEOUT**, a worker killed/restarted, repeated
+instance starts and **Invalid session** socket errors. Gunicorn's "Perhaps out
+of memory?" line is a generic SIGKILL diagnostic, not confirmation of a Cloud
+Run memory-limit termination. A 45-second polling GET can be normal long polling.
+
+Read-only inspection found revision **hrtech-00152-sw4** (image **cb02e70…**),
+service maximum **3**, revision maximum **10**, no affinity, concurrency **80**
+and request timeout **300 seconds**. Interview/socket state is process-local,
+so different instances can receive requests belonging to the same interview.
+
+The pending source changes use one Gunicorn **gthread** worker with **32 threads**
+and explicit Flask-SocketIO threading/simple-websocket. Native vision/gRPC work
+therefore does not starve a cooperative socket hub. Google TTS has a **4-second
+RPC deadline**, with retries disabled. Setup prefetches question speech once;
+speech availability does not gate setup. The existing first question is
+deterministic, and its timer begins only after activation. OpenCV uses one
+internal CPU thread; recharge-pack initialization runs once per database.
+Desktop/mobile/application connections prefer WebSocket with polling fallback.
+[Flask-SocketIO deployment guidance](https://flask-socketio.readthedocs.io/en/latest/deployment.html).
+
+## Deploy release 1.2.4
+
+1. Review, commit and push the fixes; run **genhire-main-deploy** on the new
+   commit. Confirm logs show **gthread**, rather than eventlet. Keep the attached
+   GCS identity, Redis Secret Manager mapping and HTTP `/health` startup probe.
+   No dotenv credentials changed in this release.
+2. Apply the connection settings in Cloud Shell during the rollout:
+
+   ```bash
+   gcloud run services update hrtech \
+     --project=hr-tech-2026 \
+     --region=europe-west1 \
+     --max=1 \
+     --max-instances=1 \
+     --session-affinity \
+     --concurrency=16 \
+     --timeout=3600
+   ```
+
+   Both maximum settings address the inspected service/revision limits.
+   Concurrency 16 leaves spare native thread capacity; it is a conservative
+   starting configuration, not a production capacity benchmark. Instance limits
+   can briefly be exceeded, and affinity is best-effort; neither recovers lost
+   process state. Avoid deployments during active interviews. See Google's
+   [instance limits](https://docs.cloud.google.com/run/docs/configuring/max-instances)
+   and [WebSocket guidance](https://docs.cloud.google.com/run/docs/triggering/websockets).
+3. Deploy the frontend to Vercel. npm install/start/build prepares the local WASM
+   files automatically; serve the resulting `/assets/` files with proper MIME types.
+4. Close the old kiosk and install **secure-browser-kiosk/dist/Genhire.exe**,
+   version **1.2.4**. Packaging does not update existing installations or the
+   hosted installer URL. Publish the tested installer and `.sha256` file through
+   the existing installer release workflow when ready to distribute it.
+
+Scale-to-zero still has a cold-start cost. Optionally set minimum instances to
+**1** for planned interview windows if ongoing idle charges are acceptable.
+This paid setting was not enabled here; local tests do not establish production
+startup timing or hardware readiness.
+
+## Verify release 1.2.4
+
+Windows installer: **102,479,379 bytes**, installer version **1.2.4** (packaged application product version **1.2.4.0**).
+SHA-256: `a07f6393b33d3c8cc5cddad55328b000ec55979b87ba4504e98bd9dd0b4adc0d`.
+Its 23 bundled UI/assets files match the build output byte-for-byte, including
+the detector loader, WASM and face model. The checksum file sits beside it.
+
+- Center one face, review the automatic snapshot, retake, then approve. Only the
+  approved image should reach `register-face`; a failed save keeps it for retry.
+- Move outside the guide or show two faces: automatic capture must pause.
+- Single-/dual-camera jobs must retain their configured checks.
+- Check Socket.IO uses WebSocket when available and remains connected beyond
+  five minutes. Check new logs for quick photo saves and no worker restarts.
+- Local checks passed: 20 interview UI scenarios, frontend helper/security
+  checks and a real WebSocket heartbeat during a blocked native request.
+  The real bundled detector initialized under the kiosk CSP in **566 ms**
+  and correctly found no face in a blank frame. Physical devices and production
+  timing require the above checks after deployment.
+
+The updated local backend also started with the existing private configuration:
+health returned **200**, interview-start preflight **200**, empty Google auth
+**400**, and Socket.IO connected over **WebSocket**. The temporary port-5052
+server used disabled background jobs and was stopped after verification.
+The local threaded server closes WebSocket handlers cleanly without treating
+their closing frames as another HTTP request. Focused backend tests cover
+capture ownership/quality, stale retake scores, speech deadlines and plan setup.
+
+## Earlier fixes in kiosk 1.2.2
 
 Updated 11 October 2026. These changes preserve the required camera, microphone,
 speaker, face-capture and signed phone-readiness checks before activation.

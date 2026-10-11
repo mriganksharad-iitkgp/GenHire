@@ -39,9 +39,11 @@ yarn-error.log*
 
 # ── Build outputs ────────────────────────────────────────────────────────────
 react-frontend/build/
+react-frontend/public/assets/vision_wasm_*
 react-frontend/dist/
 secure-browser-kiosk/dist/
 secure-browser-kiosk/web-app/
+secure-browser-kiosk/.face-smoke-user-data/
 
 # ── Environment files ────────────────────────────────────────────────────────
 .env

@@ -69,6 +69,12 @@ def result_payload(doc):
         return {"status": "interview_discarded", "session_id": doc["session_id"],
                 "message": "No answers were recorded. This interview was not counted.",
                 "refund": doc.get("credits_refund")}
+    if doc.get("status") == "terminated":
+        from services.interview_integrity_service import policy_payload
+        return {"status": "interview_terminated", "session_id": doc["session_id"],
+                "message": "This attempt ended under the monitoring policy. Another attempt for this application is not available. Submitted answers and recordings are retained for recruiter review.",
+                "integrity": policy_payload(doc), "transcript": doc.get("transcript") or [],
+                "proctoring_status": "interrupted", "proctoring_report": doc.get("proctoring_report") or {}}
     return {
         "status": "interview_ended", "session_id": doc["session_id"],
         "evaluation": doc.get("evaluation") or {},

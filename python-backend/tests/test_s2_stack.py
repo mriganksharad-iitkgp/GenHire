@@ -350,6 +350,8 @@ class SpeechTests(unittest.TestCase):
         with patch("services.provider_usage_service.record_provider_request"):
             self.assertTrue(service.text_to_speech("Hello", session_id="s"))
         self.assertEqual(CostTracker().get_summary("s")["total_tts_characters"], 5)
+        self.assertEqual(service.tts_client.synthesize_speech.call_args.kwargs["timeout"], 4)
+        self.assertIsNone(service.tts_client.synthesize_speech.call_args.kwargs["retry"])
         with self.assertRaises(ValueError):
             service.text_to_speech("Hello", voice_name="en-US-Neural2-C")
 

@@ -42,6 +42,7 @@ from services import face_verification_service as face_service
 from services import face_match_service
 from services import identity_card_service
 from services import interview_credit_service
+from services import interview_integrity_service as integrity
 from services.cv_scoring_service import CVScoringService
 from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
@@ -195,6 +196,10 @@ def start_interview(current_user):
     application = applications_collection.find_one({"_id": app_id, "student_id": owner})
     if not application:
         return jsonify({"error": "Application not found"}), 404
+    if application.get("interview_attempt_locked") or interviews_collection.find_one({
+            "application_id": application_id, "user_id": owner, "status": "terminated"}):
+        return jsonify({"error": "This interview attempt ended under the monitoring policy. Another attempt for this application is not available.",
+                        "error_code": "interview_attempt_locked"}), 409
     existing = interviews_collection.find_one({"application_id": application_id,
         "user_id": owner, "status": {"$in": ["setup", "active"]}})
     if existing:
@@ -204,7 +209,7 @@ def start_interview(current_user):
             "error_code": "interview_not_eligible"}), 409
     lease_id = uuid.uuid4().hex
     now = datetime.datetime.utcnow()
-    claimed = applications_collection.update_one({"_id": app_id, "student_id": owner,
+    claimed = applications_collection.update_one({"_id": app_id, "student_id": owner, "interview_attempt_locked": {"$ne": True},
         "$or": [{"interview_start_lease": {"$exists": False}},
                 {"interview_start_lease.expires_at": {"$lt": now}}]},
         {"$set": {"interview_start_lease": {"id": lease_id,
@@ -476,6 +481,8 @@ def _start_interview(current_user):
             "cv_path": cv_txt_path,
             "jd_path": jd_txt_path,
             "reference_paths": [],
+            "source_documents": {"cv_text": cv_text, "jd_text": jd_text},
+            "engine_checkpoint": interview_manager.checkpoint(session_details["session_id"]),
             "application_id": application_id,
             "recruiter_id": (
                 str(job.get("created_by")) if job and job.get("created_by") else None
@@ -548,6 +555,7 @@ def _owned_session(user_id, session_id):
 def _session_payload(doc, manager=None):
     if manager is None:
         _, _, manager = _owned_session(doc["user_id"], doc["session_id"])
+    _restore_engine(doc, manager)
     session = manager.sessions.get(doc["session_id"]) if manager else None
     dual = bool((doc.get("proctoring_config") or {}).get("dual_camera"))
     payload = {
@@ -555,7 +563,7 @@ def _session_payload(doc, manager=None):
         "application_id": doc.get("application_id"), "status": doc.get("status"),
         "is_practice": bool(doc.get("is_practice")),
         "setup_required": doc.get("status") == "setup",
-        "identity_captured": bool(doc.get("identity_verification")),
+        "identity_captured": bool(doc.get("identity_verification")) and (doc.get("status") != "setup" or bool(live_sessions.get(doc["session_id"]))),
         "initial_questions": [session.current_question] if session else [],
         "current_question": session.current_question if session else None,
         "questions_asked": session.questions_asked if session else len(doc.get("qa_pairs") or []),
@@ -575,10 +583,11 @@ def _session_payload(doc, manager=None):
         "mobile_ready": mobile_is_ready(doc),
         "engine_available": session is not None,
         "last_answer": doc.get("last_answer"),
+        "integrity": integrity.policy_payload(doc),
         "interview_complete": bool((session and session.is_complete) or doc.get("status") == "finishing"
             or ((doc.get("last_answer") or {}).get("result") or {}).get("interview_complete")),
     }
-    if doc.get("status") in {"completed", "abandoned"}:
+    if doc.get("status") in {"completed", "abandoned", "terminated"}:
         terminal = result_payload(doc)
         payload.update(terminal)
         payload["result_status"] = terminal["status"]
@@ -586,13 +595,82 @@ def _session_payload(doc, manager=None):
     return payload
 
 
+def _restore_engine(doc, manager):
+    if not manager or doc.get("status") not in {"setup", "active", "finishing"}:
+        return
+    from services.interview_flow_service import session_lock
+    with session_lock(doc["session_id"]):
+        if doc["session_id"] not in manager.sessions and hasattr(manager, "restore_session"):
+            source = doc.get("source_documents") or {}
+            if not source.get("cv_text") and doc.get("application_id"):
+                application = applications_collection.find_one({"_id": ObjectId(doc["application_id"])}) or {}
+                job = jobs_collection.find_one({"_id": ObjectId(application["job_id"])}) if application.get("job_id") else {}
+                snapshot = application.get("cv_snapshot") or {}
+                source = {"cv_text": snapshot.get("text") or _format_cv_from_details(snapshot.get("details") or application.get("cv_details") or {}),
+                          "jd_text": _format_job_from_doc(job or {})}
+            if not source.get("cv_text") or not source.get("jd_text"):
+                return
+            try:
+                manager.restore_session(doc, source["cv_text"], source["jd_text"])
+            except Exception:
+                logger.warning("Owned interview checkpoint could not be restored: %s", doc["session_id"], exc_info=True)
+                return
+        if doc["session_id"] not in live_sessions and doc.get("identity_verification"):
+            captured = (doc.get("identity_verification") or {}).get("captured_image_file_id")
+            if captured:
+                import gridfs
+                try:
+                    image = gridfs.GridFS(db).get(ObjectId(captured)).read()
+                except Exception:
+                    logger.warning("Saved face reference unavailable for %s", doc["session_id"])
+                    return
+                live_sessions[doc["session_id"]] = {"owner_id": str(doc["user_id"]),
+                    "proctoring_config": doc.get("proctoring_config") or {},
+                    "registered_face": image, "registered_face_np": face_service.decode_image(image),
+                    "proctoring_score": doc.get("proctoring_score"), "infractions": {}, "analyzed_frames": 0}
+                report = doc.get("proctoring_report") or {}
+                coverage = report.get("coverage") or {}
+                live_sessions[doc["session_id"]].update({
+                    "infractions": report.get("infraction_counts") or {}, "events": report.get("events") or [],
+                    "capabilities": report.get("capabilities") or {},
+                    "desktop_analyzed_frames": coverage.get("desktop_analyzed_frames", 0),
+                    "mobile_analyzed_frames": coverage.get("mobile_analyzed_frames", 0),
+                    "analyzed_frames": coverage.get("desktop_analyzed_frames", 0) + coverage.get("mobile_analyzed_frames", 0),
+                    "mobile_coverage_gaps": coverage.get("mobile_coverage_gaps", 0)})
+
+
 @interview_bp.route("/api/interviews/<session_id>/session", methods=["GET"])
 @token_required
 def get_interview_session(current_user, session_id):
-    doc, _, manager = _owned_session(current_user["_id"], session_id)
+    doc, collection, manager = _owned_session(current_user["_id"], session_id)
     if not doc:
         return jsonify({"error": "Session not found"}), 404
+    integrity.check_health(collection, doc)
+    if doc.get("status") == "active":
+        doc = collection.find_one({"_id": doc["_id"]})
     return jsonify(_session_payload(doc, manager))
+
+
+@interview_bp.route("/api/interviews/<session_id>/monitoring", methods=["POST"])
+@token_required
+def update_monitoring(current_user, session_id):
+    doc, collection, _ = _owned_session(current_user["_id"], session_id)
+    if not doc:
+        return jsonify({"error": "Session not found"}), 404
+    data = request.get_json(silent=True) or {}
+    if doc.get("status") == "active":
+        values = {"desktop_monitoring.last_seen_at": integrity.utcnow(),
+            "desktop_monitoring.visible": data.get("visible") is True,
+            "desktop_monitoring.focused": data.get("focused") is True,
+            "desktop_monitoring.secure_view": data.get("secure_view") is True,
+            "desktop_monitoring.devices_ready": data.get("devices_ready") is True}
+        collection.update_one({"_id": doc["_id"], "status": "active"}, {"$set": values})
+        doc = collection.find_one({"_id": doc["_id"]})
+        reason = data.get("interruption")
+        if reason in {"tab_switch", "window_blur", "fullscreen_exit", "device_lost"}:
+            integrity.reconcile(collection, doc, {"desktop": reason})
+            doc = collection.find_one({"_id": doc["_id"]})
+    return jsonify({"integrity": integrity.check_health(collection, doc)})
 
 
 @interview_bp.route("/api/interviews/<session_id>/activate", methods=["POST"])
@@ -618,13 +696,21 @@ def activate_interview(current_user, session_id):
     if manager is None:
         return jsonify({"error": "The interview service is unavailable. Close this interrupted attempt safely before restarting.",
             "error_code": "engine_unavailable"}), 503
+    _restore_engine(doc, manager)
+    policy = integrity.check_health(collection, doc)
+    if policy["terminated"] or policy["losses"]:
+        return jsonify({"error": "Restore interview monitoring before continuing.", "error_code": "monitoring_required", "integrity": policy}), 409
     result = manager.activate_session(session_id)
     if "error" in result:
         return jsonify(result), 409
     if doc.get("status") == "active":
+        if not doc.get("activated_at"):
+            collection.update_one({"_id": doc["_id"], "status": "active", "activated_at": {"$exists": False}},
+                {"$set": {"activated_at": integrity.utcnow(), "engine_checkpoint": manager.checkpoint(session_id) if hasattr(manager, "checkpoint") else None}})
         return jsonify(result)
     collection.update_one({"_id": doc["_id"]}, {"$set": {"status": "active",
         "activated_at": datetime.datetime.utcnow(), "device_checks": checks,
+        "engine_checkpoint": manager.checkpoint(session_id) if hasattr(manager, "checkpoint") else None,
         "updated_at": datetime.datetime.utcnow()}})
     return jsonify(result)
 
@@ -643,6 +729,9 @@ def get_interview_question(current_user, session_id):
         return jsonify({"error": "Session not found"}), 404
 
     doc, _, manager = _owned_session(user_id, session_id)
+    if doc.get("status") == "terminated":
+        return jsonify({"error": "This interview has ended under the monitoring policy.", "error_code": "session_ended"}), 409
+    _restore_engine(doc, manager)
     if manager is None:
         return jsonify({"error": "The interview service is unavailable.", "error_code": "engine_unavailable"}), 503
     question_result = manager.get_next_question(session_id)
@@ -663,6 +752,10 @@ def submit_answer(current_user, session_id):
     if doc.get("status") != "active":
         return jsonify({"error": "Start the interview after completing setup before answering.",
             "error_code": "session_not_active"}), 409
+    policy = integrity.check_health(interviews_collection, doc)
+    if policy["terminated"] or policy["losses"]:
+        return jsonify({"error": "Restore monitoring before submitting another answer.", "error_code": "monitoring_required", "integrity": policy}), 409
+    _restore_engine(doc, interview_manager)
     data = request.json or {}
     question = data.get("question")
     answer = data.get("answer")
@@ -737,7 +830,8 @@ def submit_answer(current_user, session_id):
                     "transcript": {"$each": [{"role": "assistant", "text": question},
                         {"role": "user", "text": answer}]}},
                 "$set": {"last_answer": {"question": question, "answer": answer,
-                    "result": serializable_result}, "updated_at": datetime.datetime.utcnow()}})
+                    "result": serializable_result}, "engine_checkpoint": interview_manager.checkpoint(session_id) if hasattr(interview_manager, "checkpoint") else None,
+                    "updated_at": datetime.datetime.utcnow()}})
 
         return jsonify(serializable_result)
 
@@ -756,8 +850,14 @@ def end_interview(current_user, session_id):
     session_doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
     if not session_doc:
         return jsonify({"error": "Session not found"}), 404
-    if session_doc.get("status") in {"completed", "abandoned"}:
+    if session_doc.get("status") in {"completed", "abandoned", "terminated"}:
         return jsonify(result_payload(session_doc))
+    claimed = interviews_collection.update_one({"_id": session_doc["_id"], "status": {"$in": ["setup", "active"]}},
+        {"$set": {"status": "finishing"}})
+    if not claimed.matched_count:
+        latest = interviews_collection.find_one({"_id": session_doc["_id"]})
+        if latest and latest.get("status") == "terminated":
+            return jsonify(result_payload(latest))
     data = request.json or {}
     tracking_data = data.get("tracking_data", [])
 
@@ -1519,10 +1619,11 @@ def _identity_summary(identity, session_id):
         "session_id": session_id,
         "checked_at": identity.get("checked_at"),
         "scored_at": identity.get("scored_at"),
+        "captured_image_file_id": identity.get("captured_image_file_id"),
     }
 
 
-def _score_identity_async(interview_id, application_id, card_file_id, capture_bytes, session_id):
+def _score_identity_async(interview_id, application_id, card_file_id, capture_bytes, session_id, captured_id):
     """Background LLM face-similarity scoring (daemon thread).
 
     Compares the live capture against the uploaded identity card and stores
@@ -1566,16 +1667,23 @@ def _score_identity_async(interview_id, application_id, card_file_id, capture_by
             "identity_verification.scored_at": now,
             "updated_at": now,
         }
-        interviews_collection.update_one({"_id": interview_id}, {"$set": patch})
+        # A retake may have replaced this photo while its advisory score was
+        # running. An old score must never overwrite the candidate's new photo.
+        capture_filter = {"_id": interview_id, "identity_verification.captured_image_file_id": captured_id}
+        result = interviews_collection.update_one(capture_filter, {"$set": patch})
+        if not result.matched_count:
+            return
 
         if application_id:
             try:
                 refreshed = interviews_collection.find_one(
-                    {"_id": interview_id}, {"identity_verification": 1}
+                    capture_filter, {"identity_verification": 1}
                 ) or {}
+                if not refreshed:
+                    return
                 identity = refreshed.get("identity_verification") or {}
                 applications_collection.update_one(
-                    {"_id": ObjectId(str(application_id))},
+                    {"_id": ObjectId(str(application_id)), "identity_verification.captured_image_file_id": captured_id},
                     {
                         "$set": {
                             "identity_verification": _identity_summary(identity, session_id),
@@ -1653,6 +1761,7 @@ def register_face(current_user, session_id):
         "mode": mode,
         "model": face_service.FACE_MODEL_NAME,
     }
+    scoring_arguments = None
 
     try:
         if practice_doc is not None:
@@ -1660,6 +1769,7 @@ def register_face(current_user, session_id):
             # canonical identity when one exists, never enroll, never block.
             identity["status"] = "practice_captured"
             identity["verified"] = None
+            identity["captured_image_file_id"] = face_service.store_face_image(db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture")
             collections["practice_sessions"].update_one(
                 {"_id": practice_doc["_id"]},
                 {"$set": {"identity_verification": identity, "updated_at": now}},
@@ -1667,6 +1777,7 @@ def register_face(current_user, session_id):
         else:
             if mode == "off":
                 identity.update({"status": "skipped", "verified": None})
+                identity["captured_image_file_id"] = face_service.store_face_image(db, decoded_image, user_id=user_id, session_id=session_id, purpose="capture")
             else:
                 # The uploaded identity card is the reference identity. The
                 # live capture is similarity-scored against it by an LLM in
@@ -1703,17 +1814,10 @@ def register_face(current_user, session_id):
                         "threshold": face_match_service.get_threshold(),
                     }
                 )
-                threading.Thread(
-                    target=_score_identity_async,
-                    args=(
-                        interview_doc["_id"],
-                        interview_doc.get("application_id"),
-                        card_file_id,
-                        decoded_image,
-                        session_id,
-                    ),
-                    daemon=True,
-                ).start()
+                scoring_arguments = (
+                    interview_doc["_id"], interview_doc.get("application_id"),
+                    card_file_id, decoded_image, session_id, captured_id,
+                )
 
             # Persist identity state and activate the session
             interviews_collection.update_one(
@@ -1746,6 +1850,11 @@ def register_face(current_user, session_id):
             "analyzed_frames": 0,
             "infractions": {},
         }
+
+        # Start after the capture is persisted, so a fast scorer cannot have
+        # its result replaced by the route's pending-state write.
+        if scoring_arguments:
+            threading.Thread(target=_score_identity_async, args=scoring_arguments, daemon=True).start()
 
         status = identity.get("status")
         return (

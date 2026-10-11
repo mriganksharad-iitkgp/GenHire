@@ -23,6 +23,7 @@ const JOB_TYPE_OPTIONS = [
 const DATE_CUTOFF_DAYS = { week: 7, month: 30, quarter: 90, halfyear: 180 };
 
 function nextStep(app) {
+  if (app.interviewAttemptLocked) return "Your interview attempt ended under the monitoring policy. Another attempt for this application is unavailable. The recruiter can review the retained evidence.";
   if (app.processingStatus === "awaiting_candidate") return "Complete your profile and upload a CV to prepare this application for screening.";
   if (app.scoringError) return "Your application is saved, but the CV assessment could not be completed. Check again later or contact the recruiter.";
   if (app.processingStatus && app.processingStatus !== "completed") return "Your CV assessment is processing. You can refresh to check progress; you do not need to submit another application.";
@@ -112,7 +113,7 @@ export default function ApplicationsList({
     <section className={styles.applicationsSection}>
       <div className={styles.applicationOverview} aria-label="Application overview">
         <button className={styles.overviewCard} aria-pressed={!statusFilter} onClick={() => setStatusFilter("")}><span>All applications</span><strong>{applications.length}</strong></button>
-        <button className={styles.overviewCard} aria-pressed={statusFilter === "shortlisted"} onClick={() => setStatusFilter(statusFilter === "shortlisted" ? "" : "shortlisted")}><span>Ready for interview</span><strong>{applications.filter(app => app.statusKey === "shortlisted").length}</strong></button>
+        <button className={styles.overviewCard} aria-pressed={statusFilter === "shortlisted"} onClick={() => setStatusFilter(statusFilter === "shortlisted" ? "" : "shortlisted")}><span>Ready for interview</span><strong>{applications.filter(app => app.statusKey === "shortlisted" && !app.interviewAttemptLocked).length}</strong></button>
         <div className={styles.overviewCard}><span>Reports available</span><strong>{applications.filter(app => app.reportAvailable).length}</strong></div>
       </div>
       <div className={styles.listHeading}><h2>Application history</h2><span>{sorted.length} {sorted.length === 1 ? "application" : "applications"}</span></div>
@@ -221,7 +222,7 @@ export default function ApplicationsList({
           paginatedApplications.map((app) => {
             const statusKey =
               app.statusKey || app.status.toLowerCase().replace(/\s+/g, "");
-            const availableButtons = getButtonsForStatus(statusKey);
+            const availableButtons = app.interviewAttemptLocked ? ["viewCV", "details", ...(app.reportAvailable ? ["report"] : [])] : getButtonsForStatus(statusKey);
             return (
               <div
                 key={app.id}

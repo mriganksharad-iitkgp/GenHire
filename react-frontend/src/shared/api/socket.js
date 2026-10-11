@@ -18,6 +18,8 @@ export function getAppSocket() {
 
   socket = io(process.env.REACT_APP_API_URL, {
     autoConnect: false,
+    transports: ["websocket", "polling"],
+    tryAllTransports: true,
     auth: (cb) => cb({ token: getToken() }),
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,

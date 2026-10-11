@@ -1,6 +1,7 @@
 """Interview lifecycle regression tests with no database/provider credentials."""
 import importlib.util
 import math
+import datetime
 import sys
 import types
 import unittest
@@ -103,7 +104,7 @@ class InterviewRouteTests(unittest.TestCase):
             "middleware.auth_middleware": module("middleware.auth_middleware", token_required=auth),
             "payment_module.config.settings": module("payment_module.config.settings", PaymentConfig=MagicMock()),
             "payment_module.services.wallet_service": module("payment_module.services.wallet_service", WalletService=MagicMock()),
-            "services.face_verification_service": module("services.face_verification_service", FACE_MODEL_NAME="stub", assess_face_image=MagicMock(), get_mode=lambda: "off"),
+            "services.face_verification_service": module("services.face_verification_service", FACE_MODEL_NAME="stub", assess_face_image=MagicMock(), store_face_image=MagicMock(return_value="captured-id"), get_mode=lambda: "off"),
             "services.face_match_service": module("services.face_match_service"),
             "services.identity_card_service": module("services.identity_card_service"),
             "services.interview_credit_service": module("services.interview_credit_service", count_answered_questions=lambda *args: 0),
@@ -152,9 +153,24 @@ class InterviewRouteTests(unittest.TestCase):
         self.manager.activate_session.assert_called_once_with("session")
 
     def test_activation_retry_does_not_overwrite_original_checks_or_start(self):
-        self.real.find_one.return_value = {"_id": "doc", "session_id": "session", "user_id": "candidate-one", "status": "active"}
+        self.real.find_one.return_value = {"_id": "doc", "session_id": "session", "user_id": "candidate-one", "status": "active", "activated_at": datetime.datetime.now(datetime.timezone.utc)}
         self.assertEqual(self.client.post("/api/interviews/session/activate", json={}).status_code, 200)
         self.real.update_one.assert_not_called()
+
+    def test_terminated_attempt_cannot_activate_answer_or_start_again(self):
+        import mongomock
+        from bson import ObjectId
+        database = mongomock.MongoClient().test
+        app_id = database.applications.insert_one({"student_id": "candidate-one", "status": "shortlisted"}).inserted_id
+        database.interviews.insert_one({"session_id": "session", "user_id": "candidate-one",
+            "application_id": str(app_id), "status": "terminated", "integrity": {"count": 5}})
+        self.routes.init_interview_routes(database, {name: database[name] for name in ("users", "interviews", "applications", "jobs", "practice_sessions")})
+        self.assertEqual(self.client.post("/api/interviews/session/activate", json={}).status_code, 409)
+        self.assertEqual(self.client.post("/api/interviews/session/answer", json={"question": "q", "answer": "a"}).status_code, 409)
+        self.assertEqual(self.client.post("/api/interviews/start", json={"application_id": str(app_id)}).json["error_code"], "interview_attempt_locked")
+        self.assertEqual(self.client.post("/api/interviews/session/end", json={}).json["status"], "interview_terminated")
+        self.manager.submit_answer.assert_not_called()
+        self.manager.activate_session.assert_not_called()
 
     def test_completed_end_retry_does_not_recompute_or_charge(self):
         self.real.find_one.return_value = {"session_id": "session", "user_id": "candidate-one", "status": "completed", "final_score": 82, "cv_score": 66}
@@ -187,6 +203,27 @@ class InterviewRouteTests(unittest.TestCase):
         self.assertTrue(identity["has_captured_image"])
         self.assertEqual(identity["status"], "score_pending")
         self.assertNotIn("captured_image_file_id", identity)
+
+    def test_capture_quality_and_setup_policy_still_apply_to_auto_photos(self):
+        self.real.find_one.return_value = {"_id": "doc", "session_id": "session", "user_id": "candidate-one", "status": "setup"}
+        self.routes.face_service.assess_face_image.return_value = {"ok": False, "error_code": "multiple_faces_detected", "message": "Only one face is allowed"}
+        response = self.client.post("/api/interviews/session/register-face", json={"image": "data:image/jpeg;base64,Zml4dHVyZQ=="})
+        self.assertEqual(response.status_code, 400)
+        self.real.update_one.assert_not_called()
+        self.routes.face_service.assess_face_image.return_value = {"ok": True}
+        with patch.object(self.routes.face_service, "decode_image", return_value=MagicMock(), create=True):
+            response = self.client.post("/api/interviews/session/register-face", json={"image": "data:image/jpeg;base64,Zml4dHVyZQ=="})
+        self.assertEqual(response.status_code, 200)
+        self.real.find_one.return_value["status"] = "active"
+        self.assertEqual(self.client.post("/api/interviews/session/register-face", json={"image": "data:image/jpeg;base64,Zml4dHVyZQ=="}).status_code, 409)
+
+    def test_old_photo_score_cannot_replace_a_retake(self):
+        self.real.update_one.return_value.matched_count = 0
+        with patch.object(self.routes.identity_card_service, "load_identity_card", return_value=(b"card", "image/jpeg"), create=True), \
+                patch.object(self.routes.face_match_service, "compare_faces", return_value={"available": True, "matched": True, "score": 90}, create=True):
+            self.routes._score_identity_async("doc", "application", "card", b"old-capture", "session", "old-photo")
+        self.assertEqual(self.real.update_one.call_args.args[0]["identity_verification.captured_image_file_id"], "old-photo")
+        self.routes.applications_collection.update_one.assert_not_called()
 
 
 if __name__ == "__main__":

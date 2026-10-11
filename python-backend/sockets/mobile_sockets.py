@@ -9,6 +9,7 @@ from extensions import socketio
 from interview.runtime import live_sessions
 from services.proctoring_service import mobile_is_ready, requires_mobile, validate_mobile_pairing_token
 from sockets.session_access import bound_context, contexts_lock, owner_session, session_record, socket_contexts, TERMINAL_STATUSES
+from services import interview_integrity_service as integrity
 
 
 @socketio.on("join_mobile_session")
@@ -85,6 +86,8 @@ def handle_mobile_status(data):
     collection, doc = session_record(session_id)
     if not doc or (doc.get("mobile_proctoring") or {}).get("socket_id") != request.sid:
         return {"ok": False, "error_code": "companion_replaced"}
+    if doc.get("status") in TERMINAL_STATUSES:
+        return {"ok": False, "error_code": "session_ended"}
     now = datetime.datetime.now(datetime.timezone.utc)
     mobile = {
         "socket_id": request.sid, "status": status,
@@ -92,6 +95,8 @@ def handle_mobile_status(data):
         "microphone_ready": data.get("microphone_ready") is True,
         "last_seen_at": now,
         "preview_frame_received_at": (doc.get("mobile_proctoring") or {}).get("preview_frame_received_at"),
+        "page_visible": data.get("page_visible") is True,
+        "facing_mode": data.get("facing_mode"),
     }
     # Completion/error reports cannot claim readiness even if a stale caller
     # supplied the camera flags from its earlier successful permission check.
@@ -99,6 +104,7 @@ def handle_mobile_status(data):
         mobile["camera_ready"] = mobile["microphone_ready"] = False
     collection.update_one({"_id": doc["_id"], "mobile_proctoring.socket_id": request.sid}, {"$set": {"mobile_proctoring": mobile}})
     doc["mobile_proctoring"] = mobile
+    integrity.check_health(collection, doc)
     socketio.emit("mobile_status_dashboard", {
         "status": status, "camera_ready": mobile["camera_ready"], "microphone_ready": mobile["microphone_ready"],
         "last_seen_at": now.isoformat(), "ready": mobile_is_ready(doc),

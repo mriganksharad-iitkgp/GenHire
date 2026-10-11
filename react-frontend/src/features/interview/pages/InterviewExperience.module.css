@@ -25,6 +25,10 @@
 .preview { width:100%; height:100%; display:block; object-fit:cover; transform:scaleX(-1); }
 .cameraPlaceholder { position:absolute; inset:0; display:flex; gap:12px; align-items:center; justify-content:center; color:#9cb1cf; font-size:14px; }
 .faceGuide { position:absolute; top:10%; left:32%; width:36%; height:80%; border:2px dashed #e0f4ffb3; border-radius:50%; pointer-events:none; }
+.faceAligned { border-color:#4ade80; border-style:solid; box-shadow:0 0 0 3px #4ade8033; }
+.faceStatus { position:absolute; bottom:14px; left:16px; right:16px; border-radius:10px; background:#14233be6; color:#fff; padding:12px 16px; text-align:center; font-size:13px; }
+.faceProgress { display:block; height:4px; margin:9px auto 0; max-width:200px; overflow:hidden; background:#ffffff35; border-radius:8px; }
+.faceProgress i { display:block; height:100%; background:#4ade80; transition:width .2s linear; }
 .deviceRow,.monitorRow { display:flex; gap:11px; align-items:center; padding:16px 0; border-bottom:1px solid #e8edf4; font-size:13px; }
 .deviceRow>span { flex:1; display:flex; gap:12px; align-items:center; }
 .deviceRow>svg { color:#6580a0; }

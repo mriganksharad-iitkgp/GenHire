@@ -101,6 +101,31 @@ class PaymentStartupTests(unittest.TestCase):
         self.assertEqual(self.load_backfill()(db), {"eligible_accounts": 1})
         self.assertEqual(db.list_collection_names(), before)
 
+    def test_pack_sync_runs_once_per_database_but_retries_after_failure(self):
+        from payment_module.services.plan_service import PlanService
+        client = mongomock.MongoClient()
+        with patch.object(PlanService, "_ensure_indexes", return_value=True), \
+                patch.object(PlanService, "_seed_default_plans", side_effect=[False, True, True]) as seed, \
+                patch.object(PlanService, "_remove_plan_usage_fields", return_value=True):
+            PlanService(client.primary); PlanService(client.primary); PlanService(client.primary)
+            self.assertEqual(seed.call_count, 2)
+            PlanService(client.another)
+            self.assertEqual(seed.call_count, 3)
+
+    def test_real_pack_sync_preserves_prices_and_existing_wallets(self):
+        from payment_module.services.plan_service import PlanService
+        from payment_module.config.settings import PaymentConfig
+        db = mongomock.MongoClient().db
+        db.credit_wallets.insert_one({"owner_id": "existing", "balance": 83})
+        service = PlanService(db)
+        before = list(service.collection.find())
+        PlanService(db)
+        self.assertEqual(list(service.collection.find()), before)
+        self.assertEqual(db.credit_wallets.find_one({"owner_id": "existing"})["balance"], 83)
+        for configured in PaymentConfig.DEFAULT_PLANS.values():
+            stored = service.collection.find_one({"slug": configured["slug"]})
+            self.assertEqual(stored["price_paise"], configured["price_paise"])
+
     def test_explicit_backfill_is_idempotent_and_preserves_signup_exclusions(self):
         db = mongomock.MongoClient().db
         db.users.insert_many([

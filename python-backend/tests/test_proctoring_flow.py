@@ -36,7 +36,7 @@ class PolicyTests(unittest.TestCase):
 
     def test_readiness_requires_camera_mic_heartbeat_and_actual_preview(self):
         now = datetime.datetime(2026, 10, 8, 12)
-        mobile = {"status": "ready", "camera_ready": True, "microphone_ready": True, "last_seen_at": now}
+        mobile = {"status": "ready", "camera_ready": True, "microphone_ready": True, "page_visible": True, "facing_mode": "user", "last_seen_at": now}
         doc = {"mobile_proctoring": mobile}
         self.assertFalse(policy.mobile_is_ready(doc, now))
         mobile["preview_frame_received_at"] = now
@@ -79,7 +79,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(state["mobile_coverage_gaps"], 1)
         self.assertEqual(state["infractions"], {})
         now = datetime.datetime.now(datetime.timezone.utc)
-        doc["mobile_proctoring"] = {"status": "ready", "camera_ready": True, "microphone_ready": True,
+        doc["mobile_proctoring"] = {"status": "ready", "camera_ready": True, "microphone_ready": True, "page_visible": True, "facing_mode": "user",
                                    "last_seen_at": now, "preview_frame_received_at": now}
         self.assertIsNone(policy.observe_mobile_coverage(state, doc))
         doc["mobile_proctoring"]["camera_ready"] = False
@@ -214,7 +214,7 @@ class SocketTests(unittest.TestCase):
         import numpy as np
         self.owner.emit("join_interview_session", {"session_id": "session-a"})
         self.assertTrue(self.join_phone()["ok"])
-        ready = self.phone.emit("mobile_status_update", {"session_id": "session-a", "status": "ready", "camera_ready": True, "microphone_ready": True}, callback=True)
+        ready = self.phone.emit("mobile_status_update", {"session_id": "session-a", "status": "ready", "camera_ready": True, "microphone_ready": True, "page_visible": True, "facing_mode": "user"}, callback=True)
         self.assertFalse(ready["ready"])
         self.assertFalse(self.phone.emit("mobile_proctoring_frame", {"session_id": "session-a", "image": "bad"}, callback=True)["ok"])
         _, image = cv2.imencode(".jpg", np.zeros((100, 100, 3), dtype=np.uint8))

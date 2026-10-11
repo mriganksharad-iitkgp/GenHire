@@ -70,6 +70,8 @@ def requires_mobile(session_doc):
 
 def mobile_is_ready(session_doc, now=None):
     mobile = (session_doc or {}).get("mobile_proctoring") or {}
+    if mobile.get("page_visible") is not True or mobile.get("facing_mode") != "user":
+        return False
     last_seen = mobile.get("last_seen_at")
     if isinstance(last_seen, str):
         try:
@@ -219,6 +221,7 @@ def build_proctoring_report(live_session, session_doc=None):
         "final_score": score_from_infractions(counts) if desktop_frames > 0 and not disabled else None,
         "status": status, "infraction_counts": counts,
         "events": list(state.get("events", [])), "capabilities": dict(capabilities),
+        "interruption_policy": (session_doc or {}).get("integrity") or {},
         "missing_checks": missing,
         "coverage": {"desktop_analyzed_frames": desktop_frames, "mobile_analyzed_frames": mobile_frames, "dual_camera_required": dual, "analysis_errors": state.get("analysis_errors", 0), "mobile_coverage_gaps": state.get("mobile_coverage_gaps", 0)},
         "summary": "Proctoring checks were disabled for this interview." if disabled else "Proctoring could not analyze the laptop camera; no score is available." if desktop_frames == 0 else "Some proctoring checks were unavailable; review camera coverage and warnings." if status == "partial" else "No proctoring warnings detected." if not counts else "Proctoring warnings require human review; detections are not a cheating verdict.",

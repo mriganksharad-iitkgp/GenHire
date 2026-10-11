@@ -4,7 +4,7 @@ import threading
 
 socket_contexts = {}
 contexts_lock = threading.Lock()
-TERMINAL_STATUSES = {"completed", "ended", "cancelled", "abandoned", "failed", "expired"}
+TERMINAL_STATUSES = {"completed", "ended", "cancelled", "abandoned", "failed", "expired", "terminated"}
 
 
 def session_record(session_id):

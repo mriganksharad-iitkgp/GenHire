@@ -229,7 +229,8 @@ readable through `GET /api/files/<gridfs_id>`.
 ## Deployment: Cloud Run and keeping it warm
 
 Production is deployed to **Google Cloud Run** from `python-backend/Dockerfile`
-(Gunicorn + eventlet worker, listens on `$PORT`, default `8080`). Cloud Run's
+(pending source: Gunicorn gthread + simple-websocket, listens on `$PORT`,
+Docker default `8080`; see [interview setup recovery](../interview-setup-recovery.md)). Cloud Run's
 default billing model scales a service to **zero instances** after a period
 of no traffic — the next request then pays a cold-start penalty (container
 boot + Python imports + a fresh MongoDB connection).

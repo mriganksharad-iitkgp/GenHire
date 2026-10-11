@@ -22,7 +22,8 @@ export default function Modal({
   const dialogRef = useRef(null);
   const callbacks = useRef({ onClose, closeOnEsc });
   callbacks.current = { onClose, closeOnEsc };
-  const portalTarget = document.fullscreenElement || document.body;
+  const portalTarget = document.fullscreenElement && document.fullscreenElement !== document.documentElement
+    ? document.fullscreenElement : document.body;
 
   useEffect(() => {
     if (!isOpen) return undefined;

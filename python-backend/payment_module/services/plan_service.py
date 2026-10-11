@@ -9,6 +9,8 @@ Design Decisions:
 """
 
 import logging
+import threading
+import weakref
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
@@ -30,6 +32,9 @@ class PlanService:
     - Plan validation
     """
 
+    _initialization_lock = threading.Lock()
+    _initialized_clients = weakref.WeakKeyDictionary()
+
     def __init__(self, db):
         """
         Initialize with database connection.
@@ -39,17 +44,25 @@ class PlanService:
         """
         self.db = db
         self.collection = db[PlanSchema.COLLECTION_NAME]
-        self._ensure_indexes()
-        self._seed_default_plans()
-        self._remove_plan_usage_fields()
+        # Controllers construct this service repeatedly. Synchronize the same
+        # database once per process instead of rewriting every pack three times
+        # during boot (and again on subsequent requests).
+        with self._initialization_lock:
+            initialized = self._initialized_clients.setdefault(db.client, set())
+            if db.name not in initialized:
+                results = [self._ensure_indexes(), self._seed_default_plans(), self._remove_plan_usage_fields()]
+                if all(results):
+                    initialized.add(db.name)
 
     def _ensure_indexes(self):
         """Create indexes if they don't exist"""
         try:
             PlanSchema.create_indexes(self.db)
             logger.info("Plan indexes ensured")
+            return True
         except Exception as e:
             logger.error(f"Error creating plan indexes: {str(e)}")
+            return False
 
     def _seed_default_plans(self):
         """Synchronize configured recharge packs and deactivate legacy plan rows."""
@@ -92,9 +105,11 @@ class PlanService:
             )
 
             logger.info("Recharge packs synchronized successfully")
+            return True
 
         except Exception as e:
             logger.error(f"Error seeding plans: {str(e)}")
+            return False
 
     def _ensure_default_plans_exist(self):
         """Ensure every configured default plan exists by slug (safe additive seed)."""
@@ -231,8 +246,10 @@ class PlanService:
                 logger.info(
                     f"Removed runtime usage fields from {result.modified_count} plan template(s)"
                 )
+            return True
         except Exception as e:
             logger.error(f"Error removing plan usage fields: {str(e)}")
+            return False
 
     def _migrate_legacy_enterprise_to_recruiter_max(self):
         """Remove legacy recruiter enterprise plans and enforce recruiter-max defaults."""
