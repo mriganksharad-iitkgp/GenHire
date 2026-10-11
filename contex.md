@@ -320,13 +320,13 @@ This file contains architecture context and public identifiers only; credential 
 - `proctoring_service.py` normalizes monitoring state, observations, penalties, availability, and final integrity reports.
 - Mobile pairing tokens are HMAC-signed and scoped to session/account; readiness checks confirm the required second-camera connection.
 - `MobileRecorder` runs on the paired phone; mobile/proctoring socket handlers authenticate sessions and validate access to their events.
-- `MOBILE_RECORDING_ENABLED=false` remains the current private-file setting; jobs requiring a second camera need it enabled and tested.
+- `MOBILE_RECORDING_ENABLED=true` now enables signed phone pairing locally; Cloud Run must also enable it for dual-camera jobs.
 - `gaze_recorder_service.py` analyzes supplied gaze points and persists related artifacts; collection support must be checked in the actual active renderer.
 - Integrity signals and answer-pattern review support human review and should not be interpreted as conclusive proof of cheating or AI use.
 
 ## 20. Electron secure browser
 
-- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.1, Electron 40, and electron-builder packaging.
+- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.2, Electron 40, and electron-builder packaging with explicit media consent.
 - `main.js` owns windows, single-instance handling, protocol registration, speech IPC, and kiosk lifecycle controls.
 - The `secure-interview://` custom protocol carries validated interview launch context from the website into the installed app.
 - `runtime-security.js` validates launch/external URLs and renderer paths; installer code signing is not enforced by the current build configuration.

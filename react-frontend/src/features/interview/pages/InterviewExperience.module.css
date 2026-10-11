@@ -28,6 +28,10 @@
 .deviceRow,.monitorRow { display:flex; gap:11px; align-items:center; padding:16px 0; border-bottom:1px solid #e8edf4; font-size:13px; }
 .deviceRow>span { flex:1; display:flex; gap:12px; align-items:center; }
 .deviceRow>svg { color:#6580a0; }
+.deviceRow { flex-wrap:wrap; }
+.speakerDialog { max-width:520px; margin:0; outline:none; }
+.speakerDialog h2 { margin:16px 0 12px; }
+.speakerDialog .actions { justify-content:space-between; }
 .deviceRow strong,.monitorRow strong { font-size:12px; font-weight:600; color:#8190a5; }
 .good { color:#128462 !important; display:inline-flex; align-items:center; gap:6px; }
 .meter { display:inline-block; width:65px; height:6px; border-radius:4px; background:#e5edf4; overflow:hidden; }

@@ -74,6 +74,8 @@ removed settings.
   the interview UI, component tree.
 
 ### Secure Browser (`secure-browser-kiosk/`)
+- **[interview-setup-recovery.md](interview-setup-recovery.md)** — kiosk 1.2.2,
+  automatic device permissions, speaker confirmation, phone enablement and release steps.
 - **[secure-browser/overview.md](secure-browser/overview.md)** — why it
   exists and what it does.
 - **[secure-browser/secure-browser-detailed.md](secure-browser/secure-browser-detailed.md)**

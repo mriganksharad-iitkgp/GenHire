@@ -1,6 +1,6 @@
 {
   "name": "genhire",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "GenHire secure interview browser",
   "main": "main.js",
   "scripts": {
@@ -30,6 +30,7 @@
       "main.js",
       "preload.js",
       "runtime-security.js",
+      "media-permissions.js",
       "web-app/**",
       "build/**",
       "package.json"

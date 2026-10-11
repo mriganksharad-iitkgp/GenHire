@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { resolvePublicFile, validWebUrl, parseInitialization } = require('./runtime-security');
+const { createMediaPermissionHandlers } = require('./media-permissions');
 
 // Speech requests are proxied through the authenticated GenHire backend.
 // Provider credentials never leave the server.
@@ -272,16 +273,22 @@ function createWindow() {
     // Maximize on start for a nice look
     mainWindow.maximize();
 
-    // Auto-grant media permissions
-    mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-        if (permission === 'media' && requestingOrigin === `http://localhost:${KIOSK_HTTP_PORT}`) return true;
-        return false;
+    const permissionWindow = mainWindow;
+    const mediaPermissions = createMediaPermissionHandlers({
+        origin: `http://localhost:${KIOSK_HTTP_PORT}`,
+        webContents: permissionWindow.webContents,
+        ask: async () => {
+            const { response } = await dialog.showMessageBox(permissionWindow, {
+                type: 'question', title: 'Camera and microphone access',
+                message: 'Allow GenHire to use your camera and microphone?',
+                detail: 'These devices are used for interview setup, your answers, and the monitoring required for this interview. Access ends when you close the interview.',
+                buttons: ['Allow camera and microphone', 'Not now'], defaultId: 0, cancelId: 1, noLink: true,
+            });
+            return response === 0;
+        },
     });
-
-    mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
-        if (permission === 'media' && details.requestingUrl?.startsWith(`http://localhost:${KIOSK_HTTP_PORT}/`)) callback(true);
-        else callback(false);
-    });
+    permissionWindow.webContents.session.setPermissionCheckHandler(mediaPermissions.check);
+    permissionWindow.webContents.session.setPermissionRequestHandler(mediaPermissions.request);
 
     // Only the local, bundled UI can access the preload API.
     mainWindow.webContents.on('will-navigate', (event, url) => {

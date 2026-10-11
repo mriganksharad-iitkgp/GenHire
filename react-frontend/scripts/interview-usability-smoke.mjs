@@ -27,7 +27,7 @@ win.HTMLCanvasElement.prototype.toDataURL = () => "data:image/jpeg;base64,Zml4dH
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
-const { MemoryRouter, useLocation } = await import("react-router-dom");
+const { MemoryRouter, Routes, Route, useLocation } = await import("react-router-dom");
 const e = React.createElement;
 const log = console.log, logError = console.error;
 console.log = () => {};
@@ -36,6 +36,7 @@ console.error = (...args) => renderErrors.push(args.map(String).join(" "));
 let root, compiled, currentLocation, passes = 0;
 let apiCalls, dualRequired, micSound, recordings, currentStream, socket, serverStatus;
 let answerFailure, uploadFailure, applicationsFailure, applicationStatus, applicationProcessingStatus, pairingVersion;
+let mediaRequests, mediaFailure, audioSuspended, identityCaptured, socketEvents;
 const now = Date.now;
 
 function track(kind) { return { kind, readyState: "live", muted: false, onended: null, stop() { this.readyState = "ended"; }, getSettings: () => ({ sampleRate: 48000 }) }; }
@@ -56,9 +57,9 @@ class FixtureRecorder extends win.EventTarget {
   }
 }
 class FixtureAudioContext {
-  state = "running"; currentTime = 0; destination = {};
-  resume = async () => {}; close = async () => {};
-  createAnalyser() { return { fftSize: 1024, getByteTimeDomainData(samples) { samples.fill(micSound ? 133 : 128); } }; }
+  state = audioSuspended ? "suspended" : "running"; currentTime = 0; destination = {};
+  resume = async () => { if (!audioSuspended) this.state = "running"; }; close = async () => {};
+  createAnalyser() { const context = this; return { fftSize: 1024, getByteTimeDomainData(samples) { samples.fill(micSound && context.state === "running" ? 133 : 128); } }; }
   createMediaStreamSource() { return { connect() {} }; }
   createOscillator() { return { connect() {}, frequency: {}, start() {}, stop() {} }; }
   createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
@@ -66,16 +67,16 @@ class FixtureAudioContext {
 globalThis.MediaStream = win.MediaStream = FixtureStream;
 globalThis.MediaRecorder = win.MediaRecorder = FixtureRecorder;
 win.AudioContext = FixtureAudioContext;
-Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { async getUserMedia() { currentStream = new FixtureStream(); return currentStream; } } });
+Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { async getUserMedia() { mediaRequests++; if (mediaFailure) throw new win.DOMException("Permission denied", "NotAllowedError"); currentStream = new FixtureStream(); return currentStream; } } });
 globalThis.__interviewTestSocket = () => {
   const handlers = new Map();
-  socket = { connected: true, on(name, fn) { handlers.set(name, fn); return this; }, off() { return this; }, emit(name, payload, ack) { ack?.({ ok: true }); return this; }, disconnect() { this.connected = false; }, connect() { this.connected = true; queueMicrotask(() => handlers.get("connect")?.()); }, fire(name, data) { handlers.get(name)?.(data); } };
+  socket = { connected: true, on(name, fn) { handlers.set(name, fn); return this; }, off() { return this; }, emit(name, payload, ack) { socketEvents.push({ name, payload }); ack?.({ ok: true }); return this; }, disconnect() { this.connected = false; }, connect() { this.connected = true; queueMicrotask(() => handlers.get("connect")?.()); }, fire(name, data) { handlers.get(name)?.(data); } };
   queueMicrotask(() => socket.fire("connect"));
   return socket;
 };
 function sessionPayload() {
   return { session_id: "ui-session", current_question: "Describe a recent project.", max_questions: 10, question_count: 1,
-    engine_available: true, identity_captured: true, dual_proctoring_required: dualRequired,
+    engine_available: true, identity_captured: identityCaptured, dual_proctoring_required: dualRequired,
     mobile_pairing_token: `fixture-pairing-${pairingVersion}`, question_timeout_seconds: 300, status: serverStatus };
 }
 globalThis.fetch = win.fetch = async (url, options = {}) => {
@@ -99,7 +100,7 @@ globalThis.fetch = win.fetch = async (url, options = {}) => {
 };
 function Probe() { currentLocation = useLocation(); return null; }
 function text() { return document.body.textContent; }
-function button(label) { return [...document.querySelectorAll("button")].find(node => node.textContent.trim() === label); }
+function button(label, scope = document) { return [...scope.querySelectorAll("button")].find(node => node.textContent.trim() === label); }
 async function settle(ms = 60) { await act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); }); }
 async function click(node) { assert.ok(node, "Expected clickable control"); await act(async () => node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))); await settle(); }
 async function typeAnswer(value) {
@@ -111,16 +112,17 @@ async function mount(component, options = {}) {
   if (root) await act(async () => root.unmount());
   Date.now = now; renderErrors = []; apiCalls = []; dualRequired = options.dual || false; micSound = true; recordings = [];
   serverStatus = "setup"; answerFailure = false; uploadFailure = false; applicationsFailure = false; applicationStatus = "shortlisted"; applicationProcessingStatus = options.processingStatus || "completed"; pairingVersion = 1;
+  mediaRequests = 0; mediaFailure = options.mediaFailure || false; audioSuspended = options.audioSuspended || false; identityCaptured = options.identityCaptured !== false; socketEvents = [];
   sessionStorage.clear(); sessionStorage.setItem("companyxyz-token", "fixture-token");
   sessionStorage.setItem("companyxyz-user", JSON.stringify({ user_type: "candidate", userType: "candidate" }));
   root = createRoot(document.getElementById("root"));
-  await act(async () => root.render(e(compiled.AppProviders, null, e(MemoryRouter, { initialEntries: ["/interviews/ui-session"] }, e(Probe), component))));
+  await act(async () => root.render(e(compiled.AppProviders, null, e(MemoryRouter, { initialEntries: [options.path || "/interviews/ui-session"] }, e(Probe), component))));
   await settle();
 }
 async function activeInterview(options = {}) {
   await mount(e(compiled.Chat, { interviewId: "ui-session" }), options);
-  await click(button("Enable camera and microphone")); await settle(180);
-  await click(button("Play test sound")); await click(button("I heard the sound")); await click(button("Continue"));
+  await settle(180); assert.equal(mediaRequests, 1);
+  await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
   if (options.dual) { await act(async () => socket.fire("mobile_status_dashboard", { ready: true, status: "connected" })); assert.ok(button("Continue"), text() + "\n" + renderErrors.join("\n")); await click(button("Continue")); }
   await click(document.querySelector('input[type="checkbox"]'));
   micSound = false; await click(button("Start interview"));
@@ -132,7 +134,7 @@ async function check(name, fn) {
   passes++; log(`PASS ${name}`);
 }
 try {
-  const exports = { Chat: "features/interview/pages/Chat", Applications: "features/candidate/pages/Applications", Modal: "shared/components/ui/Modal", ConfirmDialog: "shared/components/ui/ConfirmDialog", AppProviders: "app/providers" };
+  const exports = { Chat: "features/interview/pages/Chat", MobileRecorder: "features/interview/pages/MobileRecorder", Applications: "features/candidate/pages/Applications", Modal: "shared/components/ui/Modal", ConfirmDialog: "shared/components/ui/ConfirmDialog", AppProviders: "app/providers" };
   const entry = Object.entries(exports).map(([name, file]) => `export {${name === "AppProviders" ? name : "default as " + name}} from ${JSON.stringify(file)};`).join("\n");
   const output = await build({ stdin: { contents: entry, resolveDir: cwd, loader: "jsx" }, bundle: true, write: false,
     outfile: path.join(tmp, "bundle.mjs"), platform: "node", format: "esm", packages: "external",
@@ -152,6 +154,59 @@ try {
   const style = document.createElement("style");
   style.textContent = (await readFile("src/shared/styles/portal-theme.css", "utf8")) + output.outputFiles.find(file => file.path.endsWith(".css")).text;
   document.head.appendChild(style);
+
+  await check("automatic device permission leads through speaker confirmation and face capture without a hidden Continue gate", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { identityCaptured: false }); await settle(180);
+    assert.equal(mediaRequests, 1); assert.ok(!button("Enable camera and microphone")); assert.ok(!button("Continue").disabled);
+    assert.ok(text().includes("Continue to confirm your speakers")); await click(button("Continue"));
+    assert.ok(document.querySelector('[role="dialog"]')); assert.ok(text().includes("Can you hear the test sound?"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/activate")).length, 0);
+    await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
+    assert.ok(button("Capture my face")); await click(button("Capture my face"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/register-face")).length, 1);
+    await click(document.querySelector('input[type="checkbox"]')); micSound = false; await click(button("Start interview"));
+    const activation = apiCalls.find(call => call.url.endsWith("/activate"));
+    assert.deepEqual(JSON.parse(activation.options.body), { camera_ready: true, microphone_ready: true, speaker_ready: true });
+  });
+  await check("permission denial offers an explicit retry without repeated automatic popups", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { mediaFailure: true }); await settle(180);
+    assert.equal(mediaRequests, 1); assert.ok(text().includes("permission was denied")); assert.ok(button("Continue").disabled);
+    mediaFailure = false; await click(button("Retry device checks")); await settle(180);
+    assert.equal(mediaRequests, 2); assert.ok(!button("Continue").disabled);
+  });
+  await check("losing a device during speaker confirmation keeps setup blocked and permits recovery", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" })); await settle(180); await click(button("Continue"));
+    await act(async () => { const camera = currentStream.getVideoTracks()[0]; camera.stop(); camera.onended(); }); await settle();
+    const dialog = document.querySelector('[role="dialog"]'); assert.ok(button("I heard the sound", dialog).disabled);
+    assert.ok(dialog.textContent.includes("A device was disconnected"));
+    await click(button("Back to device checks", dialog)); await click(button("Retry device checks")); await settle(180);
+    await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
+    assert.ok(button("Start interview")); assert.equal(apiCalls.filter(call => call.url.endsWith("/activate")).length, 0);
+  });
+  await check("a suspended audio context releases the busy state and can be resumed by checking the microphone", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { audioSuspended: true }); await settle(180);
+    assert.ok(button("Continue").disabled); assert.ok(button("Check microphone")); assert.ok(!button("Retry device checks").disabled);
+    audioSuspended = false; await click(button("Check microphone")); await settle(180);
+    assert.ok(!button("Continue").disabled); assert.equal(mediaRequests, 1);
+  });
+  await check("a required phone cannot be skipped before server-confirmed camera readiness", async () => {
+    await mount(e(compiled.Chat, { interviewId: "ui-session" }), { dual: true }); await settle(180);
+    await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
+    assert.ok(text().includes("Waiting for your phone")); assert.ok(button("Continue").disabled); assert.ok(document.querySelector("svg"));
+    await act(async () => socket.fire("mobile_status_dashboard", { ready: false, status: "connected" }));
+    assert.ok(button("Continue").disabled); assert.equal(apiCalls.filter(call => call.url.endsWith("/activate")).length, 0);
+    await act(async () => socket.fire("mobile_status_dashboard", { ready: true, status: "connected" }));
+    await click(button("Continue")); assert.ok(button("Start interview"));
+  });
+  await check("the signed phone companion automatically requests devices after joining and reports live tracks", async () => {
+    await mount(e(Routes, null, e(Route, { path: "/mobile-camera/:sessionId", element: e(compiled.MobileRecorder) })), { path: "/mobile-camera/ui-session?pairing_token=fixture-pairing" }); await settle(180);
+    assert.equal(mediaRequests, 1); assert.ok(text().includes("Your second camera is ready")); assert.ok(!button("Enable camera and microphone"));
+    const joining = socketEvents.find(event => event.name === "join_mobile_session");
+    assert.equal(joining.payload.pairing_token, "fixture-pairing");
+    const ready = socketEvents.find(event => event.name === "mobile_status_update" && event.payload.status === "ready");
+    assert.equal(ready.payload.camera_ready, true); assert.equal(ready.payload.microphone_ready, true);
+    await settle(1050); assert.ok(socketEvents.some(event => event.name === "mobile_proctoring_frame"));
+  });
 
   await check("typing does not trigger voice auto-submission and advances the same interview", async () => {
     await activeInterview(); await click(button("Type answer")); await typeAnswer("I built a reliable service.");

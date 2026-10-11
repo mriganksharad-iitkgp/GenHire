@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import io from "socket.io-client";
 import { Check, CircleAlert, ShieldCheck, Smartphone } from "lucide-react";
@@ -14,13 +14,14 @@ export default function MobileRecorder() {
   const videoRef = useRef(null); const streamRef = useRef(null); const socketRef = useRef(null); const recorderRef = useRef(null);
   const partsRef = useRef([]); const uploadingRef = useRef(false); const joinedRef = useRef(false); const wakeLockRef = useRef(null); const aliveRef = useRef(true);
   const uploadRef = useRef(null); const statusRef = useRef(status); statusRef.current = status;
+  const cameraRequestRef = useRef(false); const permissionAttemptedRef = useRef(false);
 
-  const sendStatus = (override) => {
+  const sendStatus = useCallback((override) => {
     if (!joinedRef.current) return;
     const stream = streamRef.current;
     const live = (kind) => !!stream?.getTracks().some((track) => track.kind === kind && track.readyState === "live" && !track.muted);
     socketRef.current?.emit("mobile_status_update", { session_id: sessionId, status: override || (document.hidden ? "camera_error" : recorderRef.current?.state === "recording" ? "recording" : stream ? "ready" : "connected"), camera_ready: !document.hidden && live("video"), microphone_ready: !document.hidden && live("audio") });
-  };
+  }, [sessionId]);
   const upload = async () => {
     if (uploadingRef.current || !partsRef.current.some((part) => !part.uploaded)) return; uploadingRef.current = true;
     setStatus("uploading"); setError("");
@@ -102,8 +103,8 @@ export default function MobileRecorder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, pairingToken]);
 
-  const enableCamera = async () => {
-    if (busy) return; setBusy(true); setError("");
+  const enableCamera = useCallback(async () => {
+    if (cameraRequestRef.current) return; cameraRequestRef.current = true; setBusy(true); setError("");
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Open this private link in a current Safari or Chrome browser. Camera access requires HTTPS.");
       streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
@@ -114,14 +115,19 @@ export default function MobileRecorder() {
       setCameraReady(true); setStatus("ready"); sendStatus("ready");
       try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* display power policy belongs to the device */ }
     } catch (failure) { setError(failure.name === "NotAllowedError" ? "Allow camera and microphone access in your browser settings, then retry." : failure.message); }
-    finally { setBusy(false); }
-  };
+    finally { cameraRequestRef.current = false; if (aliveRef.current) setBusy(false); }
+  }, [sendStatus]);
+  useEffect(() => {
+    if (!joined || status !== "camera_needed" || permissionAttemptedRef.current) return;
+    permissionAttemptedRef.current = true; enableCamera();
+  }, [joined, status, enableCamera]);
   const title = { connecting: "Connecting your phone", reconnecting: "Reconnecting…", camera_needed: "Enable your second camera", camera_error: "Reconnect your second camera", ready: "Your second camera is ready", recording: "Interview monitoring is active", uploading: "Saving your recording", uploaded: "Recording saved", upload_failed: "Let's save your recording", complete: "Your interview has finished", invalid: "Scan a new private QR code" }[status];
   return <main className={styles.shell}><section className={styles.centerCard} style={{ margin: "10px auto", maxWidth: 540 }}><span className={styles.brand}><ShieldCheck size={22} /> GenHire companion</span>
     <span className={styles.eyebrow}>Phone · Second camera</span><h1>{title}</h1><p>Place your phone to show you, your laptop and your desk from the side. Keep this page open, your screen unlocked and your phone connected to power.</p>
     <div className={styles.devicePreview}><video ref={videoRef} autoPlay muted playsInline className={styles.preview} style={{ transform: "none" }} aria-label="Phone camera preview" />{!cameraReady && <span className={styles.cameraPlaceholder}><Smartphone size={30} />Rear camera preview</span>}</div>
     {error && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{error}</span></div>}
-    {!cameraReady && joined && !["uploaded", "complete", "uploading", "upload_failed", "invalid"].includes(status) && <button className={styles.primary} style={{ marginTop: 22 }} onClick={enableCamera} disabled={busy}>{busy ? "Opening camera…" : "Enable camera and microphone"}</button>}
+    {busy && <p className={styles.note} role="status">Allow camera and microphone access in your browser's permission prompt.</p>}
+    {!cameraReady && joined && error && !["uploaded", "complete", "uploading", "upload_failed", "invalid"].includes(status) && <button className={styles.primary} style={{ marginTop: 22 }} onClick={enableCamera} disabled={busy}>{busy ? "Opening camera…" : "Retry camera and microphone"}</button>}
     {cameraReady && <p className={styles.good} style={{ marginTop: 20 }}><Check size={18} /> Camera connected · {joined ? "Laptop connected" : "Reconnecting to laptop"}</p>}
     {status === "ready" && <p className={styles.note}>Continue on your laptop. Recording begins when your interview starts.</p>}{status === "recording" && <p className={styles.note}>Do not switch apps or lock your phone. Your laptop controls recording automatically.</p>}
     {status === "upload_failed" && <button className={styles.primary} onClick={upload}>Retry recording upload</button>}

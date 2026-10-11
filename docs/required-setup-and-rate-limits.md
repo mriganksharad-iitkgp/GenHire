@@ -8,7 +8,10 @@ owner reports production Redis is injected from Secret Manager
 `genhire-redis-url:latest`; `REDIS_URL=""` in `.env.production` is intentional.
 DeepSeek/production webhook values are populated. The table below is
 the original 9 October audit, not the current credential state. Mobile recording
-and deployment/model checks remain relevant.
+and deployment/model checks remain relevant. The 11 October kiosk 1.2.2 update
+enables mobile recording in all four backend environment files; also enable it
+in the running Cloud Run revision. Follow
+[Interview setup fixes and kiosk 1.2.2](interview-setup-recovery.md).
 
 Audit date: **9 October 2026 (IST)**. Follow the actions below before considering
 production ready. The audit inspected the current private configuration and source;

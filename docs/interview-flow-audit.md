@@ -2,6 +2,20 @@
 
 Audit date: 8 October 2026. Implementation tracking: [interview-flow-plan.md](interview-flow-plan.md).
 
+**11 October setup update:** kiosk 1.2.2 requests explicit camera/microphone
+consent automatically, uses a speaker confirmation dialog when Continue is
+selected, and handles suspended browser audio without leaving setup busy.
+Mobile recording is enabled in the environment files; the running Cloud Run
+revision must enable it too. See [Interview setup recovery](interview-setup-recovery.md).
+Verification: 16 interview usability checks, 50 portal regression checks, 7 kiosk
+contracts, 16 frontend contracts and 28 backend interview/proctoring checks passed with isolated fixtures;
+frontend lint and web/kiosk production builds passed. Physical-device and deployed
+acceptance remain required.
+Local backend startup also passed with network access: HTTP 200 health confirmed
+Mongo/Redis availability, CORS preflight returned 200, and GCS configuration plus
+mobile enablement were confirmed. The temporary server ran with jobs/wallet
+bootstrap disabled and was stopped after verification.
+
 ## Critical defects found
 
 | Area | Defect | Required correction |
@@ -77,8 +91,8 @@ state implementation. No deployed speed or detection-accuracy claim is made.
 
 ## Local deliverables
 
-- Windows installer: `secure-browser-kiosk/dist/Genhire.exe` (97,000,512 bytes).
-- Installer SHA256: `793a77f843f01ea5aa0f77b83b16f77e67017bc293457cf5cd00063deea17f51`;
+- Windows installer: `secure-browser-kiosk/dist/Genhire.exe` (version 1.2.2; 97,005,107 bytes).
+- Installer SHA256: `cf5cf432294f88322d177d8b9271a215be291383eb9a475c58ca0e5c8aceb458`;
   checksum file: `secure-browser-kiosk/dist/Genhire.exe.sha256`.
 - Final packaged ASAR contains the current compiled UI assets; legacy renderer
   and credential files are excluded. Packaging, syntax and contract checks do

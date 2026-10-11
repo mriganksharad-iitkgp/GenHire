@@ -678,6 +678,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 <input
                   type="text"
                   name="department"
+                  className={styles.enhancedInput}
                   value={jobData.department}
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('department')}
@@ -712,6 +713,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 <input
                   type="text"
                   name="location"
+                  className={styles.enhancedInput}
                   value={jobData.location}
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('location')}
@@ -765,6 +767,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 <input
                   type="text"
                   name="experience"
+                  className={styles.enhancedInput}
                   value={jobData.experience}
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('experience')}
@@ -799,6 +802,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 <input
                   type="text"
                   name="salary"
+                  className={styles.enhancedInput}
                   value={jobData.salary}
                   onChange={handleInputChange}
                   onFocus={() => setActiveDropdown('salary')}
@@ -832,6 +836,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <input
                 type="date"
                 name="deadline"
+                  className={styles.enhancedInput}
                 value={jobData.deadline}
                 onChange={handleInputChange}
                 required
@@ -980,25 +985,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <label>
                 Job Description * 
                 <span className={styles.smartIndicator}> Suggestions</span>
-                {jobData.title && (
-                  <button
-                    type="button"
-                    className={styles.generateButton}
-                    onClick={() => {
-                      const template = Object.values(JOB_TEMPLATES).find(t => 
-                        t.department === jobData.department
-                      );
-                      if (template && !jobData.description) {
-                        handleInputChange({ 
-                          target: { name: 'description', value: template.description } 
-                        });
-                      }
-                    }}
-                    disabled={!jobData.title || !jobData.department || jobData.description}
-                  >
-                     Generate draft
-                  </button>
-                )}
               </label>
               <textarea
                 name="description"
@@ -1018,25 +1004,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <label>
                 Key Responsibilities
                 <span className={styles.optional}>(Optional)</span>
-                {jobData.title && (
-                  <button
-                    type="button"
-                    className={styles.generateButton}
-                    onClick={() => {
-                      const template = Object.values(JOB_TEMPLATES).find(t => 
-                        t.department === jobData.department
-                      );
-                      if (template && !jobData.responsibilities) {
-                        handleInputChange({ 
-                          target: { name: 'responsibilities', value: template.responsibilities.join('\n') } 
-                        });
-                      }
-                    }}
-                    disabled={!jobData.title || !jobData.department || jobData.responsibilities}
-                  >
-                     Generate draft
-                  </button>
-                )}
               </label>
               <textarea
                 name="responsibilities"
@@ -1059,25 +1026,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <label>
                 Requirements & Qualifications
                 <span className={styles.optional}>(Optional)</span>
-                {jobData.title && (
-                  <button
-                    type="button"
-                    className={styles.generateButton}
-                    onClick={() => {
-                      const template = Object.values(JOB_TEMPLATES).find(t => 
-                        t.department === jobData.department
-                      );
-                      if (template && !jobData.requirements) {
-                        handleInputChange({ 
-                          target: { name: 'requirements', value: template.requirements.join('\n') } 
-                        });
-                      }
-                    }}
-                    disabled={!jobData.title || !jobData.department || jobData.requirements}
-                  >
-                     Generate draft
-                  </button>
-                )}
               </label>
               <textarea
                 name="requirements"
@@ -1100,25 +1048,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <label>
                 Benefits & Perks
                 <span className={styles.optional}>(Optional)</span>
-                {jobData.title && (
-                  <button
-                    type="button"
-                    className={styles.generateButton}
-                    onClick={() => {
-                      const template = Object.values(JOB_TEMPLATES).find(t => 
-                        t.department === jobData.department
-                      );
-                      if (template && !jobData.benefits) {
-                        handleInputChange({ 
-                          target: { name: 'benefits', value: template.benefits.join('\n') } 
-                        });
-                      }
-                    }}
-                    disabled={!jobData.title || !jobData.department || jobData.benefits}
-                  >
-                     Generate draft
-                  </button>
-                )}
               </label>
               <textarea
                 name="benefits"

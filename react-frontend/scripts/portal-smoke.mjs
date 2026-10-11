@@ -165,8 +165,8 @@ try {
   await check("usage API failure is shown honestly and retry recovers",async()=>{await mount(e(compiled.RecruiterCostStatistics),"/recruiter/cost-statistics",{role:"recruiter",costFailure:true});assert.ok(text().includes("Unable to load usage"));assert.ok(!text().includes("New Recruiter"));assert.ok(sessionStorage.getItem("companyxyz-token"));costFailure=false;await click(button("Retry"));assert.ok(text().includes("Cost statistics"));});
   await check("invalid session redirects to login and clears credentials",async()=>{await mount(e(Routes,null,e(Route,{element:e(compiled.Layout)},e(Route,{path:"/profile",element:e("div",null,"Protected")})),e(Route,{path:"/login",element:e("div",null,"Sign in here")})),"/profile",{status:401});assert.ok(text().includes("Sign in here"));assert.equal(sessionStorage.getItem("companyxyz-token"),null);});
   await check("interview preparation shares purple actions and handles unavailable media",async()=>{
-    await mount(e(compiled.Chat,{interviewId:"fixture-interview"}),"/interviews/fixture-interview");assert.ok(text().includes("Check your devices"));assert.ok(text().includes("Connect your phone"));assert.ok(button("Enable camera and microphone"));assert.ok(button("Continue").disabled);
-    styles(909,642);const shell=document.querySelector("main");assert.ok(getComputedStyle(shell).fontFamily.includes("Segoe UI"));const action=button("Enable camera and microphone");assert.equal(getComputedStyle(action).minHeight,"44px");await click(action);assert.ok(document.querySelector('[role="alert"]'));assert.ok(button("Continue").disabled);
+    await mount(e(compiled.Chat,{interviewId:"fixture-interview"}),"/interviews/fixture-interview");assert.ok(text().includes("Check your devices"));assert.ok(text().includes("Connect your phone"));assert.ok(!button("Enable camera and microphone"));assert.ok(button("Continue").disabled);
+    styles(909,642);const shell=document.querySelector("main");assert.ok(getComputedStyle(shell).fontFamily.includes("Segoe UI"));const action=button("Retry device checks");assert.equal(getComputedStyle(action).minHeight,"44px");await click(action);assert.ok(document.querySelector('[role="alert"]'));assert.ok(button("Continue").disabled);
   });
   await check("completed interview retains three zero scores and themed report",async()=>{
     await mount(e(compiled.Chat,{interviewId:"fixture-interview"}),"/interviews/fixture-interview",{interviewTerminal:true});assert.equal((text().match(/0%/g)||[]).length,3);await click(button("View evaluation and transcript"));styles(390,844);readable(document.querySelector('[role="dialog"] h2'));await click(document.querySelector('button[aria-label="Close interview report"]'));
@@ -241,6 +241,20 @@ try {
       assert.equal(document.querySelectorAll('input[name="gaze_proctoring"]').length,0);
       assert.equal(document.querySelectorAll('input[aria-label="Gaze heatmap"]').length,1);
       assert.ok(!text().includes("instantly"));
+      for(const [width,height] of [[1366,768],[390,844]]){
+        styles(width,height);
+        for(const field of ["department","location","experience","salary",...(name==="JobCreationModal"?["deadline"]:[])]){
+          const input=document.querySelector(`input[name="${field}"]`);assert.ok(input);
+          assert.equal(getComputedStyle(input).minHeight,"44px");assert.equal(getComputedStyle(input).borderRadius,"10px");
+          assert.equal(getComputedStyle(input).fontSize,width<=600?"16px":"14px");
+        }
+      }
+      if(name==="JobCreationModal"){
+        await click(button("Show Templates"));
+        await click([...document.querySelectorAll('[class*="templateCard"]')].find(node=>node.textContent.includes("Software Engineer")));
+        assert.equal(document.querySelector('input[name="title"]').value,"Software Engineer");
+        assert.ok(!button("Generate draft"));
+      }
     }
   });
   await check("answer controls stay readable with standard desktop and mobile input sizing", async () => {

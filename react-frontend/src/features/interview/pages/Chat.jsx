@@ -37,6 +37,8 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const [phase, setPhase] = useState("loading"); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const [deviceError, setDeviceError] = useState(""); const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false); const [micLevel, setMicLevel] = useState(0); const [speakerTested, setSpeakerTested] = useState(false);
+  const [showSpeakerCheck, setShowSpeakerCheck] = useState(false);
+  const deviceRequestRef = useRef(false); const permissionAttemptedRef = useRef(false);
   const [rulesAccepted, setRulesAccepted] = useState(false); const [faceCaptured, setFaceCaptured] = useState(false);
   const [phone, setPhone] = useState({ ready: false, status: "disconnected" }); const [connected, setConnected] = useState(false);
   const [proctoring, setProctoring] = useState(null); const [warning, setWarning] = useState(null); const [warningCount, setWarningCount] = useState(0);
@@ -111,8 +113,9 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       .then((data) => { if (data.audio_base64) audioCacheRef.current.set(question, `data:audio/mp3;base64,${data.audio_base64}`); }).catch(() => {});
   }, [session?.session_id, question, request, phase]);
 
-  const enableDevices = async () => {
-    if (busy) return; setBusy(true); setDeviceError(""); setMicReady(false); setCameraReady(false);
+  const enableDevices = useCallback(async () => {
+    if (deviceRequestRef.current) return; deviceRequestRef.current = true;
+    setBusy(true); setDeviceError(""); setMicReady(false); setCameraReady(false);
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Use the GenHire kiosk browser or a current Chrome, Edge or Safari browser with HTTPS camera access.");
       streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
@@ -122,7 +125,10 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       setCameraReady(stream.getVideoTracks().some((track) => track.readyState === "live" && !track.muted) && !!videoRef.current?.videoWidth);
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Your browser cannot test the microphone. Open the GenHire kiosk browser.");
-      await contextRef.current?.close().catch(() => {}); const context = new AudioContextClass(); await context.resume();
+      await contextRef.current?.close().catch(() => {}); const context = new AudioContextClass();
+      // A browser can suspend audio until a click. Do not leave setup busy while
+      // waiting for that gesture; the microphone check offers an explicit retry.
+      context.resume().catch(() => {});
       const analyser = context.createAnalyser(); analyser.fftSize = 1024; context.createMediaStreamSource(stream).connect(analyser);
       contextRef.current = context; analyserRef.current = analyser;
       stream.getTracks().forEach((track) => { track.onended = () => {
@@ -132,8 +138,13 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     } catch (failure) {
       const messages = { NotAllowedError: "Camera or microphone permission was denied. Allow both in your browser settings, then retry.", NotFoundError: "We could not find a camera and microphone. Connect them and retry.", NotReadableError: "Another app may be using your devices. Close it and retry." };
       setDeviceError(messages[failure.name] || failure.message);
-    } finally { if (aliveRef.current) setBusy(false); }
-  };
+    } finally { deviceRequestRef.current = false; if (aliveRef.current) setBusy(false); }
+  }, []);
+  useEffect(() => {
+    if (phase !== "devices" || permissionAttemptedRef.current) return;
+    permissionAttemptedRef.current = true;
+    enableDevices();
+  }, [phase, enableDevices]);
   // One stream/analyser covers setup, voice activity and archival video.
   useEffect(() => {
     const samples = new Uint8Array(1024);
@@ -148,13 +159,23 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     }, 120); return () => clearInterval(timer);
   }, []);
   const testSpeaker = async () => {
-    setDeviceError("");
+    setDeviceError(""); setSpeakerTested(false);
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext; const context = contextRef.current || new AudioContextClass(); await context.resume();
       const oscillator = context.createOscillator(); const gain = context.createGain(); oscillator.connect(gain); gain.connect(context.destination); oscillator.frequency.value = 660;
       gain.gain.setValueAtTime(0.12, context.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.7); oscillator.start(); oscillator.stop(context.currentTime + 0.7);
       if (!contextRef.current) oscillator.onended = () => context.close(); setSpeakerTested("played");
     } catch { setDeviceError("We could not play the test sound. Check your output device and volume, then retry."); }
+  };
+  const continueSetup = () => {
+    if (!cameraReady || !micReady || busy) return;
+    setShowSpeakerCheck(false); setError("");
+    setPhase(faceCaptured ? dualRequired ? "phone" : "ready" : "face");
+  };
+  const continueDevices = () => {
+    if (!cameraReady || !micReady || busy) return;
+    if (speakerTested === true) continueSetup();
+    else { setShowSpeakerCheck(true); testSpeaker(); }
   };
 
   useEffect(() => {
@@ -447,9 +468,11 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       <h2>{phase === "devices" ? "Check your devices" : phase === "face" ? "Center your face in the preview" : phase === "phone" ? "Connect your mobile camera" : "Start your interview"}</h2>
       <p>{phase === "devices" ? "Allow camera and microphone access, speak a short sentence, then check your speakers." : phase === "face" ? "Sit in good light with only your face visible. We'll capture one image for this session." : phase === "phone" ? "Your recruiter requires a second view. Scan this private QR code on your phone, enable its camera, and leave the page open." : "The interviewer asks one question at a time. Take a moment to think, answer naturally, and use Send answer whenever you're finished."}</p>
       {phase === "devices" && <><div className={styles.devicePreview}>{renderVideo()}{!cameraReady && <span className={styles.cameraPlaceholder}><Camera size={32} />Camera preview</span>}</div>
-        <div className={styles.deviceRow}><Camera size={20} /><span>Camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Ready" : "Waiting for permission"}</strong></div><div className={styles.deviceRow}><Mic size={20} /><span>Microphone <span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></span><strong className={micReady ? styles.good : ""}>{micReady ? "Sound detected" : "Say a short sentence"}</strong></div>
+        <div className={styles.deviceRow}><Camera size={20} /><span>Camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Ready" : "Waiting for permission"}</strong></div><div className={styles.deviceRow}><Mic size={20} /><span>Microphone <span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></span><strong className={micReady ? styles.good : ""}>{micReady ? "Sound detected" : "Say a short sentence"}</strong>{cameraReady && !micReady && !busy && <button className={styles.secondary} onClick={() => contextRef.current?.resume().catch(() => setDeviceError("Retry your microphone check."))}>Check microphone</button>}</div>
         <div className={styles.deviceRow}><Headphones size={20} /><span>Speakers</span><button className={styles.secondary} onClick={testSpeaker}><Volume2 size={15} />Play test sound</button></div>{speakerTested === "played" && <button className={styles.secondary} onClick={() => setSpeakerTested(true)}>I heard the sound <Check size={16} /></button>}{speakerTested === true && <p className={styles.good}><Check size={16} /> Speakers confirmed</p>}
-        {renderError(deviceError)}<div className={styles.actions}><button className={styles.secondary} onClick={enableDevices} disabled={busy}>{busy ? "Checking devices…" : cameraReady ? "Retry device checks" : "Enable camera and microphone"}</button><button className={styles.primary} disabled={!deviceReady || busy} onClick={() => { setError(""); setPhase(faceCaptured ? dualRequired ? "phone" : "ready" : "face"); }}>Continue <ChevronRight size={17} /></button></div></>}
+        {renderError(deviceError)}<p id="device-next-step" className={styles.note} role="status">{busy ? "Allow camera and microphone access in the permission window." : !cameraReady ? "Allow both devices in the permission window. If access was blocked, retry below." : !micReady ? "Speak a short sentence. If the meter stays still, select Check microphone." : speakerTested !== true ? "Camera and microphone are ready. Continue to confirm your speakers." : "All device checks passed. Continue to the next step."}</p>
+        <div className={styles.actions}>{(deviceError || cameraReady) && <button className={styles.secondary} onClick={enableDevices} disabled={busy}>{busy ? "Checking devices…" : "Retry device checks"}</button>}<button className={styles.primary} aria-describedby="device-next-step" disabled={!cameraReady || !micReady || busy} onClick={continueDevices}>Continue <ChevronRight size={17} /></button></div>
+        <Modal isOpen={showSpeakerCheck} onClose={() => setShowSpeakerCheck(false)} ariaLabelledBy="speaker-check-title" contentClassName={`${styles.centerCard} ${styles.speakerDialog}`}><Headphones size={28} className={styles.good}/><h2 id="speaker-check-title">Can you hear the test sound?</h2><p>Confirm your speakers before continuing. If you cannot hear it, check your volume or select another output device, then play it again.</p>{renderError(deviceError)}<div className={styles.actions}><button className={styles.secondary} onClick={testSpeaker}><Volume2 size={16}/>Play test sound</button><button className={styles.primary} disabled={!cameraReady || !micReady || busy || (speakerTested !== "played" && speakerTested !== true)} onClick={() => { setSpeakerTested(true); continueSetup(); }}>I heard the sound <Check size={16}/></button></div><button className={styles.textButton} onClick={() => setShowSpeakerCheck(false)}>Back to device checks</button></Modal></>}
       {phase === "face" && <><div className={styles.facePreview}>{renderVideo()}<span className={styles.faceGuide} /></div><p className={styles.note}>{isPractice ? "This capture is used only for practice monitoring." : "Your capture is compared with your uploaded identity card in the background and included in the evaluation report."}</p>{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase("devices")}>Back</button><button className={styles.primary} onClick={captureFace} disabled={busy}>{busy ? "Capturing face…" : "Capture my face"}<Camera size={18} /></button></div></>}
       {phase === "phone" && <><div className={styles.phonePairing}>{phoneUrl ? <div className={styles.qr}><QRCode value={phoneUrl} size={172} /></div> : <div className={styles.error}>The private phone link is unavailable. Reload this session to refresh it.</div>}<div><Smartphone size={30} /><h3>{phone.ready ? "Phone camera is ready" : "Waiting for your phone"}</h3><p>Place it beside you, aimed at you, your laptop and desk. Keep it plugged in and turn off auto-lock.</p><span className={`${styles.badge} ${phone.ready ? styles.goodBadge : ""}`}>{phone.ready ? "Camera and microphone connected" : phone.status === "connected" ? "Phone connected · enable its camera" : "Scan the QR code"}</span></div></div><p className={styles.note}>This private link grants access only to this interview's companion camera.</p><button className={styles.primary} disabled={!phone.ready} onClick={() => setPhase("ready")}>Continue <ChevronRight size={18} /></button></>}
       {phase === "ready" && <><div className={styles.readySummary}><Check size={18} /> Camera, microphone and speakers checked<br /><Check size={18} /> Face captured{dualRequired && <><br /><Check size={18} /> Second camera {phone.ready ? "ready" : "disconnected"}</>}</div><label className={styles.consent}><input type="checkbox" checked={rulesAccepted} onChange={(event) => setRulesAccepted(event.target.checked)} /><span>I'm in a quiet, well-lit place and have time to finish. I'll keep my face visible, stay in this window and use no outside help{dualRequired ? ". My phone is positioned only as the required second camera" : ""}.</span></label><p className={styles.note}>{maxQuestions} questions · Usually 15–20 minutes · Your answer starts after the interviewer finishes speaking.</p>
