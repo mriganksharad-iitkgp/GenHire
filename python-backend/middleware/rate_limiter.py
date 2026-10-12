@@ -128,6 +128,7 @@ POLICIES = {
     'speech': (120, 60), 'speech_token': (20, 60), 'payment': (20, 300),
     'socket_connect': (120, 60), 'socket_control': (120, 60),
     'socket_frame': (180, 60), 'socket_status': (60, 60),
+    'socket_audio': (720, 60),
     'export': (10, 300), 'read': (240, 60), 'write': (60, 60),
 }
 

@@ -698,7 +698,7 @@ def activate_interview(current_user, session_id):
             "error_code": "engine_unavailable"}), 503
     _restore_engine(doc, manager)
     policy = integrity.check_health(collection, doc)
-    if policy["terminated"] or policy["losses"]:
+    if policy["terminated"]:
         return jsonify({"error": "Restore interview monitoring before continuing.", "error_code": "monitoring_required", "integrity": policy}), 409
     result = manager.activate_session(session_id)
     if "error" in result:
@@ -753,7 +753,7 @@ def submit_answer(current_user, session_id):
         return jsonify({"error": "Start the interview after completing setup before answering.",
             "error_code": "session_not_active"}), 409
     policy = integrity.check_health(interviews_collection, doc)
-    if policy["terminated"] or policy["losses"]:
+    if policy["terminated"]:
         return jsonify({"error": "Restore monitoring before submitting another answer.", "error_code": "monitoring_required", "integrity": policy}), 409
     _restore_engine(doc, interview_manager)
     data = request.json or {}

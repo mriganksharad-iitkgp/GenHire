@@ -172,6 +172,19 @@ class InterviewRouteTests(unittest.TestCase):
         self.manager.submit_answer.assert_not_called()
         self.manager.activate_session.assert_not_called()
 
+    def test_active_attempt_can_submit_after_many_monitoring_gaps(self):
+        import mongomock
+        database = mongomock.MongoClient().test
+        database.interviews.insert_one({"session_id": "session", "user_id": "candidate-one", "status": "active",
+            "integrity": {"version": 1, "count": 8, "counts_by_type": {"mobile_unavailable": 8},
+                          "losses": {"mobile": {"since": datetime.datetime.now(datetime.timezone.utc), "reason": "mobile_unavailable"}}}})
+        self.routes.init_interview_routes(database, {name: database[name] for name in ("users", "interviews", "applications", "jobs", "practice_sessions")})
+        self.manager.checkpoint.return_value = None
+        self.manager.submit_answer.return_value = {"next_question": "Next question", "current_evaluation": {}}
+        response = self.client.post("/api/interviews/session/answer", json={"question": "q", "answer": "Spoken answer"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(database.interviews.find_one({"session_id": "session"})["status"], "active")
+
     def test_completed_end_retry_does_not_recompute_or_charge(self):
         self.real.find_one.return_value = {"session_id": "session", "user_id": "candidate-one", "status": "completed", "final_score": 82, "cv_score": 66}
         response = self.client.post("/api/interviews/session/end", json={})

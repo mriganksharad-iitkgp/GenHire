@@ -55,7 +55,32 @@ def detect_faces(frame):
                 _face_detector = None
                 raise RuntimeError("Face detector could not be loaded")
         gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
-        return list(_face_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40)))
+        boxes, _, weights = _face_detector.detectMultiScale3(gray, scaleFactor=1.12,
+            minNeighbors=8, minSize=(48, 48), outputRejectLevels=True)
+        return distinct_faces(boxes, weights)
+
+
+def distinct_faces(boxes, weights):
+    """Reject weak cascade matches and nested boxes around the same face.
+
+    Cascade weights are detector evidence, not calibrated identity confidence.
+    Multiple-face warnings require distinct, sufficiently strong rectangles.
+    """
+    ranked = sorted(zip(boxes, weights), key=lambda item: float(item[1]), reverse=True)
+    accepted = []
+    for box, weight in ranked:
+        x, y, w, h = map(int, box)
+        if float(weight) < 4 or w < 48 or h < 48 or not .65 <= w / h <= 1.45:
+            continue
+        duplicate = False
+        for bx, by, bw, bh in accepted:
+            overlap = max(0, min(x + w, bx + bw) - max(x, bx)) * max(0, min(y + h, by + bh) - max(y, by))
+            if overlap / min(w * h, bw * bh) >= .55 or overlap / (w * h + bw * bh - overlap) >= .3:
+                duplicate = True
+                break
+        if not duplicate:
+            accepted.append((x, y, w, h))
+    return accepted
 
 
 def _head_pose(frame):
@@ -146,8 +171,11 @@ def analyze_frame(current_frame, registered_face_img=None, config=None, source="
         # No frontal face in the side-view phone is expected.
         if source == "desktop" and face_count == 0:
             violations.append({"type": "no_face", "message": "No face detected. Please stay visible in the laptop camera."})
-        elif face_count > 1:
+        elif face_count > 1 and source == "desktop":
             violations.append({"type": "multiple_faces", "message": "Multiple faces detected. Only the candidate should be visible."})
+        # A side-view phone sees the physical candidate and often their face
+        # on the laptop preview. Haar alone cannot distinguish a screen image
+        # from another person; use independent person evidence below instead.
     except Exception as exc:
         errors.append(f"face_detection: {type(exc).__name__}")
     if source == "desktop" and face_count == 1 and config.get("eyeball_tracking", True):

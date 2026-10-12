@@ -7,4 +7,4 @@ app composition root after the database is connected.
 
 
 def register_all():
-    from sockets import proctoring_sockets, mobile_sockets  # noqa: F401
+    from sockets import proctoring_sockets, mobile_sockets, speech_sockets  # noqa: F401

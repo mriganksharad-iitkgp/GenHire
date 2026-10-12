@@ -43,6 +43,8 @@ def handle_connect(auth=None):
 
 @socketio.on("disconnect")
 def handle_disconnect(reason=None):
+    from sockets.speech_sockets import cancel_speech
+    cancel_speech(request.sid)
     session_id = mobile_disconnect(request.sid)
     if session_id:
         state = live_sessions.get(session_id)
@@ -88,8 +90,8 @@ def handle_start_proctoring(data):
     state = live_sessions.get(data["session_id"])
     if not state or not state.get("registered_face"):
         return {"ok": False, "error_code": "face_registration_required"}
-    if requires_mobile(doc) and not mobile_is_ready(doc):
-        return {"ok": False, "error_code": "mobile_camera_not_ready"}
+    # Initial phone readiness is enforced by /activate. During an active
+    # interview, camera coverage gaps are evidence rather than a resume lock.
     state.setdefault("proctoring_config", doc.get("proctoring_config") or {})
     state.setdefault("owner_id", str(doc.get("user_id")))
     state["monitoring"] = True

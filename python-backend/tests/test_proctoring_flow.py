@@ -56,9 +56,9 @@ class PolicyTests(unittest.TestCase):
             policy.record_observation(state, observation, now=second)
         self.assertEqual(state["infractions"]["multiple_faces"], 1)
         self.assertEqual(state["proctoring_score"], 98)
-        policy.record_observation(state, observation, now=16)
+        policy.record_observation(state, observation, now=18)
         self.assertEqual(state["infractions"]["multiple_faces"], 2)
-        policy.record_observation(state, {"available": False, "errors": ["detector unavailable"]}, now=17)
+        policy.record_observation(state, {"available": False, "errors": ["detector unavailable"]}, now=19)
         self.assertEqual(state["proctoring_score"], 96)
         self.assertEqual(state["analysis_errors"], 1)
 
@@ -131,6 +131,23 @@ class DetectionTests(unittest.TestCase):
         self.assertFalse(unavailable["available"])
         self.assertEqual(unavailable["violations"], [])
 
+    def test_nested_weak_face_matches_and_phone_screen_do_not_imply_two_people(self):
+        import security_check
+        self.assertEqual(security_check.distinct_faces([(80, 80, 150, 150), (82, 82, 148, 148), (300, 20, 60, 60)], [8, 7, 2]), [(80, 80, 150, 150)])
+        self.assertEqual(len(security_check.distinct_faces([(80, 80, 150, 150), (320, 80, 110, 110)], [8, 7])), 2)
+        with patch.object(security_check, "detect_faces", return_value=[(80, 80, 150, 150), (320, 80, 110, 110)]):
+            result = security_check.analyze_frame(None, config={"object_detection": False}, source="mobile")
+        self.assertFalse(any(item["type"] == "multiple_faces" for item in result["violations"]))
+
+    def test_final_score_includes_typed_interruptions_without_double_manual_penalty(self):
+        state = {"analyzed_frames": 6, "desktop_analyzed_frames": 6,
+                 "infractions": {"multiple_faces": 2, "manual_tab_switch": 3}}
+        doc = {"proctoring_config": {"object_detection": True}, "integrity": {
+            "count": 5, "counts_by_type": {"tab_switch": 3, "mobile_unavailable": 2}}}
+        result = policy.build_proctoring_report(state, doc)
+        self.assertEqual(result["final_score"], 89)
+        self.assertEqual(result["interruption_counts"], {"tab_switch": 3, "mobile_unavailable": 2})
+
 
 class _Collection:
     def __init__(self, docs=()):
@@ -182,10 +199,11 @@ class SocketTests(unittest.TestCase):
         self.key = patch.object(policy, "_signing_key", return_value=b"test-pairing-secret")
         self.key.start()
         self.addCleanup(self.key.stop)
-        for name in ("sockets.proctoring_sockets", "sockets.mobile_sockets", "sockets.session_access"):
+        for name in ("sockets.proctoring_sockets", "sockets.mobile_sockets", "sockets.session_access", "sockets.speech_sockets"):
             sys.modules.pop(name, None)
         self.desktop_handlers = importlib.import_module("sockets.proctoring_sockets")
         self.mobile_handlers = importlib.import_module("sockets.mobile_sockets")
+        self.speech_handlers = importlib.import_module("sockets.speech_sockets")
         self.owner = self.sio.test_client(self.app, auth={"token": "owner"})
         self.outsider = self.sio.test_client(self.app, auth={"token": "outsider"})
         self.phone = self.sio.test_client(self.app)
@@ -199,6 +217,30 @@ class SocketTests(unittest.TestCase):
     def join_phone(self):
         token = policy.create_mobile_pairing_token("session-a", "candidate")
         return self.phone.emit("join_mobile_session", {"session_id": "session-a", "pairing_token": token}, callback=True)
+
+    def test_live_captions_require_active_owner_and_remain_private(self):
+        import array
+        import math
+        fake_routes = types.ModuleType("routes.speech_routes")
+        fake_routes.speech_controller = types.SimpleNamespace(speech_service=types.SimpleNamespace(
+            groq_client=object(), speech_client=None, speech_to_text=lambda *args, **kwargs: "Private caption text"))
+        data = {"session_id": "session-a", "stream_id": "caption-owned-123"}
+        with patch.dict(sys.modules, {"routes.speech_routes": fake_routes}):
+            for client in (self.outsider, self.phone):
+                self.assertFalse(client.emit("speech_live_start", data, callback=True)["ok"])
+            self.owner.emit("join_interview_session", {"session_id": "session-a"}, callback=True)
+            self.assertFalse(self.owner.emit("speech_live_start", data, callback=True)["ok"])
+            self.collection.update_one({"session_id": "session-a"}, {"$set": {"status": "active"}})
+            self.assertTrue(self.owner.emit("speech_live_start", data, callback=True)["ok"])
+            self.assertFalse(self.outsider.emit("speech_live_audio", {"stream_id": data["stream_id"], "sequence": 0, "audio": bytes(6400)}, callback=True)["ok"])
+            audio = array.array("h", (int(3000 * math.sin(i * .1)) for i in range(48000))).tobytes()
+            for number, offset in enumerate(range(0, len(audio), 6400)):
+                self.assertTrue(self.owner.emit("speech_live_audio", {"stream_id": data["stream_id"], "sequence": number, "audio": audio[offset:offset + 6400]}, callback=True)["ok"])
+            result = self.owner.emit("speech_live_end", {"stream_id": data["stream_id"], "last_sequence": 14}, callback=True)
+            self.assertEqual(result["transcript"], "Private caption text")
+            self.assertTrue(result["complete"])
+            self.assertFalse(any(item["name"] == "speech_live_transcript" for item in self.outsider.get_received()))
+            self.assertFalse(any(item["name"] == "speech_live_transcript" for item in self.phone.get_received()))
 
     def test_anonymous_and_other_candidate_cannot_join_control_or_score(self):
         for client in (self.phone, self.outsider):

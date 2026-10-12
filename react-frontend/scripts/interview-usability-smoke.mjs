@@ -14,6 +14,9 @@ const { window: win } = new JSDOM('<html><body><div id="root"></div></body></htm
 for (const key of ["window", "document", "navigator", "sessionStorage", "localStorage", "HTMLElement", "Element", "Node", "Event", "MouseEvent", "getComputedStyle"]) {
   Object.defineProperty(globalThis, key, { value: key === "window" ? win : win[key], configurable: true, writable: true });
 }
+globalThis.FileReader = class {
+  readAsDataURL(blob) { blob.arrayBuffer().then(bytes => { this.result = `data:${blob.type};base64,${Buffer.from(bytes).toString("base64")}`; this.onload?.(); }).catch(() => this.onerror?.()); }
+};
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 win.scrollTo = () => {};
@@ -73,17 +76,23 @@ class FixtureAudioContext {
   state = audioSuspended ? "suspended" : "running"; currentTime = 0; destination = {};
   resume = async () => { if (!audioSuspended) this.state = "running"; }; close = async () => {};
   createAnalyser() { const context = this; return { fftSize: 1024, getByteTimeDomainData(samples) { samples.fill(micSound && context.state === "running" ? 133 : 128); } }; }
-  createMediaStreamSource() { return { connect() {} }; }
+  createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
   createOscillator() { return { connect() {}, frequency: {}, start() {}, stop() {} }; }
-  createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
+  audioWorklet = { addModule: async () => {} };
+  createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
 }
+class FixturePCMNode {
+  port = { onmessage: null, postMessage: message => { if (message.type === "flush") this.port.onmessage?.({ data: { type: "flushed" } }); } };
+  connect() {} disconnect() {}
+}
+globalThis.AudioWorkletNode = win.AudioWorkletNode = FixturePCMNode;
 globalThis.MediaStream = win.MediaStream = FixtureStream;
 globalThis.MediaRecorder = win.MediaRecorder = FixtureRecorder;
 win.AudioContext = FixtureAudioContext;
 Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { async getUserMedia() { mediaRequests++; if (mediaFailure) throw new win.DOMException("Permission denied", "NotAllowedError"); currentStream = new FixtureStream(); return currentStream; } } });
 globalThis.__interviewTestSocket = () => {
   const handlers = new Map();
-  socket = { connected: true, on(name, fn) { handlers.set(name, fn); return this; }, off() { return this; }, emit(name, payload, ack) { socketEvents.push({ name, payload }); ack?.({ ok: true }); return this; }, disconnect() { this.connected = false; }, connect() { this.connected = true; queueMicrotask(() => handlers.get("connect")?.()); }, fire(name, data) { handlers.get(name)?.(data); } };
+  socket = { connected: true, on(name, fn) { handlers.set(name, [...(handlers.get(name) || []), fn]); return this; }, off(name, fn) { handlers.set(name, (handlers.get(name) || []).filter(item => item !== fn)); return this; }, emit(name, payload, ack) { socketEvents.push({ name, payload }); ack?.({ ok: true }); return this; }, disconnect() { this.connected = false; }, connect() { this.connected = true; queueMicrotask(() => socket.fire("connect")); }, fire(name, data) { (handlers.get(name) || []).forEach(fn => fn(data)); } };
   queueMicrotask(() => socket.fire("connect"));
   return socket;
 };
@@ -97,6 +106,7 @@ globalThis.fetch = win.fetch = async (url, options = {}) => {
   const pathname = new URL(String(url), "http://localhost:5000").pathname;
   let data = {}, status = 200;
   if (pathname.endsWith("/session")) data = sessionPayload();
+  if (pathname.endsWith("/transcribe")) data = { transcript: "I built a reliable Python service." };
   if (pathname.endsWith("/activate")) { serverStatus = "active"; data = { current_question: "Describe a recent project.", question_deadline: Date.now() / 1000 + 300 }; }
   if (pathname.endsWith("/answer")) {
     status = answerFailure ? 503 : 200;
@@ -116,10 +126,6 @@ function text() { return document.body.textContent; }
 function button(label, scope = document) { return [...scope.querySelectorAll("button")].find(node => node.textContent.trim() === label); }
 async function settle(ms = 60) { await act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); }); }
 async function click(node) { assert.ok(node, "Expected clickable control"); await act(async () => node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))); await settle(); }
-async function typeAnswer(value) {
-  const input = document.querySelector("#typed-answer"); assert.ok(input);
-  await act(async () => { Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, "value").set.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
-}
 async function keyboard(key, shiftKey = false) { await act(async () => document.dispatchEvent(new win.KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true }))); await settle(); }
 async function mount(component, options = {}) {
   if (root) await act(async () => root.unmount());
@@ -140,7 +146,7 @@ async function activeInterview(options = {}) {
   if (options.dual) { await act(async () => socket.fire("mobile_status_dashboard", { ready: true, status: "connected" })); assert.ok(button("Continue"), text() + "\n" + renderErrors.join("\n")); await click(button("Continue")); }
   await click(document.querySelector('input[type="checkbox"]'));
   micSound = false; await click(button("Start interview"));
-  assert.ok(document.querySelector('[aria-label="Answer format"]'));
+  assert.ok(document.querySelector('[aria-label="Interview conversation"]'));
 }
 async function check(name, fn) {
   await fn();
@@ -250,74 +256,68 @@ try {
     await settle(1050); assert.ok(socketEvents.some(event => event.name === "mobile_proctoring_frame"));
   });
 
-  await check("typing does not trigger voice auto-submission and advances the same interview", async () => {
-    await activeInterview(); await click(button("Type answer")); await typeAnswer("I built a reliable service.");
-    const voice = recordings.find(recorder => recorder.mimeType.startsWith("audio")); assert.equal(voice.state, "inactive");
-    const clock = now(); Date.now = () => clock + 31000; await settle(200);
-    assert.equal(apiCalls.filter(call => call.url.endsWith("/answer")).length, 0);
-    assert.ok(text().includes("Automatic answer submission is off")); assert.ok(text().includes("Question time remaining"));
-    await click(button("Send text answer"));
-    const answers = apiCalls.filter(call => call.url.endsWith("/answer")); assert.equal(answers.length, 1);
-    assert.deepEqual(JSON.parse(answers[0].options.body), { question: "Describe a recent project.", answer: "I built a reliable service." });
-    assert.ok(text().includes("What did you learn?")); assert.equal(document.querySelector("#typed-answer").value, "");
-    assert.equal(recordings.filter(recorder => recorder.mimeType.startsWith("audio")).length, 1);
-    Date.now = now;
+  await check("phone camera recovery restarts recording and uploads both retained parts", async () => {
+    await mount(e(Routes, null, e(Route, { path: "/mobile-camera/:sessionId", element: e(compiled.MobileRecorder) })), { path: "/mobile-camera/ui-session?pairing_token=fixture-pairing" }); await settle(180);
+    await act(async () => socket.fire("mobile_recording_action", { action: "start" }));
+    assert.equal(recordings.length, 1); assert.equal(recordings[0].state, "recording");
+    const lostTrack = currentStream.getVideoTracks()[0]; lostTrack.muted = true;
+    await act(async () => lostTrack.onmute());
+    await click(button("Retry camera and microphone"));
+    assert.equal(recordings[0].state, "inactive"); assert.equal(recordings.length, 2);
+    assert.equal(recordings[1].state, "recording"); assert.equal(mediaRequests, 2);
+    await act(async () => socket.fire("mobile_recording_action", { action: "stop" })); await settle(120);
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/upload-mobile-recording")).length, 2);
+    assert.ok(text().includes("Recording saved"));
   });
-  await check("a failed typed submission keeps the exact answer for retry", async () => {
-    await activeInterview(); await click(button("Type answer")); await typeAnswer("My saved draft."); answerFailure = true;
-    await click(button("Send text answer")); assert.ok(button("Retry saved answer")); assert.equal(document.querySelector("#typed-answer").value, "My saved draft.");
-    answerFailure = false; await click(button("Retry saved answer"));
+  await check("voice-only conversation shows live captions and final spoken answers", async () => {
+    await activeInterview(); assert.ok(!button("Type answer")); assert.ok(!document.querySelector("textarea"));
+    const live = socketEvents.find(event => event.name === "speech_live_start"); assert.ok(live);
+    await act(async () => socket.fire("speech_live_transcript", { stream_id: live.payload.stream_id, transcript: "I built a reliable" }));
+    assert.ok(text().includes("I built a reliable")); micSound = true; await settle(180); micSound = false;
+    await click(button("Send answer"));
+    const submitted = apiCalls.find(call => call.url.endsWith("/answer")); assert.ok(submitted, text());
+    assert.equal(JSON.parse(submitted.options.body).answer, "I built a reliable Python service.");
+    assert.ok(text().includes("What did you learn?")); assert.ok(text().includes("I built a reliable Python service."));
+  });
+  await check("a failed spoken submission keeps the exact final transcript for retry", async () => {
+    await activeInterview(); micSound = true; await settle(180); micSound = false; answerFailure = true;
+    await click(button("Send answer")); assert.ok(button("Send saved answer"));
+    answerFailure = false; await click(button("Send saved answer"));
     const answers = apiCalls.filter(call => call.url.endsWith("/answer")); assert.equal(answers.length, 2);
-    assert.equal(answers[0].options.body, answers[1].options.body); assert.ok(text().includes("What did you learn?"));
+    assert.equal(answers[0].options.body, answers[1].options.body);
   });
-  await check("changing answer format protects both an unsent recording and a typed draft", async () => {
-    await activeInterview(); micSound = true; await settle(180); micSound = false;
-    await click(button("Type answer")); assert.ok(text().includes("Switch to a typed answer?"));
-    const clock = now(); Date.now = () => clock + 9000; await settle(200);
-    assert.equal(apiCalls.filter(call => call.url.endsWith("/answer")).length, 0);
-    await click(button("Switch to typing")); assert.ok(document.querySelector("#typed-answer"));
-    await typeAnswer("Keep my draft."); await click(button("Speak answer")); assert.ok(text().includes("Switch to a spoken answer?"));
-    await click(button("Cancel")); assert.equal(document.querySelector("#typed-answer").value, "Keep my draft.");
-    Date.now = now;
-  });
-  await check("phone reconnection provides a fresh pairing code and retains the typed draft", async () => {
-    await activeInterview({ dual: true }); await click(button("Type answer")); await typeAnswer("Keep this draft.");
+  await check("phone monitoring gaps warn without blocking or ending the voice interview", async () => {
+    await activeInterview({ dual: true });
     await act(async () => socket.fire("mobile_disconnected")); await settle();
-    assert.ok(text().includes("Reconnect your devices")); assert.ok(button("Resume interview").disabled);
-    assert.ok(document.querySelector('[role="dialog"] svg')); assert.equal(document.querySelectorAll("video").length, 1);
-    pairingVersion = 2; await click(button("Refresh phone pairing code"));
-    assert.ok(apiCalls.filter(call => call.url.endsWith("/session")).length >= 2);
-    assert.equal(apiCalls.filter(call => call.url.endsWith("/start")).length, 0);
-    await act(async () => socket.fire("mobile_status_dashboard", { ready: true, status: "connected" })); await click(button("Resume interview"));
-    assert.equal(document.querySelector("#typed-answer").value, "Keep this draft."); assert.equal(document.querySelectorAll("video").length, 1);
-    await click(button("End interview")); assert.ok(text().includes("Your typed draft has not been submitted")); await click(button("Cancel"));
+    assert.ok(!text().includes("Reconnect your devices")); assert.ok(text().includes("phone camera disconnected"));
+    assert.ok(document.querySelector('[aria-label="Interview voice activity"]'));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 0);
+    assert.ok(recordings.some(recorder => recorder.state === "recording"));
   });
-  await check("a disconnected laptop can be checked again before resuming", async () => {
-    await activeInterview(); await click(button("Type answer"));
+  await check("a disconnected laptop retains its spoken recording and can resume", async () => {
+    await activeInterview(); micSound = true; await settle(180); micSound = false;
     await act(async () => { currentStream.getVideoTracks()[0].stop(); currentStream.getVideoTracks()[0].onended(); }); await settle();
     assert.ok(button("Resume interview").disabled); micSound = true;
-    await click(button("Retry device checks")); await settle(180); assert.ok(!button("Resume interview").disabled);
-    micSound = false; await click(button("Resume interview")); assert.ok(!text().includes("Reconnect your devices"));
-    assert.ok(document.querySelector("#typed-answer"));
+    await click(button("Retry device checks")); await settle(180); micSound = false;
+    await click(button("Resume interview")); assert.ok(!text().includes("Reconnect your devices"));
+    assert.ok(button("Send saved answer")); assert.ok(!document.querySelector("textarea"));
   });
-  await check("server monitoring loss pauses the interview with an authoritative interruption count", async () => {
+  await check("warnings dismiss after 1.8 seconds while counts remain visible", async () => {
     await activeInterview();
-    await act(async () => socket.fire("interview_integrity", { session_id: "ui-session", count: 4, limit: 5, recovery_seconds: 60,
-      losses: { mobile: { message: "Phone monitoring stopped." } } })); await settle();
-    assert.ok(text().includes("Interruption 4 of 5"));
-    assert.ok(text().includes("Reconnect your devices"));
-    assert.ok(text().includes("Restore monitoring within 60 seconds"));
+    await act(async () => socket.fire("proctoring_alert", { type: "head_turn", source: "desktop", message: "Keep your face visible." }));
+    assert.ok(text().includes("Keep your face visible.")); await settle(1900);
+    assert.ok(!text().includes("Keep your face visible."));
   });
-  await check("the fifth server interruption stops recording and shows a terminal result without retry", async () => {
-    await activeInterview(); serverStatus = "terminated";
-    await act(async () => socket.fire("interview_integrity", { session_id: "ui-session", count: 5, limit: 5, terminated: true })); await settle();
-    assert.ok(text().includes("This interview attempt has ended"));
-    assert.ok(text().includes("cannot repeat this interview"));
-    assert.ok(!button("Resume interview")); assert.ok(!button("Start interview"));
-    assert.ok(recordings.every(recorder => recorder.state === "inactive"));
+  await check("more than five recorded interruptions never automatically end or pause", async () => {
+    await activeInterview();
+    await act(async () => socket.fire("interview_integrity", { session_id: "ui-session", count: 8,
+      counts_by_type: { tab_switch: 6, mobile_unavailable: 2 }, auto_termination: false,
+      losses: { mobile: { message: "Phone monitoring stopped." } } })); await settle();
+    assert.ok(text().includes("Recorded interruptions8")); assert.ok(!text().includes("Reconnect your devices"));
+    assert.ok(!text().includes("of 5")); assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 0);
   });
   await check("failed recording uploads warn before closing and offer themed leave or retry", async () => {
-    await activeInterview(); await click(button("Type answer")); await typeAnswer("Submitted answer."); await click(button("Send text answer"));
+    await activeInterview(); micSound = true; await settle(180); micSound = false; await click(button("Send answer"));
     uploadFailure = true; await click(button("End interview")); await click(button("Finish interview")); await settle();
     assert.ok(text().includes("recording upload failed"));
     const leaving = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(leaving); assert.equal(leaving.defaultPrevented, true);

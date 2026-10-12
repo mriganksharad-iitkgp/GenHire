@@ -17,7 +17,8 @@
     "react-dom": "^19.0.0",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.1.5",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "three": "0.180.0"
   },
   "scripts": {
     "postinstall": "node scripts/prepare-face-assets.mjs",
@@ -32,9 +33,10 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
     "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15",
-    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/features/interview/utils/faceCapture.test.mjs src/shared/components/layout/navigation.test.mjs",
+    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/features/interview/utils/faceCapture.test.mjs src/shared/components/layout/navigation.test.mjs src/features/interview/utils/pcmWorklet.test.mjs",
     "test:portals": "node scripts/portal-smoke.mjs",
-    "test:interview-ui": "node scripts/interview-usability-smoke.mjs"
+    "test:interview-ui": "node scripts/interview-usability-smoke.mjs",
+    "test:voice-runtime:prepare": "node scripts/build-voice-runtime-smoke.mjs && node scripts/build-interview-runtime-smoke.mjs"
   },
   "eslintConfig": {
     "extends": [

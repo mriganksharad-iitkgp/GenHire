@@ -16,6 +16,7 @@ export default function MobileRecorder() {
   const uploadRef = useRef(null); const statusRef = useRef(status); statusRef.current = status;
   const cameraRequestRef = useRef(false); const permissionAttemptedRef = useRef(false);
   const fullscreenWantedRef = useRef(false);
+  const activeInterviewRef = useRef(false);
   const [awakeNotice, setAwakeNotice] = useState("");
   const [integrity, setIntegrity] = useState(null);
 
@@ -41,8 +42,9 @@ export default function MobileRecorder() {
     finally { uploadingRef.current = false; }
   };
   uploadRef.current = upload;
-  const startRecording = () => {
-    if (!streamRef.current || recorderRef.current?.state === "recording" || document.hidden) return;
+  const startRecording = useCallback(() => {
+    if (!streamRef.current || recorderRef.current?.state === "recording" || document.hidden
+      || !streamRef.current.getTracks().every(track => track.readyState === "live" && !track.muted)) return;
     try {
       const mimeType = mediaMimeType("video"); const recorder = new MediaRecorder(streamRef.current, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 450000, audioBitsPerSecond: 24000 });
       const chunks = []; recorderRef.current = recorder;
@@ -55,7 +57,7 @@ export default function MobileRecorder() {
       };
       recorder.start(2000); setStatus("recording"); sendStatus("recording");
     } catch (failure) { setError(`Recording could not start: ${failure.message}. Reconnect your camera.`); setCameraReady(false); setStatus("camera_error"); sendStatus("camera_error"); }
-  };
+  }, [sendStatus]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -66,12 +68,14 @@ export default function MobileRecorder() {
         if (!aliveRef.current) return;
         if (!response?.ok) { setStatus("invalid"); setError(response?.error || "This pairing link is invalid or expired. Refresh the QR code on your laptop."); return; }
         joinedRef.current = true; setJoined(true); setError("");
+        activeInterviewRef.current = response.session_status === "active";
         if (response.terminal || ["completed", "abandoned", "discarded"].includes(response.session_status)) {
           if (recorderRef.current?.state === "recording") { statusRef.current = "uploading"; setStatus("uploading"); recorderRef.current.stop(); }
           else if (partsRef.current.some((part) => !part.uploaded)) uploadRef.current(); else setStatus("complete");
           streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); setCameraReady(false); wakeLockRef.current?.release().catch(() => {}); return;
         }
         if (recorderRef.current?.state === "recording") setStatus("recording"); else setStatus(streamRef.current ? "ready" : "camera_needed");
+        if (activeInterviewRef.current && streamRef.current) startRecording();
         sendStatus();
       });
     });
@@ -79,8 +83,9 @@ export default function MobileRecorder() {
     socket.on("connect_error", () => setStatus("reconnecting"));
     socket.on("interview_integrity", (data) => { setIntegrity(data); if (data.losses?.mobile) setError(data.losses.mobile.message); else setError(""); });
     socket.on("mobile_recording_action", (data) => {
-      if (data.action === "start") startRecording();
+      if (data.action === "start") { activeInterviewRef.current = true; startRecording(); }
       else if (data.action === "stop") {
+        activeInterviewRef.current = false;
         if (recorderRef.current?.state === "recording") { statusRef.current = "uploading"; setStatus("uploading"); recorderRef.current.stop(); }
         else if (partsRef.current.some((part) => !part.uploaded)) uploadRef.current(); else setStatus("complete");
         streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); setCameraReady(false); wakeLockRef.current?.release().catch(() => {});
@@ -97,7 +102,7 @@ export default function MobileRecorder() {
     }, 1000);
     const visibility = async () => {
       if (document.hidden) sendStatus("camera_error");
-      else if (streamRef.current) { sendStatus(); try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* power saving may block wake lock */ } }
+      else if (streamRef.current) { if (activeInterviewRef.current) startRecording(); sendStatus(); try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); } catch { /* power saving may block wake lock */ } }
     };
     const leaving = () => sendStatus("camera_error");
     const fullscreen = () => sendStatus();
@@ -121,17 +126,27 @@ export default function MobileRecorder() {
     if (cameraRequestRef.current) return; cameraRequestRef.current = true; setBusy(true); setError("");
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Open this private link in a current Safari or Chrome browser. Camera access requires HTTPS.");
+      // Finish and retain the old part before swapping tracks. Otherwise its
+      // asynchronous stop can leave the replacement camera without a recorder.
+      const previous = recorderRef.current;
+      if (previous && previous.state !== "inactive") await new Promise((resolve, reject) => {
+        const finished = () => { clearTimeout(timer); resolve(); };
+        const timer = setTimeout(() => { previous.removeEventListener("stop", finished); reject(new Error("Your previous recording is still saving. Retry camera access.")); }, 3000);
+        previous.addEventListener("stop", finished, { once: true });
+        try { previous.stop(); } catch (failure) { clearTimeout(timer); previous.removeEventListener("stop", finished); reject(failure); }
+      });
       streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: { echoCancellation: true, noiseSuppression: true } });
       if (!aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream; videoRef.current.srcObject = stream; await videoRef.current.play();
-      stream.getTracks().forEach((track) => { track.onended = track.onmute = () => { setCameraReady(false); setStatus("camera_error"); setError("Your camera or microphone stopped. Enable it again to continue."); sendStatus("camera_error"); }; track.onunmute = () => { setCameraReady(true); sendStatus(); }; });
+      stream.getTracks().forEach((track) => { track.onended = track.onmute = () => { setCameraReady(false); setStatus("camera_error"); setError("Your camera or microphone stopped. Enable it again to continue."); sendStatus("camera_error"); }; track.onunmute = () => { setCameraReady(true); setError(""); setStatus(recorderRef.current?.state === "recording" ? "recording" : "ready"); if (activeInterviewRef.current) startRecording(); sendStatus(); }; });
       setCameraReady(true); setStatus("ready"); sendStatus("ready");
+      if (activeInterviewRef.current) startRecording();
       try { wakeLockRef.current = await navigator.wakeLock?.request("screen"); if (!wakeLockRef.current) setAwakeNotice("Automatic screen wake is unavailable. Disable auto-lock in your phone settings and keep this page visible."); }
       catch { setAwakeNotice("Your phone declined automatic screen wake. Disable auto-lock and keep it connected to power."); }
     } catch (failure) { setError(failure.name === "NotAllowedError" ? "Allow camera and microphone access in your browser settings, then retry." : failure.message); }
     finally { cameraRequestRef.current = false; if (aliveRef.current) setBusy(false); }
-  }, [sendStatus]);
+  }, [sendStatus, startRecording]);
   useEffect(() => {
     if (!joined || status !== "camera_needed" || permissionAttemptedRef.current) return;
     permissionAttemptedRef.current = true; enableCamera();
@@ -140,8 +155,8 @@ export default function MobileRecorder() {
   return <main className={styles.shell}><section className={styles.centerCard} style={{ margin: "10px auto", maxWidth: 540 }}><span className={styles.brand}><ShieldCheck size={22} /> GenHire companion</span>
     <span className={styles.eyebrow}>Phone · Second camera</span><h1>{title}</h1><p>Place your phone to show you, your laptop and your desk from the side. Keep this page open, your screen unlocked and your phone connected to power.</p>
     <div className={styles.devicePreview}><video ref={videoRef} autoPlay muted playsInline className={styles.preview} aria-label="Phone front camera preview" />{!cameraReady && <span className={styles.cameraPlaceholder}><Smartphone size={30} />Front camera preview</span>}</div>
-    <p className={styles.note}>Use the front camera and position the phone beside you. Leaving this page, locking the screen or losing camera access pauses the interview. Five interruptions end this attempt; restore monitoring within 60 seconds. Your phone browser cannot prevent app switching or manual screen lock.</p>
-    {integrity && <p role="status">Interruptions: {integrity.count} of {integrity.limit}{integrity.terminated ? " · Interview ended" : ""}</p>}
+    <p className={styles.note}>Use the front camera and position the phone beside you. Leaving this page, locking the screen or losing camera access is recorded as a coverage gap in the final report. Interruptions do not automatically end the interview. Your phone browser cannot prevent app switching or manual screen lock.</p>
+    {integrity && <p role="status">Recorded interruptions: {integrity.count}</p>}
     {error && <div className={styles.error} role="alert"><CircleAlert size={18} /><span>{error}</span></div>}
     {awakeNotice && <p className={styles.note}>{awakeNotice}</p>}
     {cameraReady && typeof document.documentElement.requestFullscreen === "function" && <button className={styles.secondary} onClick={async () => {

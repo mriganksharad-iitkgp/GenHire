@@ -109,8 +109,9 @@ def mobile_is_ready(session_doc, now=None):
 def record_observation(state, observation, source="desktop", now=None):
     """Confirm repeated observations and charge at most once per 15 seconds.
 
-    A one-frame miss/false positive does not reduce scores. An active violation
-    still produces an alert during its cooldown so a warning stays visible.
+    A one-frame miss/false positive does not reduce scores. Multiple-face
+    observations require four consecutive frames; other checks require two.
+    Cooldowns bound both score deductions and transient warning frequency.
     """
     now = time.monotonic() if now is None else now
     capabilities = observation.get("capabilities") or {}
@@ -133,7 +134,7 @@ def record_observation(state, observation, source="desktop", now=None):
     alerts = []
     for kind, violation in found.items():
         streaks[kind] = streaks.get(kind, 0) + 1
-        if streaks[kind] < 2:
+        if streaks[kind] < (4 if kind == "multiple_faces" else 2):
             continue
         cooldown_key = f"{source}:{kind}"
         last = state.setdefault("last_penalties", {}).get(cooldown_key)
@@ -144,8 +145,8 @@ def record_observation(state, observation, source="desktop", now=None):
             event = {"type": kind, "source": source, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), "message": violation.get("message", kind)}
             state.setdefault("events", []).append(event)
             state["events"] = state["events"][-500:]
-        state["proctoring_score"] = score_from_infractions(state.get("infractions", {}))
-        alerts.append({"type": kind, "status": violation.get("message", kind), "score": state["proctoring_score"], "source": source})
+            state["proctoring_score"] = score_from_infractions(state.get("infractions", {}))
+            alerts.append({"type": kind, "status": violation.get("message", kind), "score": state["proctoring_score"], "source": source})
     return alerts
 
 
@@ -178,8 +179,17 @@ def record_manual_violation(state, kind, now=None):
     return alerts[0] if alerts else None
 
 
-def score_from_infractions(infractions):
-    return round(max(0, 100 - sum(PENALTIES.get(kind, 0) * count for kind, count in infractions.items())), 2)
+INTERRUPTION_WEIGHTS = {"tab_switch": 2, "window_blur": 1, "fullscreen_exit": 2,
+    "device_lost": 1, "desktop_unavailable": .5, "mobile_unavailable": .5}
+
+
+def score_from_infractions(infractions, interruptions=None):
+    # Focus callbacks have their own durable episode counts. Do not deduct
+    # both the legacy manual warning and that same persisted interruption.
+    vision = sum(PENALTIES.get(kind, 0) * count for kind, count in infractions.items()
+                 if not interruptions or not kind.startswith("manual_"))
+    gaps = sum(INTERRUPTION_WEIGHTS.get(kind, .5) * count for kind, count in (interruptions or {}).items())
+    return round(max(0, 100 - vision - gaps), 2)
 
 
 def build_proctoring_report(live_session, session_doc=None):
@@ -217,12 +227,16 @@ def build_proctoring_report(live_session, session_doc=None):
         if missing:
             status = "partial"
     counts = dict(state.get("infractions", {}))
+    from services.interview_integrity_service import policy_payload
+    interruptions = policy_payload(session_doc or {}).get("counts_by_type") or {}
     return {
-        "final_score": score_from_infractions(counts) if desktop_frames > 0 and not disabled else None,
+        "final_score": score_from_infractions(counts, interruptions) if desktop_frames > 0 and not disabled else None,
+        "interruption_counts": interruptions,
+        "score_breakdown": {"vision_weights": dict(PENALTIES), "interruption_weights": dict(INTERRUPTION_WEIGHTS)},
         "status": status, "infraction_counts": counts,
         "events": list(state.get("events", [])), "capabilities": dict(capabilities),
         "interruption_policy": (session_doc or {}).get("integrity") or {},
         "missing_checks": missing,
         "coverage": {"desktop_analyzed_frames": desktop_frames, "mobile_analyzed_frames": mobile_frames, "dual_camera_required": dual, "analysis_errors": state.get("analysis_errors", 0), "mobile_coverage_gaps": state.get("mobile_coverage_gaps", 0)},
-        "summary": "Proctoring checks were disabled for this interview." if disabled else "Proctoring could not analyze the laptop camera; no score is available." if desktop_frames == 0 else "Some proctoring checks were unavailable; review camera coverage and warnings." if status == "partial" else "No proctoring warnings detected." if not counts else "Proctoring warnings require human review; detections are not a cheating verdict.",
+        "summary": "Proctoring checks were disabled for this interview." if disabled else "Proctoring could not analyze the laptop camera; no score is available." if desktop_frames == 0 else "Some proctoring checks were unavailable; review camera coverage and warnings." if status == "partial" else "No proctoring warnings detected." if not counts and not interruptions else "Recorded interruptions and camera observations require human review; they are not a cheating verdict.",
     }

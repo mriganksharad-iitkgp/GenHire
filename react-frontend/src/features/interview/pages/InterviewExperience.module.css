@@ -75,6 +75,33 @@
 .progressTrack { height:3px; background:#dbe5f1; margin:0 auto 28px; max-width:1260px; }
 .progressTrack i { display:block; height:100%; background:var(--portal-accent); transition:width .3s; }
 .interviewGrid { display:grid; grid-template-columns:minmax(420px,1fr) 300px; gap:24px; max-width:1260px; margin:auto; }
+.interviewGrid { grid-template-columns:minmax(0,1fr) 330px; align-items:start; }
+.conversation { display:flex; flex-direction:column; height:calc(100dvh - 137px); min-height:540px; padding:25px; }
+.transcriptHeader { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-bottom:20px; border-bottom:1px solid #edf0f7; }
+.transcriptFeed { overflow-y:auto; flex:1; min-height:180px; padding:22px 4px 8px; scroll-behavior:smooth; }
+.transcriptTurn { margin:0 32px 20px 0; padding:17px 20px; border:1px solid #e7e7f4; border-radius:4px 17px 17px 17px; background:#f7f6ff; }
+.transcriptTurn>span { display:flex; align-items:center; gap:10px; font-size:12px; font-weight:700; color:#6854d6; margin-bottom:9px; }
+.transcriptTurn small { font-size:10px; font-weight:450; color:#8a89a5; }
+.transcriptTurn p,.liveQuestion { font-family:inherit; font-size:16px; font-weight:450; line-height:1.65; letter-spacing:0; white-space:pre-wrap; margin:0; overflow-wrap:anywhere; }
+.candidateTurn { margin-left:32px; margin-right:0; background:#fff; border-color:#e0e8f0; border-radius:17px 4px 17px 17px; }
+.candidateTurn>span { color:#248e81; }
+.captionNote { display:block; margin-top:10px; line-height:1.6; }
+.voiceControls { border-top:1px solid #edf0f7; padding-top:15px; }
+.voiceControls .conversationStatus { margin:0 0 12px; font-size:12px; }
+.voiceButtons { display:flex; flex-wrap:wrap; gap:10px; }
+.voiceControls .note { margin:12px 0 0; font-size:11px !important; }
+.voiceControls .questionClock { margin:12px 0 0; font-size:11px; }
+.warningToast { position:fixed; top:20px; left:50%; transform:translateX(-50%); width:min(550px,calc(100% - 32px)); z-index:15000; display:flex; align-items:start; gap:11px; padding:14px 18px; border:1px solid #f0d3a2; border-radius:13px; background:#fffaf0; color:#975e1c; box-shadow:0 10px 36px #29324920; animation:noticeEnter .18s ease-out; pointer-events:none; }
+.warningToast svg { flex-shrink:0; margin-top:2px; }
+.warningToast strong { font-size:12px; }
+.warningToast p { font-size:12px; line-height:1.5; margin:4px 0 0; }
+.interruptionDetails { border:1px solid #e8e7f4; padding:10px 12px; border-radius:10px; margin:12px 0; font-size:11px; color:#67758b; }
+.interruptionDetails summary { cursor:pointer; color:#6854d6; font-weight:600; }
+.interruptionDetails>div:not(.qr) { display:flex; justify-content:space-between; gap:8px; margin-top:10px; text-transform:capitalize; }
+@keyframes noticeEnter { from { opacity:0; translate:0 -8px; } to { opacity:1; translate:0 0; } }
+@media(max-width:900px) { .interviewGrid { grid-template-columns:1fr; } .conversation { height:auto; min-height:540px; } .transcriptFeed { max-height:52vh; } .monitorPanel { max-width:none; } }
+@media(max-width:480px) { .conversation { padding:18px; } .transcriptTurn { margin-right:12px; padding:14px; } .candidateTurn { margin-left:12px; margin-right:0; } .transcriptHeader>.badge { display:none; } .transcriptTurn p,.liveQuestion { font-size:14px; } }
+@media(prefers-reduced-motion:reduce) { .warningToast { animation:none; } .transcriptFeed { scroll-behavior:auto; } }
 .conversation { background:white; border:1px solid #e0e8f1; border-radius:18px; padding:36px; min-height:min(560px,calc(100dvh - 145px)); }
 .interviewerBadge { display:flex; gap:12px; align-items:center; }
 .interviewerBadge>span { width:47px; height:47px; display:grid; place-items:center; border-radius:16px; background:var(--portal-primary-soft); font-weight:650; color:var(--portal-primary); font-size:23px; }
@@ -176,6 +203,10 @@
 .reportBody .scoreCard strong { color:var(--portal-primary); }.resultCard .scoreCard strong { font-size:24px; }
 @media (max-width:900px) { .setupLayout { grid-template-columns:220px minmax(0,1fr); }.interviewGrid { grid-template-columns:minmax(0,1fr) 230px; } }
 @media (max-width:650px) { .setupCard h2 { font-size:22px; }.centerCard h1,.resultCard h1 { font-size:24px; }.conversation { min-height:0; }.scoreCard { flex-wrap:wrap; gap:8px; }.question { font-size:22px; }.centerCard { margin:20px auto; }.actions { flex-wrap:wrap; }.actions a { flex:1; }.reportFooter { flex-wrap:wrap; } }
+.conversation { padding:25px; }
+.monitorPanel { max-height:calc(100dvh - 136px); overflow-y:auto; overscroll-behavior:contain; }
+@media(max-width:900px) { .interviewGrid { grid-template-columns:1fr; } .conversation { height:auto; min-height:500px; } .transcriptFeed { max-height:52vh; } .monitorPanel { max-height:none; } .candidatePreview { width:100%; height:200px; float:none; margin:0; } }
+@media(max-width:650px) { .conversation { width:100%; padding:18px; min-height:480px; } .candidatePreview { height:210px; } .monitorPanel h3 { margin-top:20px; } }
 
 /* Dialogs must clear the fixed navigation and scroll within the viewport. */
 .reportOverlay { z-index:10060; padding:20px; overflow-y:auto; overscroll-behavior:contain; }

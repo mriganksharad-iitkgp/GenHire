@@ -44,6 +44,8 @@ react-frontend/dist/
 secure-browser-kiosk/dist/
 secure-browser-kiosk/web-app/
 secure-browser-kiosk/.face-smoke-user-data/
+secure-browser-kiosk/.voice-smoke-user-data/
+secure-browser-kiosk/.voice-runtime-smoke/
 
 # ── Environment files ────────────────────────────────────────────────────────
 .env

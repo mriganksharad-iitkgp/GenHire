@@ -74,8 +74,9 @@ removed settings.
   the interview UI, component tree.
 
 ### Secure Browser (`secure-browser-kiosk/`)
-- **[interview-monitoring-policy.md](interview-monitoring-policy.md)** ? five-interruption enforcement, front phone camera, session restoration and device acceptance checks.
-- **[interview-setup-recovery.md](interview-setup-recovery.md)** — kiosk 1.2.4,
+- **[interview-voice-and-captions.md](interview-voice-and-captions.md)** — real-audio Three.js sphere, incremental speech recognition, provider setup, usage and verification.
+- **[interview-monitoring-policy.md](interview-monitoring-policy.md)** — interruption counts and scoring without automatic termination, front phone camera, recovery and device acceptance checks.
+- **[interview-setup-recovery.md](interview-setup-recovery.md)** — kiosk 1.2.5,
   automatic face capture/retake, threaded backend, Cloud Run settings and release steps.
 - **[secure-browser/overview.md](secure-browser/overview.md)** — why it
   exists and what it does.

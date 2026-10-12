@@ -8,7 +8,8 @@ import { getToken } from "shared/utils/session";
 import ConfirmDialog from "shared/components/ui/ConfirmDialog";
 import Modal from "shared/components/ui/Modal";
 import InterviewReportModal from "../components/InterviewReportModal";
-import AnswerComposer from "../components/AnswerComposer";
+import VoiceSphere from "../components/VoiceSphere";
+import { startLiveCaptions } from "../utils/liveCaptions";
 import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase, transcriptionAudio } from "../utils/session";
 import styles from "./InterviewExperience.module.css";
 import { captureProgress, createFaceDetector, facePosition, faceSnapshot } from "../utils/faceCapture";
@@ -46,15 +47,14 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const [faceHint, setFaceHint] = useState("Preparing automatic capture…");
   const [faceProgress, setFaceProgress] = useState(0);
   const [phone, setPhone] = useState({ ready: false, status: "disconnected" }); const [connected, setConnected] = useState(false);
-  const [proctoring, setProctoring] = useState(null); const [warning, setWarning] = useState(null); const [warningCount, setWarningCount] = useState(0);
-  const [integrity, setIntegrity] = useState({ count: 0, limit: 5 });
+  const [proctoring, setProctoring] = useState(null); const [warning, setWarning] = useState(null);
+  const [integrity, setIntegrity] = useState({ count: 0, counts_by_type: {} });
+  const [turns, setTurns] = useState([]); const [captionNote, setCaptionNote] = useState("");
+  const voiceAudioRef = useRef({ microphone: null, speaker: null }); const speakerNodesRef = useRef(null);
+  const liveCaptionsRef = useRef(null), captionGenerationRef = useRef(0), transcriptTailRef = useRef(null);
   const [question, setQuestion] = useState(""); const [questionCount, setQuestionCount] = useState(1); const [speechState, setSpeechState] = useState("idle");
   const [hasSpoken, setHasSpoken] = useState(false); const [answerCountdown, setAnswerCountdown] = useState(THINK_SECONDS);
   const [draft, setDraft] = useState(""); const [pendingAnswer, setPendingAnswer] = useState(null); const [elapsed, setElapsed] = useState(0);
-  const [answerMode, setAnswerMode] = useState("voice"); const answerModeRef = useRef("voice");
-  const [showModeConfirm, setShowModeConfirm] = useState(false);
-  const [modeToConfirm, setModeToConfirm] = useState("text");
-  const modeConfirmRef = useRef(false);
   const [questionDeadline, setQuestionDeadline] = useState(null); const [questionRemaining, setQuestionRemaining] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [audioRetryAvailable, setAudioRetryAvailable] = useState(false); const recordedAnswerRef = useRef(null);
@@ -77,22 +77,23 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const bindVideo = useCallback((element) => { videoRef.current = element; if (element && streamRef.current) element.srcObject = streamRef.current; }, []);
   const notify = useCallback((message, type = "notice", source = "laptop") => {
     const key = `${source}:${type}`; if (Date.now() - (lastWarningRef.current[key] || 0) < 8000) return;
-    lastWarningRef.current[key] = Date.now(); setWarning({ message, type, source }); if (type !== "notice") setWarningCount((count) => count + 1);
+    lastWarningRef.current[key] = Date.now(); setWarning({ message, type, source });
   }, []);
+  useEffect(() => { if (!warning) return; const timer = setTimeout(() => setWarning(null), 1800); return () => clearTimeout(timer); }, [warning]);
+  useEffect(() => { transcriptTailRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); }, [turns, question, draft]);
   const stopPlayback = useCallback(() => {
     speechRequestRef.current += 1;
+    speakerNodesRef.current?.source.disconnect(); speakerNodesRef.current?.analyser.disconnect(); speakerNodesRef.current = null; voiceAudioRef.current.speaker = null;
     if (audioRef.current) { audioRef.current.onended = null; audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; }
   }, []);
   const applyIntegrity = useCallback((data) => {
     if (!data || (data.session_id && data.session_id !== sessionRef.current?.session_id)) return;
     setIntegrity(data);
-    if (data.terminated && !["loading", "ending", "completed", "discarded", "terminated"].includes(phaseRef.current)) actionsRef.current.finish();
-    else if (Object.keys(data.losses || {}).length && phaseRef.current === "active") {
+    if (Object.keys(data.losses || {}).length && phaseRef.current === "active") {
       const message = Object.values(data.losses)[0].message;
-      setWarning({ message: `${message} Interruption ${data.count} of ${data.limit}. Restore monitoring within ${data.recovery_seconds} seconds.`, type: "interruption", source: "monitoring" });
-      actionsRef.current.pause(message);
+      notify(`${message} The interruption is recorded for your final monitoring report.`, "interruption", "monitoring");
     }
-  }, []);
+  }, [notify]);
   const reportMonitoring = useCallback(async (interruption) => {
     if (phaseRef.current !== "active") return;
     const tracks = streamRef.current?.getTracks() || [];
@@ -125,6 +126,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         setQuestion(merged.current_question || merged.initial_questions?.[0] || existing?.initial_questions?.[0] || ""); setQuestionCount(merged.question_count || 1);
         setQuestionDeadline(merged.question_deadline ?? null);
         if (merged.integrity) setIntegrity(merged.integrity);
+        setTurns(merged.transcript || []);
         if (terminalPhase(merged)) { setResult(merged); setPhase(terminalPhase(merged)); }
         else if (merged.interview_complete) actionsRef.current.finish();
         else if (merged.engine_available === false) { setError("This session's live interviewer is unavailable. Finish with your saved answers, then return to your dashboard. Your submitted answers will be retained."); setPhase("recovery_failed"); }
@@ -195,7 +197,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       // waiting for that gesture; the microphone check offers an explicit retry.
       context.resume().catch(() => {});
       const analyser = context.createAnalyser(); analyser.fftSize = 1024; context.createMediaStreamSource(stream).connect(analyser);
-      contextRef.current = context; analyserRef.current = analyser;
+      contextRef.current = context; analyserRef.current = analyser; voiceAudioRef.current.microphone = analyser;
       stream.getTracks().forEach((track) => { track.onended = track.onmute = () => {
         if (phaseRef.current === "active") { setCameraReady(false); setMicReady(false); actionsRef.current.reportMonitoring("device_lost").catch(() => {}); actionsRef.current.pause("Your camera or microphone stopped. Reconnect your devices to continue."); }
         else { setCameraReady(false); setMicReady(false); setDeviceError("A device was disconnected. Enable your camera and microphone again."); }
@@ -217,7 +219,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       if (!analyserRef.current) return; analyserRef.current.getByteTimeDomainData(samples);
       const level = microphoneLevel(samples); setMicLevel(level);
       if (level >= 4) { setMicReady(true); if (answerRecorderRef.current?.state === "recording" && !pauseRef.current) { spokeRef.current = true; setHasSpoken(true); lastSpeechRef.current = Date.now(); } }
-      if (phaseRef.current !== "active" || answerModeRef.current !== "voice" || modeConfirmRef.current || pauseRef.current || processingRef.current || answerRecorderRef.current?.state !== "recording") return;
+      if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || answerRecorderRef.current?.state !== "recording") return;
       const remaining = spokeRef.current ? SILENCE_SECONDS - (Date.now() - lastSpeechRef.current) / 1000 : THINK_SECONDS - (Date.now() - answerStartRef.current) / 1000;
       setAnswerCountdown(Math.max(0, Math.ceil(remaining)));
       if (remaining <= 0 || Date.now() - answerStartRef.current > 180000) submitRecordingRef.current?.(!spokeRef.current);
@@ -247,16 +249,16 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     if (!session?.session_id) return;
     const socket = io(socketUrl, { auth: { token: getToken() }, transports: ["websocket", "polling"], tryAllTransports: true, reconnection: true, timeout: 8000 }); socketRef.current = socket;
     const onPhone = (data) => { setPhone((previous) => ({ ...previous, ...data, receivedAt: Date.now(), ready: data.ready === true }));
-      if (data.ready === false && phaseRef.current === "active" && sessionRef.current?.dual_proctoring_required) actionsRef.current.pause("Your phone camera is unavailable. Keep its companion page visible and reconnect to continue."); };
+      if (data.ready === false && phaseRef.current === "active" && sessionRef.current?.dual_proctoring_required) notify("Your phone camera is unavailable. Keep its companion page visible; the coverage gap is recorded.", "mobile_unavailable", "phone"); };
     socket.on("connect", () => {
       socketAcknowledgement(socket, "join_interview_session", { session_id: session.session_id }).then(() => {
         if (!aliveRef.current || socketRef.current !== socket) return; setConnected(true);
       }).catch((failure) => { setConnected(false); notify(failure.message); });
     });
-    socket.on("disconnect", () => { setConnected(false); if (phaseRef.current === "active") actionsRef.current.pause("Your connection to interview monitoring was lost. We are reconnecting."); });
+    socket.on("disconnect", () => { setConnected(false); if (phaseRef.current === "active") notify("Monitoring is reconnecting. Your spoken answer is still being recorded.", "connection", "laptop"); });
     socket.on("connect_error", () => setConnected(false)); socket.on("mobile_connected", onPhone); socket.on("mobile_status_dashboard", onPhone);
     socket.on("interview_integrity", applyIntegrity);
-    socket.on("mobile_disconnected", () => { setPhone({ ready: false, status: "disconnected" }); if (phaseRef.current === "active" && sessionRef.current?.dual_proctoring_required) actionsRef.current.pause("Your phone camera disconnected. Keep its companion page open and reconnect to continue."); });
+    socket.on("mobile_disconnected", () => { setPhone({ ready: false, status: "disconnected" }); if (phaseRef.current === "active" && sessionRef.current?.dual_proctoring_required) notify("Your phone camera disconnected. Reopen its companion page; this gap is recorded.", "mobile_unavailable", "phone"); });
     socket.on("proctoring_status", setProctoring); socket.on("proctoring_alert", (data) => { if (data.session_id && data.session_id !== session.session_id) return; const message = data.message || data.status; if (message && message !== "Status: OK") notify(message, data.type || "proctoring", data.source || "laptop"); });
     const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
     const frames = setInterval(() => { if (phaseRef.current !== "active" || !socket.connected || !videoRef.current || videoRef.current.readyState < 2) return;
@@ -267,24 +269,34 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   }, [session?.session_id, notify, socketUrl]);
 
   const stopAnswer = useCallback(async () => {
+    captionGenerationRef.current += 1; liveCaptionsRef.current?.cancel(); liveCaptionsRef.current = null;
     const recorder = answerRecorderRef.current; if (!recorder || recorder.state === "inactive") return null;
     return new Promise((resolve) => { recorder.onstop = () => { const blob = new Blob(answerChunksRef.current, { type: recorder.mimeType }); answerChunksRef.current = []; answerRecorderRef.current = null; resolve(blob); }; recorder.stop(); });
   }, []);
   const beginListening = useCallback(() => {
     if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || !streamRef.current || answerRecorderRef.current?.state === "recording") return;
-    if (answerModeRef.current === "text") { setSpeechState("idle"); return; }
     try { const stream = new MediaStream(streamRef.current.getAudioTracks()); const mimeType = mediaMimeType("audio"); const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       recordedAnswerRef.current = null; setAudioRetryAvailable(false); answerChunksRef.current = []; recorder.ondataavailable = (event) => { if (event.data.size) answerChunksRef.current.push(event.data); }; answerRecorderRef.current = recorder;
-      spokeRef.current = false; setHasSpoken(false); answerStartRef.current = Date.now(); lastSpeechRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); recorder.start(1000); setSpeechState("listening");
-    } catch (failure) { setError(`Could not record your answer: ${failure.message}. You can use the text answer below.`); setSpeechState("idle"); }
+      spokeRef.current = false; setHasSpoken(false); answerStartRef.current = Date.now(); lastSpeechRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); recorder.start(1000); setSpeechState("listening"); setDraft(""); setCaptionNote("");
+      const generation = ++captionGenerationRef.current;
+      startLiveCaptions(contextRef.current, streamRef.current, socketRef.current, sessionRef.current.session_id,
+        text => { if (aliveRef.current && generation === captionGenerationRef.current) setDraft(text); },
+        note => { if (aliveRef.current && generation === captionGenerationRef.current) setCaptionNote(note); })
+        .then(controller => { if (generation !== captionGenerationRef.current || !aliveRef.current) controller?.cancel(); else liveCaptionsRef.current = controller; });
+    } catch (failure) { setError(`Could not record your answer: ${failure.message}. Reconnect your microphone, then choose Record answer again.`); setSpeechState("idle"); }
   }, []);
   const speak = useCallback(async (text) => {
-    stopPlayback(); const requestId = speechRequestRef.current; setSpeechState("speaking");
-    const finished = () => { if (requestId !== speechRequestRef.current || phaseRef.current !== "active") return; audioRef.current = null; beginListening(); };
+    stopPlayback(); const requestId = speechRequestRef.current; setSpeechState("thinking");
+    const finished = () => { if (requestId !== speechRequestRef.current || phaseRef.current !== "active") return; speakerNodesRef.current?.source.disconnect(); speakerNodesRef.current?.analyser.disconnect(); speakerNodesRef.current = null; voiceAudioRef.current.speaker = null; audioRef.current = null; beginListening(); };
     try { let src = audioCacheRef.current.get(text);
       if (!src) { const data = await request("/speech/synthesize", { method: "POST", body: JSON.stringify({ text, session_id: sessionRef.current.session_id }) }, 4000); if (data.audio_base64) src = `data:audio/mp3;base64,${data.audio_base64}`; }
       if (requestId !== speechRequestRef.current || phaseRef.current !== "active" || pauseRef.current) return;
       if (!src) { finished(); return; } const audio = new Audio(src); audioRef.current = audio; audio.onended = finished; audio.onerror = finished;
+      try { const context = contextRef.current; await context.resume();
+        const source = context.createMediaElementSource(audio), analyser = context.createAnalyser(); analyser.fftSize = 1024;
+        source.connect(analyser); analyser.connect(context.destination); speakerNodesRef.current = { source, analyser }; voiceAudioRef.current.speaker = analyser;
+      } catch { /* Playback remains available if the browser cannot expose its analyser. */ }
+      setSpeechState("speaking");
       await audio.play().catch(() => { notify("Audio playback is unavailable. Read the question on screen and answer when ready."); finished(); });
     } catch { if (requestId === speechRequestRef.current) { notify("The voice service is taking too long. Read this question and continue."); finished(); } }
   }, [beginListening, notify, request, stopPlayback]);
@@ -328,8 +340,8 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     }
       const data = await request(`/interviews/${session.session_id}/activate`, { method: "POST", body: JSON.stringify({ camera_ready: cameraReady, microphone_ready: micReady, speaker_ready: speakerTested === true }) });
       await socketAcknowledgement(socketRef.current, "start_proctoring", { session_id: session.session_id });
-      if (dualRequired) await socketAcknowledgement(socketRef.current, "control_mobile_recording", { session_id: session.session_id, action: "start" });
-      if (data.current_question) { setQuestion(data.current_question); questionRef.current = data.current_question; }
+      if (dualRequired && phone.ready) await socketAcknowledgement(socketRef.current, "control_mobile_recording", { session_id: session.session_id, action: "start" });
+      if (data.current_question || data.first_question) { setQuestion(data.current_question || data.first_question); questionRef.current = data.current_question || data.first_question; }
       setQuestionDeadline(data.question_deadline ?? session.question_deadline ?? null);
       startArchive(); phaseRef.current = "active"; setPhase("active"); setPauseReason(""); pauseRef.current = "";
       startedAtRef.current = Date.now() - elapsed * 1000; speak(questionRef.current);
@@ -372,6 +384,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     const submittedQuestion = questionRef.current; submitRequestRef.current = true; processingRef.current = true; setSpeechState("thinking"); setError("");
     try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/answer`, { method: "POST", body: JSON.stringify({ question: submittedQuestion, answer }) }, 20000);
       if (phaseRef.current !== "active") return;
+      setTurns(previous => [...previous, { role: "assistant", text: submittedQuestion }, { role: "user", text: answer }]);
       setPendingAnswer(null); setDraft(""); recordedAnswerRef.current = null; setAudioRetryAvailable(false); if (data.interview_complete) { processingRef.current = false; await finish(); return; }
       if (!data.next_question) throw new Error("The next question is unavailable. Please retry your saved answer."); setQuestion(data.next_question); questionRef.current = data.next_question;
       setQuestionDeadline(data.question_deadline ?? null);
@@ -398,39 +411,21 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   }, [finish, location, notify, request, speak]);
   const submitRecording = useCallback(async (skip = false, retry = false) => {
     if (processingRef.current || phaseRef.current !== "active" || pauseRef.current) return; processingRef.current = true; setSpeechState("transcribing"); setError("");
-    try { const blob = retry ? recordedAnswerRef.current : await stopAnswer(); if (skip) { await submitAnswer(""); return; } if (!blob?.size) throw new Error("No answer was recorded. Please retry or type your answer.");
+    try { const blob = retry ? recordedAnswerRef.current : await stopAnswer(); if (skip) { await submitAnswer(""); return; } if (!blob?.size) throw new Error("No answer was recorded. Record your answer again.");
       recordedAnswerRef.current = blob;
       const audio = await transcriptionAudio(blob, streamRef.current); const data = await request("/speech/transcribe", { method: "POST", body: JSON.stringify({ ...audio, session_id: sessionRef.current.session_id }) }, 35000);
-      const answer = data.transcript?.trim(); if (!answer) throw new Error("We could not hear your answer clearly. Please retry or use a text answer."); await submitAnswer(answer);
+      const answer = data.transcript?.trim(); setDraft(answer || ""); if (!answer) throw new Error("We could not hear your answer clearly. Check your microphone and record your answer again."); await submitAnswer(answer);
     } catch (failure) { processingRef.current = false; setAudioRetryAvailable(!!recordedAnswerRef.current?.size); setError(failure.message); setSpeechState("idle"); }
   }, [request, stopAnswer, submitAnswer]);
   submitRecordingRef.current = submitRecording;
-  const changeAnswerMode = async (mode) => {
-    if (processingRef.current || pauseRef.current || mode === answerModeRef.current) return;
-    answerModeRef.current = mode; setAnswerMode(mode); modeConfirmRef.current = false; setShowModeConfirm(false);
-    stopPlayback(); processingRef.current = true;
-    try {
-      await stopAnswer();
-      recordedAnswerRef.current = null; setAudioRetryAvailable(false); setHasSpoken(false); spokeRef.current = false;
-      setSpeechState("idle");
-    } finally { processingRef.current = false; }
-    if (mode === "voice") beginListening();
-  };
-  const requestAnswerMode = mode => {
-    if (mode === answerModeRef.current || processingRef.current || pauseRef.current) return;
-    if ((mode === "text" && (hasSpoken || audioRetryAvailable)) || (mode === "voice" && draft.trim())) {
-      modeConfirmRef.current = true; setModeToConfirm(mode); setShowModeConfirm(true);
-    }
-    else changeAnswerMode(mode);
-  };
   const pause = useCallback(async (reason) => {
     if (pauseRef.current || phaseRef.current !== "active") return; pauseRef.current = reason; setPauseReason(reason);
-    modeConfirmRef.current = false; setShowModeConfirm(false); stopPlayback(); const blob = await stopAnswer();
+    stopPlayback(); const blob = await stopAnswer();
     if (blob?.size && spokeRef.current) actionsRef.current.interruptedAudio = blob; setSpeechState("idle");
   }, [stopAnswer, stopPlayback]);
   actionsRef.current.pause = pause;
   const resume = async () => {
-    if (!connected || (dualRequired && !phone.ready) || busy) return;
+    if (!connected || busy) return;
     if (!streamRef.current?.getTracks().every((track) => track.readyState === "live")) { await enableDevices(); return; }
     if (!deviceReady) { setDeviceError("Say a short sentence so we can check your microphone again."); return; }
     setBusy(true);
@@ -439,16 +434,16 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       await reportMonitoring();
       await request(`/interviews/${session.session_id}/activate`, { method: "POST", body: JSON.stringify({ camera_ready: cameraReady, microphone_ready: micReady, speaker_ready: speakerTested === true }) });
       await socketAcknowledgement(socketRef.current, "start_proctoring", { session_id: session.session_id });
-      if (dualRequired) await socketAcknowledgement(socketRef.current, "control_mobile_recording", { session_id: session.session_id, action: "start" });
+      if (dualRequired && phone.ready) await socketAcknowledgement(socketRef.current, "control_mobile_recording", { session_id: session.session_id, action: "start" });
       startArchive();
     } catch (failure) { setDeviceError(failure.message); setBusy(false); return; }
     setBusy(false); setPauseReason(""); pauseRef.current = ""; setError("");
     if (actionsRef.current.interruptedAudio) {
       setSpeechState("transcribing"); processingRef.current = true;
       try { const audio = await transcriptionAudio(actionsRef.current.interruptedAudio, streamRef.current); const data = await request("/speech/transcribe", { method: "POST", body: JSON.stringify({ ...audio, session_id: session.session_id }) }, 35000);
-        setDraft(data.transcript || ""); answerModeRef.current = "text"; setAnswerMode("text"); actionsRef.current.interruptedAudio = null; setError("Your interrupted answer has been restored. Review and send it, or record the question again.");
+        setDraft(data.transcript || ""); setPendingAnswer({ answer: data.transcript || "", question: questionRef.current }); actionsRef.current.interruptedAudio = null; setError("Your interrupted spoken answer is restored. Send the saved answer or record again.");
       } catch (failure) { setError(failure.message); } finally { processingRef.current = false; setSpeechState("idle"); }
-    } else if (pendingAnswer !== null || draftRef.current.trim() || answerModeRef.current === "text") setSpeechState("idle"); else speak(questionRef.current);
+    } else if (pendingAnswer !== null || draftRef.current.trim()) setSpeechState("idle"); else speak(questionRef.current);
   };
   const refreshPhoneLink = async () => {
     if (busy) return; setBusy(true); setDeviceError("");
@@ -468,19 +463,19 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   }, [phase, questionDeadline]);
   useEffect(() => {
     if (phase !== "active") return; const tick = setInterval(() => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)), 1000);
-    const violation = (type) => { reportMonitoring(type).catch(() => {}); pause("Restore interview monitoring to continue. Leaving this window counts as an interruption."); };
+    const violation = (type) => { reportMonitoring(type).catch(() => {}); notify("Keep your interview window visible. This interruption is recorded for the final report.", type); };
     const visibility = () => { if (document.hidden) violation("tab_switch"); else reportMonitoring().catch(() => {}); }; const fullscreen = () => { if (!document.fullscreenElement && !window.electronAPI) violation("fullscreen_exit"); };
-    const offline = () => pause("You are offline. Reconnect to continue; submitted answers are saved.");
+    const offline = () => notify("You are offline. Your recording continues; reconnect before sending your answer.", "connection");
     const blur = () => violation("window_blur");
     const focus = () => reportMonitoring().catch(() => {});
     window.electronAPI?.onAppSwitched(blur);
-    const monitoring = setInterval(() => reportMonitoring().catch(() => pause("Monitoring updates could not reach the server. Reconnect within 60 seconds.")), 5000);
+    const monitoring = setInterval(() => reportMonitoring().catch(() => notify("Monitoring updates are reconnecting. Your recording continues.", "connection")), 5000);
     reportMonitoring().catch(() => {});
     document.addEventListener("visibilitychange", visibility); document.addEventListener("fullscreenchange", fullscreen); window.addEventListener("offline", offline);
     window.addEventListener("blur", blur);
     window.addEventListener("focus", focus);
     return () => { clearInterval(tick); clearInterval(monitoring); document.removeEventListener("visibilitychange", visibility); document.removeEventListener("fullscreenchange", fullscreen); window.removeEventListener("offline", offline); window.removeEventListener("blur", blur); window.removeEventListener("focus", focus); };
-  }, [phase, reportMonitoring, pause]);
+  }, [phase, reportMonitoring, notify]);
   useEffect(() => {
     if (!["active", "ending", "end_failed", "recovery_failed"].includes(phase) && !["uploading", "error"].includes(uploadStatus)) return;
     const beforeUnload = event => { event.preventDefault(); event.returnValue = ""; };
@@ -496,11 +491,11 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     if (!dualRequired) return;
     const timer = setInterval(() => setPhone((previous) => {
       if (!previous.ready || Date.now() - previous.receivedAt < 15000) return previous;
-      if (phaseRef.current === "active") actionsRef.current.pause("Your phone camera stopped sending frames. Keep its page open and reconnect to continue.");
+      if (phaseRef.current === "active") notify("Your phone camera stopped sending frames. Reopen its page to restore coverage.", "mobile_unavailable", "phone");
       return { ...previous, ready: false, status: "disconnected" };
     }), 1000);
     return () => clearInterval(timer);
-  }, [dualRequired]);
+  }, [dualRequired, notify]);
   useEffect(() => {
     if (phase !== "completed" || !session?.session_id) return;
     let cancelled = false; let timer; let attempts = 0;
@@ -517,7 +512,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     return () => { cancelled = true; clearTimeout(timer); };
   }, [phase, session?.session_id, request]);
   useEffect(() => { aliveRef.current = true; return () => {
-    aliveRef.current = false; stopPlayback(); socketRef.current?.disconnect();
+    aliveRef.current = false; captionGenerationRef.current += 1; liveCaptionsRef.current?.cancel(); stopPlayback(); socketRef.current?.disconnect();
     [answerRecorderRef.current, archiveRecorderRef.current].forEach((recorder) => { if (recorder && recorder.state !== "inactive") { try { recorder.onstop = null; recorder.stop(); } catch { /* already stopped */ } } });
     streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); }); contextRef.current?.close().catch(() => {});
   }; }, [stopPlayback]);
@@ -567,28 +562,55 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         <Modal isOpen={showSpeakerCheck} onClose={() => setShowSpeakerCheck(false)} ariaLabelledBy="speaker-check-title" contentClassName={`${styles.centerCard} ${styles.speakerDialog}`}><Headphones size={28} className={styles.good}/><h2 id="speaker-check-title">Can you hear the test sound?</h2><p>Confirm your speakers before continuing. If you cannot hear it, check your volume or select another output device, then play it again.</p>{renderError(deviceError)}<div className={styles.actions}><button className={styles.secondary} onClick={testSpeaker}><Volume2 size={16}/>Play test sound</button><button className={styles.primary} disabled={!cameraReady || !micReady || busy || (speakerTested !== "played" && speakerTested !== true)} onClick={() => { setSpeakerTested(true); continueSetup(); }}>I heard the sound <Check size={16}/></button></div><button className={styles.textButton} onClick={() => setShowSpeakerCheck(false)}>Back to device checks</button></Modal></>}
       {phase === "face" && <><div className={styles.facePreview}>{facePhoto ? <img className={styles.preview} src={facePhoto} alt="Your captured face" /> : <>{renderVideo()}<span className={`${styles.faceGuide} ${faceProgress > 0 ? styles.faceAligned : ""}`} /><div className={styles.faceStatus} role="status">{faceHint}{faceProgress > 0 && <span className={styles.faceProgress}><i style={{ width: `${faceProgress * 100}%` }} /></span>}</div></>}</div><p className={styles.note}>{isPractice ? "This capture is used only for practice monitoring." : "Your capture is compared with your uploaded identity card in the background and included in the evaluation report."}</p>{renderError(error)}<div className={styles.actions}><button className={styles.secondary} disabled={busy} onClick={() => setPhase("devices")}>Back</button>{facePhoto ? <><button className={styles.secondary} onClick={retakeFace} disabled={busy}>Retake photo</button><button className={styles.primary} onClick={confirmFace} disabled={busy || !deviceReady}>{busy ? "Saving photo…" : "Use photo and continue"}<ChevronRight size={18} /></button></> : <button className={styles.secondary} onClick={captureFace} disabled={busy || !deviceReady}>Take photo manually <Camera size={18} /></button>}</div></>}
       {phase === "phone" && <><div className={styles.phonePairing}>{phoneUrl ? <div className={styles.qr}><QRCode value={phoneUrl} size={172} /></div> : <div className={styles.error}>The private phone link is unavailable. Reload this session to refresh it.</div>}<div><Smartphone size={30} /><h3>{phone.ready ? "Phone camera is ready" : "Waiting for your phone"}</h3><p>Use the front camera. Place it beside you, aimed at you, your laptop and desk. Keep it plugged in and turn off auto-lock.</p><span className={`${styles.badge} ${phone.ready ? styles.goodBadge : ""}`}>{phone.ready ? "Camera and microphone connected" : phone.status === "connected" ? "Phone connected · enable its camera" : "Scan the QR code"}</span></div></div><p className={styles.note}>This private link grants access only to this interview's companion camera.</p><button className={styles.primary} disabled={!phone.ready} onClick={() => setPhase("ready")}>Continue <ChevronRight size={18} /></button></>}
-      {phase === "ready" && <><div className={styles.readySummary}><Check size={18} /> Camera, microphone and speakers checked<br /><Check size={18} /> Face captured{dualRequired && <><br /><Check size={18} /> Second camera {phone.ready ? "ready" : "disconnected"}</>}</div><label className={styles.consent}><input type="checkbox" checked={rulesAccepted} onChange={(event) => setRulesAccepted(event.target.checked)} /><span>I'm in a quiet, well-lit place and have time to finish. I'll keep my face visible, stay in this window and use no outside help{dualRequired ? ". My phone is positioned only as the required second camera" : ""}.</span></label><p className={styles.note}>Leaving this window, stopping a camera or microphone, switching phone apps, or locking your phone counts as an interruption. Five interruptions end this attempt and prevent a repeat for this application. Restore lost monitoring within 60 seconds. Camera-analysis notices are retained for human review.</p><p className={styles.note}>{maxQuestions} questions · Usually 15–20 minutes · Your answer starts after the interviewer finishes speaking.</p>
+      {phase === "ready" && <><div className={styles.readySummary}><Check size={18} /> Camera, microphone and speakers checked<br /><Check size={18} /> Face captured{dualRequired && <><br /><Check size={18} /> Second camera {phone.ready ? "ready" : "disconnected"}</>}</div><label className={styles.consent}><input type="checkbox" checked={rulesAccepted} onChange={(event) => setRulesAccepted(event.target.checked)} /><span>I'm in a quiet, well-lit place and have time to finish. I'll keep my face visible, stay in this window and use no outside help{dualRequired ? ". My phone is positioned only as the required second camera" : ""}.</span></label><p className={styles.note}>Leaving this window, stopping a camera or microphone, switching phone apps, or locking your phone counts as an interruption. Interruptions are counted by type and included in your final proctoring score. Monitoring warnings do not automatically end this interview. Camera-analysis notices are retained for human review.</p><p className={styles.note}>{maxQuestions} questions · Usually 15–20 minutes · Your answer starts after the interviewer finishes speaking.</p>
         {!connected && renderError("Connecting to interview monitoring. Check your internet connection if this takes more than a few seconds.")}{dualRequired && !phone.ready && renderError("Your phone disconnected. Reopen its companion page before starting.")}{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase(dualRequired ? "phone" : "face")}>Back</button><button className={styles.primary} onClick={activate} disabled={busy || !deviceReady || !rulesAccepted || !connected || (dualRequired && !phone.ready)}>{busy ? "Starting…" : "Start interview"}<ChevronRight size={18} /></button></div></>}
     </section></div></main>;
 
   return <main className={styles.interviewShell}><header className={styles.interviewHeader}><span className={styles.brand}><ShieldCheck size={22} /> GenHire <small>{isPractice ? "Practice" : "Interview"}</small></span><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack} role="progressbar" aria-label="Interview question progress" aria-valuemin={1} aria-valuemax={maxQuestions} aria-valuenow={Math.min(questionCount, maxQuestions)}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
-    {warning && <div className={styles.warning} role="status"><CircleAlert size={20} /><div><strong>Monitoring notice {warning.type !== "interruption" && warningCount ? `· ${warningCount}` : ""}</strong><p>{warning.message}</p></div><button onClick={() => setWarning(null)} aria-label="Dismiss monitoring notice">×</button></div>}
-    <section className={styles.interviewGrid}><article className={styles.conversation}><div className={styles.interviewerBadge}><span>A</span><div><strong>Alex</strong><small>Your AI interviewer</small></div><i className={speechState === "speaking" ? styles.speakingDot : ""} /></div><span className={styles.eyebrow}>{speechState === "thinking" ? "Preparing your next question" : "Let's talk about your experience"}</span><h1 className={styles.question}>{question}</h1>
-      <div className={styles.conversationStatus} aria-live="polite">{answerMode === "text" && speechState === "idle" ? "Type your answer, then select Send text answer" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Turning your answer into text…" : speechState === "thinking" ? "Your answer is being saved…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Finished? Sending in ${answerCountdown}s of silence` : "Listening to your answer" : answerCountdown <= 15 ? `Answer when ready · moving on in ${answerCountdown}s` : "Take a moment, then answer naturally" : "Ready when you are"}</div>{renderError(error)}
-      {pendingAnswer !== null && <div className={styles.savedAnswer}><p>Your answer is preserved for retry.</p><button className={styles.primary} disabled={!!pauseReason || speechState === "thinking"} onClick={() => submitAnswer(pendingAnswer.answer)}>Retry saved answer</button></div>}
-      {questionRemaining !== null && <p className={styles.questionClock}>Question time remaining <strong>{formatTime(questionRemaining)}</strong>{questionRemaining === 0 && <span>Time limit reached. Submit to continue.</span>}</p>}
-      <AnswerComposer mode={answerMode} onModeChange={requestAnswerMode} speechState={speechState} paused={!!pauseReason}
-        pendingAnswer={pendingAnswer} audioRetryAvailable={audioRetryAvailable} hasSpoken={hasSpoken} draft={draft} onDraftChange={setDraft}
-        onSendText={async () => { processingRef.current = true; stopPlayback(); await stopAnswer(); submitAnswer(draft.trim()); }}
-        onSendVoice={() => submitRecording(false)} onRetryAudio={() => submitRecording(false, true)}
-        onRepeat={async () => { await stopAnswer(); speak(question); }} onRecord={beginListening}
-        onMoreTime={() => { answerStartRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); }} />
-    </article><aside className={styles.monitorPanel}><div className={styles.candidatePreview}>{!pauseReason && renderVideo()}<span>You</span></div><h3><ShieldCheck size={19} /> Interview monitoring</h3><p role="status">Interruptions: <strong>{integrity.count} of {integrity.limit}</strong></p><div className={styles.monitorRow}><span>Laptop camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Connected" : "Reconnect"}</strong></div><div className={styles.monitorRow}><span>Microphone</span><span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></div>{dualRequired && <div className={styles.monitorRow}><span>Phone camera</span><strong className={phone.ready ? styles.good : ""}>{phone.ready ? "Connected" : "Reconnect"}</strong></div>}<div className={styles.monitorRow}><span>Live checks</span><strong>{!connected ? "Reconnecting" : proctoring?.available === false ? "Limited coverage" : proctoring?.analyzed_frames > 0 ? "Active" : "Connecting"}</strong></div>
-      {proctoring?.capabilities?.object_detection === false && <p className={styles.note}>Object detection is unavailable. Camera recording and other available checks continue.</p>}<p className={styles.note}>Keep your face visible and your desk clear. Only the paired phone used for monitoring is permitted.</p><button className={styles.endButton} disabled={["transcribing", "thinking"].includes(speechState)} onClick={() => setShowEndConfirm(true)}>End interview</button></aside></section>
+    {warning && <div className={styles.warningToast} role="status"><CircleAlert size={19} /><div><strong>{warning.source === "mobile" || warning.source === "phone" ? "Phone camera notice" : "Monitoring notice"}</strong><p>{warning.message}</p></div></div>}
+    <section className={styles.interviewGrid}>
+      <article className={styles.conversation}>
+        <div className={styles.transcriptHeader}><div className={styles.interviewerBadge}><span>A</span><div><strong>Interview conversation</strong><small>Alex / Your AI interviewer</small></div></div><span className={styles.badge}>Voice interview</span></div>
+        <div className={styles.transcriptFeed} role="log" aria-label="Interview conversation" aria-live="polite" aria-relevant="additions text">
+          {turns.map((turn, index) => <div key={index} className={`${styles.transcriptTurn} ${turn.role === "user" || turn.role === "candidate" ? styles.candidateTurn : ""}`}><span>{turn.role === "user" || turn.role === "candidate" ? "You" : "Alex"}</span><p>{turn.text}</p></div>)}
+          <div className={styles.transcriptTurn}><span>Alex <small>{speechState === "speaking" ? "Speaking" : `Question ${questionCount}`}</small></span><h1 className={styles.liveQuestion}>{question}</h1></div>
+          <div className={`${styles.transcriptTurn} ${styles.candidateTurn}`}><span>You <small>{speechState === "listening" ? "Live captions" : speechState === "transcribing" ? "Finalizing transcript" : "Spoken answer"}</small></span><p>{draft || (speechState === "listening" ? "Your words will appear here as you speak…" : speechState === "speaking" ? "Listen to the question, then answer naturally." : "Your spoken answer will appear here.")}</p>{captionNote && <small className={styles.captionNote}>{captionNote}</small>}</div>
+          <div ref={transcriptTailRef} />
+        </div>
+        <div className={styles.voiceControls}>
+          <div className={styles.conversationStatus} aria-live="polite">{pauseReason ? "Reconnect your microphone to continue" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Finalizing your spoken answer…" : speechState === "thinking" ? "Saving your answer and preparing the next question…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Sending after ${answerCountdown}s of silence` : "Listening to your answer" : "Take a moment, then answer naturally" : "Ready when you are"}</div>
+          {renderError(error)}
+          {pendingAnswer !== null && <div className={styles.savedAnswer}><p>Your spoken answer is saved for retry.</p><button className={styles.primary} disabled={!!pauseReason || speechState === "thinking"} onClick={() => submitAnswer(pendingAnswer.answer)}>Send saved answer</button></div>}
+          <div className={styles.voiceButtons}>
+            <button className={styles.primary} disabled={!!pauseReason || speechState !== "listening" || !hasSpoken} onClick={() => submitRecording(false)}><Mic size={17} />Send answer</button>
+            {audioRetryAvailable && <button className={styles.secondary} disabled={!!pauseReason || ["thinking", "transcribing"].includes(speechState)} onClick={() => submitRecording(false, true)}>Retry recording</button>}
+            {speechState === "idle" && !pendingAnswer && <button className={styles.secondary} disabled={!!pauseReason} onClick={beginListening}>Record answer again</button>}
+            <button className={styles.secondary} disabled={!!pauseReason || hasSpoken || ["thinking", "transcribing"].includes(speechState)} onClick={async () => { await stopAnswer(); speak(question); }}>Repeat question</button>
+          </div>
+          <p className={styles.note}>Speak naturally. After you speak, 8 seconds of silence sends your answer automatically. You can also choose Send answer.</p>
+          {questionRemaining !== null && <p className={styles.questionClock}>Question time remaining <strong>{formatTime(questionRemaining)}</strong></p>}
+        </div>
+      </article>
+      <aside className={styles.monitorPanel}>
+        <div className={styles.candidatePreview}>{!pauseReason && renderVideo()}<span>You / Laptop camera</span></div>
+        <VoiceSphere state={pauseReason ? "interrupted" : speechState === "speaking" ? "speaking" : speechState === "listening" ? "listening" : ["thinking", "transcribing"].includes(speechState) ? "processing" : "idle"} audioRef={voiceAudioRef} caption={pauseReason ? "Your recording is preserved while you reconnect." : undefined} />
+        <h3><ShieldCheck size={18} /> Interview monitoring</h3>
+        <div className={styles.monitorRow}><span>Recorded interruptions</span><strong>{integrity.count}</strong></div>
+        {!!Object.keys(integrity.counts_by_type || {}).length && <details className={styles.interruptionDetails}><summary>View interruption types</summary>{Object.entries(integrity.counts_by_type).map(([type, count]) => <div key={type}><span>{type.replaceAll("_", " ")}</span><strong>{count}</strong></div>)}</details>}
+        <div className={styles.monitorRow}><span>Laptop camera</span><strong className={cameraReady ? styles.good : ""}>{cameraReady ? "Connected" : "Reconnect"}</strong></div>
+        <div className={styles.monitorRow}><span>Microphone</span><span className={styles.meter}><i style={{ width: `${micLevel}%` }} /></span></div>
+        {dualRequired && <div className={styles.monitorRow}><span>Phone camera</span><strong className={phone.ready ? styles.good : ""}>{phone.ready ? "Connected" : "Reconnect"}</strong></div>}
+        <div className={styles.monitorRow}><span>Monitoring connection</span><strong>{connected ? "Connected" : "Reconnecting"}</strong></div>
+        <p className={styles.note}>Warnings and coverage gaps contribute to the final monitoring report. They do not automatically end the interview or establish cheating.</p>
+        {dualRequired && !phone.ready && phoneUrl && <details className={styles.interruptionDetails}><summary>Reconnect phone camera</summary><p className={styles.note}>Reopen the companion page and keep the screen unlocked.</p><div className={styles.qr}><QRCode value={phoneUrl} size={128} /></div><button className={styles.textButton} onClick={refreshPhoneLink} disabled={busy}>Refresh pairing link</button></details>}
+        {proctoring?.capabilities?.object_detection === false && <p className={styles.note}>Object detection is unavailable. Available camera checks and recording continue.</p>}
+        <button className={styles.endButton} disabled={["transcribing", "thinking"].includes(speechState)} onClick={() => setShowEndConfirm(true)}>End interview</button>
+      </aside>
+    </section>
     <Modal isOpen={!!pauseReason} closeOnEsc={false} closeOnOverlayClick={false}
       overlayClassName={styles.pauseOverlay} contentClassName={`${styles.centerCard} ${styles.reconnectCard}`} ariaLabelledBy="reconnect-title">
       <CircleAlert size={30} /><h2 id="reconnect-title">Reconnect your devices</h2><p>{pauseReason}</p>
-      <p className={styles.note}>Restore monitoring within 60 seconds. Five interruptions end this attempt. Submitted answers are saved. Your interrupted answer and typed draft stay on this device. The question time limit continues during reconnection.</p>
+      <p className={styles.note}>Submitted answers are saved. Your interrupted recording stays on this device. Monitoring gaps are counted by type and included in the final proctoring report; they do not automatically end this interview. The question time limit continues during reconnection.</p>
       <div className={styles.recoveryPreview}>{pauseReason && renderVideo()}</div>
       <dl className={styles.recoveryChecks}>
         <div><dt>Monitoring connection</dt><dd>{connected ? "Connected" : "Reconnecting"}</dd></div>
@@ -604,14 +626,11 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         <button className={styles.secondary} onClick={refreshPhoneLink} disabled={busy}>Refresh phone pairing code</button>
       </div>}
       {renderError(deviceError)}
-      <button className={styles.primary} onClick={resume} disabled={!connected || !deviceReady || (dualRequired && !phone.ready) || busy}>{busy ? "Checking devices..." : "Resume interview"}</button>
+      <button className={styles.primary} onClick={resume} disabled={!connected || !deviceReady || busy}>{busy ? "Checking devices..." : "Resume interview"}</button>
       <button className={styles.textButton} onClick={() => setShowEndConfirm(true)}>End with saved answers</button>
     </Modal>
     <ConfirmDialog isOpen={showEndConfirm} onClose={() => setShowEndConfirm(false)} onConfirm={finish} title="Finish this interview?"
-      message={draft.trim() ? "Your typed draft has not been submitted. Cancel and choose Send text answer to include it. Finishing evaluates only your submitted answers." : "Your submitted answers will be evaluated. An answer currently being recorded will not be submitted. Use Send answer first if you want to include it."} confirmText="Finish interview" />
-    <ConfirmDialog isOpen={showModeConfirm} onClose={() => { modeConfirmRef.current = false; lastSpeechRef.current = Date.now(); setShowModeConfirm(false); }}
-      onConfirm={() => changeAnswerMode(modeToConfirm)} title={modeToConfirm === "text" ? "Switch to a typed answer?" : "Switch to a spoken answer?"}
-      message={modeToConfirm === "text" ? "The current spoken recording has not been submitted. Switching discards that recording so you can type this answer instead. Your previously submitted answers stay saved." : "Your typed draft has not been submitted. Switching starts automatic voice capture. Submit your draft first to include it, or switch to answer this question aloud."}
-      confirmText={modeToConfirm === "text" ? "Switch to typing" : "Switch to speaking"} confirmVariant="primary" />
+      message="Your submitted spoken answers will be evaluated. Use Send answer first to include the current recording. Finishing does not submit an unsent recording." confirmText="Finish interview" />
+
   </main>;
 }

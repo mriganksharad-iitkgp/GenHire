@@ -552,7 +552,7 @@ class ApplicationController:
                 completed_interview = interviews_by_app.get(app["_id"])
                 
                 # Check if job has gaze proctoring enabled
-                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                gaze_proctoring_enabled = any((job.get('proctoring_config') or {}).values()) if job and isinstance(job.get('proctoring_config'), dict) else bool(job and job.get('gaze_proctoring', False))
                 
                 # Prioritize scores stored directly in the application (from interview end process)
                 if not gaze_proctoring_enabled:
@@ -694,7 +694,7 @@ class ApplicationController:
                 completed_interview = interviews_by_app.get(app["_id"])
                 
                 # Check if job has gaze proctoring enabled
-                gaze_proctoring_enabled = job.get('gaze_proctoring', False) if job else False
+                gaze_proctoring_enabled = any((job.get('proctoring_config') or {}).values()) if job and isinstance(job.get('proctoring_config'), dict) else bool(job and job.get('gaze_proctoring', False))
                 
                 if not gaze_proctoring_enabled:
                     app['proctoring_score'] = None

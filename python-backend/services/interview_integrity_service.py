@@ -1,15 +1,12 @@
-"""Durable interruption policy. Coverage failures are not cheating verdicts."""
+"""Durable interruption accounting. Coverage failures are not cheating verdicts."""
 import copy
 import datetime as dt
 import logging
 import threading
-import sys
 
 from services.proctoring_service import mobile_is_ready, requires_mobile
 
-LIMIT = 5
 HEARTBEAT_SECONDS = 20
-RECOVERY_SECONDS = 60
 REASONS = {
     "tab_switch": "The interview tab was left.",
     "window_blur": "Another window was opened.",
@@ -18,6 +15,8 @@ REASONS = {
     "desktop_unavailable": "Laptop monitoring stopped receiving updates.",
     "mobile_unavailable": "Phone monitoring stopped. Keep its page visible and screen unlocked.",
 }
+REASON_PRIORITY = {"desktop_unavailable": 0, "window_blur": 1,
+                   "fullscreen_exit": 2, "tab_switch": 3, "device_lost": 4}
 logger = logging.getLogger(__name__)
 
 
@@ -37,34 +36,25 @@ def age(value, now):
 
 def policy_payload(doc):
     policy = doc.get("integrity") or {}
-    return {"count": policy.get("count", 0), "limit": LIMIT,
-            "remaining": max(0, LIMIT - policy.get("count", 0)),
+    counts = dict(policy.get("counts_by_type") or {})
+    if not counts:
+        for event in policy.get("events") or []:
+            reason = event.get("reason", "unknown")
+            counts[reason] = counts.get(reason, 0) + 1
+    return {"count": policy.get("count", 0), "counts_by_type": counts,
             "losses": {key: {"reason": value["reason"], "message": REASONS.get(value["reason"], "Monitoring interrupted.")}
                        for key, value in (policy.get("losses") or {}).items()},
-            "terminated": doc.get("status") == "terminated",
-            "termination_reason": doc.get("termination_reason"),
-            "recovery_seconds": RECOVERY_SECONDS, "enabled": enabled(doc)}
+            "auto_termination": False, "terminated": doc.get("status") == "terminated", "enabled": enabled(doc)}
 
 
 def _publish(collection, doc, changed=False):
     payload = dict(policy_payload(doc), session_id=doc["session_id"])
-    if payload["terminated"] and changed:
-        # The session itself is the primary lock; this application flag also
-        # makes the restriction visible to recruiters and the start endpoint.
-        if doc.get("application_id"):
-            from bson import ObjectId
-            collection.database["applications"].update_one(
-                {"_id": ObjectId(doc["application_id"])}, {"$set": {
-                    "interview_attempt_locked": True, "terminated_session_id": doc["session_id"],
-                    "interview_termination_reason": doc.get("termination_reason")}})
-        from services.interview_flow_service import stop_companion
-        stop_companion(doc)
     if changed:
         from extensions import socketio
         try:
             socketio.emit("interview_integrity", payload, room=doc["session_id"])
         except Exception:
-            logger.warning("Monitoring notification unavailable; durable policy remains enforced")
+            logger.warning("Monitoring notification unavailable; interruption counts remain saved")
     return payload
 
 
@@ -85,34 +75,36 @@ def reconcile(collection, doc, losses=None, restored=(), now=None):
         policy.setdefault("count", 0)
         policy.setdefault("losses", {})
         policy.setdefault("events", [])
+        policy.setdefault("counts_by_type", policy_payload(doc)["counts_by_type"])
         for source in restored:
             policy["losses"].pop(source, None)
         for source, reason in (losses or {}).items():
             if source not in policy["losses"]:
                 policy["count"] += 1
+                policy["counts_by_type"][reason] = policy["counts_by_type"].get(reason, 0) + 1
                 policy["losses"][source] = {"since": now, "reason": reason}
                 policy["events"].append({"source": source, "reason": reason, "at": now,
                                          "count": policy["count"], "message": REASONS[reason]})
+            else:
+                previous = policy["losses"][source]["reason"]
+                # A tab switch commonly fires blur first. Refine that same
+                # episode's category rather than charging two interruptions.
+                if REASON_PRIORITY.get(reason, 0) > REASON_PRIORITY.get(previous, 0):
+                    policy["counts_by_type"][previous] = max(0, policy["counts_by_type"].get(previous, 1) - 1)
+                    if not policy["counts_by_type"][previous]:
+                        policy["counts_by_type"].pop(previous)
+                    policy["counts_by_type"][reason] = policy["counts_by_type"].get(reason, 0) + 1
+                    policy["losses"][source]["reason"] = reason
+                    for event in reversed(policy["events"]):
+                        if event["source"] == source and event["reason"] == previous:
+                            event.update(reason=reason, message=REASONS[reason])
+                            break
         policy["events"] = policy["events"][-100:]
-        expired = any(age(value["since"], now) >= RECOVERY_SECONDS for value in policy["losses"].values())
-        terminal = policy["count"] >= LIMIT or expired
-        if policy == old and not terminal:
+        if policy == old:
             return policy_payload(doc)
         version = old.get("version", 0)
         policy["version"] = version + 1
         values = {"integrity": policy}
-        if terminal:
-            values.update(status="terminated", ended_at=now, updated_at=now,
-                          termination_reason="interruption_limit" if policy["count"] >= LIMIT else "monitoring_not_restored",
-                          proctoring_status="interrupted")
-            from services.proctoring_service import build_proctoring_report
-            runtime = sys.modules.get("interview.runtime")
-            state = getattr(runtime, "live_sessions", {}).get(doc["session_id"])
-            if state:
-                state["monitoring"] = False
-            report = build_proctoring_report(state, dict(doc, integrity=policy))
-            report["status"] = "interrupted"
-            values["proctoring_report"] = report
         query = {"_id": doc["_id"], "status": "active"}
         query["integrity.version"] = version if "version" in old else {"$exists": False}
         if collection.update_one(query, {"$set": values}).matched_count:
@@ -154,7 +146,7 @@ def check_health(collection, doc, now=None):
 
 
 class IntegrityWatchdog:
-    """Continues enforcing coverage when a browser closes or stops polling."""
+    """Continues measuring coverage when a browser closes or stops polling."""
     def __init__(self, collections):
         self.collections = collections
         self.stop_event = threading.Event()

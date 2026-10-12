@@ -456,7 +456,7 @@ class PracticeController:
 
             from services import interview_integrity_service as integrity
             policy = integrity.check_health(self.collections["practice_sessions"], session)
-            if policy["terminated"] or policy["losses"]:
+            if policy["terminated"]:
                 return {"error": "Restore interview monitoring before answering.", "error_code": "monitoring_required", "integrity": policy}, 409
             from routes.interview_routes import _restore_engine
             _restore_engine(session, self.interview_api.session_manager)

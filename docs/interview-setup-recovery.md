@@ -1,9 +1,15 @@
-# Interview setup, automatic face capture and kiosk 1.2.4
+# Interview setup, automatic face capture and kiosk 1.2.5
 
-Updated 12 October 2026. For the current five-interruption rule, front camera,
+Updated 12 October 2026. For interruption accounting without automatic termination, front camera,
 session restoration and real-device acceptance checklist, follow
 [Interview monitoring policy](interview-monitoring-policy.md). Backend/frontend changes require deployment; the
 rebuilt kiosk includes its own bundled UI and must be installed separately.
+
+Release 1.2.5 adds the real-audio dotted voice sphere, voice-only conversation
+and incremental captions. It removes automatic interruption termination, adds
+typed interruption counts to the final monitoring score, reduces duplicate-face
+warnings and retains phone recording parts across camera recovery. See
+[voice and captions](interview-voice-and-captions.md) for provider usage and latency.
 
 ## Automatic capture and retake
 
@@ -42,7 +48,7 @@ internal CPU thread; recharge-pack initialization runs once per database.
 Desktop/mobile/application connections prefer WebSocket with polling fallback.
 [Flask-SocketIO deployment guidance](https://flask-socketio.readthedocs.io/en/latest/deployment.html).
 
-## Deploy release 1.2.4
+## Deploy release 1.2.5
 
 1. Review, commit and push the fixes; run **genhire-main-deploy** on the new
    commit. Confirm logs show **gthread**, rather than eventlet. Keep the attached
@@ -71,7 +77,7 @@ Desktop/mobile/application connections prefer WebSocket with polling fallback.
 3. Deploy the frontend to Vercel. npm install/start/build prepares the local WASM
    files automatically; serve the resulting `/assets/` files with proper MIME types.
 4. Close the old kiosk and install **secure-browser-kiosk/dist/Genhire.exe**,
-   version **1.2.4**. Packaging does not update existing installations or the
+   version **1.2.5**. Packaging does not update existing installations or the
    hosted installer URL. Publish the tested installer and `.sha256` file through
    the existing installer release workflow when ready to distribute it.
 
@@ -80,12 +86,12 @@ Scale-to-zero still has a cold-start cost. Optionally set minimum instances to
 This paid setting was not enabled here; local tests do not establish production
 startup timing or hardware readiness.
 
-## Verify release 1.2.4
+## Verify release 1.2.5
 
-Windows installer: **102,479,379 bytes**, installer version **1.2.4** (packaged application product version **1.2.4.0**).
-SHA-256: `a07f6393b33d3c8cc5cddad55328b000ec55979b87ba4504e98bd9dd0b4adc0d`.
-Its 23 bundled UI/assets files match the build output byte-for-byte, including
-the detector loader, WASM and face model. The checksum file sits beside it.
+Windows installer: **102,580,181 bytes**, installer version **1.2.5** (packaged application product version **1.2.5.0**).
+SHA-256: `d146c966dfbc4c70fb977726dbfb2129f796e323d83ce1b5f390783269c14f91`.
+Its 24 bundled UI/assets files match the build output byte-for-byte, including
+the AudioWorklet, detector loader, WASM and face model. The checksum file sits beside it.
 
 - Center one face, review the automatic snapshot, retake, then approve. Only the
   approved image should reach `register-face`; a failed save keeps it for retry.
@@ -93,16 +99,17 @@ the detector loader, WASM and face model. The checksum file sits beside it.
 - Single-/dual-camera jobs must retain their configured checks.
 - Check Socket.IO uses WebSocket when available and remains connected beyond
   five minutes. Check new logs for quick photo saves and no worker restarts.
-- Local checks passed: 20 interview UI scenarios, frontend helper/security
-  checks and a real WebSocket heartbeat during a blocked native request.
-  The real bundled detector initialized under the kiosk CSP in **566 ms**
-  and correctly found no face in a blank frame. Physical devices and production
-  timing require the above checks after deployment.
+- Local checks passed: **161 backend tests**, **20 interview UI scenarios**,
+  **19 frontend helper tests**, **7 kiosk security tests**, lint and both builds.
+  Native Electron verified all five GPU voice states, actual audio amplitude,
+  the AudioWorklet, cleanup and responsive layouts at 1400, 900 and about 390 pixels.
+  Fixtures do not establish real-device camera accuracy or provider caption latency.
 
 The updated local backend also started with the existing private configuration:
-health returned **200**, interview-start preflight **200**, empty Google auth
-**400**, and Socket.IO connected over **WebSocket**. The temporary port-5052
-server used disabled background jobs and was stopped after verification.
+health returned **200** with MongoDB connected and Redis protection available,
+Google-auth CORS preflight returned **200**, and an unauthenticated session read
+returned **401**. The temporary port-5053 server used disabled background jobs
+and was stopped after verification. Native WebSocket transport is covered by the suite.
 The local threaded server closes WebSocket handlers cleanly without treating
 their closing frames as another HTTP request. Focused backend tests cover
 capture ownership/quality, stale retake scores, speech deadlines and plan setup.
@@ -164,8 +171,8 @@ speaker, face-capture and signed phone-readiness checks before activation.
 - Second camera: scan the signed QR code, allow devices on the phone, keep its
   page visible and position it beside the workspace. Continue becomes available
   after the server confirms the live phone camera, microphone and heartbeat.
-- Disconnect: stop a camera or background the phone, verify the interview pauses,
-  then reconnect and resume the same session without losing an answer draft.
+- Disconnect: background the phone and verify a warning/count while laptop answers
+  continue. Stop the laptop microphone, recover it and send the retained spoken answer.
 
 ## Local phone testing needs a reachable HTTPS site
 

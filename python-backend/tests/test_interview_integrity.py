@@ -1,4 +1,4 @@
-"""Durable policy tests, including restart, simultaneous callbacks and lockout."""
+"""Durable accounting tests, including restart and simultaneous callbacks."""
 import datetime as dt
 import unittest
 from unittest.mock import patch, MagicMock
@@ -25,18 +25,19 @@ class IntegrityTests(unittest.TestCase):
     def stored(self):
         return self.collection.find_one({"_id": self.doc["_id"]})
 
-    def test_fifth_distinct_episode_terminates_and_locks_application(self):
-        for number in range(1, 6):
+    def test_many_episodes_are_counted_without_termination_or_application_lock(self):
+        for number in range(1, 9):
             result = policy.reconcile(self.collection, self.stored(), {"desktop": "tab_switch"}, now=self.now)
             self.assertEqual(result["count"], number)
-            self.assertEqual(result["terminated"], number == 5)
+            self.assertFalse(result["terminated"])
             # Multiple callbacks from the same absence are one interruption.
             duplicate = policy.reconcile(self.collection, self.stored(), {"desktop": "window_blur"}, now=self.now)
             self.assertEqual(duplicate["count"], number)
-            if number < 5:
+            if number < 8:
                 policy.reconcile(self.collection, self.stored(), restored=["desktop"], now=self.now)
-        self.assertTrue(self.db.applications.find_one({"_id": self.application})["interview_attempt_locked"])
-        self.assertEqual(self.stored()["termination_reason"], "interruption_limit")
+        self.assertNotIn("interview_attempt_locked", self.db.applications.find_one({"_id": self.application}))
+        self.assertEqual(self.stored()["status"], "active")
+        self.assertEqual(self.stored()["integrity"]["counts_by_type"]["tab_switch"], 8)
 
     def test_stale_worker_cas_cannot_double_count_an_open_loss(self):
         stale = self.stored()
@@ -44,12 +45,19 @@ class IntegrityTests(unittest.TestCase):
         result = policy.reconcile(self.collection, stale, {"desktop": "window_blur"}, now=self.now)
         self.assertEqual(result["count"], 1)
 
-    def test_sustained_loss_ends_after_recovery_window_without_five_fake_strikes(self):
+    def test_blur_then_tab_switch_refines_one_episode_without_double_count(self):
+        policy.reconcile(self.collection, self.stored(), {"desktop": "window_blur"}, now=self.now)
+        result = policy.reconcile(self.collection, self.stored(), {"desktop": "tab_switch"}, now=self.now)
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["counts_by_type"], {"tab_switch": 1})
+        self.assertEqual(self.stored()["integrity"]["events"][0]["reason"], "tab_switch")
+
+    def test_sustained_outage_is_one_count_and_never_automatically_ends(self):
         policy.reconcile(self.collection, self.stored(), {"mobile": "mobile_unavailable"}, now=self.now)
         result = policy.reconcile(self.collection, self.stored(), now=self.now + dt.timedelta(seconds=60))
-        self.assertTrue(result["terminated"])
+        self.assertFalse(result["terminated"])
         self.assertEqual(result["count"], 1)
-        self.assertEqual(self.stored()["termination_reason"], "monitoring_not_restored")
+        self.assertEqual(self.stored()["status"], "active")
 
     def test_actual_frames_heartbeat_front_camera_and_visibility_gate_health(self):
         self.collection.update_one({"_id": self.doc["_id"]}, {"$set": {

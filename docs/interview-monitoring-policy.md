@@ -1,116 +1,134 @@
-# Interview monitoring and recovery — kiosk 1.2.4
+# Interview monitoring, scoring and recovery — kiosk 1.2.5
 
-Updated 12 October 2026. These changes are in the workspace; deploy the backend
-and frontend and replace the downloadable installer before testing production.
+Updated 12 October 2026. This release replaces the former five-interruption and
+60-second termination rules. Deploy the backend and frontend, publish the new
+installer, and reinstall the kiosk before testing production.
 
 ## Candidate workflow
 
-1. Open the secure browser from the correct application; retries reuse its session.
+1. Open the interview from the correct application; retries reuse its session.
 2. Allow the laptop camera and microphone, speak briefly, and confirm the speaker test.
 3. Hold one centered face steady for 1.2 seconds; review the automatic snapshot,
    retake it if needed, then approve its upload. Manual capture remains available.
-4. For a required phone, scan the signed private QR code on a reachable HTTPS site.
-   Allow its **front camera and microphone**. Position it beside you so its view
-   includes you, your laptop and desk; keep it plugged in and its page visible.
-5. Read and accept the monitoring rules, then start. Question pacing begins after setup.
+4. If a phone is required, scan the signed private QR code on a reachable HTTPS
+   site. Allow its **front camera and microphone** and position it beside you,
+   showing you, your laptop and desk. Keep its page visible and screen unlocked.
+5. Accept the rules and start. Read the AI question and speak your answer; the
+   conversation shows live captions, with a corrected transcript after submission.
+6. Choose **Send answer**, or let silence submit after you have spoken. Recordings
+   and submitted answers are retained for retry when the network fails.
 
-## What counts toward the interruption limit
+## Interruption accounting
 
-- Leaving the laptop tab, switching windows, or leaving required fullscreen.
-- Losing the laptop camera, microphone, monitoring heartbeat, or camera frames.
-- Hiding the phone page, switching phone apps, locking its screen, losing camera
-  or microphone access, disconnecting it, or stopping its preview frames.
-- **Five distinct interruptions end the attempt.** The server stores counts,
-  evidence and the terminal status in MongoDB; a reload, reconnect, server restart,
-  another socket or another `/start` request cannot reset or reopen that attempt.
-- A continuous loss is one episode per device: blur and visibility callbacks,
-  stale heartbeats and repeated disconnection messages do not create extra strikes.
-- Restore lost monitoring within **60 seconds**. A sustained outage also ends the
-  attempt; it is recorded as one outage, not five invented interruptions.
-- Setup permission problems, slow providers, and uncertain automated face/object/
-  gaze observations are not interruption strikes. Vision warnings remain evidence
-  for human review; the system does not automatically declare a candidate cheating.
+Interruptions no longer automatically terminate an interview, regardless of
+their count or duration. Camera observations also do not automatically end it.
+Leaving the laptop tab, switching windows, exiting required fullscreen, losing
+devices, stale monitoring, and unavailable phone coverage are recorded by type.
+Counts remain visible during the interview and appear in the recruiter report.
 
-The attempt's terminal record independently blocks retries for its application,
-even if updating the application summary fails. It does not block unrelated jobs.
-Submitted answers remain saved. Desktop and phone recordings are stopped and
-offered for upload; candidates must keep the pages open while uploads finish.
-Recruiters can retrieve a terminated attempt's transcript, coverage and policy
-events through the authorized report endpoint. No fabricated interview score is
-assigned to a terminated attempt.
+One continuous absence is one episode per device until healthy monitoring is
+restored. Blur followed by a tab-switch event refines that episode's category;
+repeated callbacks, stale heartbeats and disconnection messages do not add counts.
+Setup problems and unmonitored practice sessions do not accumulate interruptions.
+MongoDB stores the counts and current losses using versioned compare-and-swap
+updates, so worker restarts and simultaneous callbacks do not reset the totals.
 
-## Phone capabilities and limits
+Network and phone gaps display a transient warning and allow laptop recording
+to continue. Loss of the actual laptop camera, microphone or answer recorder
+still opens a recovery dialog because a voice answer cannot be recorded safely
+without working devices. The original question deadline remains in force.
+The interrupted recording can be transcribed and sent after reconnection.
 
-The phone requires a live front camera, microphone, visible page, heartbeat and
-decoded preview frame before it is ready. A rear camera does not silently replace
-the front camera. Heartbeats arrive every five seconds; previews every second.
-Readiness expires after 15 seconds without a heartbeat or actual preview.
+The candidate can end voluntarily; completion and explicit historical terminal
+states remain final. Attempts already terminated by an older release are **not
+automatically reopened** or erased. The new policy governs active/new attempts.
 
-Screen Wake Lock is requested where supported and reacquired after returning to
-the page. Power saving or browser policy may reject it; the UI then explains that
-auto-lock needs to be disabled manually. The fullscreen button is available where
-the browser supports fullscreen. Once entered, leaving it removes phone readiness
-until fullscreen is restored.
+## Proctoring score
 
-An ordinary mobile website **cannot prevent OS app switching, force device lock
-settings, or guarantee delivery of an event after the screen locks**. Visibility
-events provide immediate notices when possible; expired heartbeat/frame evidence
-provides the fallback. The server watchdog checks active sessions every five
-seconds, including after a browser closes. Neither browser warnings nor a single
-image prove misconduct. Mobile OS lockdown would require a separate managed/native
-device solution, not a promise made by this web page.
+The report starts at 100 and deducts the weighted recorded observations and
+interruption episodes, bounded at zero. The score is a review signal, not a
+probability that a candidate cheated or a substitute for interview performance.
+Technical outages are explicitly labelled and carry smaller deductions.
 
-References: [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API),
-[HackerRank Proctor Mode](https://support.hackerrank.com/articles/5663779659).
-The five-interruption rule is GenHire's configured product policy, not a claimed
-HackerRank rule or a certification of equivalence.
+| Interruption category | Deduction per episode |
+| --- | ---: |
+| Laptop tab switch | 2 |
+| Window blur | 1 |
+| Fullscreen exit | 2 |
+| Camera or microphone lost | 1 |
+| Laptop monitoring unavailable | 0.5 |
+| Phone monitoring unavailable | 0.5 |
 
-## Session restoration
+Confirmed camera observations retain the existing weights: no face/head turn
+0.5, multiple faces/extra phone 2, prohibited object 1, and identity mismatch 5.
+Legacy manual focus observations are excluded when durable interruption counts
+already describe the same episode. The report includes counts, weights, events,
+coverage, and missing detector capabilities. No analyzed laptop frames means
+**score unavailable**, rather than a fabricated perfect score.
 
-New real and practice sessions persist their source-document snapshots and engine
-checkpoints. These contain the same session ID, current question, conversation
-context, answers, count and original question deadline. Restoration uses owned
-database evidence without another payment or initial LLM call. Captured face
-references and saved proctoring evidence are restored for socket monitoring.
+## Camera warnings and false positives
 
-Older real sessions can reconstruct documents from their application/job snapshot
-and continue from the saved last answer. If the saved current question or source
-documents are unavailable, recovery reports that limitation rather than inventing
-answers or silently restarting. Older practice sessions without snapshots may
-still require ending with their saved answers.
+OpenCV Haar face detections now reject weak/small/implausible rectangles and
+suppress overlapping duplicate boxes before counting distinct faces. A
+multiple-face warning requires four consecutive observations; other vision
+warnings require two. A confirmed type/source emits at most once every 15 seconds.
+The candidate's warning popup dismisses after **1.8 seconds**; report evidence
+and totals remain saved. These filters reduce noise but do not guarantee accuracy.
 
-Live question generation and Socket.IO bindings still reside in one process.
-Keep one Gunicorn worker and one Cloud Run instance with session affinity as
-described in [setup recovery](interview-setup-recovery.md). Checkpoints repair
-worker restarts; they do not make parallel answer mutations across multiple
-containers safe. Keep `GENHIRE_DISABLE_JOBS=0` in production: disabling jobs also
-disables the independent integrity watchdog.
+A phone's side view can include both the candidate and their laptop preview.
+Haar rectangles alone therefore do not declare multiple people on the phone;
+additional-person warnings require the independent available person detector.
+The required companion phone alone is allowed by the existing object rules.
+Unavailable object/identity/gaze modules appear as missing checks, not detections.
 
-## Release and device acceptance checklist
+## Phone capabilities
 
-1. Deploy the changed Python backend with its native threading Gunicorn config;
-   check `/health` and the frontend-origin CORS preflight.
-2. Deploy the changed frontend so the phone receives the same protocol and front
-   camera requirements as the kiosk. Both devices must target the same backend.
-3. Upload `secure-browser-kiosk/dist/Genhire.exe` (1.2.4), verify its sibling SHA-256
-   file, and install that build on the test laptop. Existing installations do not
-   acquire bundled UI changes just by redeploying the website.
-4. Test single-camera setup, automatic capture/retake, activation, one answer and end.
-5. Test the signed phone link on real Android Chrome and iPhone Safari: verify the
-   front camera, both permissions, heartbeat, frames, recording and final upload.
-6. Switch laptop tabs/windows once: expect one counted episode and paused answers.
-   Restore monitoring, resume, and repeat until the fifth distinct interruption.
-7. Switch phone apps, lock it, disconnect network, and revoke camera access in
-   separate tests. Expect readiness loss, laptop pause, a counted episode and recovery.
-8. Confirm staying disconnected for 60 seconds ends the attempt once.
-9. At termination, reload, reconnect, activate, submit, and call `/start` again:
-   expect rejection for that same application and a retained recruiter report.
-10. Restart the backend during setup and verify same-session recovery with no
-    extra debit. Restart during an active question and verify its deadline is retained.
-11. Confirm uncertain vision flags generate review notices without termination
-    strikes; a required companion phone alone must not trigger an extra-phone flag.
+Phone readiness requires a live front camera, microphone, visible page, heartbeat
+and decoded preview. A rear camera does not silently replace the front camera.
+Heartbeats arrive every five seconds and previews every second; readiness expires
+after 15 seconds without either heartbeat or preview evidence. Camera re-enabling
+after an active-session loss restarts the phone recorder and retains earlier parts.
 
-Automated tests cover server state, CAS retries, authorization/terminal guards,
-engine restoration, real React components and recording shutdown. They use fixture
-media and cannot establish physical device compatibility, real camera positioning,
-model accuracy or deployed network readiness. The device checklist remains required.
+Screen Wake Lock is requested where supported and reacquired after returning.
+If browser/power-saving policy rejects it, disable auto-lock manually. Optional
+fullscreen is offered where supported; leaving entered fullscreen removes readiness
+until restored. Mobile browsers cannot prevent OS app switching or guarantee an
+event after locking. Visibility notices and server-side stale-evidence checks
+record the coverage gap; no claim of mobile OS lockdown is made.
+
+See [Screen Wake Lock](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API)
+and [HackerRank Proctor Mode](https://support.hackerrank.com/articles/5663779659).
+GenHire's advisory weights and dual-camera flow are its own product policy.
+
+## Session restoration and deployment
+
+Owned MongoDB source snapshots and engine checkpoints retain session ID, current
+question, answer history and original deadline without another debit/initial LLM
+call. Older sessions without sufficient snapshots report the recovery limitation.
+Live engine and Socket.IO state still require one Gunicorn worker, one Cloud Run
+instance and session affinity; follow [setup recovery](interview-setup-recovery.md).
+Keep `GENHIRE_DISABLE_JOBS=0` in production for the five-second coverage watchdog.
+See [voice/captions implementation](interview-voice-and-captions.md) for audio setup.
+
+## Device acceptance after deployment
+
+1. Verify backend `/health`, frontend-origin CORS, native gthread logs and persistent sockets.
+2. Install kiosk 1.2.5; deploy the matching phone website against the same backend.
+3. Test single-camera setup, automatic capture/retake, activation, spoken answer and completion.
+4. Test a physical Android Chrome and iPhone Safari phone: front camera, microphone,
+   private pairing, live frames, recorder start, reconnect and final upload.
+5. Test a single candidate and a second person in each camera; confirm no duplicate
+   laptop-preview false alarm and confirmed warnings hide after 1.8 seconds.
+6. Switch laptop tabs/windows repeatedly, restoring focus between episodes; verify
+   counts/types persist and more than five episodes never automatically end the attempt.
+7. Switch phone apps, lock it, disconnect its network and revoke permissions separately;
+   verify warnings, coverage gaps, automatic recovery and uninterrupted laptop answers.
+8. Leave phone/network monitoring unavailable beyond 60 seconds; the interview stays active.
+9. Remove the laptop microphone/camera; recover devices and send the retained answer.
+10. Restart the backend; verify owned same-session restoration without a second debit.
+11. Finish, verify both uploads, and inspect the recruiter report's counts, score and coverage.
+
+Fixture tests cover state, authorization, recovery, real React UI and recording
+cleanup. Native Electron tests exercise WebGL, analysers and the AudioWorklet under
+the kiosk CSP. They do not establish physical camera accuracy, provider recognition
+quality or production network readiness; the device checks above remain necessary.

@@ -285,16 +285,16 @@ This file contains architecture context and public identifiers only; credential 
 - `answer_classifier.py` distinguishes answer types and uses langdetect when language detection is available.
 - pandas supports evaluation data processing; matplotlib supports evaluation visualizations where those utilities are invoked.
 - MongoDB source snapshots and engine checkpoints restore owned interviews with their question, answers and deadline without another debit.
-- `interview_integrity_service.py` stores five-interruption lockouts and runs a five-second coverage watchdog with a 60-second recovery window.
+- `interview_integrity_service.py` persists interruption episodes/counts by type and runs a five-second coverage watchdog without automatic termination.
 - Phone monitoring requires a front camera, microphone, visible page and fresh frames; wake lock helps but a website cannot block OS app switching.
 - [Chat.jsx](react-frontend/src/features/interview/pages/Chat.jsx) is the current shared interview UI for the website and packaged kiosk renderer.
 - Pre-interview phases guide device access, microphone/speaker checks, face capture, and optional paired-phone readiness before answering.
 - MediaPipe Tasks Vision and bundled BlazeFace/WASM assets guide local automatic capture with a 1.2-second stable hold, review and retake.
-- Answer controls support voice and typed responses with confirmation/recovery behavior when changing modes.
+- Voice-only answers show incremental configured-provider captions; retained whole-recording transcription supplies the final submitted answer.
 - Recording/transcription and submission failures preserve retryable answers instead of discarding the participant's work immediately.
-- Visibility, connection, and device checks can pause/recover the experience; session termination and report handling have explicit states.
+- Tab, network and phone gaps show 1.8-second notices; actual laptop device loss offers recording recovery, and final reports include weighted interruption counts.
 - `KioskLaunchGuide` remembers installation confirmation in browser storage and offers reinstall help; browsers cannot reliably prove native installation.
-- Final interview and proctoring report dialogs present results separately from active-answer controls.
+- The interview layout places live question/answer history on the left, camera and voice sphere on the right, with responsive stacking and GPU/audio cleanup.
 
 ## 18. Speech and recording
 
@@ -306,7 +306,7 @@ This file contains architecture context and public identifiers only; credential 
 - Google Cloud Speech remains an SDK/alternate transcription path; retired streaming endpoints should not be treated as the current interview route.
 - Browser `getUserMedia` requests camera/microphone access; permissions and a secure browser context are required on participant devices.
 - MediaRecorder records answer audio and session video using supported browser formats.
-- Web Audio `AudioContext` supports microphone-level checks and audio handling in the current interview UI.
+- Web Audio analysers drive Three.js 0.180.0 dotted `VoiceSphere` states from real microphone/AI playback amplitude; an AudioWorklet produces 16 kHz mono caption packets.
 - Recorded audio is submitted to `/api/speech/transcribe`; question text is submitted to `/api/speech/synthesize`.
 - Electron's restricted speech IPC forwards requests to authenticated backend endpoints without embedding Google or Groq secrets in the installer.
 - `speech_cost_tracker.py` and provider telemetry estimate speech usage separately from chat token usage.
@@ -324,7 +324,7 @@ This file contains architecture context and public identifiers only; credential 
 - `face_match_service.py` separately compares a live face with an uploaded identity-card image using image-capable LLM providers.
 - Identity-reference comparison and repeated account-face verification are different checks with distinct availability and failure behavior.
 - `identity_card_service.py` stores reference images in GridFS; candidate replacement is locked after upload while administrators have management actions.
-- `proctoring_service.py` normalizes monitoring state, observations, penalties, availability, and final integrity reports.
+- `proctoring_service.py` scores confirmed observations and persisted interruption types; face deduplication/four-frame confirmation reduce false multiple-face warnings.
 - Mobile pairing tokens are HMAC-signed and scoped to session/account; readiness checks confirm the required second-camera connection.
 - `MobileRecorder` runs on the paired phone; mobile/proctoring socket handlers authenticate sessions and validate access to their events.
 - `MOBILE_RECORDING_ENABLED=true` now enables signed phone pairing locally; Cloud Run must also enable it for dual-camera jobs.
@@ -333,7 +333,7 @@ This file contains architecture context and public identifiers only; credential 
 
 ## 20. Electron secure browser
 
-- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.4, Electron 40, and electron-builder packaging with explicit media consent.
+- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.5, Electron 40, and electron-builder packaging with explicit media consent.
 - `main.js` owns windows, single-instance handling, protocol registration, speech IPC, and kiosk lifecycle controls.
 - The `secure-interview://` custom protocol carries validated interview launch context from the website into the installed app.
 - `runtime-security.js` validates launch/external URLs and renderer paths; installer code signing is not enforced by the current build configuration.
