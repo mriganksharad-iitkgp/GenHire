@@ -10,10 +10,14 @@ import re
 import threading
 import time
 import logging
+import math
 
 SAMPLE_RATE = 16000
-WINDOW_BYTES = SAMPLE_RATE * 2 * 3
-OVERLAP_BYTES = SAMPLE_RATE * 2 // 3
+# Four-second cadence (15 requests/minute), with eight seconds of context.
+# Keep the newest four seconds revisable as the next window adds context.
+STEP_BYTES = SAMPLE_RATE * 2 * 4
+WINDOW_BYTES = STEP_BYTES * 2
+OVERLAP_BYTES = STEP_BYTES
 MAX_SECONDS = 185
 SLOTS = threading.BoundedSemaphore(8)
 logger = logging.getLogger(__name__)
@@ -46,6 +50,7 @@ class LiveTranscript:
         self.sequence = 0
         self.samples = 0
         self.text = ""
+        self.words = []
         self.complete = True
         self.closed = False
         self.done = threading.Event()
@@ -108,22 +113,45 @@ class LiveTranscript:
         except queue.Full:
             pass
 
-    def _recognize(self, pcm):
+    def _recognize(self, pcm, offset=0):
         if not has_speech_energy(pcm):
             return
         if not self.still_active():
             self.cancelled.set()
             return
-        text = self.recognize(pcm)
-        if text is None:
+        # Only confirmed earlier context belongs in the hint; feeding the
+        # overlapping draft back would reinforce its first recognition errors.
+        earlier = " ".join(word["word"] for word in self.words if word["end"] <= offset)
+        result = self.recognize(pcm, " ".join(earlier.split()[-60:]))
+        if result is None:
             raise RuntimeError("Caption recognition unavailable")
+        text = result.get("text", "") if isinstance(result, dict) else str(result)
         if not self.cancelled.is_set() and str(text).strip():
-            self.text = append_transcript(self.text, str(text).strip())
+            words = result.get("words") if isinstance(result, dict) else None
+            if words:
+                # Replace the overlapping draft, rather than appending another
+                # recognition of the same sound. Keep only earlier stable words.
+                stable = [word for word in self.words if word["end"] <= offset]
+                boundary = stable[-1]["end"] if stable else offset
+                revised = []
+                duration = len(pcm) / (SAMPLE_RATE * 2)
+                for word in words:
+                    start, end = float(word.get("start", 0)), float(word.get("end", 0))
+                    value = str(word.get("word", "")).strip()
+                    if value and math.isfinite(start) and math.isfinite(end) and 0 <= start <= end <= duration + .25 and offset + end > boundary + .05:
+                        revised.append({"word": value, "start": offset + start, "end": offset + end})
+                if revised:
+                    self.words = stable + revised
+                    self.text = " ".join(word["word"] for word in self.words)
+            else:
+                self.text = append_transcript(self.text, str(text).strip())
             self.emit({"stream_id": self.stream_id, "session_id": self.session_id,
-                       "transcript": self.text, "final": False})
+                       "transcript": self.text, "final": False, "provisional": True})
 
     def _run(self):
         buffer = bytearray()
+        offset = 0
+        fresh = 0
         try:
             while not self.cancelled.is_set() and time.monotonic() - self.created < MAX_SECONDS + 10:
                 try:
@@ -132,13 +160,18 @@ class LiveTranscript:
                     self.complete = False
                     break
                 if chunk is None:
-                    if len(buffer) > OVERLAP_BYTES:
-                        self._recognize(bytes(buffer))
+                    if fresh:
+                        self._recognize(bytes(buffer), offset)
                     break
                 buffer.extend(chunk)
-                while len(buffer) >= WINDOW_BYTES:
-                    self._recognize(bytes(buffer[:WINDOW_BYTES]))
-                    del buffer[:WINDOW_BYTES - OVERLAP_BYTES]
+                fresh += len(chunk)
+                if fresh >= STEP_BYTES:
+                    self._recognize(bytes(buffer), offset)
+                    fresh = 0
+                    if len(buffer) >= WINDOW_BYTES:
+                        removed = len(buffer) - OVERLAP_BYTES
+                        del buffer[:removed]
+                        offset += removed / (SAMPLE_RATE * 2)
             if self.cancelled.is_set():
                 self.complete = False
         except Exception as exc:

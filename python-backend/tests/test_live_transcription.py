@@ -20,7 +20,7 @@ class LiveCaptionsTests(unittest.TestCase):
         emit, recognize = MagicMock(), MagicMock(side_effect=["I built a hiring platform", "hiring platform using Python"])
         stream = LiveTranscript("one", "owned-session", recognize, emit, lambda: True)
         self.assertTrue(stream.start())
-        audio = pcm(4)
+        audio = pcm(5)
         packets = [audio[i:i + 6400] for i in range(0, len(audio), 6400)]
         # A native handler may briefly run out of order; this does not lose PCM.
         self.assertTrue(stream.add(1, packets[1])); self.assertTrue(stream.add(0, packets[0]))
@@ -32,6 +32,20 @@ class LiveCaptionsTests(unittest.TestCase):
         self.assertEqual(result["transcript"], "I built a hiring platform using Python")
         self.assertEqual(recognize.call_count, 2)
         self.assertTrue(stream.done.is_set())
+
+    def test_overlapping_word_times_revise_draft_without_duplicate_sentences(self):
+        responses = [
+            {"text": "I study at IKAPU", "words": [{"word": "I", "start": 0, "end": .3}, {"word": "study", "start": .5, "end": 1}, {"word": "at IKAPU", "start": 2, "end": 3.9}]},
+            {"text": "I study at IIT Kharagpur in year five", "words": [{"word": "I study at IIT Kharagpur", "start": 0, "end": 3.9}, {"word": "in year five", "start": 4.1, "end": 7}]},
+            {"text": "in year five today", "words": [{"word": "in year five", "start": .1, "end": 3}, {"word": "today", "start": 4, "end": 5}]},
+        ]
+        stream = LiveTranscript("revision", "owned", MagicMock(side_effect=responses), MagicMock(), lambda: True)
+        stream._recognize(pcm(4), 0)
+        self.assertIn("IKAPU", stream.text)
+        stream._recognize(pcm(8), 0)
+        stream._recognize(pcm(8), 4)
+        self.assertEqual(stream.text, "I study at IIT Kharagpur in year five today")
+        self.assertEqual(stream.recognize.call_args.args[1], "I study at IIT Kharagpur")
 
     def test_gap_invalid_audio_and_closed_session_never_become_complete(self):
         stream = LiveTranscript("two", "owned-session", MagicMock(), MagicMock(), lambda: False)

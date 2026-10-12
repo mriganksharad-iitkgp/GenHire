@@ -152,7 +152,7 @@ async function activeInterview(options = {}) {
   await click(button("Continue")); await click(button("I heard the sound", document.querySelector('[role="dialog"]')));
   if (options.dual) { await act(async () => socket.fire("mobile_status_dashboard", { ready: true, status: "connected" })); assert.ok(button("Continue"), text() + "\n" + renderErrors.join("\n")); await click(button("Continue")); }
   await click(document.querySelector('input[type="checkbox"]'));
-  micSound = false; await click(button("Start interview"));
+  micSound = false; await settle(750); await click(button("Start interview"));
   assert.ok(document.querySelector('[aria-label="Interview conversation"]'));
 }
 async function check(name, fn) {
@@ -295,14 +295,29 @@ try {
     await activeInterview(); assert.ok(!button("Type answer")); assert.ok(!document.querySelector("textarea"));
     const live = socketEvents.find(event => event.name === "speech_live_start"); assert.ok(live);
     await act(async () => socket.fire("speech_live_transcript", { stream_id: live.payload.stream_id, transcript: "I built a reliable" }));
-    assert.ok(text().includes("I built a reliable")); micSound = true; await settle(180); micSound = false;
+    assert.ok(text().includes("I built a reliable")); micSound = true; await settle(600); micSound = false;
     await click(button("Send answer"));
     const submitted = apiCalls.find(call => call.url.endsWith("/answer")); assert.ok(submitted, text());
     assert.equal(JSON.parse(submitted.options.body).answer, "I built a reliable Python service.");
     assert.ok(text().includes("What did you learn?")); assert.ok(text().includes("I built a reliable Python service."));
   });
+  await check("ten seconds without speech advances without invoking transcription", async () => {
+    await activeInterview(); const began = now(); Date.now = () => began + 10100;
+    await settle(200);
+    const submitted = apiCalls.find(call => call.url.endsWith("/answer"));
+    assert.ok(submitted, text()); assert.equal(JSON.parse(submitted.options.body).answer, "");
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/transcribe")).length, 0);
+  });
+  await check("five seconds after sustained speech submits once and asks the next question", async () => {
+    await activeInterview(); micSound = true; await settle(600); micSound = false;
+    const stopped = now(); Date.now = () => stopped + 5100; await settle(220);
+    const submitted = apiCalls.filter(call => call.url.endsWith("/answer"));
+    assert.equal(submitted.length, 1, text());
+    assert.equal(JSON.parse(submitted[0].options.body).answer, "I built a reliable Python service.");
+    assert.ok(text().includes("What did you learn?"));
+  });
   await check("a failed spoken submission keeps the exact final transcript for retry", async () => {
-    await activeInterview(); micSound = true; await settle(180); micSound = false; answerFailure = true;
+    await activeInterview(); micSound = true; await settle(600); micSound = false; answerFailure = true;
     await click(button("Send answer")); assert.ok(button("Send saved answer"));
     answerFailure = false; await click(button("Send saved answer"));
     const answers = apiCalls.filter(call => call.url.endsWith("/answer")); assert.equal(answers.length, 2);
@@ -317,7 +332,7 @@ try {
     assert.ok(recordings.some(recorder => recorder.state === "recording"));
   });
   await check("a disconnected laptop retains its spoken recording and can resume", async () => {
-    await activeInterview(); micSound = true; await settle(180); micSound = false;
+    await activeInterview(); micSound = true; await settle(600); micSound = false;
     await act(async () => { currentStream.getVideoTracks()[0].stop(); currentStream.getVideoTracks()[0].onended(); }); await settle();
     assert.ok(button("Resume interview").disabled); micSound = true;
     await click(button("Retry device checks")); await settle(180); micSound = false;
@@ -339,7 +354,7 @@ try {
     assert.ok(!text().includes("of 5")); assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 0);
   });
   await check("failed recording uploads warn before closing and offer themed leave or retry", async () => {
-    await activeInterview(); micSound = true; await settle(180); micSound = false; await click(button("Send answer"));
+    await activeInterview(); micSound = true; await settle(600); micSound = false; await click(button("Send answer"));
     uploadFailure = true; await click(button("End interview")); await click(button("Finish interview")); await settle();
     assert.ok(text().includes("recording upload failed"));
     const leaving = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(leaving); assert.equal(leaving.defaultPrevented, true);

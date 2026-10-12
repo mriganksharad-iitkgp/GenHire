@@ -1,4 +1,6 @@
-# Interview setup, automatic face capture and kiosk 1.2.6
+# Interview setup, automatic face capture and kiosk 1.2.7
+
+For the 13 October question fallback, silence timers, revised captions and live memory recovery, see [Interview turn recovery](interview-turn-recovery.md). The earlier release notes below are historical.
 
 Updated 13 October 2026. For interruption accounting without automatic termination, front camera,
 session restoration and real-device acceptance checklist, follow

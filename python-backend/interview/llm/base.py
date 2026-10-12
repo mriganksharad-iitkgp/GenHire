@@ -16,15 +16,6 @@ if TYPE_CHECKING:
     from llama_index.core.llms.llm import LLM as LlamaIndexLLM
     from llama_index.core.base.llms.types import CompletionResponse
 
-try:
-    from llama_index.core.llms.llm import LLM as LlamaIndexLLM
-    from llama_index.core.base.llms.types import CompletionResponse
-
-    LLAMA_INDEX_AVAILABLE = True
-except ImportError:
-    LLAMA_INDEX_AVAILABLE = False
-    LlamaIndexLLM = object
-    CompletionResponse = object
 
 
 @dataclass

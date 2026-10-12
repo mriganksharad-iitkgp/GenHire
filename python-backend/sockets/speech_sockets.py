@@ -38,15 +38,15 @@ def start_live_speech(data):
         _, current = owner_session(session_id, context["user_id"])
         return bool(current and current.get("status") == "active")
     state = LiveTranscript(data["stream_id"], session_id,
-        lambda pcm: service.speech_to_text(pcm, sample_rate_hertz=16000,
-            language_code="en-US", encoding="LINEAR16", session_id=session_id),
+        lambda pcm, prompt: service.speech_to_text(pcm, sample_rate_hertz=16000,
+            language_code="en-US", encoding="LINEAR16", session_id=session_id, caption_prompt=prompt),
         lambda payload: socketio.emit("speech_live_transcript", payload, room=sid), active)
     cancel_speech(sid)
     if not state.start():
         return {"ok": False, "error_code": "live_speech_busy"}
     with lock:
         streams[sid] = state
-    return {"ok": True, "sample_rate": 16000, "window_seconds": 3}
+    return {"ok": True, "sample_rate": 16000, "window_seconds": 4}
 
 
 @socketio.on("speech_live_audio")

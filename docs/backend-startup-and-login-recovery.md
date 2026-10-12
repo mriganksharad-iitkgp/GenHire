@@ -1,5 +1,7 @@
 # Backend startup and login recovery
 
+13 October update: the interview instance exceeded 512 MiB. Memory is now 2 GiB on ready revision `hrtech-00160-j8z`; health and login preflight passed. See [Interview turn recovery](interview-turn-recovery.md) for the provider fix and remaining code deployment.
+
 Updated 12 October 2026. Follow this guide for production recovery and verification,
 then use [Required setup and rate limits](required-setup-and-rate-limits.md)
 for the remaining service setup.

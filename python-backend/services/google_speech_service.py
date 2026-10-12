@@ -113,12 +113,13 @@ class GoogleSpeechService:
         language_code="en-US",
         encoding="WEBM_OPUS",
         session_id=None,
+        caption_prompt=None,
     ):
         """
         Transcribe with configured Groq STT, or explicitly selected legacy Google STT.
         """
         if self.stt_provider == "groq":
-            return self._groq_transcribe(audio_content, language_code, encoding, session_id, sample_rate_hertz)
+            return self._groq_transcribe(audio_content, language_code, encoding, session_id, sample_rate_hertz, caption_prompt)
         if not self.speech_client:
             logger.error("Speech client not initialized. Check credentials.")
             return None
@@ -176,7 +177,7 @@ class GoogleSpeechService:
             logger.error(f"Speech to text transcription failed: {e}")
             return None
 
-    def _groq_transcribe(self, audio_content, language_code, encoding, session_id, sample_rate_hertz=16000):
+    def _groq_transcribe(self, audio_content, language_code, encoding, session_id, sample_rate_hertz=16000, caption_prompt=None):
         if self.groq_client is None:
             raise RuntimeError("Groq STT is not configured; set GROQ_API_KEY")
         if isinstance(audio_content, str):
@@ -195,10 +196,15 @@ class GoogleSpeechService:
                 wav.setframerate(sample_rate_hertz)
                 wav.writeframes(audio_content)
             audio_content = output.getvalue()
+        options = {}
+        if caption_prompt is not None:
+            options = {"timestamp_granularities": ["word", "segment"], "timeout": 6}
+            if caption_prompt.strip():
+                options["prompt"] = " ".join(caption_prompt.split()[-60:])[:600]
         response = self.groq_client.audio.transcriptions.create(
             file=("answer." + suffix, audio_content), model=self.stt_model,
             language=language_code.split("-")[0], response_format="verbose_json",
-            temperature=0,
+            temperature=0, **options,
         )
         duration = getattr(response, "duration", None)
         duration_source = "actual" if duration is not None else "assumed"
@@ -213,7 +219,15 @@ class GoogleSpeechService:
                                 service="stt", cost_usd=groq_stt_cost(duration),
                                 metadata={"audio_seconds": duration, "session_id": session_id,
                                           "billed_seconds": max(10, duration)})
-        return response.text.strip()
+        if caption_prompt is None:
+            return response.text.strip()
+        payload = response.model_dump()
+        # Whisper's own confidence fields identify likely silence hallucinations.
+        rejected = [segment for segment in payload.get("segments", []) or []
+                    if segment.get("no_speech_prob", 0) > .6 and segment.get("avg_logprob", 0) < -1]
+        words = [word for word in payload.get("words", []) or [] if not any(
+            segment["start"] <= (word["start"] + word["end"]) / 2 <= segment["end"] for segment in rejected)]
+        return {"text": " ".join(word["word"] for word in words) if payload.get("words") else response.text.strip(), "words": words}
 
     def text_to_speech(
         self,

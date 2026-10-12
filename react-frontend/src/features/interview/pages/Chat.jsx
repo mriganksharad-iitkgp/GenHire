@@ -12,12 +12,11 @@ import VoiceSphere from "../components/VoiceSphere";
 import { playInterviewerSpeech } from "../utils/interviewerSpeech";
 import { proctoringNotice } from "../utils/proctoringNotice";
 import { startLiveCaptions } from "../utils/liveCaptions";
+import { createVoiceTurn, voicePolicy } from "../utils/voiceActivity";
 import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase, transcriptionAudio } from "../utils/session";
 import styles from "./InterviewExperience.module.css";
 import { captureProgress, createFaceDetector, facePosition, faceSnapshot } from "../utils/faceCapture";
 
-const THINK_SECONDS = 30;
-const SILENCE_SECONDS = 8;
 const CACHE_KEY = "genhire-interview-session";
 const formatTime = (value) => `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
 
@@ -56,7 +55,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const voiceAudioRef = useRef({ microphone: null, speaker: null }); const speakerNodesRef = useRef(null);
   const liveCaptionsRef = useRef(null), captionGenerationRef = useRef(0), transcriptTailRef = useRef(null);
   const [question, setQuestion] = useState(""); const [questionCount, setQuestionCount] = useState(1); const [speechState, setSpeechState] = useState("idle");
-  const [hasSpoken, setHasSpoken] = useState(false); const [answerCountdown, setAnswerCountdown] = useState(THINK_SECONDS);
+  const [hasSpoken, setHasSpoken] = useState(false); const [answerCountdown, setAnswerCountdown] = useState(10);
   const [draft, setDraft] = useState(""); const [pendingAnswer, setPendingAnswer] = useState(null); const [elapsed, setElapsed] = useState(0);
   const [questionDeadline, setQuestionDeadline] = useState(null); const [questionRemaining, setQuestionRemaining] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -68,11 +67,12 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const socketRef = useRef(null); const audioRef = useRef(null); const speechRequestRef = useRef(0); const audioCacheRef = useRef(new Map());
   const answerRecorderRef = useRef(null); const answerChunksRef = useRef([]); const archiveRecorderRef = useRef(null); const archiveChunksRef = useRef([]);
   const archivePartsRef = useRef([]); const archiveUploadRef = useRef(false); const submitRequestRef = useRef(false);
-  const startedAtRef = useRef(null); const answerStartRef = useRef(0); const lastSpeechRef = useRef(0);
+  const startedAtRef = useRef(null); const voiceTurnRef = useRef(null); const setupLevelsRef = useRef([]);
   const spokeRef = useRef(false); const processingRef = useRef(false); const pauseRef = useRef(""); const submitRecordingRef = useRef(null);
   const actionsRef = useRef({}); const lastWarningRef = useRef({}); const draftRef = useRef(draft); draftRef.current = draft;
   const request = useCallback((path, options = {}, timeout = 15000) => interviewRequest(apiBase, path, getToken(), options, timeout), [apiBase]);
   const isPractice = isPracticeSession(location, session || {}); const dualRequired = session?.dual_proctoring_required === true;
+  const timing = voicePolicy(session?.voice_policy);
   const maxQuestions = session?.max_questions || 10; const phoneUrl = mobilePairingUrl(session, webOrigin);
   const deviceReady = cameraReady && micReady && speakerTested === true;
   phaseRef.current = phase; sessionRef.current = session; questionRef.current = question; pauseRef.current = pauseReason;
@@ -221,11 +221,15 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     const timer = setInterval(() => {
       if (!analyserRef.current) return; analyserRef.current.getByteTimeDomainData(samples);
       const level = microphoneLevel(samples); setMicLevel(level);
-      if (level >= 4) { setMicReady(true); if (answerRecorderRef.current?.state === "recording" && !pauseRef.current) { spokeRef.current = true; setHasSpoken(true); lastSpeechRef.current = Date.now(); } }
+      if (level >= 4) setMicReady(true);
+      if (["devices", "face", "phone", "ready"].includes(phaseRef.current)) {
+        setupLevelsRef.current.push(level); if (setupLevelsRef.current.length > 60) setupLevelsRef.current.shift();
+      }
       if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || answerRecorderRef.current?.state !== "recording") return;
-      const remaining = spokeRef.current ? SILENCE_SECONDS - (Date.now() - lastSpeechRef.current) / 1000 : THINK_SECONDS - (Date.now() - answerStartRef.current) / 1000;
-      setAnswerCountdown(Math.max(0, Math.ceil(remaining)));
-      if (remaining <= 0 || Date.now() - answerStartRef.current > 180000) submitRecordingRef.current?.(!spokeRef.current);
+      const activity = voiceTurnRef.current?.sample(level, Date.now());
+      if (!activity) return;
+      spokeRef.current = activity.spoke; setHasSpoken(activity.spoke); setAnswerCountdown(activity.remaining);
+      if (activity.submit) submitRecordingRef.current?.(activity.skip);
     }, 120); return () => clearInterval(timer);
   }, []);
   const testSpeaker = async () => {
@@ -280,7 +284,9 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     if (phaseRef.current !== "active" || pauseRef.current || processingRef.current || !streamRef.current || answerRecorderRef.current?.state === "recording") return;
     try { const stream = new MediaStream(streamRef.current.getAudioTracks()); const mimeType = mediaMimeType("audio"); const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       recordedAnswerRef.current = null; setAudioRetryAvailable(false); answerChunksRef.current = []; recorder.ondataavailable = (event) => { if (event.data.size) answerChunksRef.current.push(event.data); }; answerRecorderRef.current = recorder;
-      spokeRef.current = false; setHasSpoken(false); answerStartRef.current = Date.now(); lastSpeechRef.current = Date.now(); setAnswerCountdown(THINK_SECONDS); recorder.start(1000); setSpeechState("listening"); setDraft(""); setCaptionNote("");
+      const levels = [...setupLevelsRef.current].sort((a, b) => a - b);
+      voiceTurnRef.current = createVoiceTurn(sessionRef.current?.voice_policy, Date.now(), levels[Math.floor(levels.length * .2)] || 0);
+      spokeRef.current = false; setHasSpoken(false); setAnswerCountdown(voicePolicy(sessionRef.current?.voice_policy).initial_wait_seconds); recorder.start(1000); setSpeechState("listening"); setDraft(""); setCaptionNote("");
       const generation = ++captionGenerationRef.current;
       startLiveCaptions(contextRef.current, streamRef.current, socketRef.current, sessionRef.current.session_id,
         text => { if (aliveRef.current && generation === captionGenerationRef.current) setDraft(text); },
@@ -586,12 +592,12 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         <div className={styles.transcriptFeed} role="log" aria-label="Interview conversation" aria-live="polite" aria-relevant="additions text">
           {turns.map((turn, index) => <div key={index} className={`${styles.transcriptTurn} ${turn.role === "user" || turn.role === "candidate" ? styles.candidateTurn : ""}`}><span>{turn.role === "user" || turn.role === "candidate" ? "You" : "Alex"}</span><p>{turn.text}</p></div>)}
           <div className={styles.transcriptTurn}><span>Alex <small>{speechState === "speaking" ? "Speaking" : `Question ${questionCount}`}</small></span><h1 className={styles.liveQuestion}>{aiCaption || (speechState === "speaking" ? "Alex is speaking..." : speechState === "thinking" ? "Preparing Alex's voice..." : question)}</h1></div>
-          <div className={`${styles.transcriptTurn} ${styles.candidateTurn}`}><span>You <small>{speechState === "listening" ? "Live captions" : speechState === "transcribing" ? "Finalizing transcript" : "Spoken answer"}</small></span><p>{draft || (speechState === "listening" ? "Your words will appear here as you speak…" : speechState === "speaking" ? "Listen to the question, then answer naturally." : "Your spoken answer will appear here.")}</p>{captionNote && ["listening", "transcribing"].includes(speechState) && <small className={styles.captionNote}>{captionNote}</small>}</div>
+          <div className={`${styles.transcriptTurn} ${styles.candidateTurn}`}><span>You <small>{speechState === "listening" ? "Draft captions" : speechState === "transcribing" ? "Finalizing transcript" : "Spoken answer"}</small></span><p>{draft || (speechState === "listening" ? "Your words will appear here as you speak…" : speechState === "speaking" ? "Listen to the question, then answer naturally." : "Your spoken answer will appear here.")}</p>{captionNote && ["listening", "transcribing"].includes(speechState) && <small className={styles.captionNote}>{captionNote}</small>}</div>
           <div ref={transcriptTailRef} />
         </div>
         <div className={styles.voiceControls}>
           {speechError && <div className={styles.savedAnswer} role="alert"><p>{speechError}</p><button className={styles.primary} onClick={() => speak(question)}>Play question</button><button className={styles.secondary} onClick={() => { setSpeechError(""); setAiCaption(question); beginListening(); }}>Continue with question text</button></div>}
-          <div className={styles.conversationStatus} aria-live="polite">{pauseReason ? "Reconnect your microphone to continue" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Finalizing your spoken answer…" : speechState === "thinking" ? "Saving your answer and preparing the next question…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Sending after ${answerCountdown}s of silence` : "Listening to your answer" : "Take a moment, then answer naturally" : "Ready when you are"}</div>
+          <div className={styles.conversationStatus} aria-live="polite">{pauseReason ? "Reconnect your microphone to continue" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Finalizing your spoken answer…" : speechState === "thinking" ? "Saving your answer and preparing the next question…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Sending in ${answerCountdown}s unless you continue speaking` : "Listening to your answer" : `Start speaking within ${answerCountdown}s` : "Ready when you are"}</div>
           {renderError(error)}
           {pendingAnswer !== null && <div className={styles.savedAnswer}><p>Your spoken answer is saved for retry.</p><button className={styles.primary} disabled={!!pauseReason || speechState === "thinking"} onClick={() => submitAnswer(pendingAnswer.answer)}>Send saved answer</button></div>}
           <div className={styles.voiceButtons}>
@@ -600,7 +606,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
             {speechState === "idle" && !pendingAnswer && !speechError && <button className={styles.secondary} disabled={!!pauseReason} onClick={beginListening}>Record answer again</button>}
             <button className={styles.secondary} disabled={!!pauseReason || hasSpoken || ["thinking", "transcribing"].includes(speechState)} onClick={async () => { await stopAnswer(); speak(question); }}>Repeat question</button>
           </div>
-          <p className={styles.note}>Speak naturally. After you speak, 8 seconds of silence sends your answer automatically. You can also choose Send answer.</p>
+          <p className={styles.note}>After Alex finishes speaking, you have {timing.initial_wait_seconds} seconds to begin. Once you speak, {timing.silence_seconds} seconds of silence sends your answer automatically. You can also choose Send answer.</p>
           {questionRemaining !== null && <p className={styles.questionClock}>Question time remaining <strong>{formatTime(questionRemaining)}</strong></p>}
         </div>
       </article>

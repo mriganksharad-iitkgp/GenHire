@@ -33,7 +33,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
     "lint:ci": "eslint src --ext .js,.jsx --max-warnings 15",
-    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/features/interview/utils/faceCapture.test.mjs src/shared/components/layout/navigation.test.mjs src/features/interview/utils/pcmWorklet.test.mjs src/features/interview/utils/interviewerSpeech.test.mjs src/features/interview/utils/liveCaptions.test.mjs",
+    "test": "node --test src/shared/api/retry.test.mjs src/features/interview/utils/session.test.mjs src/features/interview/utils/faceCapture.test.mjs src/shared/components/layout/navigation.test.mjs src/features/interview/utils/pcmWorklet.test.mjs src/features/interview/utils/interviewerSpeech.test.mjs src/features/interview/utils/liveCaptions.test.mjs src/features/interview/utils/voiceActivity.test.mjs",
     "test:portals": "node scripts/portal-smoke.mjs",
     "test:interview-ui": "node scripts/interview-usability-smoke.mjs",
     "test:voice-runtime:prepare": "node scripts/build-voice-runtime-smoke.mjs && node scripts/build-interview-runtime-smoke.mjs"

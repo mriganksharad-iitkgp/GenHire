@@ -151,6 +151,7 @@ class ProviderConfig:
     cooldown_seconds: float = 300  # 5 min cooldown after quota error
     timeout_seconds: float = 30
     max_tokens: Optional[int] = None
+    reasoning_effort: Optional[str] = None
 
 
 @dataclass
@@ -282,6 +283,7 @@ class LLMFallbackService:
                 max_retries=0,
                 timeout=config.timeout_seconds,
                 max_tokens=config.max_tokens,
+                model_kwargs={"reasoning_effort": config.reasoning_effort} if config.reasoning_effort else {},
             )
         else:
             raise ValueError(f"Unknown provider type: {config.provider_type}")

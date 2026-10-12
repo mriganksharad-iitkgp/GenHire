@@ -6,13 +6,6 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from .processor import DocumentProcessor
 
-try:
-    from llama_index.core import SimpleDirectoryReader
-
-    LLAMA_INDEX_AVAILABLE = True
-except ImportError:
-    LLAMA_INDEX_AVAILABLE = False
-
 
 class DocumentLoader:
     """Loads and manages CV, JD, and reference documents."""
@@ -33,8 +26,9 @@ class DocumentLoader:
         ]
 
         # Load with llama-index if available
-        if LLAMA_INDEX_AVAILABLE and self.reference_paths:
+        if self.reference_paths:
             try:
+                from llama_index.core import SimpleDirectoryReader
                 self.documents = SimpleDirectoryReader(
                     input_files=self.reference_paths
                 ).load_data()

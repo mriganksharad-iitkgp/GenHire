@@ -75,6 +75,28 @@ class ProviderTests(unittest.TestCase):
             llm = LLMFallbackService._create_llm(ProviderConfig(provider, provider, "test-key", model))
             self.assertIsNotNone(llm)
 
+    def test_interview_groq_reasoning_budget_and_truncation_fallback(self):
+        from interview.llm.chat_provider_llm import GroqChatLLM
+        provider = GroqChatLLM("openai/gpt-oss-20b", "test-key", max_tokens=1024)
+        config = provider.service._providers[0]
+        client = LLMFallbackService._create_llm(config)
+        self.assertEqual(client.model_kwargs["reasoning_effort"], "low")
+        self.assertEqual(client.max_tokens, 1024)
+        response = {"content": "", "raw_response": SimpleNamespace(response_metadata={"finish_reason": "length"})}
+        with patch.object(provider.service, "invoke", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "output_budget_exhausted"):
+                provider.complete("Ask a short question")
+
+    def test_interview_two_failed_providers_reach_groq_on_followup(self):
+        from interview.llm.chat_provider_llm import DeepSeekLLM, GeminiChatLLM, GroqChatLLM
+        primary, secondary, third = DeepSeekLLM("deepseek-flash", "test"), GeminiChatLLM("gemini-3.1-flash-lite", "test"), GroqChatLLM("openai/gpt-oss-20b", "test", max_tokens=1024)
+        chain = FallbackLLM([primary, secondary, third])
+        def response(text):
+            return {"content": text, "model_used": third.model_name, "provider_used": "groq", "usage": {}, "raw_response": SimpleNamespace(response_metadata={"finish_reason": "stop"})}
+        with patch.object(primary.service, "invoke", side_effect=RuntimeError("402")), patch.object(secondary.service, "invoke", side_effect=RuntimeError("429")), patch.object(third.service, "invoke", side_effect=[response("What did you build?"), response("How did you test it?")]):
+            self.assertEqual(chain.complete("first").text, "What did you build?")
+            self.assertEqual(chain.complete("followup").text, "How did you test it?")
+
     def _exercise_failover(self, failures, images=None):
         service = LLMFallbackService(providers=[ProviderConfig(p, p, "test", default_model_for(p), max_retries=1)
                                                for p in ("deepseek", "google", "groq")])
@@ -345,6 +367,24 @@ class SpeechTests(unittest.TestCase):
         self.assertEqual(call.kwargs["model"], "whisper-large-v3-turbo")
         self.assertEqual(call.kwargs["response_format"], "verbose_json")
         self.assertEqual(ledger.call_args.kwargs["metadata"]["billed_seconds"], 12)
+
+    def test_caption_words_have_context_and_filter_likely_silence_hallucinations(self):
+        from services.google_speech_service import GoogleSpeechService
+        response = MagicMock(text="Python Thank you", duration=8)
+        response.model_dump.return_value = {"words": [
+            {"word": "Python", "start": 0, "end": 1},
+            {"word": "Thank you", "start": 5, "end": 6}],
+            "segments": [{"start": 4, "end": 8, "no_speech_prob": .95, "avg_logprob": -1.4}]}
+        with patch("groq.Groq") as groq:
+            groq.return_value.audio.transcriptions.create.return_value = response
+            service = GoogleSpeechService()
+        with patch("services.provider_usage_service.enqueue_provider_request"):
+            result = service.speech_to_text(b"RIFFfake", encoding="LINEAR16", caption_prompt="A previous confirmed sentence")
+        self.assertEqual(result["text"], "Python")
+        options = service.groq_client.audio.transcriptions.create.call_args.kwargs
+        self.assertEqual(options["prompt"], "A previous confirmed sentence")
+        self.assertEqual(options["timestamp_granularities"], ["word", "segment"])
+        self.assertEqual(options["timeout"], 6)
 
     def test_failed_stt_does_not_record_success_or_charge_session(self):
         from services.google_speech_service import GoogleSpeechService

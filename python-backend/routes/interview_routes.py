@@ -47,6 +47,7 @@ from services.cv_scoring_service import CVScoringService
 from services.email_service import EmailService
 from services.usage_telemetry_service import record_usage_event
 from services.llm_fallback_service import default_model_for, get_provider_priority
+from services.interview_voice_policy import voice_policy
 from services.interview_flow_service import (
     normalize_proctoring_config, percentage, result_payload, serialized_session, evaluation_percentage, cached_answer_result, schedule_evaluation_refresh, stop_companion,
 )
@@ -524,6 +525,7 @@ def _start_interview(current_user):
             "conversation_context": session_details.get("conversation_context", {}),
             "question_timeout_seconds": session_details.get("question_timeout_seconds"),
             "question_deadline": None,
+            "voice_policy": voice_policy(),
             "max_questions": session_details.get("max_questions"),
             "proctoring_config": interview_doc["proctoring_config"],
             "credits_deducted": recruiter_interview_cost,
@@ -563,6 +565,7 @@ def _session_payload(doc, manager=None):
         "application_id": doc.get("application_id"), "status": doc.get("status"),
         "is_practice": bool(doc.get("is_practice")),
         "setup_required": doc.get("status") == "setup",
+        "voice_policy": voice_policy(),
         "identity_captured": bool(doc.get("identity_verification")) and (doc.get("status") != "setup" or bool(live_sessions.get(doc["session_id"]))),
         "initial_questions": [session.current_question] if session else [],
         "current_question": session.current_question if session else None,

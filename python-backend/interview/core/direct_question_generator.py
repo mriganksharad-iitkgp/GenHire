@@ -14,6 +14,8 @@ class DirectQuestionGenerator(PromptBasedQuestionGenerator):
     def __init__(self, llm, config=None):
         self.llm = llm
         self.config = config or InterviewConfig()
+        from services.interview_voice_policy import bounded_number
+        self.completion_budget_seconds = bounded_number("INTERVIEW_QUESTION_BUDGET_SECONDS", 14, 4, 20)
         self.cv_content = ""
         self.jd_content = ""
 

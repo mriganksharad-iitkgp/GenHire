@@ -204,6 +204,15 @@ class InterviewRuntimeTests(unittest.TestCase):
         self.assertEqual(session.questions_asked, 0)
         self.assertEqual(session.interview_data, [])
 
+    def test_failed_next_question_retries_do_not_launch_duplicate_scoring(self):
+        _, session = self.create()
+        with patch.object(session.question_generator, "get_next_question", side_effect=RuntimeError("provider offline")), patch.object(runtime.threading, "Thread") as worker:
+            for _ in range(3):
+                result = self.manager.submit_answer(session.session_id, session.current_question, "I built an API with Python and tested the response times.")
+                self.assertEqual(result["error_code"], "next_question_unavailable")
+            worker.assert_not_called()
+        self.assertEqual(session.evaluation_events, [])
+
     def test_last_answer_does_not_wait_for_report(self):
         _, session = self.create()
         session.questions_asked = session.conversation_context.question_count = self.manager.config.max_questions - 1

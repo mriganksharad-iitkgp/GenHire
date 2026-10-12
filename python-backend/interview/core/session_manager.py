@@ -95,7 +95,11 @@ class InterviewSessionManager:
         self.llm = self._create_fallback_llm(llm_config)
 
         # Initialize components
-        self.question_llm = self._create_fallback_llm(replace(llm_config, max_tokens=256, timeout_seconds=4))
+        # Reasoning tokens share the output budget with the spoken question.
+        from services.interview_voice_policy import bounded_number
+        self.question_llm = self._create_fallback_llm(replace(llm_config,
+            max_tokens=int(bounded_number("INTERVIEW_QUESTION_MAX_TOKENS", 1024, 512, 4096)),
+            timeout_seconds=bounded_number("INTERVIEW_PROVIDER_TIMEOUT_SECONDS", 4, 2, 8)))
         self.question_generator = QuestionGenerator(self.question_llm, config=self.config)
 
         # Initialize evaluation system if available
@@ -494,7 +498,6 @@ class InterviewSessionManager:
             evaluation = provisional_evaluation.copy()
             evaluation["evaluation_status"] = "complete" if answer_is_junk else "pending"
             completed_evaluation = threading.Event()
-            session.evaluation_events.append(completed_evaluation)
 
             def bg_evaluate_and_update():
                 eval_token = CostTracker().set_session_context(session_id)
@@ -520,23 +523,8 @@ class InterviewSessionManager:
                     CostTracker().clear_session_context(eval_token)
                     _EVALUATION_SLOTS.release()
 
-            # Skip the (two-LLM-call) background evaluation entirely for
-            # pre-classified junk — there's nothing useful for the LLM to score,
-            # and the deterministic provisional_evaluation above is already final.
-            if not answer_is_junk:
-                if _EVALUATION_SLOTS.acquire(blocking=False):
-                    threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
-                else:
-                    evaluation["evaluation_status"] = "unavailable"
-                    evaluation["reasoning"] = "Evaluation capacity was temporarily unavailable; this answer needs review."
-                    completed_evaluation.set()
-            else:
-                completed_evaluation.set()
-
-            # Generate next question using natural conversation flow. Retry the
-            # whole provider set a couple of times before giving up — a single
-            # failure here previously ended the interview immediately even
-            # though it may have been a transient blip across all providers.
+            # One bounded pass through the provider chain. On failure keep the
+            # current question for an explicit retry without ending the attempt.
             next_question, next_metadata, generation_error = None, None, None
             MAX_QUESTION_GEN_RETRIES = 0 if session.questions_asked + 1 >= self.config.max_questions else 1
             for attempt in range(MAX_QUESTION_GEN_RETRIES):
@@ -560,6 +548,22 @@ class InterviewSessionManager:
             if generation_error is not None:
                 return {"error": "The interviewer could not prepare the next question. Retry your saved answer.",
                         "error_code": "next_question_unavailable", "retryable": True}
+
+            # Start scoring only after the next question succeeds. Failed retries
+            # must not consume two more LLM calls or compete with the live turn.
+            session.evaluation_events.append(completed_evaluation)
+            # Skip the (two-LLM-call) background evaluation entirely for
+            # pre-classified junk — there's nothing useful for the LLM to score,
+            # and the deterministic provisional_evaluation above is already final.
+            if not answer_is_junk:
+                if _EVALUATION_SLOTS.acquire(blocking=False):
+                    threading.Thread(target=bg_evaluate_and_update, daemon=True).start()
+                else:
+                    evaluation["evaluation_status"] = "unavailable"
+                    evaluation["reasoning"] = "Evaluation capacity was temporarily unavailable; this answer needs review."
+                    completed_evaluation.set()
+            else:
+                completed_evaluation.set()
 
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
             # Mirror the question generator's own counter instead of maintaining
@@ -878,7 +882,7 @@ class InterviewSessionManager:
         try:
             if score_status != "complete":
                 raise RuntimeError("Answer evaluation is incomplete")
-            # Report prose has its own output budget; the 256-token question
+            # Report prose has its own output budget; the short question
             # client must not truncate it. This runs in the report worker only.
             reporter = QuestionGenerator(self.llm, config=self.config)
             reporter.completion_budget_seconds = 20
