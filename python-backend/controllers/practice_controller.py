@@ -585,6 +585,9 @@ class PracticeController:
                 if latest and latest.get("status") == "terminated":
                     return result_payload(latest), 200
             from interview.runtime import live_sessions
+            if self.interview_api:
+                from routes.interview_routes import _restore_engine
+                _restore_engine(session, self.interview_api.session_manager)
             if live_sessions.get(session_id):
                 live_sessions[session_id]["monitoring"] = False
             stop_companion(session)

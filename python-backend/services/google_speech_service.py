@@ -2,8 +2,10 @@ import os
 import base64
 import wave
 import io
+import re
+from html import escape
 from google.cloud import speech
-from google.cloud import texttospeech
+from google.cloud import texttospeech_v1beta1 as texttospeech
 import logging
 from interview.core.cost_tracker import CostTracker
 from config.env_loader import normalize_google_credential_overrides
@@ -205,7 +207,7 @@ class GoogleSpeechService:
         self.cost_tracker.add_stt_usage(
             "interview_stt", float(duration), model=self.stt_model, session_id=session_id
         )
-        from services.provider_usage_service import record_provider_request
+        from services.provider_usage_service import enqueue_provider_request as record_provider_request
         from services.ai_pricing_service import groq_stt_cost
         record_provider_request("groq", self.stt_model, {"usage_source": duration_source},
                                 service="stt", cost_usd=groq_stt_cost(duration),
@@ -219,6 +221,7 @@ class GoogleSpeechService:
         language_code="en-US",
         voice_name="en-US-Standard-C",
         session_id=None,
+        with_timestamps=False,
     ):
         """
         Converts text to speech using Google Cloud Text-to-Speech.
@@ -232,7 +235,11 @@ class GoogleSpeechService:
         if "Standard" not in voice_name:
             raise ValueError("S2 Low uses a Google Standard voice")
 
-        synthesis_input = texttospeech.SynthesisInput(text=text)
+        words = list(re.finditer(r"\S+", text))
+        ssml = "<speak>" + " ".join(
+            f'<mark name="w{index}"/>{escape(word.group())}' for index, word in enumerate(words)
+        ) + "</speak>"
+        synthesis_input = texttospeech.SynthesisInput(ssml=ssml) if with_timestamps else texttospeech.SynthesisInput(text=text)
         voice = texttospeech.VoiceSelectionParams(
             language_code=language_code, name=voice_name
         )
@@ -241,14 +248,14 @@ class GoogleSpeechService:
         )
 
         try:
-            response = self.tts_client.synthesize_speech(
-                input=synthesis_input, voice=voice, audio_config=audio_config,
-                timeout=4, retry=None,
-            )
+            payload = {"input": synthesis_input, "voice": voice, "audio_config": audio_config}
+            if with_timestamps:
+                payload["enable_time_pointing"] = [texttospeech.SynthesizeSpeechRequest.TimepointType.SSML_MARK]
+            response = self.tts_client.synthesize_speech(request=payload, timeout=8, retry=None)
             self.cost_tracker.add_tts_usage(
                 "interview_tts", len(text), session_id=session_id
             )
-            from services.provider_usage_service import record_provider_request
+            from services.provider_usage_service import enqueue_provider_request as record_provider_request
             from interview.core.speech_cost_tracker import calculate_tts_cost
             record_provider_request("gcp", voice_name, {"usage_source": "actual"},
                                     service="tts", cost_usd=calculate_tts_cost(text),
@@ -257,7 +264,15 @@ class GoogleSpeechService:
                 f"TTS Success: {len(response.audio_content)} bytes of audio generated."
             )
             # Return base64 encoded audio
-            return base64.b64encode(response.audio_content).decode("utf-8")
+            audio = base64.b64encode(response.audio_content).decode("utf-8")
+            if with_timestamps:
+                # Browser String.slice uses UTF-16 units, including surrogate pairs.
+                offsets = {f"w{index}": len(text[:word.end()].encode("utf-16-le")) // 2
+                           for index, word in enumerate(words)}
+                return {"audio_base64": audio, "timepoints": [
+                    {"time_seconds": point.time_seconds, "char_end": offsets[point.mark_name]}
+                    for point in response.timepoints if point.mark_name in offsets]}
+            return audio
         except Exception as e:
             logger.error(f"Text to speech synthesis failed: {e}")
             return None

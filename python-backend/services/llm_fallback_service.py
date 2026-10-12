@@ -64,7 +64,7 @@ def is_quota_error(error: Exception) -> bool:
     status = getattr(error, "status_code", None) or getattr(
         error, "http_status", None
     )
-    if status == 429:
+    if status in (402, 429):
         return True
     # google-api-core wraps gRPC codes
     code = getattr(error, "code", None)
@@ -296,6 +296,7 @@ class LLMFallbackService:
         json_mode: bool = False,
         images: Optional[List[Tuple[bytes, str]]] = None,
         model_overrides: Optional[Dict[str, str]] = None,
+        defer_usage: bool = False,
     ) -> Dict[str, Any]:
         """
         Invoke the prompt against the provider chain.
@@ -362,8 +363,9 @@ class LLMFallbackService:
 
                     # Extract usage metadata
                     usage = self._extract_usage(response)
-                    from services.provider_usage_service import record_provider_request
-                    record_provider_request(provider_cfg.provider_type, provider_cfg.model, usage)
+                    from services.provider_usage_service import record_provider_request, enqueue_provider_request
+                    recorder = enqueue_provider_request if defer_usage else record_provider_request
+                    recorder(provider_cfg.provider_type, provider_cfg.model, usage)
 
                     return {
                         "content": content,

@@ -224,7 +224,7 @@ class PromptBasedQuestionGenerator:
                         completed.set()
 
                 threading.Thread(target=request, daemon=True).start()
-                budget = max(0.5, min(8.0, float(os.getenv("INTERVIEW_QUESTION_BUDGET_SECONDS", "4"))))
+                budget = getattr(self, "completion_budget_seconds", None) or max(0.5, min(8.0, float(os.getenv("INTERVIEW_QUESTION_BUDGET_SECONDS", "4"))))
                 if not completed.wait(budget):
                     raise RuntimeError("Question generation exceeded its response budget")
                 if "error" in result:

@@ -41,7 +41,11 @@ app.whenReady().then(async () => {
     if(!accepted)throw new Error('Setup did not reach interview consent');
     await new Promise(resolve=>setTimeout(resolve,200));
     if(!await press('Start interview')) throw new Error('Interview start unavailable');
-    await new Promise(resolve=>setTimeout(resolve,1500));
+    await new Promise(resolve=>setTimeout(resolve,250));
+    const speaking=await window.webContents.executeJavaScript("({caption:document.querySelector('h1')?.textContent,state:document.querySelector('[data-state]')?.getAttribute('data-state')})");
+    if(speaking.state!=='speaking'||speaking.caption!=='Tell me')throw new Error('Actual playback/timestamp synchronization failed: '+JSON.stringify(speaking));
+    await fs.writeFile(path.join(files,'interview-speaking.png'),(await window.webContents.capturePage()).toPNG());
+    await new Promise(resolve=>setTimeout(resolve,2100));
     const layout=await window.webContents.executeJavaScript("({width:innerWidth,pageWidth:document.documentElement.scrollWidth,transcript:document.querySelector('[aria-label=\"Interview conversation\"]')?.textContent,canvas:!!document.querySelector('[aria-label=\"Interview voice activity\"] canvas'),typedAnswer:!!document.querySelector('textarea')})");
     if(!layout.canvas||layout.typedAnswer||layout.pageWidth>layout.width||!layout.transcript.includes('hiring platform')) throw new Error('Interview layout failed: '+JSON.stringify(layout));
     await fs.writeFile(path.join(files,'interview-layout.png'),(await window.webContents.capturePage()).toPNG());

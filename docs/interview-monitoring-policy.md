@@ -1,7 +1,7 @@
-# Interview monitoring, scoring and recovery — kiosk 1.2.5
+# Interview monitoring, scoring and recovery — kiosk 1.2.6
 
-Updated 12 October 2026. This release replaces the former five-interruption and
-60-second termination rules. Deploy the backend and frontend, publish the new
+Updated 13 October 2026. Five-interruption and 60-second automatic termination
+rules remain removed. Deploy the backend and frontend, publish the new
 installer, and reinstall the kiosk before testing production.
 
 ## Candidate workflow
@@ -72,6 +72,8 @@ OpenCV Haar face detections now reject weak/small/implausible rectangles and
 suppress overlapping duplicate boxes before counting distinct faces. A
 multiple-face warning requires four consecutive observations; other vision
 warnings require two. A confirmed type/source emits at most once every 15 seconds.
+Warnings identify the laptop or phone, distinguish camera/focus/connection issues,
+and give a concrete recovery instruction without claiming cheating is proven.
 The candidate's warning popup dismisses after **1.8 seconds**; report evidence
 and totals remain saved. These filters reduce noise but do not guarantee accuracy.
 
@@ -113,7 +115,7 @@ See [voice/captions implementation](interview-voice-and-captions.md) for audio s
 ## Device acceptance after deployment
 
 1. Verify backend `/health`, frontend-origin CORS, native gthread logs and persistent sockets.
-2. Install kiosk 1.2.5; deploy the matching phone website against the same backend.
+2. Install kiosk 1.2.6; deploy the matching phone website against the same backend.
 3. Test single-camera setup, automatic capture/retake, activation, spoken answer and completion.
 4. Test a physical Android Chrome and iPhone Safari phone: front camera, microphone,
    private pairing, live frames, recorder start, reconnect and final upload.

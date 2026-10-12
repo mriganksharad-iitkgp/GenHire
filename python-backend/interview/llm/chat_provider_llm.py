@@ -14,6 +14,7 @@ class ChatProviderLLM(BaseLLM):
             temperature=kwargs.get("temperature", 0.7),
             timeout_seconds=kwargs.get("timeout_seconds", 30),
             max_tokens=kwargs.get("max_tokens"),
+            max_retries=1,
         )])
 
     def _create_llama_index_llm(self):
@@ -21,7 +22,9 @@ class ChatProviderLLM(BaseLLM):
 
     def complete(self, prompt, **kwargs):
         try:
-            result = self.service.invoke(prompt)
+            result = self.service.invoke(prompt, defer_usage=True)
+            if not str(result.get("content", "")).strip():
+                raise RuntimeError("Interview provider returned no text")
             return LLMResponse(text=result["content"], model=result["model_used"],
                                usage=result["usage"], finish_reason="completed",
                                metadata={"provider": result["provider_used"]})

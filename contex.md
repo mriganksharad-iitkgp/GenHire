@@ -1,6 +1,6 @@
 # GenHire technology and deployment context
 
-Reviewed against the repository and deployment notes on 11 October 2026, with deployment identity/configuration checked on 12 October; each bullet explains one responsibility.
+Reviewed against the repository on 13 October 2026, with deployment identity/configuration last checked on 12 October; each bullet explains one responsibility.
 Reported cloud access is distinguished from read-only inspection; production application health and runtime secret access still require verification.
 This file contains architecture context and public identifiers only; credential values belong in private configuration or Secret Manager.
 
@@ -276,7 +276,7 @@ This file contains architecture context and public identifiers only; credential 
 
 - [interview/core/session_manager.py](python-backend/interview/core/session_manager.py) owns active interview state, questions, responses, evaluation, and final results.
 - `InterviewConfig` and `LLMConfig` organize interview settings and provider configuration.
-- `prompt_based_question_generator.py` generates questions appropriate to the CV, job, skills, and interview phase.
+- `direct_question_generator.py` generates first and later questions from CV, JD and previous Q/A only; no question banks, retrieval or embeddings run on this path.
 - Prompt modules separate greeting, structure explanation, technical, experiential, HR, skill-assessment, and closing instructions.
 - `services/interview_flow_service.py` connects persisted session records with runtime interview actions and normalized result payloads.
 - Cached answer results and request identity support retry/idempotency handling so a repeated submission need not duplicate evaluation work.
@@ -290,7 +290,7 @@ This file contains architecture context and public identifiers only; credential 
 - [Chat.jsx](react-frontend/src/features/interview/pages/Chat.jsx) is the current shared interview UI for the website and packaged kiosk renderer.
 - Pre-interview phases guide device access, microphone/speaker checks, face capture, and optional paired-phone readiness before answering.
 - MediaPipe Tasks Vision and bundled BlazeFace/WASM assets guide local automatic capture with a 1.2-second stable hold, review and retake.
-- Voice-only answers show incremental configured-provider captions; retained whole-recording transcription supplies the final submitted answer.
+- Voice-only answers use reconnecting, buffered PCM captions through the configured provider; whole-recording transcription supplies the final answer.
 - Recording/transcription and submission failures preserve retryable answers instead of discarding the participant's work immediately.
 - Tab, network and phone gaps show 1.8-second notices; actual laptop device loss offers recording recovery, and final reports include weighted interruption counts.
 - `KioskLaunchGuide` remembers installation confirmation in browser storage and offers reinstall help; browsers cannot reliably prove native installation.
@@ -301,13 +301,13 @@ This file contains architecture context and public identifiers only; credential 
 - [google_speech_service.py](python-backend/services/google_speech_service.py) exposes the configured speech transcription and synthesis integrations.
 - The current `STT_PROVIDER=groq` uses Groq Whisper transcription instead of the former Google streaming-token workflow.
 - `GROQ_STT_MODEL=whisper-large-v3-turbo` selects the configured transcription model for recorded answers.
-- Google Cloud Text-to-Speech generates spoken interview questions through the backend.
+- Google Cloud Text-to-Speech supplies question audio and SSML word timestamps; captions follow actual playback with explicit audio retry/fallback.
 - The current speech implementation restricts TTS to Standard voices and defaults to `en-US-Standard-C`.
 - Google Cloud Speech remains an SDK/alternate transcription path; retired streaming endpoints should not be treated as the current interview route.
 - Browser `getUserMedia` requests camera/microphone access; permissions and a secure browser context are required on participant devices.
 - MediaRecorder records answer audio and session video using supported browser formats.
 - Web Audio analysers drive Three.js 0.180.0 dotted `VoiceSphere` states from real microphone/AI playback amplitude; an AudioWorklet produces 16 kHz mono caption packets.
-- Recorded audio is submitted to `/api/speech/transcribe`; question text is submitted to `/api/speech/synthesize`.
+- `/api/speech/transcribe` handles final answers; `/api/speech/synthesize` returns timed audio; end endpoints return HTTP 202 while owned report work completes.
 - Electron's restricted speech IPC forwards requests to authenticated backend endpoints without embedding Google or Groq secrets in the installer.
 - `speech_cost_tracker.py` and provider telemetry estimate speech usage separately from chat token usage.
 
@@ -333,7 +333,7 @@ This file contains architecture context and public identifiers only; credential 
 
 ## 20. Electron secure browser
 
-- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.5, Electron 40, and electron-builder packaging with explicit media consent.
+- [secure-browser-kiosk/package.json](secure-browser-kiosk/package.json) declares version 1.2.6, Electron 40, and electron-builder packaging with explicit media consent.
 - `main.js` owns windows, single-instance handling, protocol registration, speech IPC, and kiosk lifecycle controls.
 - The `secure-interview://` custom protocol carries validated interview launch context from the website into the installed app.
 - `runtime-security.js` validates launch/external URLs and renderer paths; installer code signing is not enforced by the current build configuration.

@@ -1,6 +1,19 @@
 # Interview voice sphere and live captions
 
-Updated 12 October 2026; shared website/kiosk UI in release 1.2.5.
+Updated 13 October 2026; shared website/kiosk UI in release 1.2.6.
+
+## Release 1.2.6: causes and repairs
+
+- The old four-second question budget expired while providers failed over; first and subsequent questions now use one direct LLM call with CV, JD and previous Q/A as context, without question banks, retrieval, embeddings or an extra context-extraction call.
+- Question output is bounded to 256 tokens; each configured provider has a four-second request deadline within a fourteen-second completion budget. Provider failures preserve the current answer for retry instead of ending the interview.
+- A synthetic live probe on 12 October found DeepSeek HTTP 402 (billing), Gemini ResourceExhausted (quota), and a successful Groq question in 0.73 seconds. These are observations, not a latency guarantee; restore provider balance/quota in the respective accounts.
+- Billing/quota failures enter the existing five-minute provider cooldown so every question does not repeat the failing call. Provider usage writes run through a bounded background queue; in-memory pending telemetry can be lost on process termination and is not a durable billing queue.
+- The client previously abandoned Google speech at the same four-second deadline as the server, and could silently enter listening after playback failed. Google synthesis now has an eight-second RPC deadline and the UI allows twelve seconds, followed by native speech fallback and explicit retry/text-continuation controls if audio remains unavailable.
+- Candidate PCM buffering now starts before the stream acknowledgement, retains up to six seconds during short reconnects, and rejoins only after the owned socket room is ready. A single in-flight packet preserves ordering; long outages explicitly report unavailable captions while the whole-answer recorder continues.
+- Per-packet Redis throttling was removed from the 200 ms caption path; authenticated stream ownership, start quotas, packet size, elapsed-audio bounds, recognition slots and queue bounds remain enforced.
+- Completion previously posted no JSON body while Flask unconditionally parsed JSON, causing HTTP 415. Both bodyless and object-JSON requests are now accepted, and the client sends `{}` explicitly.
+- Report evaluation runs in a bounded background pool; HTTP 202 responses are polled rather than keeping an HTTP request open during scoring. A Mongo lease and process-local single-flight guard coordinate retries; this is not a durable external task queue. After a process crash, retry can reclaim the session when the three-minute lease expires.
+- Report generation waits up to thirty seconds for outstanding answer evaluations and uses a separate twenty-second prose budget. The UI polls for up to two minutes, then offers retry; incomplete evaluation is labelled rather than assigned invented scores.
 
 ## Experience and rendering
 
@@ -42,7 +55,7 @@ An AudioWorklet reuses the checked microphone and resamples its real input to
 HTTPS website and bundled kiosk loopback server. The existing kiosk CSP permits
 this local asset; media is never fetched from an unrelated origin.
 
-Owner-bound `speech_live_start`, `speech_live_audio` and `speech_live_end` Socket.IO
+Owner-bound `speech_live_start`, `speech_live_audio`, `speech_live_end` and `speech_live_cancel` Socket.IO
 events carry audio to the configured service. The backend uses three-second WAV
 windows with a short overlap, removes repeated caption phrases, and sends text
 only to the authenticated desktop socket. Phone and other-candidate sockets
@@ -51,14 +64,19 @@ eight recognition slots, bounded queues and cancellation limit resource use.
 
 The current Whisper endpoint transcribes complete files, so captions update in
 small batches: expect roughly **three seconds plus provider/network latency**,
-not guaranteed word-by-word instant text. AI question text appears immediately
-when available; actual audio drives the speaking animation. Sending an answer
+not guaranteed word-by-word instant text. AI captions follow Google SSML word
+timepoints and actual audio playback position. Native speech fallback uses real
+word-boundary events where supported; a legacy response without timepoints shows
+the full text when playback starts. No simulated typing or amplitude is used.
+See [Google SSML timepoints](https://docs.cloud.google.com/text-to-speech/docs/ssml).
+Sending an answer
 uses the retained whole recording and the existing `/speech/transcribe` path for
 its final authoritative transcript, correcting provisional caption differences.
 
 If captions, sockets or the worklet fail, the UI explains the loss while the
 answer recorder continues. Final transcription and retry remain available.
-Disconnect/unmount cancels caption processing and releases the additional nodes
+Socket reconnection starts a fresh owned stream while preserving prior captions;
+unmount cancels caption processing and releases the additional nodes
 without stopping the shared microphone. Audio/text are not logged by the new
 caption service; existing provider usage auditing and final answer storage apply.
 
@@ -74,7 +92,7 @@ Run frontend `npm test`, `npm run lint` and `npm run test:interview-ui`, then ba
 with frontend `npm run test:voice-runtime:prepare`, then run kiosk
 `npm run test:voice-runtime` (unset `ELECTRON_RUN_AS_NODE` for Electron launches).
 The native test uses a generated silent-output tone and fixture camera, and
-verifies all five WebGL states, real analyser response, the real AudioWorklet,
+verifies timed question captions during playback, all five WebGL states, real analyser response, the real AudioWorklet,
 voice-only layout and disposal. It calls no paid speech provider.
 
 Before release acceptance, speak several real answers on the installed kiosk,

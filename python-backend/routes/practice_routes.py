@@ -115,7 +115,6 @@ def submit_practice_answer(current_user, session_id):
 
 @practice_bp.route('/<session_id>/end', methods=['POST', 'OPTIONS'])
 @token_required
-@serialized_session
 def end_practice_interview(current_user, session_id):
     """End a practice interview session"""
     user_type = str((current_user.get('user_type') or 'candidate')).strip().lower()
@@ -123,14 +122,19 @@ def end_practice_interview(current_user, session_id):
         return jsonify({'error': 'Unauthorized.'}), 403
     
     user_id = str(current_user['_id'])
-    
+    from services.interview_completion_service import complete_in_background
     try:
-        result, status_code = practice_controller.end_practice(
-            session_id=session_id,
-            user_id=user_id
-        )
-        
-        return jsonify(result), status_code
+        def complete():
+            result, status_code = practice_controller.end_practice(session_id=session_id, user_id=user_id)
+            return jsonify(result), status_code
+        doc = practice_controller.collections["practice_sessions"].find_one({"session_id": session_id, "user_id": user_id})
+        if not doc:
+            return jsonify({"error": "Practice session not found"}), 404
+        if doc.get("status") in {"completed", "abandoned", "terminated"}:
+            from services.interview_flow_service import result_payload
+            return jsonify(result_payload(doc))
+        return complete_in_background(("practice", user_id, session_id), complete,
+                                      practice_controller.collections["practice_sessions"])
     except Exception as e:
         print(f"Error in end_practice_interview: {str(e)}")
         import traceback

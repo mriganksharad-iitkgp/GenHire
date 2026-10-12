@@ -9,19 +9,21 @@ import queue
 import re
 import threading
 import time
+import logging
 
 SAMPLE_RATE = 16000
 WINDOW_BYTES = SAMPLE_RATE * 2 * 3
 OVERLAP_BYTES = SAMPLE_RATE * 2 // 3
 MAX_SECONDS = 185
 SLOTS = threading.BoundedSemaphore(8)
+logger = logging.getLogger(__name__)
 
 
 def append_transcript(previous, additional):
     left, right = previous.split(), additional.split()
     normalize = lambda word: re.sub(r"[^\w]", "", word).casefold()
     overlap = 0
-    for size in range(2, min(12, len(left), len(right)) + 1):
+    for size in range(1, min(12, len(left), len(right)) + 1):
         if list(map(normalize, left[-size:])) == list(map(normalize, right[:size])):
             overlap = size
     return " ".join(left + right[overlap:]).strip()
@@ -72,7 +74,9 @@ class LiveTranscript:
                 while self.sequence in self.pending:
                     chunk = self.pending.pop(self.sequence)
                     self.samples += len(chunk) // 2
-                    if self.samples > SAMPLE_RATE * MAX_SECONDS:
+                    # Audio is already owner-bound and bounded per stream. A
+                    # local real-time budget avoids a Redis round trip per packet.
+                    if self.samples > SAMPLE_RATE * min(MAX_SECONDS, time.monotonic() - self.created + 12):
                         self.complete = False
                         return False
                     self.queue.put_nowait(chunk)
@@ -137,9 +141,11 @@ class LiveTranscript:
                     del buffer[:WINDOW_BYTES - OVERLAP_BYTES]
             if self.cancelled.is_set():
                 self.complete = False
-        except Exception:
+        except Exception as exc:
+            logger.warning("Live captions stopped (%s)", type(exc).__name__)
             self.complete = False
             self.emit({"stream_id": self.stream_id, "session_id": self.session_id,
+                       "error_code": "caption_provider_unavailable",
                        "error": "Live captions are temporarily unavailable. Your recorded answer is still being saved."})
         finally:
             self.done.set()

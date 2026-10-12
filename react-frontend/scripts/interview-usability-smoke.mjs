@@ -43,7 +43,7 @@ let renderErrors = [];
 console.error = (...args) => renderErrors.push(args.map(String).join(" "));
 let root, compiled, currentLocation, passes = 0;
 let apiCalls, dualRequired, micSound, recordings, currentStream, socket, serverStatus;
-let answerFailure, uploadFailure, applicationsFailure, applicationStatus, applicationProcessingStatus, pairingVersion;
+let speechFailure, reportPending, answerFailure, uploadFailure, applicationsFailure, applicationStatus, applicationProcessingStatus, pairingVersion;
 let mediaRequests, mediaFailure, audioSuspended, identityCaptured, socketEvents;
 let detectedFaces = [], detectionUnavailable = false;
 globalThis.__faceDetectorFixture = {
@@ -89,6 +89,11 @@ globalThis.AudioWorkletNode = win.AudioWorkletNode = FixturePCMNode;
 globalThis.MediaStream = win.MediaStream = FixtureStream;
 globalThis.MediaRecorder = win.MediaRecorder = FixtureRecorder;
 win.AudioContext = FixtureAudioContext;
+globalThis.Audio = win.Audio = class {
+  currentTime = 0;
+  async play() { this.onplaying?.(); this.timer = setTimeout(() => { this.currentTime = .05; this.onended?.(); }, 25); }
+  pause() { clearTimeout(this.timer); }
+};
 Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { async getUserMedia() { mediaRequests++; if (mediaFailure) throw new win.DOMException("Permission denied", "NotAllowedError"); currentStream = new FixtureStream(); return currentStream; } } });
 globalThis.__interviewTestSocket = () => {
   const handlers = new Map();
@@ -107,12 +112,14 @@ globalThis.fetch = win.fetch = async (url, options = {}) => {
   let data = {}, status = 200;
   if (pathname.endsWith("/session")) data = sessionPayload();
   if (pathname.endsWith("/transcribe")) data = { transcript: "I built a reliable Python service." };
+  if (pathname.endsWith("/synthesize")) data = speechFailure ? {} : { audio_base64: "ZmFrZQ==", timepoints: [{ time_seconds: 0, char_end: 8 }] };
   if (pathname.endsWith("/activate")) { serverStatus = "active"; data = { current_question: "Describe a recent project.", question_deadline: Date.now() / 1000 + 300 }; }
   if (pathname.endsWith("/answer")) {
     status = answerFailure ? 503 : 200;
     data = answerFailure ? { error: "Temporary answer service failure" } : { next_question: "What did you learn?", progress: { questions_asked: 1 }, question_deadline: Date.now() / 1000 + 300 };
   }
   if (pathname.endsWith("/end")) { data = serverStatus === "terminated" ? { status: "interview_terminated", message: "The monitoring policy ended this attempt. You cannot repeat this interview for the same application." } : { status: "completed", interview_score: 0, cv_score: 0, proctoring_score: 0 }; serverStatus = data.status; }
+  if (pathname.endsWith("/end") && reportPending) { reportPending = false; data = {status:"finishing",report_pending:true}; status = 202; }
   if (pathname.endsWith("/upload-recording")) status = uploadFailure ? 503 : 200;
   if (pathname.endsWith("/applications")) {
     status = applicationsFailure ? 503 : 200;
@@ -130,7 +137,7 @@ async function keyboard(key, shiftKey = false) { await act(async () => document.
 async function mount(component, options = {}) {
   if (root) await act(async () => root.unmount());
   Date.now = now; renderErrors = []; apiCalls = []; dualRequired = options.dual || false; micSound = true; recordings = [];
-  serverStatus = "setup"; answerFailure = false; uploadFailure = false; applicationsFailure = false; applicationStatus = "shortlisted"; applicationProcessingStatus = options.processingStatus || "completed"; pairingVersion = 1;
+  speechFailure = !!options.speechFailure; reportPending = false; serverStatus = "setup"; answerFailure = false; uploadFailure = false; applicationsFailure = false; applicationStatus = "shortlisted"; applicationProcessingStatus = options.processingStatus || "completed"; pairingVersion = 1;
   mediaRequests = 0; mediaFailure = options.mediaFailure || false; audioSuspended = options.audioSuspended || false; identityCaptured = options.identityCaptured !== false; socketEvents = [];
   detectedFaces = options.faces || []; detectionUnavailable = options.detectionUnavailable || false;
   sessionStorage.clear(); sessionStorage.setItem("companyxyz-token", "fixture-token");
@@ -269,6 +276,21 @@ try {
     assert.equal(apiCalls.filter(call => call.url.endsWith("/upload-mobile-recording")).length, 2);
     assert.ok(text().includes("Recording saved"));
   });
+  await check("unavailable question audio stays visible until the candidate retries or chooses text", async () => {
+    await activeInterview({ speechFailure: true });
+    assert.ok(button("Play question")); assert.ok(button("Send answer").disabled);
+    assert.equal(socketEvents.filter(event => event.name === "speech_live_start").length, 0);
+    speechFailure = false; await click(button("Play question"));
+    assert.ok(socketEvents.some(event => event.name === "speech_live_start"));
+  });
+  await check("a slow report is polled with JSON until persisted completion", async () => {
+    await activeInterview(); reportPending = true;
+    await click(button("End interview")); await click(button("Finish interview", document.querySelector('[role="dialog"]')));
+    await settle(2150);
+    const requests = apiCalls.filter(call => call.url.endsWith("/end"));
+    assert.equal(requests.length, 2); assert.equal(requests[0].options.body, "{}");
+    assert.ok(text().includes("Interview complete"));
+  });
   await check("voice-only conversation shows live captions and final spoken answers", async () => {
     await activeInterview(); assert.ok(!button("Type answer")); assert.ok(!document.querySelector("textarea"));
     const live = socketEvents.find(event => event.name === "speech_live_start"); assert.ok(live);
@@ -289,7 +311,7 @@ try {
   await check("phone monitoring gaps warn without blocking or ending the voice interview", async () => {
     await activeInterview({ dual: true });
     await act(async () => socket.fire("mobile_disconnected")); await settle();
-    assert.ok(!text().includes("Reconnect your devices")); assert.ok(text().includes("phone camera disconnected"));
+    assert.ok(!text().includes("Reconnect your devices")); assert.ok(text().includes("Phone monitoring was interrupted"));
     assert.ok(document.querySelector('[aria-label="Interview voice activity"]'));
     assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 0);
     assert.ok(recordings.some(recorder => recorder.state === "recording"));
@@ -305,8 +327,8 @@ try {
   await check("warnings dismiss after 1.8 seconds while counts remain visible", async () => {
     await activeInterview();
     await act(async () => socket.fire("proctoring_alert", { type: "head_turn", source: "desktop", message: "Keep your face visible." }));
-    assert.ok(text().includes("Keep your face visible.")); await settle(1900);
-    assert.ok(!text().includes("Keep your face visible."));
+    assert.ok(text().includes("Look toward the interview screen.")); await settle(1900);
+    assert.ok(!text().includes("Look toward the interview screen."));
   });
   await check("more than five recorded interruptions never automatically end or pause", async () => {
     await activeInterview();

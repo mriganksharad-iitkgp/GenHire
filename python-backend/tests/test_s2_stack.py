@@ -102,6 +102,22 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(called, ["deepseek", "google", "groq"])
         self.assertEqual(result["model_used"], "openai/gpt-oss-20b")
 
+    def test_billing_402_cools_down_instead_of_delaying_every_question(self):
+        service = LLMFallbackService(providers=[ProviderConfig("deepseek", "deepseek", "test", "deepseek-flash", max_retries=1),
+                                               ProviderConfig("groq", "groq", "test", "openai/gpt-oss-20b", max_retries=1)])
+        class BalanceError(Exception):
+            status_code = 402
+        calls = []
+        def create(config):
+            calls.append(config.name)
+            if config.name == "deepseek":
+                raise BalanceError("Payment required")
+            return SimpleNamespace(invoke=lambda prompt: SimpleNamespace(content="Which API design decision mattered?", usage_metadata={}, response_metadata={}))
+        with patch.object(service, "_create_llm", side_effect=create), patch("services.provider_usage_service.record_provider_request"):
+            service.invoke("question one")
+            service.invoke("question two")
+        self.assertEqual(calls, ["deepseek", "groq", "groq"])
+
     def test_text_only_groq_is_skipped_for_vision(self):
         service = LLMFallbackService(providers=[ProviderConfig("groq", "groq", "test", "openai/gpt-oss-20b")])
         with patch.object(service, "_create_llm") as create:
@@ -309,7 +325,7 @@ class SpeechTests(unittest.TestCase):
         credentials = MagicMock()
         with patch("groq.Groq"), \
              patch("google.auth.default", return_value=(credentials, "test-project")) as adc, \
-             patch("google.cloud.texttospeech.TextToSpeechClient") as tts:
+             patch("google.cloud.texttospeech_v1beta1.TextToSpeechClient") as tts:
             service = GoogleSpeechService()
         tts.assert_called_once_with(credentials=credentials)
         adc.assert_called_once_with(scopes=["https://www.googleapis.com/auth/cloud-platform"])
@@ -323,7 +339,7 @@ class SpeechTests(unittest.TestCase):
             groq.return_value.audio.transcriptions.create.return_value = SimpleNamespace(text="Hello", duration=12)
             service = GoogleSpeechService()
         self.assertIsNone(service.tts_client)
-        with patch("services.provider_usage_service.record_provider_request") as ledger:
+        with patch("services.provider_usage_service.enqueue_provider_request") as ledger:
             self.assertEqual(service.speech_to_text(base64.b64encode(b"webm").decode(), session_id="s"), "Hello")
         call = service.groq_client.audio.transcriptions.create.call_args
         self.assertEqual(call.kwargs["model"], "whisper-large-v3-turbo")
@@ -335,11 +351,27 @@ class SpeechTests(unittest.TestCase):
         with patch("groq.Groq") as groq:
             groq.return_value.audio.transcriptions.create.side_effect = RuntimeError("network failure")
             service = GoogleSpeechService()
-        with patch("services.provider_usage_service.record_provider_request") as ledger:
+        with patch("services.provider_usage_service.enqueue_provider_request") as ledger:
             with self.assertRaises(RuntimeError):
                 service.speech_to_text(b"webm")
             ledger.assert_not_called()
         self.assertEqual(CostTracker().get_summary()["total_stt_seconds"], 0)
+
+    def test_word_timestamps_escape_ssml_and_map_back_to_original_text(self):
+        from services.google_speech_service import GoogleSpeechService
+        with patch("groq.Groq"):
+            service = GoogleSpeechService()
+        service.tts_client = MagicMock()
+        service.tts_client.synthesize_speech.return_value = SimpleNamespace(audio_content=b"mp3", timepoints=[SimpleNamespace(mark_name="w0", time_seconds=0), SimpleNamespace(mark_name="w1", time_seconds=.4)])
+        with patch("services.provider_usage_service.enqueue_provider_request"):
+            result = service.text_to_speech("Explain A&B", with_timestamps=True)
+        payload = service.tts_client.synthesize_speech.call_args.kwargs["request"]
+        self.assertIn("A&amp;B", payload["input"].ssml)
+        self.assertEqual(result["timepoints"], [{"time_seconds": 0, "char_end": 7}, {"time_seconds": .4, "char_end": 11}])
+        self.assertTrue(payload["enable_time_pointing"])
+        with patch("services.provider_usage_service.enqueue_provider_request"):
+            unicode_result = service.text_to_speech("Hi \U0001f44b", with_timestamps=True)
+        self.assertEqual(unicode_result["timepoints"][-1]["char_end"], 5)
 
     def test_standard_tts_only_and_success_count(self):
         from services.google_speech_service import GoogleSpeechService
@@ -347,10 +379,10 @@ class SpeechTests(unittest.TestCase):
             service = GoogleSpeechService()
         service.tts_client = MagicMock()
         service.tts_client.synthesize_speech.return_value = SimpleNamespace(audio_content=b"mp3")
-        with patch("services.provider_usage_service.record_provider_request"):
+        with patch("services.provider_usage_service.enqueue_provider_request"):
             self.assertTrue(service.text_to_speech("Hello", session_id="s"))
         self.assertEqual(CostTracker().get_summary("s")["total_tts_characters"], 5)
-        self.assertEqual(service.tts_client.synthesize_speech.call_args.kwargs["timeout"], 4)
+        self.assertEqual(service.tts_client.synthesize_speech.call_args.kwargs["timeout"], 8)
         self.assertIsNone(service.tts_client.synthesize_speech.call_args.kwargs["retry"])
         with self.assertRaises(ValueError):
             service.text_to_speech("Hello", voice_name="en-US-Neural2-C")

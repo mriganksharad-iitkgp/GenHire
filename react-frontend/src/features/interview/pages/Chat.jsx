@@ -9,6 +9,8 @@ import ConfirmDialog from "shared/components/ui/ConfirmDialog";
 import Modal from "shared/components/ui/Modal";
 import InterviewReportModal from "../components/InterviewReportModal";
 import VoiceSphere from "../components/VoiceSphere";
+import { playInterviewerSpeech } from "../utils/interviewerSpeech";
+import { proctoringNotice } from "../utils/proctoringNotice";
 import { startLiveCaptions } from "../utils/liveCaptions";
 import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase, transcriptionAudio } from "../utils/session";
 import styles from "./InterviewExperience.module.css";
@@ -50,6 +52,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const [proctoring, setProctoring] = useState(null); const [warning, setWarning] = useState(null);
   const [integrity, setIntegrity] = useState({ count: 0, counts_by_type: {} });
   const [turns, setTurns] = useState([]); const [captionNote, setCaptionNote] = useState("");
+  const [aiCaption, setAiCaption] = useState(""); const [speechError, setSpeechError] = useState(""); const playbackRef = useRef(null);
   const voiceAudioRef = useRef({ microphone: null, speaker: null }); const speakerNodesRef = useRef(null);
   const liveCaptionsRef = useRef(null), captionGenerationRef = useRef(0), transcriptTailRef = useRef(null);
   const [question, setQuestion] = useState(""); const [questionCount, setQuestionCount] = useState(1); const [speechState, setSpeechState] = useState("idle");
@@ -77,12 +80,12 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const bindVideo = useCallback((element) => { videoRef.current = element; if (element && streamRef.current) element.srcObject = streamRef.current; }, []);
   const notify = useCallback((message, type = "notice", source = "laptop") => {
     const key = `${source}:${type}`; if (Date.now() - (lastWarningRef.current[key] || 0) < 8000) return;
-    lastWarningRef.current[key] = Date.now(); setWarning({ message, type, source });
+    lastWarningRef.current[key] = Date.now(); setWarning({ ...proctoringNotice(message, type, source), type, source });
   }, []);
   useEffect(() => { if (!warning) return; const timer = setTimeout(() => setWarning(null), 1800); return () => clearTimeout(timer); }, [warning]);
-  useEffect(() => { transcriptTailRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); }, [turns, question, draft]);
+  useEffect(() => { transcriptTailRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); }, [turns, question, draft, aiCaption]);
   const stopPlayback = useCallback(() => {
-    speechRequestRef.current += 1;
+    speechRequestRef.current += 1; playbackRef.current?.cancel(); playbackRef.current = null;
     speakerNodesRef.current?.source.disconnect(); speakerNodesRef.current?.analyser.disconnect(); speakerNodesRef.current = null; voiceAudioRef.current.speaker = null;
     if (audioRef.current) { audioRef.current.onended = null; audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; }
   }, []);
@@ -114,7 +117,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         if (existing?.session_id || (interviewId && interviewId !== "start")) data = await request(`/interviews/${existing?.session_id || interviewId}/session`);
         else {
           if (!location.state?.applicationId) throw new Error("Open this interview from your applications page so we can load the correct role.");
-          try { data = await request("/interviews/start", { method: "POST", body: JSON.stringify({ application_id: location.state.applicationId }) }, 15000); }
+          try { data = await request("/interviews/start", { method: "POST", body: JSON.stringify({ application_id: location.state.applicationId }) }, 25000); }
           catch (failure) {
             if (failure.code !== "session_recovery_required" || !failure.details?.session_id) throw failure;
             data = await request(`/interviews/${failure.details.session_id}/session`);
@@ -143,8 +146,8 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     // request is still pending. Speech is optional and never gates setup.
     if (prefetchedQuestionRef.current === question) return;
     prefetchedQuestionRef.current = question;
-    request("/speech/synthesize", { method: "POST", body: JSON.stringify({ text: question, session_id: session.session_id }) }, 5000)
-      .then((data) => { if (data.audio_base64) audioCacheRef.current.set(question, `data:audio/mp3;base64,${data.audio_base64}`); }).catch(() => {});
+    request("/speech/synthesize", { method: "POST", body: JSON.stringify({ text: question, session_id: session.session_id, with_timestamps: true }) }, 12000)
+      .then((data) => { if (data.audio_base64) audioCacheRef.current.set(question, data); }).catch(() => {});
   }, [session?.session_id, question, request, phase]);
 
   // Warm the bundled detector during laptop checks. Inference is sampled only
@@ -252,7 +255,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       if (data.ready === false && phaseRef.current === "active" && sessionRef.current?.dual_proctoring_required) notify("Your phone camera is unavailable. Keep its companion page visible; the coverage gap is recorded.", "mobile_unavailable", "phone"); };
     socket.on("connect", () => {
       socketAcknowledgement(socket, "join_interview_session", { session_id: session.session_id }).then(() => {
-        if (!aliveRef.current || socketRef.current !== socket) return; setConnected(true);
+        if (!aliveRef.current || socketRef.current !== socket) return; setConnected(true); liveCaptionsRef.current?.reconnect();
       }).catch((failure) => { setConnected(false); notify(failure.message); });
     });
     socket.on("disconnect", () => { setConnected(false); if (phaseRef.current === "active") notify("Monitoring is reconnecting. Your spoken answer is still being recorded.", "connection", "laptop"); });
@@ -286,20 +289,23 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     } catch (failure) { setError(`Could not record your answer: ${failure.message}. Reconnect your microphone, then choose Record answer again.`); setSpeechState("idle"); }
   }, []);
   const speak = useCallback(async (text) => {
-    stopPlayback(); const requestId = speechRequestRef.current; setSpeechState("thinking");
-    const finished = () => { if (requestId !== speechRequestRef.current || phaseRef.current !== "active") return; speakerNodesRef.current?.source.disconnect(); speakerNodesRef.current?.analyser.disconnect(); speakerNodesRef.current = null; voiceAudioRef.current.speaker = null; audioRef.current = null; beginListening(); };
-    try { let src = audioCacheRef.current.get(text);
-      if (!src) { const data = await request("/speech/synthesize", { method: "POST", body: JSON.stringify({ text, session_id: sessionRef.current.session_id }) }, 4000); if (data.audio_base64) src = `data:audio/mp3;base64,${data.audio_base64}`; }
-      if (requestId !== speechRequestRef.current || phaseRef.current !== "active" || pauseRef.current) return;
-      if (!src) { finished(); return; } const audio = new Audio(src); audioRef.current = audio; audio.onended = finished; audio.onerror = finished;
-      try { const context = contextRef.current; await context.resume();
-        const source = context.createMediaElementSource(audio), analyser = context.createAnalyser(); analyser.fftSize = 1024;
-        source.connect(analyser); analyser.connect(context.destination); speakerNodesRef.current = { source, analyser }; voiceAudioRef.current.speaker = analyser;
-      } catch { /* Playback remains available if the browser cannot expose its analyser. */ }
-      setSpeechState("speaking");
-      await audio.play().catch(() => { notify("Audio playback is unavailable. Read the question on screen and answer when ready."); finished(); });
-    } catch { if (requestId === speechRequestRef.current) { notify("The voice service is taking too long. Read this question and continue."); finished(); } }
-  }, [beginListening, notify, request, stopPlayback]);
+    stopPlayback(); const requestId = speechRequestRef.current;
+    setSpeechState("thinking"); setSpeechError(""); setAiCaption(""); setCaptionNote("");
+    let data = audioCacheRef.current.get(text);
+    if (!data) {
+      try {
+        data = await request("/speech/synthesize", { method: "POST", body: JSON.stringify({ text, session_id: sessionRef.current.session_id, with_timestamps: true }) }, 12000);
+        if (data.audio_base64) audioCacheRef.current.set(text, data);
+      } catch { /* Use the device voice, then surface a persistent retry if both fail. */ }
+    }
+    if (requestId !== speechRequestRef.current || phaseRef.current !== "active" || pauseRef.current) return;
+    playbackRef.current = playInterviewerSpeech({ text, data, context: contextRef.current,
+      onPlaying: () => setSpeechState("speaking"), onCaption: setAiCaption,
+      onAnalyser: analyser => { voiceAudioRef.current.speaker = analyser; },
+      onDone: () => { if (requestId === speechRequestRef.current && phaseRef.current === "active") beginListening(); },
+      onError: message => { setSpeechError(message); setAiCaption(text); setSpeechState("idle"); },
+    });
+  }, [beginListening, request, stopPlayback]);
   const startArchive = useCallback(() => {
     if (archiveRecorderRef.current?.state === "recording") return; const mimeType = mediaMimeType("video");
     const recorder = new MediaRecorder(streamRef.current, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 500000, audioBitsPerSecond: 32000 });
@@ -371,8 +377,14 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     streamRef.current?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
     await contextRef.current?.close().catch(() => {}); contextRef.current = null; analyserRef.current = null;
     uploadArchive(); // Independent storage: no WASM download/remux blocks evaluation.
-    try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/end`, { method: "POST" }, 15000);
-      setResult(data); const nextPhase = terminalPhase(data) || "completed"; phaseRef.current = nextPhase; setPhase(nextPhase);
+    try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/end`, { method: "POST", body: JSON.stringify({}) }, 15000);
+      let report = data; const deadline = Date.now() + 120000;
+      while (report.report_pending && aliveRef.current && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        report = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/end`, { method: "POST", body: JSON.stringify({}) }, 15000);
+      }
+      if (report.report_pending) throw new Error("Your answers are saved. The report is still processing; retry to check its progress.");
+      setResult(report); const nextPhase = terminalPhase(report) || "completed"; phaseRef.current = nextPhase; setPhase(nextPhase);
       try { sessionStorage.removeItem(CACHE_KEY); sessionStorage.setItem("credits-needs-refresh", "true"); } catch { /* results are persisted on the server */ }
     } catch (failure) { setError(failure.message); setPhase("end_failed"); }
     finally { processingRef.current = false; socketRef.current?.disconnect(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
@@ -382,7 +394,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     if (phaseRef.current !== "active" || submitRequestRef.current) return;
     if (pauseRef.current) { setPendingAnswer({ answer, question: questionRef.current }); setSpeechState("idle"); processingRef.current = false; return; }
     const submittedQuestion = questionRef.current; submitRequestRef.current = true; processingRef.current = true; setSpeechState("thinking"); setError("");
-    try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/answer`, { method: "POST", body: JSON.stringify({ question: submittedQuestion, answer }) }, 20000);
+    try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/answer`, { method: "POST", body: JSON.stringify({ question: submittedQuestion, answer }) }, 25000);
       if (phaseRef.current !== "active") return;
       setTurns(previous => [...previous, { role: "assistant", text: submittedQuestion }, { role: "user", text: answer }]);
       setPendingAnswer(null); setDraft(""); recordedAnswerRef.current = null; setAudioRetryAvailable(false); if (data.interview_complete) { processingRef.current = false; await finish(); return; }
@@ -567,24 +579,25 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     </section></div></main>;
 
   return <main className={styles.interviewShell}><header className={styles.interviewHeader}><span className={styles.brand}><ShieldCheck size={22} /> GenHire <small>{isPractice ? "Practice" : "Interview"}</small></span><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack} role="progressbar" aria-label="Interview question progress" aria-valuemin={1} aria-valuemax={maxQuestions} aria-valuenow={Math.min(questionCount, maxQuestions)}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
-    {warning && <div className={styles.warningToast} role="status"><CircleAlert size={19} /><div><strong>{warning.source === "mobile" || warning.source === "phone" ? "Phone camera notice" : "Monitoring notice"}</strong><p>{warning.message}</p></div></div>}
+    {warning && <div className={styles.warningToast} role="status"><CircleAlert size={19} /><div><strong>{warning.title}</strong><p>{warning.message}</p>{warning.recorded && <small>Monitoring events are saved for review. Your interview continues.</small>}</div></div>}
     <section className={styles.interviewGrid}>
       <article className={styles.conversation}>
         <div className={styles.transcriptHeader}><div className={styles.interviewerBadge}><span>A</span><div><strong>Interview conversation</strong><small>Alex / Your AI interviewer</small></div></div><span className={styles.badge}>Voice interview</span></div>
         <div className={styles.transcriptFeed} role="log" aria-label="Interview conversation" aria-live="polite" aria-relevant="additions text">
           {turns.map((turn, index) => <div key={index} className={`${styles.transcriptTurn} ${turn.role === "user" || turn.role === "candidate" ? styles.candidateTurn : ""}`}><span>{turn.role === "user" || turn.role === "candidate" ? "You" : "Alex"}</span><p>{turn.text}</p></div>)}
-          <div className={styles.transcriptTurn}><span>Alex <small>{speechState === "speaking" ? "Speaking" : `Question ${questionCount}`}</small></span><h1 className={styles.liveQuestion}>{question}</h1></div>
-          <div className={`${styles.transcriptTurn} ${styles.candidateTurn}`}><span>You <small>{speechState === "listening" ? "Live captions" : speechState === "transcribing" ? "Finalizing transcript" : "Spoken answer"}</small></span><p>{draft || (speechState === "listening" ? "Your words will appear here as you speak…" : speechState === "speaking" ? "Listen to the question, then answer naturally." : "Your spoken answer will appear here.")}</p>{captionNote && <small className={styles.captionNote}>{captionNote}</small>}</div>
+          <div className={styles.transcriptTurn}><span>Alex <small>{speechState === "speaking" ? "Speaking" : `Question ${questionCount}`}</small></span><h1 className={styles.liveQuestion}>{aiCaption || (speechState === "speaking" ? "Alex is speaking..." : speechState === "thinking" ? "Preparing Alex's voice..." : question)}</h1></div>
+          <div className={`${styles.transcriptTurn} ${styles.candidateTurn}`}><span>You <small>{speechState === "listening" ? "Live captions" : speechState === "transcribing" ? "Finalizing transcript" : "Spoken answer"}</small></span><p>{draft || (speechState === "listening" ? "Your words will appear here as you speak…" : speechState === "speaking" ? "Listen to the question, then answer naturally." : "Your spoken answer will appear here.")}</p>{captionNote && ["listening", "transcribing"].includes(speechState) && <small className={styles.captionNote}>{captionNote}</small>}</div>
           <div ref={transcriptTailRef} />
         </div>
         <div className={styles.voiceControls}>
+          {speechError && <div className={styles.savedAnswer} role="alert"><p>{speechError}</p><button className={styles.primary} onClick={() => speak(question)}>Play question</button><button className={styles.secondary} onClick={() => { setSpeechError(""); setAiCaption(question); beginListening(); }}>Continue with question text</button></div>}
           <div className={styles.conversationStatus} aria-live="polite">{pauseReason ? "Reconnect your microphone to continue" : speechState === "speaking" ? "Alex is speaking…" : speechState === "transcribing" ? "Finalizing your spoken answer…" : speechState === "thinking" ? "Saving your answer and preparing the next question…" : speechState === "listening" ? hasSpoken ? answerCountdown <= 5 ? `Sending after ${answerCountdown}s of silence` : "Listening to your answer" : "Take a moment, then answer naturally" : "Ready when you are"}</div>
           {renderError(error)}
           {pendingAnswer !== null && <div className={styles.savedAnswer}><p>Your spoken answer is saved for retry.</p><button className={styles.primary} disabled={!!pauseReason || speechState === "thinking"} onClick={() => submitAnswer(pendingAnswer.answer)}>Send saved answer</button></div>}
           <div className={styles.voiceButtons}>
             <button className={styles.primary} disabled={!!pauseReason || speechState !== "listening" || !hasSpoken} onClick={() => submitRecording(false)}><Mic size={17} />Send answer</button>
             {audioRetryAvailable && <button className={styles.secondary} disabled={!!pauseReason || ["thinking", "transcribing"].includes(speechState)} onClick={() => submitRecording(false, true)}>Retry recording</button>}
-            {speechState === "idle" && !pendingAnswer && <button className={styles.secondary} disabled={!!pauseReason} onClick={beginListening}>Record answer again</button>}
+            {speechState === "idle" && !pendingAnswer && !speechError && <button className={styles.secondary} disabled={!!pauseReason} onClick={beginListening}>Record answer again</button>}
             <button className={styles.secondary} disabled={!!pauseReason || hasSpoken || ["thinking", "transcribing"].includes(speechState)} onClick={async () => { await stopAnswer(); speak(question); }}>Repeat question</button>
           </div>
           <p className={styles.note}>Speak naturally. After you speak, 8 seconds of silence sends your answer automatically. You can also choose Send answer.</p>

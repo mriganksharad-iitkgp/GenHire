@@ -64,6 +64,8 @@ class SpeechController:
         if not text:
             logger.error("No text in synthesize request")
             return jsonify({"error": "No text provided"}), 400
+        if not isinstance(text, str) or len(text) > 1500:
+            return jsonify({"error": "Speech text must be at most 1500 characters"}), 400
 
         try:
             # Optionally handle parameters from the request
@@ -77,10 +79,11 @@ class SpeechController:
                 language_code,
                 voice_name,
                 session_id=session_id,
+                with_timestamps=bool(data.get("with_timestamps")),
             )
 
             if audio_base64:
-                return jsonify({"audio_base64": audio_base64})
+                return jsonify(audio_base64 if isinstance(audio_base64, dict) else {"audio_base64": audio_base64})
             else:
                 logger.error("Speech service returned None for audio_base64")
                 return jsonify({"error": "Failed to synthesize speech"}), 500

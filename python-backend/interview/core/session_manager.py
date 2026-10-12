@@ -13,7 +13,7 @@ from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict, field, replace
 import threading
 import tempfile
 
@@ -27,12 +27,12 @@ from ..config.settings import InterviewConfig, LLMConfig
 from ..llm.factory import LLMFactory
 from ..document.loader import DocumentLoader
 from .prompt_based_question_generator import (
-    PromptBasedQuestionGenerator as QuestionGenerator,
     ConversationContext,
     QuestionMetadata,
     InterviewPhase,
     ConversationDepth,
 )
+from .direct_question_generator import DirectQuestionGenerator as QuestionGenerator
 from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
 
@@ -95,7 +95,8 @@ class InterviewSessionManager:
         self.llm = self._create_fallback_llm(llm_config)
 
         # Initialize components
-        self.question_generator = QuestionGenerator(self.llm, config=self.config)
+        self.question_llm = self._create_fallback_llm(replace(llm_config, max_tokens=256, timeout_seconds=4))
+        self.question_generator = QuestionGenerator(self.question_llm, config=self.config)
 
         # Initialize evaluation system if available
         self.evaluation_system = EvaluationSystem()
@@ -185,7 +186,7 @@ class InterviewSessionManager:
         try:
             # Load documents once — reuse the same loader for validation AND the
             # background context thread so we never read the files twice.
-            document_loader = DocumentLoader(cv_path, jd_path, reference_paths)
+            document_loader = DocumentLoader(cv_path, jd_path, [])
 
             # Validate only when the caller hasn't already guaranteed validity.
             if not pre_validated:
@@ -195,7 +196,7 @@ class InterviewSessionManager:
 
             # Each candidate owns mutable role banks, CV data and source metadata.
             # Sharing this generator let a concurrent session replace another CV.
-            generator = QuestionGenerator(self.llm, config=self.config)
+            generator = QuestionGenerator(getattr(self, "question_llm", self.llm), config=self.config)
             conversation_context = generator.initialize_conversation(
                 document_loader.get_cv_sections(), document_loader.get_jd_text(), use_llm=False
             )
@@ -206,17 +207,8 @@ class InterviewSessionManager:
                 else InterviewPhase.TECHNICAL_QUESTIONS
             )
 
-            # Deterministic first question; no provider calls are on the startup path.
-            first_question = "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?"
-            first_metadata = {
-                "intent": "ICEBREAKER",
-                "difficulty_level": "fresher",
-                "expected_depth": "BRIEF",
-                "topic_area": "General",
-                "prerequisites": [],
-                "interview_phase": "INTRODUCTION",
-                "source": "fallback"
-            }
+            first_question, generated_metadata = generator.first_question(conversation_context)
+            first_metadata = _plain_metadata(generated_metadata)
 
             # Create session without conversation_context
             session = InterviewSession(
@@ -287,7 +279,7 @@ class InterviewSessionManager:
         question = saved.get("current_question") or last.get("next_question")
         if not question and doc.get("status") == "active" and doc.get("qa_pairs"):
             raise ValueError("The saved current question is missing; submitted answers are retained.")
-        generator = QuestionGenerator(self.llm, config=self.config)
+        generator = QuestionGenerator(getattr(self, "question_llm", self.llm), config=self.config)
         with tempfile.TemporaryDirectory(prefix="genhire-restore-") as directory:
             cv_path, jd_path = os.path.join(directory, "cv.txt"), os.path.join(directory, "jd.txt")
             for path, content in ((cv_path, cv_text), (jd_path, jd_text)):
@@ -317,6 +309,10 @@ class InterviewSessionManager:
             question_generator=generator, init_event=threading.Event(),
             question_served_at=saved.get("question_served_at") or (last.get("question_deadline") - self.config.question_timeout_seconds if last.get("question_deadline") else None),
             activated_at=saved.get("activated_at"))
+        context.conversation_history = [{"question": item.get("question", ""), "answer": item.get("answer", "")}
+                                        for item in session.interview_data]
+        context.asked_questions = [item["question"] for item in context.conversation_history] + [session.current_question]
+        context.question_count = session.questions_asked
         session.init_event.set()
         # Evaluations that belonged to a killed worker cannot remain pending
         # forever. Preserve their answers and explicitly mark unavailable work.
@@ -343,7 +339,7 @@ class InterviewSessionManager:
             conversation_context = (session.question_generator or self.question_generator).initialize_conversation(
                 resume_sections, job_description, use_llm=False
             )
-            # The hardcoded first question already serves as the greeting, so skip
+            # The generated first question already serves as the greeting, so skip
             # the GREETING phase in the question generator to prevent a second greeting.
             conversation_context.has_been_greeted = True
             conversation_context.interview_phase = InterviewPhase.EXPERIENTIAL_QUESTIONS
@@ -562,38 +558,8 @@ class InterviewSessionManager:
                         time.sleep(min(2 ** attempt, 4))
 
             if generation_error is not None:
-                # All retries exhausted — end the interview, but make it clear
-                # (to the candidate now and the recruiter later) that this was
-                # a system failure, not a normal completion.
-                logger.error(
-                    f"Question generation permanently failed after {MAX_QUESTION_GEN_RETRIES} attempts "
-                    f"[session={session_id}]: {generation_error}",
-                    exc_info=generation_error,
-                )
-                session.is_complete = True
-                session.ended_early_reason = "technical_difficulty"
-                # Record the current answer before ending
-                session.interview_history += f"Q: {question}\nA: {answer}\n\n"
-                session.questions_asked += 1
-                session.interview_data.append(
-                    {
-                        "question": question,
-                        "answer": answer,
-                        "evaluation": evaluation,
-                        "question_metadata": _plain_metadata(session.current_question_metadata),
-                        "timestamp": self._get_timestamp(),
-                    }
-                )
-                final_evaluation = self._generate_final_evaluation(session)
-                return {
-                    "interview_complete": True,
-                    "current_evaluation": evaluation,
-                    "final_evaluation": final_evaluation,
-                    "conversation_summary": self._generate_conversation_summary(session),
-                    "quota_exhausted": True,
-                    "ended_early_reason": "technical_difficulty",
-                    "message": "The interview has ended early due to a technical difficulty. Your progress has been saved.",
-                }
+                return {"error": "The interviewer could not prepare the next question. Retry your saved answer.",
+                        "error_code": "next_question_unavailable", "retryable": True}
 
             session.interview_history += f"Q: {question}\nA: {answer}\n\n"
             # Mirror the question generator's own counter instead of maintaining
@@ -623,7 +589,7 @@ class InterviewSessionManager:
 
             if not should_continue:
                 session.is_complete = True
-                final_evaluation = self._generate_final_evaluation(session)
+                final_evaluation = {"score_status": "pending"}
 
                 return {
                     "interview_complete": True,
@@ -857,7 +823,7 @@ class InterviewSessionManager:
 
         # Do not persist a length-based placeholder while the last answer is
         # still being scored. Share one wait budget across all answer workers.
-        wait_until = time.monotonic() + 5.0
+        wait_until = time.monotonic() + 30.0
         for event in session.evaluation_events:
             event.wait(max(0.0, wait_until - time.monotonic()))
         all_evaluations = [dict(item["evaluation"]) for item in session.interview_data]
@@ -912,7 +878,15 @@ class InterviewSessionManager:
         try:
             if score_status != "complete":
                 raise RuntimeError("Answer evaluation is incomplete")
-            response = (session.question_generator or self.question_generator)._complete_llm(prompt)
+            # Report prose has its own output budget; the 256-token question
+            # client must not truncate it. This runs in the report worker only.
+            reporter = QuestionGenerator(self.llm, config=self.config)
+            reporter.completion_budget_seconds = 20
+            report_token = CostTracker().set_session_context(session.session_id)
+            try:
+                response = reporter._complete_llm(prompt)
+            finally:
+                CostTracker().clear_session_context(report_token)
             qualitative_assessment = response.text
         except Exception as e:
             logger.error(

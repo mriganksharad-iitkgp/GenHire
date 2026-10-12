@@ -50,7 +50,6 @@ def start_live_speech(data):
 
 
 @socketio.on("speech_live_audio")
-@socket_limit("socket_audio")
 def live_audio(data):
     state = streams.get(request.sid)
     if not isinstance(data, dict) or not state or data.get("stream_id") != state.stream_id or not bound_context(request.sid, state.session_id, "desktop"):
@@ -58,6 +57,14 @@ def live_audio(data):
     if not state.add(data.get("sequence"), data.get("audio")):
         state.cancel()
         return {"ok": False, "error_code": "invalid_audio"}
+    return {"ok": True}
+
+
+@socketio.on("speech_live_cancel")
+def cancel_live_speech(data):
+    state = streams.get(request.sid)
+    if isinstance(data, dict) and state and data.get("stream_id") == state.stream_id:
+        cancel_speech(request.sid)
     return {"ok": True}
 
 

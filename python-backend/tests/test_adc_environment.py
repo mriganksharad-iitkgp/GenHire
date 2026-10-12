@@ -77,7 +77,7 @@ class GoogleCredentialEnvironmentTests(unittest.TestCase):
         from services.google_speech_service import GoogleSpeechService
         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = ''
         os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON'] = ''
-        with patch('google.cloud.texttospeech.TextToSpeechClient') as tts:
+        with patch('google.cloud.texttospeech_v1beta1.TextToSpeechClient') as tts:
             service = GoogleSpeechService()
         self.metadata.assert_called_once()
         tts.assert_called_once_with(credentials=self.credentials)

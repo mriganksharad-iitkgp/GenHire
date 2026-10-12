@@ -1,11 +1,13 @@
-# Interview setup, automatic face capture and kiosk 1.2.5
+# Interview setup, automatic face capture and kiosk 1.2.6
 
-Updated 12 October 2026. For interruption accounting without automatic termination, front camera,
+Updated 13 October 2026. For interruption accounting without automatic termination, front camera,
 session restoration and real-device acceptance checklist, follow
 [Interview monitoring policy](interview-monitoring-policy.md). Backend/frontend changes require deployment; the
 rebuilt kiosk includes its own bundled UI and must be installed separately.
 
-Release 1.2.5 adds the real-audio dotted voice sphere, voice-only conversation
+Release 1.2.6 adds direct LLM questions, speech-timed AI captions, reconnecting
+candidate captions, explicit audio recovery and asynchronous report completion.
+The earlier 1.2.5 release adds the real-audio dotted voice sphere, voice-only conversation
 and incremental captions. It removes automatic interruption termination, adds
 typed interruption counts to the final monitoring score, reduces duplicate-face
 warnings and retains phone recording parts across camera recovery. See
@@ -40,15 +42,16 @@ so different instances can receive requests belonging to the same interview.
 
 The pending source changes use one Gunicorn **gthread** worker with **32 threads**
 and explicit Flask-SocketIO threading/simple-websocket. Native vision/gRPC work
-therefore does not starve a cooperative socket hub. Google TTS has a **4-second
-RPC deadline**, with retries disabled. Setup prefetches question speech once;
-speech availability does not gate setup. The existing first question is
-deterministic, and its timer begins only after activation. OpenCV uses one
+therefore does not starve a cooperative socket hub. Google TTS has an **8-second
+RPC deadline**, with retries disabled, and a 12-second client budget. Setup
+prefetches timestamped question speech once; speech availability does not gate
+setup. The first question is now LLM-generated from CV/JD, and its timer begins
+only after activation. Later questions add previous Q/A without retrieval. OpenCV uses one
 internal CPU thread; recharge-pack initialization runs once per database.
 Desktop/mobile/application connections prefer WebSocket with polling fallback.
 [Flask-SocketIO deployment guidance](https://flask-socketio.readthedocs.io/en/latest/deployment.html).
 
-## Deploy release 1.2.5
+## Deploy release 1.2.6
 
 1. Review, commit and push the fixes; run **genhire-main-deploy** on the new
    commit. Confirm logs show **gthread**, rather than eventlet. Keep the attached
@@ -77,7 +80,7 @@ Desktop/mobile/application connections prefer WebSocket with polling fallback.
 3. Deploy the frontend to Vercel. npm install/start/build prepares the local WASM
    files automatically; serve the resulting `/assets/` files with proper MIME types.
 4. Close the old kiosk and install **secure-browser-kiosk/dist/Genhire.exe**,
-   version **1.2.5**. Packaging does not update existing installations or the
+   version **1.2.6**. Packaging does not update existing installations or the
    hosted installer URL. Publish the tested installer and `.sha256` file through
    the existing installer release workflow when ready to distribute it.
 
@@ -86,10 +89,10 @@ Scale-to-zero still has a cold-start cost. Optionally set minimum instances to
 This paid setting was not enabled here; local tests do not establish production
 startup timing or hardware readiness.
 
-## Verify release 1.2.5
+## Verify release 1.2.6
 
-Windows installer: **102,580,181 bytes**, installer version **1.2.5** (packaged application product version **1.2.5.0**).
-SHA-256: `d146c966dfbc4c70fb977726dbfb2129f796e323d83ce1b5f390783269c14f91`.
+Windows installer: **102,581,175 bytes**, installer version **1.2.6** (packaged application product version **1.2.6.0**).
+SHA-256: `76953f913e07424f0de7ef8976f06441d7dfe0ff01d291be4bb5205b4bf22200`.
 Its 24 bundled UI/assets files match the build output byte-for-byte, including
 the AudioWorklet, detector loader, WASM and face model. The checksum file sits beside it.
 
@@ -99,13 +102,13 @@ the AudioWorklet, detector loader, WASM and face model. The checksum file sits b
 - Single-/dual-camera jobs must retain their configured checks.
 - Check Socket.IO uses WebSocket when available and remains connected beyond
   five minutes. Check new logs for quick photo saves and no worker restarts.
-- Local checks passed: **161 backend tests**, **20 interview UI scenarios**,
-  **19 frontend helper tests**, **7 kiosk security tests**, lint and both builds.
+- Local checks passed: **169 backend tests**, **22 interview UI scenarios**,
+  **24 frontend helper tests**, **7 kiosk security tests**, lint and both builds.
   Native Electron verified all five GPU voice states, actual audio amplitude,
   the AudioWorklet, cleanup and responsive layouts at 1400, 900 and about 390 pixels.
   Fixtures do not establish real-device camera accuracy or provider caption latency.
 
-The updated local backend also started with the existing private configuration:
+During the previous 1.2.5 verification, the local backend also started with the existing private configuration:
 health returned **200** with MongoDB connected and Redis protection available,
 Google-auth CORS preflight returned **200**, and an unauthenticated session read
 returned **401**. The temporary port-5053 server used disabled background jobs

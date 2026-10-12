@@ -4,6 +4,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 const target = path.resolve("../secure-browser-kiosk/.voice-runtime-smoke");
 await mkdir(target, { recursive: true });
+const sampleRate=16000, frames=24000, wav=Buffer.alloc(44+frames*2);
+wav.write("RIFF");wav.writeUInt32LE(36+frames*2,4);wav.write("WAVEfmt ",8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(sampleRate,24);wav.writeUInt32LE(sampleRate*2,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write("data",36);wav.writeUInt32LE(frames*2,40);
+for(let i=0;i<frames;i++)wav.writeInt16LE(Math.round(Math.sin(i*2*Math.PI*200/sampleRate)*2500),44+i*2);
 const source = `
 import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';
 import Chat from './src/features/interview/pages/Chat.jsx';
@@ -17,6 +20,7 @@ const stream=new MediaStream([...canvas.captureStream(15).getVideoTracks(),...de
 navigator.mediaDevices.getUserMedia=async()=>stream.clone();
 window.fetch=async(url,options={})=>{let data={};const path=String(url);
 if(path.endsWith('/session'))data={session_id:'preview-session',status:'setup',current_question:'Tell me about a product you built and the impact it had.',max_questions:10,question_count:1,identity_captured:true,engine_available:true,proctoring_config:{},dual_proctoring_required:false};
+if(path.endsWith('/synthesize'))data={audio_base64:'${wav.toString("base64")}',timepoints:[{time_seconds:0,char_end:7},{time_seconds:.6,char_end:31}]};
 if(path.endsWith('/activate'))data={current_question:'Tell me about a product you built and the impact it had.',question_deadline:Date.now()/1000+300};
 if(path.endsWith('/monitoring'))data={integrity:{count:2,counts_by_type:{tab_switch:1,mobile_unavailable:1},losses:{},auto_termination:false}};
 return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});};

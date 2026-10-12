@@ -845,8 +845,23 @@ def submit_answer(current_user, session_id):
 
 @interview_bp.route("/api/interviews/<session_id>/end", methods=["POST"])
 @token_required
-@serialized_session
 def end_interview(current_user, session_id):
+    from services.interview_completion_service import complete_in_background
+    doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
+    if not doc:
+        return jsonify({"error": "Session not found"}), 404
+    if doc.get("status") in {"completed", "abandoned", "terminated"}:
+        return jsonify(result_payload(doc))
+    data = request.get_json(silent=True)
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    return complete_in_background(("interview", str(current_user["_id"]), session_id),
+                                  lambda: _complete_interview(current_user, session_id, data), interviews_collection)
+
+
+def _complete_interview(current_user, session_id, data):
     session_doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
     if not session_doc:
         return jsonify({"error": "Session not found"}), 404
@@ -858,12 +873,13 @@ def end_interview(current_user, session_id):
         latest = interviews_collection.find_one({"_id": session_doc["_id"]})
         if latest and latest.get("status") == "terminated":
             return jsonify(result_payload(latest))
-    data = request.json or {}
     tracking_data = data.get("tracking_data", [])
 
     def utc_now():
         return datetime.datetime.now(datetime.UTC)
 
+    # A retry can reach a replacement Cloud Run worker; restore saved answers first.
+    _restore_engine(session_doc, interview_manager)
     # Get the final evaluation from the session manager if it exists
     session = interview_manager.sessions.get(session_id)
     if live_sessions.get(session_id):

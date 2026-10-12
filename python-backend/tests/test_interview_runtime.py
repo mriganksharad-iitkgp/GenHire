@@ -38,7 +38,7 @@ with patch("dotenv.load_dotenv", return_value=False):
 
 class InterviewRuntimeTests(unittest.TestCase):
     def setUp(self):
-        self.llm = SimpleNamespace(complete=lambda prompt: (_ for _ in ()).throw(AssertionError("Unexpected LLM startup")))
+        self.llm = SimpleNamespace(complete=lambda prompt: SimpleNamespace(text="Which design decision had the biggest impact on your project?", usage={}, model="test"))
         with patch.object(runtime.InterviewSessionManager, "_create_fallback_llm", return_value=self.llm), patch.object(runtime, "EvaluationSystem", return_value=None):
             self.manager = runtime.InterviewSessionManager(InterviewConfig(), LLMConfig())
 
@@ -66,7 +66,7 @@ class InterviewRuntimeTests(unittest.TestCase):
         _, analyst = self.create("Data analyst with Excel and Power BI", "Analyst career")
         self.assertIsNot(software.question_generator, analyst.question_generator)
         self.assertEqual(software.conversation_context.job_role, "software_engineer")
-        self.assertEqual(analyst.conversation_context.job_role, "data_analyst")
+        self.assertIn("Data analyst", analyst.question_generator.jd_content)
         self.assertIn("Python", software.question_generator.cv_content)
         self.assertNotIn("Analyst career", software.question_generator.cv_content)
 
@@ -152,10 +152,10 @@ class InterviewRuntimeTests(unittest.TestCase):
         generator = session.question_generator
         context = session.conversation_context
         context.experiential_questions_asked = self.manager.config.experiential_questions_limit - 1
-        with patch.object(generator, "_generate_experiential_question", return_value="Tell me about your project decisions"):
+        with patch.object(generator, "_complete_llm", return_value=SimpleNamespace(text="Tell me about your project decisions?")):
             question, metadata = generator.get_next_question(context)
         self.assertEqual(metadata.interview_phase.value, "experiential_questions")
-        self.assertEqual(context.interview_phase.value, "technical_questions")
+        self.assertEqual(metadata.source, "direct_llm")
         session.current_question = question
         session.current_question_metadata = metadata
         response = self.manager.get_next_question(session.session_id)
@@ -174,6 +174,43 @@ class InterviewRuntimeTests(unittest.TestCase):
         updated = self.manager._generate_final_evaluation(session)
         self.assertEqual(updated["score_status"], "complete")
         self.assertEqual(updated["quantitative_scores"]["answer_score"], 0.8)
+
+    def test_direct_generation_uses_only_cv_jd_and_complete_history(self):
+        from interview.core.direct_question_generator import DirectQuestionGenerator
+        prompts = []
+        responses = iter(["Which API design decision mattered most?", "How did you verify the throughput improvement?"])
+        def complete(prompt):
+            prompts.append(prompt)
+            return SimpleNamespace(text=next(responses), usage={}, model="test")
+        with patch.object(PromptBasedQuestionGenerator, "_load_hr_question_banks", side_effect=AssertionError("bank loaded")), patch.object(PromptBasedQuestionGenerator, "_get_embedding", side_effect=AssertionError("retrieval used")):
+            generator = DirectQuestionGenerator(SimpleNamespace(complete=complete), InterviewConfig())
+            context = generator.initialize_conversation({"cv": "Built Python APIs"}, "Backend engineer using Postgres")
+            first, meta = generator.first_question(context)
+            second, _ = generator.get_next_question(context, "I batched writes to increase throughput.")
+        self.assertEqual(meta.source, "direct_llm")
+        self.assertIn("Built Python APIs", prompts[1])
+        self.assertIn("Backend engineer using Postgres", prompts[1])
+        self.assertIn(first, prompts[1])
+        self.assertIn("I batched writes", prompts[1])
+        self.assertEqual(context.question_count, 1)
+        self.assertIn("throughput", second)
+
+    def test_generation_outage_does_not_end_or_advance_attempt(self):
+        _, session = self.create()
+        with patch.object(session.question_generator, "get_next_question", side_effect=RuntimeError("offline")):
+            result = self.manager.submit_answer(session.session_id, session.current_question, "I do not know")
+        self.assertEqual(result["error_code"], "next_question_unavailable")
+        self.assertFalse(session.is_complete)
+        self.assertEqual(session.questions_asked, 0)
+        self.assertEqual(session.interview_data, [])
+
+    def test_last_answer_does_not_wait_for_report(self):
+        _, session = self.create()
+        session.questions_asked = session.conversation_context.question_count = self.manager.config.max_questions - 1
+        with patch.object(self.manager, "_generate_final_evaluation", side_effect=AssertionError("report blocked answer")):
+            result = self.manager.submit_answer(session.session_id, session.current_question, "I do not know")
+        self.assertTrue(result["interview_complete"])
+        self.assertEqual(result["final_evaluation"]["score_status"], "pending")
 
 
 if __name__ == "__main__":
