@@ -73,7 +73,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
   const request = useCallback((path, options = {}, timeout = 15000) => interviewRequest(apiBase, path, getToken(), options, timeout), [apiBase]);
   const isPractice = isPracticeSession(location, session || {}); const dualRequired = session?.dual_proctoring_required === true;
   const timing = voicePolicy(session?.voice_policy);
-  const maxQuestions = session?.max_questions || 10; const phoneUrl = mobilePairingUrl(session, webOrigin);
+  const maxQuestions = session?.max_questions || 12; const phoneUrl = mobilePairingUrl(session, webOrigin);
   const deviceReady = cameraReady && micReady && speakerTested === true;
   phaseRef.current = phase; sessionRef.current = session; questionRef.current = question; pauseRef.current = pauseReason;
 
@@ -286,10 +286,15 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
       recordedAnswerRef.current = null; setAudioRetryAvailable(false); answerChunksRef.current = []; recorder.ondataavailable = (event) => { if (event.data.size) answerChunksRef.current.push(event.data); }; answerRecorderRef.current = recorder;
       const levels = [...setupLevelsRef.current].sort((a, b) => a - b);
       voiceTurnRef.current = createVoiceTurn(sessionRef.current?.voice_policy, Date.now(), levels[Math.floor(levels.length * .2)] || 0);
+      // Every question, including number ten, gets a fresh answer window only
+      // after its audio ends. Server generation/transport time is not answer time.
+      setQuestionDeadline(Date.now() / 1000 + voicePolicy(sessionRef.current?.voice_policy).max_answer_seconds);
       spokeRef.current = false; setHasSpoken(false); setAnswerCountdown(voicePolicy(sessionRef.current?.voice_policy).initial_wait_seconds); recorder.start(1000); setSpeechState("listening"); setDraft(""); setCaptionNote("");
       const generation = ++captionGenerationRef.current;
       startLiveCaptions(contextRef.current, streamRef.current, socketRef.current, sessionRef.current.session_id,
-        text => { if (aliveRef.current && generation === captionGenerationRef.current) setDraft(text); },
+        text => { if (aliveRef.current && generation === captionGenerationRef.current) {
+          setDraft(text); voiceTurnRef.current?.observeTranscript(text, Date.now());
+        } },
         note => { if (aliveRef.current && generation === captionGenerationRef.current) setCaptionNote(note); })
         .then(controller => { if (generation !== captionGenerationRef.current || !aliveRef.current) controller?.cancel(); else liveCaptionsRef.current = controller; });
     } catch (failure) { setError(`Could not record your answer: ${failure.message}. Reconnect your microphone, then choose Record answer again.`); setSpeechState("idle"); }
@@ -402,7 +407,8 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     const submittedQuestion = questionRef.current; submitRequestRef.current = true; processingRef.current = true; setSpeechState("thinking"); setError("");
     try { const practice = isPracticeSession(location, sessionRef.current); const data = await request(`/${practice ? "practice" : "interviews"}/${sessionRef.current.session_id}/answer`, { method: "POST", body: JSON.stringify({ question: submittedQuestion, answer }) }, 25000);
       if (phaseRef.current !== "active") return;
-      setTurns(previous => [...previous, { role: "assistant", text: submittedQuestion }, { role: "user", text: answer }]);
+      // A deliberate repeat is not an answered question in the transcript.
+      if (!data.repeated_question) setTurns(previous => [...previous, { role: "assistant", text: submittedQuestion }, { role: "user", text: answer }]);
       setPendingAnswer(null); setDraft(""); recordedAnswerRef.current = null; setAudioRetryAvailable(false); if (data.interview_complete) { processingRef.current = false; await finish(); return; }
       if (!data.next_question) throw new Error("The next question is unavailable. Please retry your saved answer."); setQuestion(data.next_question); questionRef.current = data.next_question;
       setQuestionDeadline(data.question_deadline ?? null);

@@ -183,7 +183,7 @@ class InterviewAPI:
         }
 
         question_count = 0
-        max_questions = max_questions or 10  # Default to 10 questions
+        max_questions = max_questions or session_result.get("max_questions", 12)
 
         # Simulate the interview
         while question_count < max_questions:

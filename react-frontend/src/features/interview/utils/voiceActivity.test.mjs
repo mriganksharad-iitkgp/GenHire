@@ -2,6 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createVoiceTurn, voicePolicy } from "./voiceActivity.js";
 
+test("quieter sustained speech after onset is not mistaken for silence", () => {
+  const turn = createVoiceTurn({}, 0);
+  turn.sample(12, 0); turn.sample(12, 300);
+  for (let now = 500; now < 15000; now += 120) assert.equal(turn.sample(4, now).submit, false);
+  assert.equal(turn.sample(0, 20100).submit, true);
+});
+test("new caption words protect quiet speech but unchanged captions cannot postpone forever", () => {
+  const turn = createVoiceTurn({}, 0);
+  turn.observeTranscript("I built an API", 9000);
+  assert.equal(turn.sample(0, 11000).submit, false);
+  turn.observeTranscript("I built an API", 13900);
+  assert.equal(turn.sample(0, 14000).submit, true);
+});
+test("onset at the initial deadline is allowed to become speech", () => {
+  const turn = createVoiceTurn({}, 0);
+  assert.equal(turn.sample(12, 9950).submit, false);
+  assert.equal(turn.sample(12, 10070).submit, false);
+  assert.equal(turn.sample(12, 10190).spoke, true);
+});
+
 test("no response sends once after ten seconds of listening", () => {
   const turn = createVoiceTurn({}, 20000);
   assert.equal(turn.sample(0, 29999).submit, false);

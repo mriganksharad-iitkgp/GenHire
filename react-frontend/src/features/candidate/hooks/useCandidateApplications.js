@@ -128,7 +128,8 @@ export default function useCandidateApplications(toast) {
   useEffect(() => {
     const onReturn = () => { if (!document.hidden) load(true); };
     document.addEventListener("visibilitychange", onReturn);
-    return () => document.removeEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => { document.removeEventListener("visibilitychange", onReturn); window.removeEventListener("focus", onReturn); };
   }, [load]);
 
   // Poll for updates when there are pending/processing/retrying applications

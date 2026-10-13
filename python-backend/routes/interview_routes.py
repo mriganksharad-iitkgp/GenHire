@@ -571,9 +571,9 @@ def _session_payload(doc, manager=None):
         "current_question": session.current_question if session else None,
         "questions_asked": session.questions_asked if session else len(doc.get("qa_pairs") or []),
         "question_count": min((session.questions_asked if session else len(doc.get("qa_pairs") or []))
-            + (0 if doc.get("status") in {"completed", "abandoned"} else 1), manager.config.max_questions if manager else 10),
+            + (0 if doc.get("status") in {"completed", "abandoned"} else 1), session.max_questions if session else (doc.get("engine_checkpoint") or {}).get("max_questions", 10)),
         "question_timeout_seconds": manager.config.question_timeout_seconds if manager else None,
-        "max_questions": manager.config.max_questions if manager else None,
+        "max_questions": session.max_questions if session else (doc.get("engine_checkpoint") or {}).get("max_questions", 10),
         "question_deadline": (session.question_served_at + manager.config.question_timeout_seconds)
             if session and session.question_served_at else None,
         "cv_score": percentage(doc.get("cv_score"), normalized=bool(doc.get("is_practice"))),
@@ -603,7 +603,9 @@ def _restore_engine(doc, manager):
         return
     from services.interview_flow_service import session_lock
     with session_lock(doc["session_id"]):
-        if doc["session_id"] not in manager.sessions and hasattr(manager, "restore_session"):
+        current = manager.sessions.get(doc["session_id"])
+        newer_checkpoint = (doc.get("engine_checkpoint") or {}).get("questions_asked", 0) > getattr(current, "questions_asked", 0)
+        if (current is None or newer_checkpoint) and hasattr(manager, "restore_session"):
             source = doc.get("source_documents") or {}
             if not source.get("cv_text") and doc.get("application_id"):
                 application = applications_collection.find_one({"_id": ObjectId(doc["application_id"])}) or {}

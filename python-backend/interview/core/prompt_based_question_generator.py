@@ -200,7 +200,7 @@ class PromptBasedQuestionGenerator:
                 # Provider failover runs inside one wall-clock budget. The worker
                 # never mutates conversation state; a late response is discarded.
                 if not _GENERATION_SLOTS.acquire(blocking=False):
-                    raise RuntimeError("Question generation is busy; use the curated fallback")
+                    raise RuntimeError("Question generation is busy; please retry")
                 completed = threading.Event()
                 result = {}
                 cost_context = copy_context()
@@ -1033,21 +1033,15 @@ class PromptBasedQuestionGenerator:
         return self._user_indicates_repetition(last_answer)
 
     def _user_indicates_repetition(self, last_answer: Optional[str]) -> bool:
-        if not last_answer:
-            return False
-        la = (last_answer or "").lower()
-        # Heuristics: look for 'already' OR 'again/same/repeat' with any verb about answering
-        core_flags = ["same question", "asked before", "repeat", "repeated", "again"]
-        if any(flag in la for flag in core_flags):
-            return True
-        if "already" in la:
-            verbs = [
-                "answer", "answ", "ask", "asked", "said", "told", "explain", "explained", "mention", "mentioned",
-                "cover", "covered", "discuss", "discussed", "insert"  # handle typo: "insert" seen in transcripts
-            ]
-            if any(v in la for v in verbs):
-                return True
-        return False
+        # Only a standalone request can discard a turn without scoring it.
+        # "I repeated the test again" and "as I already explained" are answers.
+        text = re.sub(r"[^a-z\s]", "", (last_answer or "").lower())
+        text = re.sub(r"\s+", " ", text).strip()
+        return bool(re.fullmatch(
+            r"(?:(?:sorry|please) )?(?:(?:can|could|would) you )?"
+            r"(?:repeat (?:that|it|the question|your question)|"
+            r"(?:say|ask) (?:that|it|the question|your question) again)"
+            r"(?: please)?", text))
 
     def _normalize_question(self, q: str) -> str:
         return re.sub(r"\s+", " ", (q or "").strip().lower())

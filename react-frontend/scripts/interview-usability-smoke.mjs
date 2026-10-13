@@ -45,6 +45,7 @@ let root, compiled, currentLocation, passes = 0;
 let apiCalls, dualRequired, micSound, recordings, currentStream, socket, serverStatus;
 let speechFailure, reportPending, answerFailure, uploadFailure, applicationsFailure, applicationStatus, applicationProcessingStatus, pairingVersion;
 let mediaRequests, mediaFailure, audioSuspended, identityCaptured, socketEvents;
+let fixtureQuestionNumber = 1, holdQuestionAudio = false, playingAudio;
 let detectedFaces = [], detectionUnavailable = false;
 globalThis.__faceDetectorFixture = {
   FilesetResolver: { forVisionTasks: async () => ({}) },
@@ -91,7 +92,7 @@ globalThis.MediaRecorder = win.MediaRecorder = FixtureRecorder;
 win.AudioContext = FixtureAudioContext;
 globalThis.Audio = win.Audio = class {
   currentTime = 0;
-  async play() { this.onplaying?.(); this.timer = setTimeout(() => { this.currentTime = .05; this.onended?.(); }, 25); }
+  async play() { playingAudio = this; this.onplaying?.(); if (holdQuestionAudio) return; this.timer = setTimeout(() => { this.currentTime = .05; this.onended?.(); }, 25); }
   pause() { clearTimeout(this.timer); }
 };
 Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { async getUserMedia() { mediaRequests++; if (mediaFailure) throw new win.DOMException("Permission denied", "NotAllowedError"); currentStream = new FixtureStream(); return currentStream; } } });
@@ -102,7 +103,7 @@ globalThis.__interviewTestSocket = () => {
   return socket;
 };
 function sessionPayload() {
-  return { session_id: "ui-session", current_question: "Describe a recent project.", max_questions: 10, question_count: 1,
+  return { session_id: "ui-session", current_question: "Describe a recent project.", max_questions: 12, question_count: fixtureQuestionNumber,
     engine_available: true, identity_captured: identityCaptured, dual_proctoring_required: dualRequired,
     mobile_pairing_token: `fixture-pairing-${pairingVersion}`, question_timeout_seconds: 300, status: serverStatus };
 }
@@ -116,7 +117,7 @@ globalThis.fetch = win.fetch = async (url, options = {}) => {
   if (pathname.endsWith("/activate")) { serverStatus = "active"; data = { current_question: "Describe a recent project.", question_deadline: Date.now() / 1000 + 300 }; }
   if (pathname.endsWith("/answer")) {
     status = answerFailure ? 503 : 200;
-    data = answerFailure ? { error: "Temporary answer service failure" } : { next_question: "What did you learn?", progress: { questions_asked: 1 }, question_deadline: Date.now() / 1000 + 300 };
+    data = answerFailure ? { error: "Temporary answer service failure" } : fixtureQuestionNumber === 12 ? { interview_complete: true } : { next_question: "What did you learn?", progress: { questions_asked: 1 }, question_deadline: Date.now() / 1000 + 300 };
   }
   if (pathname.endsWith("/end")) { data = serverStatus === "terminated" ? { status: "interview_terminated", message: "The monitoring policy ended this attempt. You cannot repeat this interview for the same application." } : { status: "completed", interview_score: 0, cv_score: 0, proctoring_score: 0 }; serverStatus = data.status; }
   if (pathname.endsWith("/end") && reportPending) { reportPending = false; data = {status:"finishing",report_pending:true}; status = 202; }
@@ -138,6 +139,7 @@ async function mount(component, options = {}) {
   if (root) await act(async () => root.unmount());
   Date.now = now; renderErrors = []; apiCalls = []; dualRequired = options.dual || false; micSound = true; recordings = [];
   speechFailure = !!options.speechFailure; reportPending = false; serverStatus = "setup"; answerFailure = false; uploadFailure = false; applicationsFailure = false; applicationStatus = "shortlisted"; applicationProcessingStatus = options.processingStatus || "completed"; pairingVersion = 1;
+  fixtureQuestionNumber = options.questionNumber || 1; holdQuestionAudio = !!options.holdAudio; playingAudio = null;
   mediaRequests = 0; mediaFailure = options.mediaFailure || false; audioSuspended = options.audioSuspended || false; identityCaptured = options.identityCaptured !== false; socketEvents = [];
   detectedFaces = options.faces || []; detectionUnavailable = options.detectionUnavailable || false;
   sessionStorage.clear(); sessionStorage.setItem("companyxyz-token", "fixture-token");
@@ -161,7 +163,7 @@ async function check(name, fn) {
   passes++; log(`PASS ${name}`);
 }
 try {
-  const exports = { Chat: "features/interview/pages/Chat", MobileRecorder: "features/interview/pages/MobileRecorder", Applications: "features/candidate/pages/Applications", Modal: "shared/components/ui/Modal", ConfirmDialog: "shared/components/ui/ConfirmDialog", AppProviders: "app/providers" };
+  const exports = { KioskLaunchGuide: "features/interview/components/KioskLaunchGuide", Chat: "features/interview/pages/Chat", MobileRecorder: "features/interview/pages/MobileRecorder", Applications: "features/candidate/pages/Applications", Modal: "shared/components/ui/Modal", ConfirmDialog: "shared/components/ui/ConfirmDialog", InterviewReportModal: "features/interview/components/InterviewReportModal", AppProviders: "app/providers" };
   const entry = Object.entries(exports).map(([name, file]) => `export {${name === "AppProviders" ? name : "default as " + name}} from ${JSON.stringify(file)};`).join("\n");
   const output = await build({ stdin: { contents: entry, resolveDir: cwd, loader: "jsx" }, bundle: true, write: false,
     outfile: path.join(tmp, "bundle.mjs"), platform: "node", format: "esm", packages: "external",
@@ -184,6 +186,23 @@ try {
   style.textContent = (await readFile("src/shared/styles/portal-theme.css", "utf8")) + output.outputFiles.find(file => file.path.endsWith(".css")).text;
   document.head.appendChild(style);
 
+  await check("launch guide preserves installation help but closes on return from the secure browser", async () => {
+    localStorage.setItem("genhire:kiosk-installed:v1", "confirmed");
+    let closed = 0;
+    await mount(e(compiled.KioskLaunchGuide, { isOpen: true, onClose: () => closed++, onOpen: () => window.dispatchEvent(new Event("genhire:kiosk-launch")) }));
+    await act(async () => { window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus")); });
+    assert.equal(closed, 0, "Installation help must remain open before launch");
+    await click(button("Open Secure Browser"));
+    await act(async () => { window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus")); });
+    assert.equal(closed, 1);
+    assert.equal(sessionStorage.getItem("companyxyz-token"), "fixture-token");
+  });
+  await check("launch failures stay recoverable in the guide", async () => {
+    await mount(e(compiled.KioskLaunchGuide, { isOpen: true, onClose: () => {}, onOpen: () => { throw new Error("launch failure"); } }));
+    await click(button("Open Secure Browser"));
+    assert.ok(text().includes("The secure browser could not open"));
+    assert.ok(!button("Open Secure Browser").disabled);
+  });
   await check("automatic device permission leads through speaker confirmation and face capture without a hidden Continue gate", async () => {
     await mount(e(compiled.Chat, { interviewId: "ui-session" }), { identityCaptured: false }); await settle(180);
     assert.equal(mediaRequests, 1); assert.ok(!button("Enable camera and microphone")); assert.ok(!button("Continue").disabled);
@@ -315,6 +334,32 @@ try {
     assert.equal(submitted.length, 1, text());
     assert.equal(JSON.parse(submitted[0].options.body).answer, "I built a reliable Python service.");
     assert.ok(text().includes("What did you learn?"));
+  });
+  await check("question twelve waits for audio completion and saves the answer before ending", async () => {
+    await activeInterview({ questionNumber: 12, holdAudio: true });
+    assert.ok(text().includes("Question 12 of 12"));
+    const began = now(); playingAudio.currentTime = 40; Date.now = () => began + 40000; await settle(200);
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/answer")).length, 0);
+    await act(async () => playingAudio.onended()); await settle();
+    assert.ok(text().includes("Start speaking within 10s"));
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 0);
+    const live = socketEvents.find(event => event.name === "speech_live_start");
+    await act(async () => socket.fire("speech_live_transcript", { stream_id: live.payload.stream_id, transcript: "I built a reliable Python service" }));
+    await settle(200); Date.now = () => began + 44000; await settle(200);
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/answer")).length, 0);
+    await click(button("Send answer"));
+    assert.equal(JSON.parse(apiCalls.find(call => call.url.endsWith("/answer")).options.body).answer, "I built a reliable Python service.");
+    assert.equal(apiCalls.filter(call => call.url.endsWith("/end")).length, 1);
+    assert.ok(text().includes("Interview complete"));
+  });
+  await check("reports pair candidate answers with preparation examples and support older reports", async () => {
+    await mount(e(compiled.InterviewReportModal, { isOpen: true, onClose() {}, report: { interview_score: 0, evaluation: {
+      per_question_evaluations: [{ question_number: 1, question: "Why this job?", answer: "", suggested_answer: "My Python project relates to this role. [add your actual result]", improvement_tip: "Explain your motivation." },
+        { question: "How do you collaborate?", answer: "We worked together." }], qualitative_assessment: "Review your answers." } } }));
+    assert.ok(text().includes("A stronger answer to practice"));
+    assert.ok(text().includes("[add your actual result]"));
+    assert.ok(text().includes("No answer provided"));
+    assert.ok(text().includes("Suggested answers were not generated for this older report."));
   });
   await check("a failed spoken submission keeps the exact final transcript for retry", async () => {
     await activeInterview(); micSound = true; await settle(600); micSound = false; answerFailure = true;

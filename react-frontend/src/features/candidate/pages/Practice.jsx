@@ -88,13 +88,16 @@ const Practice = () => {
         setIsStarting(false);
         if (sessionLaunched) {
           setSessionLaunched(false);
+          setShowDownloadModal(false);
+          setPendingLaunch(null);
           showToast("Welcome back! Your practice report will appear in history once the session is processed.", "info");
           fetchPracticeHistory();
         }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+    return () => { document.removeEventListener("visibilitychange", handleVisibilityChange); window.removeEventListener("focus", handleVisibilityChange); };
   }, [sessionLaunched]);
 
   // Fetch practice interview history

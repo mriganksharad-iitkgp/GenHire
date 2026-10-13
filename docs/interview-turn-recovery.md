@@ -1,6 +1,10 @@
+> Latest release: [12-question screening flow and kiosk 1.2.9](interview-screening-plan.md). Older release details below are historical.
+
 # Interview turn recovery — 13 October 2026
 
 ## Confirmed causes
+
+For the subsequent question-order, repeat, answer-cutoff and preparation-report fixes, see [Screening sequence and preparation report](interview-screening-plan.md). The latest locally built installer is **1.2.8**; the 1.2.7 release details below document the earlier recovery.
 
 - The deployed backend exhausted its 512 MiB memory limit at 02:50:38 IST; Cloud Run terminated the instance and started another.
 - This restart broke caption/monitoring connections and delayed pending requests until startup completed around 02:51:37.

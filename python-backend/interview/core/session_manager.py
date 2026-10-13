@@ -33,6 +33,7 @@ from .prompt_based_question_generator import (
     ConversationDepth,
 )
 from .direct_question_generator import DirectQuestionGenerator as QuestionGenerator
+from .direct_question_generator import QuestionValidationError
 from .cost_tracker import CostTracker
 from utils.ai_detection import check_ai_content
 
@@ -81,6 +82,8 @@ class InterviewSession:
     evaluation_events: List[Any] = field(default_factory=list, repr=False)
     activated_at: Optional[float] = None
     final_evaluation: Optional[Dict[str, Any]] = None
+    preparation_answers: Optional[List[Dict[str, Any]]] = None
+    max_questions: int = 12
 
 
 class InterviewSessionManager:
@@ -101,6 +104,8 @@ class InterviewSessionManager:
             max_tokens=int(bounded_number("INTERVIEW_QUESTION_MAX_TOKENS", 1024, 512, 4096)),
             timeout_seconds=bounded_number("INTERVIEW_PROVIDER_TIMEOUT_SECONDS", 4, 2, 8)))
         self.question_generator = QuestionGenerator(self.question_llm, config=self.config)
+        self.report_llm = self._create_fallback_llm(replace(
+            llm_config, max_tokens=4096, temperature=0.3, timeout_seconds=20))
 
         # Initialize evaluation system if available
         self.evaluation_system = EvaluationSystem()
@@ -227,6 +232,7 @@ class InterviewSessionManager:
                 init_event=threading.Event(),
                 question_served_at=None,
                 question_generator=generator,
+                max_questions=self.config.max_questions,
             )
 
             self.sessions[session_id] = session
@@ -247,11 +253,14 @@ class InterviewSessionManager:
                 "setup_required": True,
                 # Single source of truth for the client's question counter —
                 # the frontend previously hardcoded its own copy of this.
-                "max_questions": self.config.max_questions,
+                "max_questions": session.max_questions,
             }
 
         except Exception as e:
             logger.error(f"Failed to create session [session={session_id}]: {e}", exc_info=True)
+            if isinstance(e, QuestionValidationError):
+                return {"error": "The interviewer could not prepare the opening question. Please retry; your interview has not started.",
+                        "error_code": "opening_question_unavailable"}
             return {"error": f"Failed to create session: {str(e)}"}
         finally:
             cost_tracker.clear_session_context(token)
@@ -267,6 +276,7 @@ class InterviewSessionManager:
             "activated_at": session.activated_at,
             "questions_asked": session.questions_asked,
             "is_complete": session.is_complete,
+            "max_questions": session.max_questions,
             "interview_data": session.interview_data,
             "conversation_context": session.conversation_context,
         })
@@ -274,16 +284,22 @@ class InterviewSessionManager:
     def restore_session(self, doc, cv_text, jd_text):
         """Rehydrate a trusted owned Mongo checkpoint without a debit/provider call."""
         session_id = doc["session_id"]
-        if session_id in self.sessions:
-            return self.sessions[session_id]
         saved = doc.get("engine_checkpoint") or {}
+        existing = self.sessions.get(session_id)
+        if existing and saved.get("questions_asked", 0) <= existing.questions_asked:
+            return existing
         # Old active sessions may use their persisted last response; never
         # silently restart their question sequence at the introduction.
         last = (doc.get("last_answer") or {}).get("result") or {}
         question = saved.get("current_question") or last.get("next_question")
-        if not question and doc.get("status") == "active" and doc.get("qa_pairs"):
+        if not question and not saved.get("is_complete") and doc.get("status") == "active" and doc.get("qa_pairs"):
             raise ValueError("The saved current question is missing; submitted answers are retained.")
         generator = QuestionGenerator(getattr(self, "question_llm", self.llm), config=self.config)
+        # Existing attempts retain their original length after a rollout.
+        limit = saved.get("max_questions", doc.get("max_questions", 10))
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
+            limit = 10
+        generator.config = replace(self.config, max_questions=limit, min_questions=limit)
         with tempfile.TemporaryDirectory(prefix="genhire-restore-") as directory:
             cv_path, jd_path = os.path.join(directory, "cv.txt"), os.path.join(directory, "jd.txt")
             for path, content in ((cv_path, cv_text), (jd_path, jd_text)):
@@ -305,18 +321,26 @@ class InterviewSessionManager:
             context.previous_answers = [item.get("answer", "") for item in doc.get("qa_pairs") or []]
         session = InterviewSession(session_id=session_id, cv_path=doc.get("cv_path", ""),
             jd_path=doc.get("jd_path", ""), reference_paths=[], conversation_context=context,
-            current_question=question or "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?",
+            current_question=question if saved.get("is_complete") else question or "Hello, I'm Alex. Great to meet you! Could you please give me a brief introduction about yourself and your background?",
             current_question_metadata=saved.get("current_question_metadata") or {"source": "restored", "topic_area": "General"},
             interview_data=saved.get("interview_data") or doc.get("qa_pairs") or [],
             questions_asked=saved.get("questions_asked", len(doc.get("qa_pairs") or [])),
             is_complete=saved.get("is_complete", False), proctoring_config=doc.get("proctoring_config") or {},
             question_generator=generator, init_event=threading.Event(),
+            max_questions=limit,
             question_served_at=saved.get("question_served_at") or (last.get("question_deadline") - self.config.question_timeout_seconds if last.get("question_deadline") else None),
             activated_at=saved.get("activated_at"))
         context.conversation_history = [{"question": item.get("question", ""), "answer": item.get("answer", "")}
                                         for item in session.interview_data]
-        context.asked_questions = [item["question"] for item in context.conversation_history] + [session.current_question]
+        context.asked_questions = [item["question"] for item in context.conversation_history] + ([session.current_question] if session.current_question else [])
         context.question_count = session.questions_asked
+        session.interview_history = "".join(f"Q: {item['question']}\nA: {item['answer']}\n\n" for item in session.interview_data)
+        # Keep completed local rubrics when importing a newer checkpoint.
+        if existing:
+            for old, item in zip(existing.interview_data, session.interview_data):
+                if old.get("question") == item.get("question") and old.get("answer") == item.get("answer"):
+                    if (old.get("evaluation") or {}).get("evaluation_status") == "complete":
+                        item["evaluation"] = dict(old["evaluation"])
         session.init_event.set()
         # Evaluations that belonged to a killed worker cannot remain pending
         # forever. Preserve their answers and explicitly mark unavailable work.
@@ -386,7 +410,7 @@ class InterviewSessionManager:
                 "first_question": session.current_question,
                 "question_timeout_seconds": self.config.question_timeout_seconds,
                 "question_deadline": session.question_served_at + self.config.question_timeout_seconds,
-                "max_questions": self.config.max_questions,
+                "max_questions": session.max_questions,
             }
 
     def _submit_answer_locked(
@@ -426,7 +450,7 @@ class InterviewSessionManager:
                 "progress": {
                     "questions_asked": session.questions_asked,
                     "estimated_remaining": max(
-                        0, self.config.min_questions - session.questions_asked
+                        0, session.max_questions - session.questions_asked
                     ),
                 },
                 "question_timeout_seconds": self.config.question_timeout_seconds,
@@ -526,7 +550,7 @@ class InterviewSessionManager:
             # One bounded pass through the provider chain. On failure keep the
             # current question for an explicit retry without ending the attempt.
             next_question, next_metadata, generation_error = None, None, None
-            MAX_QUESTION_GEN_RETRIES = 0 if session.questions_asked + 1 >= self.config.max_questions else 1
+            MAX_QUESTION_GEN_RETRIES = 0 if session.questions_asked + 1 >= session.max_questions else 1
             for attempt in range(MAX_QUESTION_GEN_RETRIES):
                 try:
                     next_question, next_metadata = (session.question_generator or self.question_generator).get_next_question(
@@ -644,7 +668,7 @@ class InterviewSessionManager:
                     "progress": {
                         "questions_asked": session.questions_asked,
                         "estimated_remaining": max(
-                            0, self.config.min_questions - session.questions_asked
+                            0, session.max_questions - session.questions_asked
                         ),
                     },
                     "question_timeout_seconds": self.config.question_timeout_seconds,
@@ -694,7 +718,7 @@ class InterviewSessionManager:
                 else "greeting"
             ),
             "progress_percentage": min(
-                100, (session.questions_asked / self.config.min_questions) * 100
+                100, (session.questions_asked / session.max_questions) * 100
             ),
         }
 
@@ -752,7 +776,7 @@ class InterviewSessionManager:
 
     def _should_continue_interview(self, session: InterviewSession) -> bool:
         """Return True if the interview should continue, False when it should end."""
-        return session.questions_asked < self.config.max_questions
+        return session.questions_asked < session.max_questions
 
     def _generate_conversation_summary(
         self, session: InterviewSession
@@ -849,52 +873,24 @@ class InterviewSessionManager:
             / len(evaluations) if evaluations else None,
         }
 
-        # Generate qualitative assessment
-        prompt = f"""
-        You are a professional hiring manager writing a structured interview evaluation report.
-
-        Interview Data:
-        - Questions asked: {session.questions_asked}
-        - Average Answer Score: {avg_scores['answer_score']} / 1.00
-        - Average Language Score: {avg_scores['language_score']} / 1.00
-        - Score coverage: {len(evaluations)} of {len(all_evaluations)} answers. Scoring status: {score_status}.
-
-        Interview transcript:
-        {session.interview_history}
-
-        Write a professional, structured evaluation with the following sections using markdown headers:
-
-        ### 1. Overall Assessment
-        Summarise the candidate's overall performance objectively. Note if answers were incomplete, evasive, or strong.
-
-        ### 2. Key Strengths
-        List any genuine strengths observed. If none were evident, state that briefly without embellishment.
-
-        ### 3. Areas for Improvement
-        Provide specific, actionable feedback on technical depth, communication clarity, or preparation gaps.
-
-        ### 4. Hiring Recommendation
-        Give one of: **Recommend Hire**, **Further Assessment Needed**, or **Do Not Recommend** — with a one-sentence justification.
-
-        Guidelines: Be honest and objective. Avoid unnecessary harshness but do not inflate scores. If the candidate failed to engage meaningfully, say so clearly and professionally. Keep the total response under 400 words.
-        """
-
+        from .preparation_report import preparation_prompt, parse_preparation_report
+        prompt = preparation_prompt(session, session.question_generator or self.question_generator,
+                                    avg_scores, {"scored": len(evaluations), "total": len(all_evaluations), "status": score_status})
         try:
-            if score_status != "complete":
-                raise RuntimeError("Answer evaluation is incomplete")
-            # Report prose has its own output budget; the short question
-            # client must not truncate it. This runs in the report worker only.
-            reporter = QuestionGenerator(self.llm, config=self.config)
-            reporter.completion_budget_seconds = 20
+            # One structured report call, never on the live answer path. Give ten
+            # preparation answers enough output tokens, independent of question limits.
+            reporter = QuestionGenerator(self.report_llm, config=self.config)
+            reporter.completion_budget_seconds = 35
             report_token = CostTracker().set_session_context(session.session_id)
             try:
                 response = reporter._complete_llm(prompt)
+                qualitative_assessment, preparation = parse_preparation_report(response.text, len(session.interview_data))
+                session.preparation_answers = preparation
             finally:
                 CostTracker().clear_session_context(report_token)
-            qualitative_assessment = response.text
         except Exception as e:
             logger.error(
-                f"Failed to generate qualitative assessment [session={session.session_id}]: {e}",
+                f"Failed to generate assessment/preparation answers [session={session.session_id}]: {type(e).__name__}",
                 exc_info=True,
             )
             qualitative_assessment = (
@@ -911,9 +907,13 @@ class InterviewSessionManager:
             "scored_answers": len(evaluations),
             "total_answers": len(all_evaluations),
             "pending_answers": pending,
+            "preparation_status": "complete" if session.preparation_answers else "unavailable",
             "per_question_evaluations": [
-                {"question": item["question"], "answer": item["answer"], "evaluation": evaluation}
-                for item, evaluation in zip(session.interview_data, all_evaluations)
+                {"question_number": index + 1, "question": item["question"], "answer": item["answer"],
+                 "evaluation": evaluation, "question_metadata": item.get("question_metadata"),
+                 **(session.preparation_answers[index] if session.preparation_answers else
+                    {"suggested_answer_status": "unavailable"})}
+                for index, (item, evaluation) in enumerate(zip(session.interview_data, all_evaluations))
             ],
             "interview_metadata": {
                 "questions_asked": session.questions_asked,

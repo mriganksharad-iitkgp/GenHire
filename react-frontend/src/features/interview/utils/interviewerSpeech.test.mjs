@@ -4,6 +4,17 @@ import { playInterviewerSpeech } from "./interviewerSpeech.js";
 import { proctoringNotice } from "./proctoringNotice.js";
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 65));
+test("late audio errors cannot replay a completed question over the candidate", async () => {
+  let audio, ended = 0, rejectPlay;
+  globalThis.window = { speechSynthesis: { speak: assert.fail }, SpeechSynthesisUtterance: class {} };
+  globalThis.Audio = class { currentTime = 0; constructor() { audio = this; }
+    play() { return new Promise((resolve, reject) => { rejectPlay = reject; }); } pause() {} };
+  const player = playInterviewerSpeech({ text: "Question ten", data: { audio_base64: "fixture" },
+    onPlaying() {}, onCaption() {}, onAnalyser() {}, onDone: () => ended++, onError: assert.fail });
+  const lateError = audio.onerror; audio.onended();
+  lateError(); rejectPlay(new Error("late media failure")); await settle();
+  assert.equal(ended, 1); assert.equal(audio.onerror, null); player.cancel();
+});
 test("AI captions follow audio timepoints and listening waits for actual completion", async () => {
   let audio, playing = 0, ended = 0, caption = "";
   globalThis.window = {};

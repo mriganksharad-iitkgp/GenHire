@@ -17,9 +17,10 @@ function rememberInstallation(value) {
 }
 
 export function openKiosk(payload) {
-  const bytes = new TextEncoder().encode(JSON.stringify({ ...payload, token: payload.token, webOrigin: window.location.origin }));
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...payload, token: payload.token, webOrigin: window.location.origin, returnToExistingTab: true }));
   const encoded = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
   const frame = document.createElement("iframe"); frame.hidden = true;
+  window.dispatchEvent(new Event("genhire:kiosk-launch"));
   frame.src = `secure-interview://start?initData=${encodeURIComponent(encoded)}`;
   document.body.appendChild(frame); setTimeout(() => frame.remove(), 5000);
 }
@@ -28,12 +29,14 @@ export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false
   const [installed, setInstalled] = useState(installationConfirmed);
   const [showHelp, setShowHelp] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [launchError, setLaunchError] = useState("");
+  const requestedRef = useRef(false);
   const dialog = useRef(null);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   const busyRef = useRef(busy); busyRef.current = busy;
   useEffect(() => {
     if (!isOpen) return;
-    setRequested(false); setShowHelp(false);
+    setRequested(false); setShowHelp(false); setLaunchError(""); requestedRef.current = false;
     const previous = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -47,7 +50,18 @@ export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     };
     document.addEventListener("keydown", keyboard);
-    return () => { document.removeEventListener("keydown", keyboard); document.body.style.overflow = previousOverflow; previous?.focus(); };
+    // Launching a native app may blur the page without hiding it. Close the
+    // guide on return, leaving the original tab and its login intact.
+    let leftPage = false;
+    const launched = () => { requestedRef.current = true; setRequested(true); };
+    const leave = () => { if (requestedRef.current) leftPage = true; };
+    const returned = () => { if (leftPage && !document.hidden && !busyRef.current) closeRef.current(); };
+    const visibility = () => { if (document.hidden) leave(); else returned(); };
+    window.addEventListener("blur", leave);
+    window.addEventListener("genhire:kiosk-launch", launched);
+    window.addEventListener("focus", returned);
+    document.addEventListener("visibilitychange", visibility);
+    return () => { document.removeEventListener("keydown", keyboard); window.removeEventListener("genhire:kiosk-launch", launched); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); document.body.style.overflow = previousOverflow; previous?.focus(); };
   }, [isOpen]);
   if (!isOpen) return null;
   const needsSetup = !installed || showHelp;
@@ -62,9 +76,14 @@ export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false
       {!KIOSK_MAC_DOWNLOAD_URL && <p className={styles.note}>A Mac installer is not available here. Use Windows or ask your recruiter about a supported device.</p>}
       <label className={styles.consent}><input type="checkbox" checked={installed} onChange={(event) => confirm(event.target.checked)}/> I have installed GenHire Secure Browser on this computer.</label>
     </div>}
-    <button disabled={!installed || busy} className={styles.primary} onClick={async () => { setRequested(!prepareOnly); await onOpen(); }}>{busy ? "Preparing your session..." : prepareOnly ? "Continue to CV selection" : "Open Secure Browser"}</button>
+    <button disabled={!installed || busy} className={styles.primary} onClick={async () => {
+      setLaunchError("");
+      try { await onOpen(); }
+      catch { requestedRef.current = false; setRequested(false); setLaunchError("The secure browser could not open. Please try again or reinstall using installation help."); }
+    }}>{busy ? "Preparing your session..." : prepareOnly ? "Continue to CV selection" : "Open Secure Browser"}</button>
+    {launchError && <p className={styles.error} role="alert">{launchError}</p>}
     {installed && <button className={styles.textButton} aria-expanded={showHelp} aria-controls="kiosk-installation-help" onClick={() => setShowHelp(!showHelp)}>{showHelp ? "Hide installation help" : "Need to install or reinstall?"}</button>}
     {requested && <p className={styles.note} role="status">Waiting for the secure browser. If it has not opened, accept the browser prompt, or use installation help to reinstall and try again.</p>}
-    <p className={styles.note}>Inside the app, check your camera, microphone and speakers, then capture your face. A second phone camera is required only when your recruiter enables it. Answer time starts after setup.</p>
+    <p className={styles.note}>Keep this tab open. After the interview, Back to applications closes the secure browser; return to this tab to keep your login. Inside the app, check your devices and capture your face. Answer time starts after setup.</p>
   </section></div>, document.body);
 }

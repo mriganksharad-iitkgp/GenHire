@@ -9,14 +9,26 @@ export function voicePolicy(value = {}) {
 export function createVoiceTurn(settings, startedAt, noiseFloor = 0) {
   const policy = voicePolicy(settings);
   const threshold = Math.max(policy.speech_level, Math.min(40, noiseFloor * 2.5 + 1));
-  let aboveSince = null, lastSpeech = startedAt, spoke = false, submitted = false;
-  return { sample(level, now) {
-    if (level >= threshold) {
+  // Use a lower release level after voice is established. Normal syllables
+  // frequently dip below the onset level; that is not five seconds of silence.
+  const releaseThreshold = Math.max(noiseFloor * 1.5 + 1, threshold * .55);
+  let aboveSince = null, lastSpeech = startedAt, spoke = false, submitted = false, captionWords = 0;
+  return {
+    observeTranscript(text, now) {
+      // New recognized words are additional evidence of quiet speech. Repeated
+      // snapshots/revisions of the same caption cannot keep the turn alive.
+      const words = String(text || "").trim().split(/\s+/).filter(Boolean).length;
+      if (!submitted && words > captionWords) { captionWords = words; spoke = true; lastSpeech = now; }
+    },
+    sample(level, now) {
+    if (level >= (spoke ? releaseThreshold : threshold)) {
       aboveSince ??= now;
       if (now - aboveSince >= policy.speech_hold_ms) { spoke = true; lastSpeech = now; }
     } else aboveSince = null;
     const remaining = spoke ? policy.silence_seconds - (now - lastSpeech) / 1000 : policy.initial_wait_seconds - (now - startedAt) / 1000;
-    const submit = !submitted && (remaining <= 0 || now - startedAt >= policy.max_answer_seconds * 1000);
+    // Let speech that starts at the initial deadline finish onset detection.
+    const onsetPending = !spoke && aboveSince !== null && now - aboveSince < policy.speech_hold_ms;
+    const submit = !submitted && ((remaining <= 0 && !onsetPending) || now - startedAt >= policy.max_answer_seconds * 1000);
     if (submit) submitted = true;
     return { spoke, submit, skip: !spoke, remaining: Math.max(0, Math.ceil(remaining)), threshold };
   } };

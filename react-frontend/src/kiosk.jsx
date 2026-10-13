@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import Chat from "features/interview/pages/Chat";
+import { returnFromKiosk } from "features/interview/utils/kioskReturn";
 import { setToken } from "shared/utils/session";
 import styles from "features/interview/pages/InterviewExperience.module.css";
 
@@ -25,7 +26,7 @@ function Kiosk() {
     window.electronAPI?.onInitDeepLink((_event, encoded) => initialize(encoded));
     window.electronAPI?.rendererReady().then(initialize).catch(() => setError("Return to your dashboard and open the interview again."));
   }, []);
-  const back = (path) => { window.electronAPI?.disableKiosk(); window.electronAPI?.openExternal(new URL(path, launch.webOrigin).href); window.electronAPI?.quitApp(); };
+  const back = (path) => returnFromKiosk(window.electronAPI, launch, path);
   if (!launch) return <main className={styles.shell}><section className={styles.centerCard}><span className={styles.brand}>GenHire Secure Browser</span><h1>Open your interview</h1><p>Open an interview from your GenHire dashboard, then accept the request to launch GenHire Secure Browser.</p>{error && <p role="alert">{error}</p>}<button className={styles.textButton} onClick={() => window.electronAPI?.quitApp()}>Close browser</button></section></main>;
   return <>{error && <div role="alert" className={styles.error}>{error}</div>}<BrowserRouter><Chat interviewId={launch.sessionId || "start"} apiBase={`${launch.apiUrl.replace(/\/$/, "")}/api`} webOrigin={launch.webOrigin} onReturn={back} launchState={launch.launchState} /></BrowserRouter></>;
 }

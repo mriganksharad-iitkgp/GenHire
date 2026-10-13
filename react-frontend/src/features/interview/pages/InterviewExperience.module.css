@@ -218,3 +218,7 @@
 .launchCard > .primary { width:100%; margin-top:16px; }
 .launchCard > .textButton { display:block; margin:12px auto 0; }
 @media(max-width:650px) { .reportOverlay { padding:12px; }.reportOverlay .centerCard { max-height:calc(100dvh - 24px); }.launchCard { padding:20px; } }
+
+.preparationAnswer { margin-top: 16px; padding: 16px 20px; background: #f6f4ff; border: 1px solid #e4dfff; border-radius: 12px; }
+.preparationAnswer h4 { margin: 0 0 8px; color: #5344dc; }
+.preparationAnswer p { white-space: pre-wrap; overflow-wrap: anywhere; }

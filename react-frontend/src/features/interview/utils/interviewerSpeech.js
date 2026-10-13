@@ -2,17 +2,22 @@
 export function playInterviewerSpeech({ text, data, context, onPlaying, onCaption, onAnalyser, onDone, onError }) {
   let audio, utterance, source, analyser, timer, cancelled = false, finished = false, fallback = false;
   let lastTime = -1, stalledAt = Date.now();
-  const release = () => { clearInterval(timer); source?.disconnect(); analyser?.disconnect(); onAnalyser(null); };
+  const release = () => { clearInterval(timer); source?.disconnect(); analyser?.disconnect(); onAnalyser(null);
+    if (audio) { audio.onended = null; audio.onerror = null; audio.onplaying = null; }
+  };
   const done = () => { if (cancelled || finished) return; finished = true; release(); onCaption(text); onDone(); };
   const fail = () => { if (cancelled || finished) return; finished = true; release(); onError("The question could not be played. Choose Play question to retry, or continue with the question text."); };
   const native = () => {
-    if (cancelled || fallback) { fail(); return; }
+    // A late media error/play rejection after onended must never restart the
+    // question while the candidate is already recording their answer.
+    if (cancelled || finished) return;
+    if (fallback) { fail(); return; }
     fallback = true; release(); if (audio) { audio.onended = null; audio.onerror = null; audio.pause(); }
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { fail(); return; }
     utterance = new window.SpeechSynthesisUtterance(text); utterance.lang = "en-US";
     let started = false;
-    utterance.onstart = () => { if (!cancelled) { started = true; stalledAt = Date.now(); onPlaying(); } };
-    utterance.onboundary = event => { if (!cancelled) {
+    utterance.onstart = () => { if (!cancelled && !finished) { started = true; stalledAt = Date.now(); onPlaying(); } };
+    utterance.onboundary = event => { if (!cancelled && !finished) {
       const end = text.indexOf(" ", event.charIndex + 1); onCaption(text.slice(0, end < 0 ? text.length : end));
     } };
     utterance.onend = done; utterance.onerror = fail;
@@ -23,7 +28,7 @@ export function playInterviewerSpeech({ text, data, context, onPlaying, onCaptio
     if (!data?.audio_base64) { native(); return; }
     audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
     const points = (data.timepoints || []).filter(point => Number.isFinite(point.time_seconds) && Number.isFinite(point.char_end));
-    audio.onplaying = () => { if (!cancelled) { stalledAt = Date.now(); onPlaying(); if (!points.length) onCaption(text); } };
+    audio.onplaying = () => { if (!cancelled && !finished && !fallback) { stalledAt = Date.now(); onPlaying(); if (!points.length) onCaption(text); } };
     audio.onended = done; audio.onerror = native;
     try {
       if (context?.createMediaElementSource && context.state !== "closed") {
