@@ -716,7 +716,7 @@ const Dashboard = () => {
 	return (
 		<div className={styles.dashboardContainer}>
 			<div className={styles.content}>
-				<PortalPageHeader title="Open positions" eyebrow="Your career workspace" icon="fa-briefcase" subtitle="Discover opportunities that fit your skills, save roles and take your next step." />
+				<PortalPageHeader title="Open positions" eyebrow="Your career workspace" icon="fa-briefcase" subtitle="Explore roles, check application deadlines and follow screening and optional OA stages from My Applications." />
 
 				<div className={styles.jobFilters}>
 					<div className={styles.searchBarWrapper}>

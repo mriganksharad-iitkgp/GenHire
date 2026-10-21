@@ -1,4 +1,5 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import BillingOperationsPanel from 'shared/components/billing/BillingOperationsPanel';
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
@@ -222,6 +223,7 @@ const CandidateCostStatistics = () => {
       <div className={styles.pageWrapper}>
         <div className={styles.usageDashboard}>
           <PortalPageHeader title="Cost statistics" eyebrow="Your candidate wallet" icon="fa-line-chart" subtitle="Track your practice credits, wallet balance and usage over time." />
+          <BillingOperationsPanel/>
 
           <div className={styles.overviewCards}>
             <div className={styles.overviewCard}>

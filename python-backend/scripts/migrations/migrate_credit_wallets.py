@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from bson import ObjectId
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config.env_loader import load_environment
 from pymongo import MongoClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -392,7 +395,7 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Write changes to MongoDB. Default is dry-run.")
     args = parser.parse_args()
 
-    load_dotenv(BACKEND_ROOT / ".env")
+    load_environment(require_database=True)
     uri = os.getenv("MONGODB_URI")
     database_name = os.getenv("DATABASE_NAME", "hrtech")
     if not uri:

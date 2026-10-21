@@ -61,7 +61,7 @@ export default function useJobs(toast) {
         const res = await createJob(payload, jdFile);
         setJobs((prev) => [...prev, res.job ?? res]);
         toast?.("Job created successfully!", "success");
-        return true;
+        return res.job ?? res;
       } catch (e) {
         toast?.(e.message || "Failed to create job", "error");
         return false;
@@ -74,10 +74,10 @@ export default function useJobs(toast) {
     async (jobId, jobData) => {
       try {
         const payload = normalizeJobPayload(jobData);
-        await updateJob(jobId, payload);
+        const result = await updateJob(jobId, payload);
         setJobs((prev) =>
           prev.map((j) =>
-            String(j._id) === String(jobId) ? { ...j, ...payload } : j
+            String(j._id) === String(jobId) ? { ...j, ...payload, ...result?.job } : j
           )
         );
         toast?.("Job updated successfully!", "success");

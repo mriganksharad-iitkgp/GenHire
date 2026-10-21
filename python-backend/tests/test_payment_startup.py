@@ -9,10 +9,12 @@ from pathlib import Path
 import sys
 import types
 import unittest
+import weakref
 from unittest.mock import MagicMock, patch
 
 from flask import Blueprint
 import mongomock
+from workflow_test_support import isolated_database
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
@@ -41,6 +43,10 @@ class PaymentStartupTests(unittest.TestCase):
                 token_required=lambda view: view, recruiter_required=lambda view: view),
         }))
         from payment_module.services.wallet_service import WalletService
+        from payment_module.services.plan_service import PlanService
+        # mongomock clients at the same address compare equal. A weak cache key
+        # from a previous test can disappear during this test's garbage collection.
+        self.stack.enter_context(patch.object(PlanService, '_initialized_clients', weakref.WeakKeyDictionary()))
         self.wallet_type = WalletService
         self.stack.enter_context(patch.object(WalletService, "_indexes_created", False))
 
@@ -51,6 +57,7 @@ class PaymentStartupTests(unittest.TestCase):
         db_config.connect.return_value = database
         db_config.get_collections.return_value = {"users": database["users"]}
         stubs = {
+            "services.gcs_service": module("services.gcs_service", is_gcs_configured=lambda: True),
             "config.database": module("config.database", db_config=db_config),
             "core.extensions": module("core.extensions", socketio=MagicMock()),
             "controllers.admin_controller": module("controllers.admin_controller", AdminController=MagicMock()),
@@ -77,8 +84,8 @@ class PaymentStartupTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("_payment_startup_factory", BACKEND / "core/factory.py")
         factory = importlib.util.module_from_spec(spec)
         with patch.dict(sys.modules, stubs), \
+                patch('services.gcs_service', stubs['services.gcs_service'], create=True), \
                 patch("config.env_loader.load_environment"), \
-                patch("services.gcs_service.is_gcs_configured", return_value=True), \
                 patch.object(self.wallet_type, "bootstrap_signup_bonus_for_all_users") as scan:
             spec.loader.exec_module(factory)
             app = factory.create_app()
@@ -127,7 +134,8 @@ class PaymentStartupTests(unittest.TestCase):
             self.assertEqual(stored["price_paise"], configured["price_paise"])
 
     def test_explicit_backfill_is_idempotent_and_preserves_signup_exclusions(self):
-        db = mongomock.MongoClient().db
+        # Wallet and global signup-email claims now require real transactions.
+        db = isolated_database(self)
         db.users.insert_many([
             {"_id": "candidate", "user_type": "candidate", "email": "candidate@example.test"},
             {"_id": "recruiter", "user_type": "recruiter", "email": "recruiter@example.test"},

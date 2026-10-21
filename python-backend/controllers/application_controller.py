@@ -1,3 +1,4 @@
+from config.workflow import managed, legacy_filter
 import datetime
 import threading
 from bson import ObjectId
@@ -160,6 +161,10 @@ class ApplicationController:
 
         if job.get("status", "active") != "active":
             return {"error": "This job is not accepting applications."}, 409
+        if job.get('active_hiring_version_id'):
+            from services.hiring_progression_service import scheduling_enabled
+            if not scheduling_enabled():
+                return {'error': 'Hiring applications are temporarily unavailable.', 'error_code': 'scheduling_disabled'}, 503
         deadline = job.get("deadline")
         if deadline:
             try:
@@ -307,6 +312,8 @@ class ApplicationController:
             "status": new_status,
             "status_reason": new_status_reason,
         }
+        if job.get('active_hiring_version_id'):
+            candidate_fields['hiring_enrollment_version_id'] = job['active_hiring_version_id']
 
         # Pre-shortlisted (recruiter interview invite) candidates skip CV
         # scoring entirely: the recruiter already selected them, so the score
@@ -323,10 +330,16 @@ class ApplicationController:
 
         if is_invite_skeleton:
             # Update the skeleton in place rather than insert a duplicate row.
-            conversion = self.applications_collection.update_one(
-                {"_id": existing_application["_id"], "cv_snapshot": None},
-                {"$set": candidate_fields},
-            )
+            def convert(session=None):
+                if job.get('active_hiring_version_id'): self._fence_hiring_submission(job, session)
+                return self.applications_collection.update_one(
+                    {"_id": existing_application["_id"], "cv_snapshot": None}, {"$set": candidate_fields}, session=session)
+            if job.get('active_hiring_version_id'):
+                from core.mongo_transactions import atomic
+                from models.hiring_workflow import WorkflowError
+                try: conversion = atomic(self.applications_collection.database, convert)
+                except WorkflowError as exc: return {'error': str(exc), 'error_code': exc.code}, exc.status
+            else: conversion = convert()
             if not conversion.modified_count:
                 winner = self.applications_collection.find_one({"_id": existing_application["_id"]})
                 return self._submission_replay(winner or existing_application)
@@ -352,7 +365,15 @@ class ApplicationController:
             }
 
             try:
-                result = self.applications_collection.insert_one(application_doc)
+                if job.get('active_hiring_version_id'):
+                    from core.mongo_transactions import atomic
+                    from models.hiring_workflow import WorkflowError
+                    def insert(session):
+                        self._fence_hiring_submission(job, session)
+                        return self.applications_collection.insert_one(application_doc, session=session)
+                    try: result = atomic(self.applications_collection.database, insert)
+                    except WorkflowError as exc: return {'error': str(exc), 'error_code': exc.code}, exc.status
+                else: result = self.applications_collection.insert_one(application_doc)
             except DuplicateKeyError:
                 winner = self.applications_collection.find_one({"job_id": job_id, "student_id": user_id})
                 if winner:
@@ -446,6 +467,16 @@ class ApplicationController:
             "info": "Your application is visible now. CV scoring updates automatically when ready.",
         }, 201
 
+    def _fence_hiring_submission(self, expected_job, session):
+        from services.hiring_progression_service import utc, now_utc, scheduling_enabled
+        from models.hiring_workflow import WorkflowError
+        current = self.jobs_collection.find_one({'_id': expected_job['_id']}, session=session)
+        if not scheduling_enabled(): raise WorkflowError('scheduling_disabled', 'Hiring is temporarily unavailable.', 503)
+        if not current or current.get('status') != 'active' or current.get('active_hiring_version_id') != expected_job.get('active_hiring_version_id'):
+            raise WorkflowError('hiring_version_changed', 'Hiring configuration changed; refresh this job.')
+        if now_utc() >= utc(current['deadline']): raise WorkflowError('application_window_closed', 'The application deadline has passed.')
+        self.jobs_collection.update_one({'_id': current['_id']}, {'$inc': {'application_submission_fence': 1}}, session=session)
+
     @staticmethod
     def _submission_replay(application):
         return {
@@ -464,6 +495,9 @@ class ApplicationController:
         if not application:
             return {"error": "No application found for this job"}, 404
 
+        if managed(application):
+            return {"error": "Use the workflow withdrawal action; history is retained.", "error_code": "workflow_action_required"}, 409
+
         # Check if application can be withdrawn (only pending or applied status)
         status = application.get("status", "").lower()
         if status not in ["pending", "applied"]:
@@ -472,9 +506,11 @@ class ApplicationController:
             }, 400
 
         # Delete the application
-        self.applications_collection.delete_one(
-            {"job_id": job_id, "student_id": user_id}
+        deleted = self.applications_collection.delete_one(
+            legacy_filter({"job_id": job_id, "student_id": user_id})
         )
+        if not deleted.deleted_count:
+            return {"error": "Application changed; refresh before retrying."}, 409
 
         # Update job applicant count
         self.jobs_collection.update_one(
@@ -524,6 +560,7 @@ class ApplicationController:
                 # Only use fallback for legacy data that has completed processing
                 if (
                     app.get("cv_score") is None
+                    and not (app.get('workflow_version_id') or app.get('hiring_enrollment_version_id'))
                     and app.get("processing_status") == "completed"
                     and not app.get("cv_score_waived")
                 ):
@@ -538,6 +575,9 @@ class ApplicationController:
                     app["interview_score"] = None
 
                 job = jobs_by_id.get(str(app.get("job_id")))
+                from services.hiring_progression_service import application_timing
+                app['hiring_timing'] = application_timing(self.applications_collection.database, app)
+                app['hiring_available'] = bool(job and job.get('active_hiring_version_id'))
                 if job:
                     app["job_details"] = {
                         "title": job.get("title"),
@@ -555,7 +595,9 @@ class ApplicationController:
                 gaze_proctoring_enabled = any((job.get('proctoring_config') or {}).values()) if job and isinstance(job.get('proctoring_config'), dict) else bool(job and job.get('gaze_proctoring', False))
                 
                 # Prioritize scores stored directly in the application (from interview end process)
-                if not gaze_proctoring_enabled:
+                if managed(app):
+                    pass  # Preserve finalized evidence from the candidate's own workflow version.
+                elif not gaze_proctoring_enabled:
                     app['proctoring_score'] = None
                 elif 'proctoring_score' not in app or app.get('proctoring_score') is None:
                     # Fallback to interview collection if not in application
@@ -664,6 +706,7 @@ class ApplicationController:
                 # score before the candidate has done anything.
                 if (
                     app.get("cv_score") is None
+                    and not (app.get('workflow_version_id') or app.get('hiring_enrollment_version_id'))
                     and not app.get("cv_score_waived")
                     and app.get("processing_status") != "awaiting_candidate"
                 ):
@@ -678,6 +721,9 @@ class ApplicationController:
                 )
 
                 job = jobs_by_id.get(str(app.get("job_id")))
+                from services.hiring_progression_service import application_timing
+                app['hiring_timing'] = application_timing(self.applications_collection.database, app)
+                app['hiring_available'] = bool(job and job.get('active_hiring_version_id'))
                 if job:
                     app["job_details"] = {
                         "title": job.get("title"),
@@ -696,7 +742,9 @@ class ApplicationController:
                 # Check if job has gaze proctoring enabled
                 gaze_proctoring_enabled = any((job.get('proctoring_config') or {}).values()) if job and isinstance(job.get('proctoring_config'), dict) else bool(job and job.get('gaze_proctoring', False))
                 
-                if not gaze_proctoring_enabled:
+                if managed(app):
+                    pass  # A later job edit must not hide or replace historical evidence.
+                elif not gaze_proctoring_enabled:
                     app['proctoring_score'] = None
                 elif completed_interview and completed_interview.get('proctoring_score'):
                     proctoring_score = completed_interview.get('proctoring_score')
@@ -777,11 +825,14 @@ class ApplicationController:
         if not job:
             return {"error": "Unauthorized to update this application"}, 403
 
+        if managed(application):
+            return {"error": "Use a reasoned, revisioned workflow action.", "error_code": "workflow_action_required"}, 409
+
         old_status = application.get("status", "pending")
 
         # Update application status
-        self.applications_collection.update_one(
-            {"_id": ObjectId(application_id)},
+        changed = self.applications_collection.update_one(
+            legacy_filter({"_id": ObjectId(application_id), "status": old_status}),
             {
                 "$set": {
                     "status": new_status,
@@ -790,6 +841,9 @@ class ApplicationController:
                 }
             },
         )
+
+        if not changed.matched_count:
+            return {"error": "Application changed; refresh before retrying.", "error_code": "stale_revision"}, 409
 
         # Update job statistics
         # Build proper increments for known job counters
@@ -884,6 +938,9 @@ class ApplicationController:
             app_doc["interview_score"] = None
 
         job = self.jobs_collection.find_one({"_id": ObjectId(app_doc["job_id"])})
+        from services.hiring_progression_service import application_timing
+        app_doc['hiring_timing'] = application_timing(self.applications_collection.database, app_doc)
+        app_doc['hiring_available'] = bool(job and job.get('active_hiring_version_id'))
         if job:
             attach_company_info(self.users_collection, [job])
             app_doc["job_details"] = {
@@ -1254,6 +1311,9 @@ class ApplicationController:
             else:
                 return {"error": "Unauthorized"}, 403
 
+            if managed(application):
+                return {"error": "Managed workflow scores require an audited evaluation action.", "error_code": "workflow_action_required"}, 409
+
             # Get student profile and CV details
             student = self.users_collection.find_one(
                 {"_id": ObjectId(application["student_id"])}
@@ -1315,6 +1375,7 @@ class ApplicationController:
                     "updated_at": datetime.datetime.utcnow(),
                 }
 
+                job_update = {}
                 # Only update status if it changed and wasn't manually overridden
                 if new_status != old_status and application.get("auto_processed", True):
                     update_data["status"] = new_status
@@ -1338,15 +1399,15 @@ class ApplicationController:
                     if new_status in status_counters:
                         job_update[new_status] = job_update.get(new_status, 0) + 1
 
-                    if job_update:
-                        self.jobs_collection.update_one(
-                            {"_id": ObjectId(application["job_id"])},
-                            {"$inc": job_update},
-                        )
-
-                self.applications_collection.update_one(
-                    {"_id": ObjectId(application_id)}, {"$set": update_data}
+                changed = self.applications_collection.update_one(
+                    legacy_filter({"_id": ObjectId(application_id), "status": old_status}), {"$set": update_data}
                 )
+                if not changed.matched_count:
+                    return {"error": "Application changed; refresh before retrying.", "error_code": "stale_revision"}, 409
+                if job_update:
+                    self.jobs_collection.update_one(
+                        {"_id": ObjectId(application["job_id"])}, {"$inc": job_update}
+                    )
 
                 return {
                     "message": "CV score recalculated successfully",

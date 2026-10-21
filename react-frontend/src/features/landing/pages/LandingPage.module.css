@@ -779,6 +779,9 @@
 }
 
 .workflowStep {
+  width: 100%;
+  text-align: left;
+  font: inherit;
   position: relative;
   display: flex;
   gap: 1.5rem;
@@ -816,7 +819,19 @@
 
 .stepContent {
   flex: 1;
+  min-width: 0;
 }
+
+.stepContent, .stepIcon, .stepContent strong, .stepDescription { display: block; }
+.stepContent strong { color: #1e293b; margin-bottom: .25rem; }
+.stepDescription { color: #475569; font-size: .875rem; line-height: 1.6; }
+.animationControls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 1rem; margin: -1rem 0 2rem; color: #475569; font-size: .875rem; }
+.animationControls button { border: 1px solid #c7d2fe; border-radius: 8px; padding: .65rem 1rem; background: #eef2ff; color: #3730a3; cursor: pointer; font: inherit; }
+.landingPage :is(button, a):focus-visible { outline: 3px solid #4338ca; outline-offset: 4px; }
+.landingPage section[id] { scroll-margin-top: 100px; }
+.skipLink { position: fixed; top: 8px; left: 8px; z-index: 1100; padding: .75rem 1rem; background: white; color: #3730a3; transform: translateY(-150%); }
+.skipLink:focus { transform: translateY(0); }
+.mobileDrawer[inert] { visibility: hidden; }
 
 .stepIcon {
   font-size: 1.5rem;
@@ -1546,14 +1561,14 @@
   font-size: 0.9rem;
   font-weight: 700;
   color: #6366f1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .creditCostFree {
   font-size: 0.9rem;
   font-weight: 700;
   color: #16a34a;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .creditNote {
@@ -1574,5 +1589,22 @@
 @media (max-width: 480px) {
   .statsGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+.heroCta { flex-wrap: wrap; }
+.workflowStep { transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
+@media (max-width: 640px) {
+  .heroCta { flex-wrap: wrap; }
+  .workflowStep { padding: 1rem; gap: 1rem; }
+  .creditRow { align-items: flex-start; }
+  .creditCost, .creditCostFree { max-width: 52%; text-align: right; }
+  .heroTitle { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landingPage *, .landingPage *::before, .landingPage *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }

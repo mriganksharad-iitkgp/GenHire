@@ -8,7 +8,8 @@ For detailed Redis setup and the owner action checklist, start with
 
 The [environment cleanup report](environment-cleanup.md) explains the current
 grouping, removed settings, blank-value requirements and private removal record.
-All four backend files have **180 settings in the same order**. The two Google
+All four backend files have **238 settings in the same order**, including the OA
+block and previously missing interview controls. The two Google
 ADC overrides retain local values but stay empty in the production files, as documented
 below. All four frontend files have the same **8 public settings in the same order**.
 DeepSeek, Groq and Gemini keys are grouped with the other external API secrets;
@@ -80,10 +81,44 @@ actionable error before database initialization.
 
 Backend platform/shell variables take precedence over dotenv values. Production
 loads `.env.production` when `FLASK_ENV=production`; `ENV_FILE`/`DOTENV_PATH` can
-select a specific file. Cloud Run uses injected runtime settings because the
+select a specific file exclusively (a missing explicit path stops startup).
+Production and explicit profiles never fall back to local `.env`; all seven OA
+workers and active billing/interview/AI configuration use this shared selection.
+Database workers, audits, admin creation and maintenance migrations require both
+an explicit MongoDB URI and database name. API connection setup also refuses an
+unset URI rather than accepting PyMongo's implicit localhost default.
+Cloud Run uses injected runtime settings because the
 private dotenv files are excluded from the image. Frontend development reads
 `.env`; production builds additionally use `.env.production` and platform build
 variables. Avoid leaving production variables exported in a local shell.
+
+The eight public frontend settings are build-allowlisted. Unknown
+`REACT_APP_*`/`VITE_*` values fail the web build without printing their values;
+automatic Vite-prefixed exposure is disabled in both web and kiosk builds.
+Do not rename a server credential to a frontend prefix.
+
+## Owner annotations and safe defaults
+
+All eight files now distinguish `# OWNER ACTION:`, `# SAFE DEFAULT:`,
+`# SETUP NOTE:` (existing value retained), and `# OPTIONAL / ADC:`. Only
+account-specific fields without safe defaults remain empty; optional fields may
+deliberately stay empty. The provisional recruitment attempt price is 30 wallet
+credits, editable before activating/publishing paid OA. All rollout and acceptance
+flags remain false. No credentials or working configuration were copied between
+private profiles or into examples.
+
+The reusable preparation command defaults to a read-only plan with key names,
+never values; `--apply` adds missing settings/comments and fills empty safe
+defaults while refusing to alter existing nonempty values:
+
+```powershell
+python scripts/prepare_oa_environment.py
+python scripts/prepare_oa_environment.py --apply
+```
+
+Use the [owner setup guide](oa_owner_setup_guide.md) for where to obtain every
+Sphere/GCP/AI/storage/email value. Editing a production file does not update
+Cloud Run or Vercel; inject the reviewed settings/secrets in each deployment.
 
 ## Validate before importing
 

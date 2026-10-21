@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('init-from-deeplink', callback);
     },
     rendererReady: () => ipcRenderer.invoke('renderer-ready'),
+    getAssessmentRuntime: () => ipcRenderer.invoke('assessment-runtime'),
     
     // Backend speech APIs: Google Standard TTS and Groq STT
     synthesizeSpeech: (text) => ipcRenderer.invoke('synthesize-speech', text),

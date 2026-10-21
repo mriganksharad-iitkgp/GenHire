@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import styles from "features/candidate/pages/Profile.module.css";
 import { Link } from "react-router-dom";
 import Pagination from "shared/components/ui/Pagination";
+import HiringProgressNotice from './HiringProgressNotice';
+import { canStartManagedScreening } from 'shared/utils/hiringTiming';
 
 const DATE_RANGE_OPTIONS = [
   { value: "", label: "All Time" },
@@ -23,6 +25,7 @@ const JOB_TYPE_OPTIONS = [
 const DATE_CUTOFF_DAYS = { week: 7, month: 30, quarter: 90, halfyear: 180 };
 
 function nextStep(app) {
+  if (app.workflow_version_id) return app.workflow_label || 'Follow your hiring timeline for the next step.';
   if (app.interviewAttemptLocked) return "Your interview attempt ended under the monitoring policy. Another attempt for this application is unavailable. The recruiter can review the retained evidence.";
   if (app.processingStatus === "awaiting_candidate") return "Complete your profile and upload a CV to prepare this application for screening.";
   if (app.scoringError) return "Your application is saved, but the CV assessment could not be completed. Check again later or contact the recruiter.";
@@ -57,6 +60,11 @@ export default function ApplicationsList({
   onGiveInterview,
 }) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const itemsPerPage = 8;
 
   const filtered = applications.filter((app) => {
@@ -384,7 +392,7 @@ export default function ApplicationsList({
                       <i className="fa fa-info-circle" /> Details
                     </Link>
 
-                    {availableButtons.includes("giveInterview") && (
+                    {availableButtons.includes("giveInterview") && canStartManagedScreening(app, now) && (
                       <button
                         className={styles.interviewButton}
                         onClick={() => onGiveInterview && onGiveInterview(app)}
@@ -404,6 +412,7 @@ export default function ApplicationsList({
                       </button>
                     )}
                   </div>
+                  <HiringProgressNotice applicationId={app.id} enabled={!!(app.workflow_version_id || app.hiring_enrollment_version_id)} />
                 </div>
               </div>
             );

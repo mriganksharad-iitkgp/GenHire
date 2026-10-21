@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+# Keep BSON class identity stable across scoped sys.modules route stubs.
+from bson import ObjectId
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
@@ -157,9 +159,21 @@ class InterviewRouteTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/interviews/session/activate", json={}).status_code, 200)
         self.real.update_one.assert_not_called()
 
+    def test_managed_screening_cutoff_blocks_activation_question_and_answer(self):
+        from services.hiring_progression_service import now_utc
+        doc = dict(_id='doc', session_id='session', user_id='candidate-one', status='active',
+            screening_finish_by=now_utc()-datetime.timedelta(seconds=1))
+        self.real.find_one.return_value = doc
+        with patch.dict('os.environ', {'GENHIRE_WORKFLOW_ENABLED': 'true', 'GENHIRE_SCHEDULING_ENABLED': 'true'}):
+            for method, endpoint, data in [('post', 'activate', {}), ('get', 'question', None), ('post', 'answer', {'question': 'q', 'answer': 'a'})]:
+                response = getattr(self.client, method)('/api/interviews/session/'+endpoint, **({'json': data} if data is not None else {}))
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json['error_code'], 'screening_window_closed')
+        self.manager.submit_answer.assert_not_called()
+        self.manager.activate_session.assert_not_called()
+
     def test_terminated_attempt_cannot_activate_answer_or_start_again(self):
         import mongomock
-        from bson import ObjectId
         database = mongomock.MongoClient().test
         app_id = database.applications.insert_one({"student_id": "candidate-one", "status": "shortlisted"}).inserted_id
         database.interviews.insert_one({"session_id": "session", "user_id": "candidate-one",

@@ -16,6 +16,8 @@ const JobDetails = () => {
 	const navigate = useNavigate();
 	const [job, setJob] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [loadError, setLoadError] = useState("");
+	const [reloadVersion, setReloadVersion] = useState(0);
 	const [, setIsApplying] = useState(false); // write-only: apply flow tracks its own spinner
 	const [showCVModal, setShowCVModal] = useState(false);
 	const [showScoreCheckCVModal, setShowScoreCheckCVModal] = useState(false);
@@ -125,6 +127,7 @@ const JobDetails = () => {
 				return;
 			}
 			setIsLoading(true);
+			setLoadError("");
 			try {
 				const res = await authedFetch(`${API_BASE}/jobs/${jobId}`, {
 					headers: {
@@ -191,30 +194,14 @@ const JobDetails = () => {
 					// ignore app check errors
 				}
 			} catch (e) {
-				// Fallback to a minimal placeholder if fetch fails
-				setJob({
-					id: jobId,
-					title: "Job Position",
-					company: "",
-					logo: "../android-chrome-192x192.png",
-					location: "Remote",
-					type: "Full-time",
-					experience: "Not specified",
-					postedDate: new Date().toISOString(),
-					skills: ["Skill 1", "Skill 2", "Skill 3"],
-					salary: "Competitive",
-					description:
-						"This is a placeholder for a job that will be implemented later.",
-					responsibilities: ["Responsibility 1", "Responsibility 2", "Responsibility 3"],
-					requirements: ["Requirement 1", "Requirement 2", "Requirement 3"],
-					benefits: ["Benefit 1", "Benefit 2", "Benefit 3"],
-				});
+                setJob(null);
+                setLoadError("We couldn't load this job. It may be unavailable, or the connection was interrupted.");
 			} finally {
 				setIsLoading(false);
 			}
 		};
 		init();
-	}, [jobId, navigate]);
+	}, [jobId, navigate, reloadVersion]);
 
 	const handleToggleSave = async () => {
 		const result = await toggleSave(jobId, job);
@@ -234,7 +221,7 @@ const JobDetails = () => {
 	const handleDownloadPDF = async () => {
 		if (!job) return;
 
-		if (job.jd_pdf_path || job.jd_gcs_path) {
+		if (job.has_jd_document || job.jd_pdf_path || job.jd_gcs_path) {
 			setIsDownloadingJd(true);
 			try {
 				const result = await getJdDownloadUrl(jobId);
@@ -458,6 +445,8 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 		}
 	};
 
+  if (loadError) return <div className={styles.jobDetailsContainer}><section className={styles.content} role="alert"><h1>Job details unavailable</h1><p>{loadError}</p><button type="button" className={styles.applyButton} onClick={()=>setReloadVersion(value=>value+1)}>Retry job details</button><Link to="/dashboard">Back to open positions</Link></section></div>;
+
 	if (isLoading) {
 		return (
 			<div className={styles.loadingContainer}>
@@ -520,7 +509,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									className={styles.saveButton}
 									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
-									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
+									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.has_jd_document || job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
 								</button>
 							</>
 						) : (
@@ -553,7 +542,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 									className={styles.saveButton}
 									onClick={handleDownloadPDF} disabled={isDownloadingJd}
 								>
-									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
+									<i className="fa fa-file-pdf-o"></i> {isDownloadingJd ? "Preparing…" : (job?.has_jd_document || job?.jd_pdf_path || job?.jd_gcs_path) ? `Download JD (${(job?.jd_original_filename || "PDF").split(".").pop().toUpperCase()})` : "Download JD (summary)"}
 								</button>
 								{savedJobsAvailable && (
 									<button
@@ -573,6 +562,7 @@ ${job.benefits.map((benefit) => `- ${benefit}`).join("\n")}
 				</div>
 
 				<div className={styles.jobBody}>
+          <section aria-label="Hiring process"><h2>What happens after you apply?</h2><p>Follow My Applications for screening updates, any online assessment invitation and company-led next rounds. An OA may include coding, SQL or MCQs; the recruiter decides the stages and deadlines for this role.</p></section>
 					{/* Key Information Grid */}
 					<div className={styles.keyInfoGrid}>
 						<div className={styles.infoCard}>

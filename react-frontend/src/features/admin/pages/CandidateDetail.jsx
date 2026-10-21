@@ -6,6 +6,7 @@ import IdentityCardPanel from "features/admin/components/IdentityCardPanel";
 import InterviewReportModal from "features/interview/components/InterviewReportModal";
 import CVDetailsModal from "features/candidate/components/CVDetailsModal";
 import PracticeDetailsModal from "features/interview/components/PracticeDetailsModal";
+import PracticeAssessmentOperations from 'features/admin/components/PracticeAssessmentOperations';
 import PracticeHistoryList from "shared/components/lists/PracticeHistoryList";
 import ApplicationHistoryList from "shared/components/lists/ApplicationHistoryList";
 import JDDetailsModal from "features/recruiter/components/JDDetailsModal";
@@ -1089,6 +1090,7 @@ const CandidateDetail = () => {
         </div>
 
         {/* Practice History - Using same design as candidate portal */}
+        <PracticeAssessmentOperations key={candidateId} candidateId={candidateId}/>
         <div className={styles.infoCard}>
           <div className={styles.infoCardBody}>
             <PracticeHistoryList

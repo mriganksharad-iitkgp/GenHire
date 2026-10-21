@@ -1,7 +1,7 @@
 {
     "name": "GenHire - AI Recruitment Platform",
     "short_name": "GenHire",
-    "description": "AI hiring platform for automated interviews, CV screening, candidate shortlisting, and recruiter analytics.",
+    "description": "AI screening, role-based online assessments with coding, SQL and MCQs, and flexible company rounds.",
     "start_url": "/",
     "scope": "/",
     "icons": [

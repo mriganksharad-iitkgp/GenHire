@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import usePricingCatalog from 'shared/hooks/usePricingCatalog';
 import styles from "./InviteCandidatesModal.module.css";
 import {
   previewInvites,
@@ -28,6 +29,8 @@ const formatInviteDate = (iso) => {
 };
 
 const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
+  const {catalog:pricing,error:pricingError,reload:reloadPricing}=usePricingCatalog(isOpen);
+  const inviteCost=pricing?.credits?.candidate_invite;
   const [inviteType, setInviteType] = useState("apply");
   const [validityDays, setValidityDays] = useState(DEFAULT_VALIDITY_DAYS);
   const [tab, setTab] = useState(TABS.FILE);
@@ -126,6 +129,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
   // then poll it for live progress. Refreshes the invited-candidates list
   // once the batch completes.
   const startBatch = async (emails, source) => {
+    if(!Number.isInteger(inviteCost)){setError('Load the current invite price before sending. Close and reopen to retry.');return;}
     setError("");
     setIsSending(true);
     const jobId = job._id || job.id;
@@ -209,6 +213,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
 
         <div className={styles.body}>
           {error && <div className={styles.errorBanner}>{error}</div>}
+          {pricingError && <div role="alert">Current invite pricing is unavailable. <button type="button" onClick={reloadPricing}>Retry invite price</button></div>}
           {result && (
             <div className={styles.successBanner}>
               {result.status === "completed"
@@ -220,7 +225,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                 <>
                   &nbsp;{result.credits_charged} credit{result.credits_charged === 1 ? "" : "s"} charged
                   {(result.totals?.skipped || 0) + (result.totals?.failed || 0) > 0 &&
-                    ` (${((result.totals?.skipped || 0) + (result.totals?.failed || 0)) * (result.credits_per_candidate || 1)} refunded for undelivered emails)`}
+                    ` (${((result.totals?.skipped || 0) + (result.totals?.failed || 0)) * result.credits_per_candidate} refunded for undelivered emails)`}
                   .
                 </>
               )}
@@ -368,7 +373,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                                   className={styles.reinviteBtn}
                                   disabled={isSending}
                                   onClick={() => handleReinvite(row.email)}
-                                  title="Sends a fresh invite email with new credentials, a new magic link, and a new validity window. Costs 1 credit (refunded if the email fails)."
+                                  title={`Sends a fresh invite email with new credentials and validity. Current cost: ${inviteCost ?? 'unavailable'} credits; failed-email credits follow the refund policy.`}
                                 >
                                   {reinviting === row.email ? "Re-inviting…" : "Re-invite"}
                                 </button>
@@ -380,7 +385,7 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                     </div>
                     <div className={styles.helperText}>
                       Re-inviting an already-invited candidate refreshes their credentials,
-                      magic link, and validity window — it costs 1 credit like any invite.
+                      magic link, and validity window — current cost: {inviteCost ?? 'load current price'} credits per invite.
                     </div>
                   </>
                 )}
@@ -533,12 +538,12 @@ const InviteCandidatesModal = ({ isOpen, onClose, job }) => {
                 <button
                   className={styles.primary}
                   onClick={handleSend}
-                  disabled={isSending || preview.valid.length === 0}
-                  title="1 credit is deducted per invited candidate; credits for failed emails are refunded automatically."
+                  disabled={isSending || preview.valid.length === 0 || !Number.isInteger(inviteCost)}
+                  title="The current server price applies per invited candidate; failed-email credits follow the refund policy."
                 >
                   {isSending
                     ? "Sending..."
-                    : `Send ${preview.valid.length} invite${preview.valid.length === 1 ? "" : "s"} (${preview.valid.length} credit${preview.valid.length === 1 ? "" : "s"})`}
+                    : `Send ${preview.valid.length} invite${preview.valid.length === 1 ? "" : "s"} (${Number.isInteger(inviteCost) ? preview.valid.length*inviteCost : 'Load price'} credits)`}
                 </button>
               )}
             </>

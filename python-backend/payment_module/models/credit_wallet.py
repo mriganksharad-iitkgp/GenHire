@@ -10,6 +10,7 @@ class CreditWallet:
     owner_id: str
     audience: str
     balance: int = 0
+    reserved_credits: int = 0
     total_credited: int = 0
     total_debited: int = 0
     signup_bonus_granted: bool = False
@@ -22,6 +23,7 @@ class CreditWallet:
             "owner_id": self.owner_id,
             "audience": self.audience,
             "balance": int(self.balance or 0),
+            "reserved_credits": int(self.reserved_credits or 0),
             "total_credited": int(self.total_credited or 0),
             "total_debited": int(self.total_debited or 0),
             "signup_bonus_granted": bool(self.signup_bonus_granted),
@@ -38,6 +40,7 @@ class CreditWallet:
             owner_id=str(payload.get("owner_id") or ""),
             audience=str(payload.get("audience") or "recruiter"),
             balance=int(payload.get("balance", 0) or 0),
+            reserved_credits=int(payload.get("reserved_credits", 0) or 0),
             total_credited=int(payload.get("total_credited", 0) or 0),
             total_debited=int(payload.get("total_debited", 0) or 0),
             signup_bonus_granted=bool(payload.get("signup_bonus_granted", False)),

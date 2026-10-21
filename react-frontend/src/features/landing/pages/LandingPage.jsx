@@ -1,13 +1,41 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "./LandingPage.module.css";
+import usePricingCatalog from 'shared/hooks/usePricingCatalog';
 
 const LandingPage = () => {
+  const {catalog:pricing,error:pricingError,reload:reloadPricing}=usePricingCatalog();
+  const credits=key=>pricing?.credits?.[key] ?? 'See current price';
+  const packAmount=key=>pricing?.packs?.[key] ? (pricing.packs[key].price_paise/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : 'See wallet';
+  const packCredits=key=>pricing?.packs?.[key]?.credits_allocated?.toLocaleString() ?? 'See wallet for';
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [workflowTab, setWorkflowTab] = useState("candidate"); // "candidate" or "recruiter"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [animationPaused, setAnimationPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [pageVisible, setPageVisible] = useState(true);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)') ?? {matches:true};
+    const updateMotion = () => setReducedMotion(media.matches);
+    const updateVisibility = () => setPageVisible(!document.hidden);
+    updateMotion(); updateVisibility();
+    media.addEventListener?.('change', updateMotion);
+    document.addEventListener('visibilitychange', updateVisibility);
+    return () => {
+      media.removeEventListener?.('change', updateMotion);
+      document.removeEventListener('visibilitychange', updateVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const close = event => { if (event.key === 'Escape') { setMobileMenuOpen(false); document.getElementById('landing-menu-toggle')?.focus(); } };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -18,151 +46,86 @@ const LandingPage = () => {
   }, []);
 
   useEffect(() => {
-    document.title = "GenHire | AI Hiring, Interviews, CV Screening & Shortlisting";
+    document.title = "GenHire | AI Screening & Online Assessments";
 
     const description = document.querySelector('meta[name="description"]');
     if (description) {
       description.setAttribute(
         "content",
-        "GenHire is an AI recruitment platform for automated hiring, AI interviews, candidate evaluation, CV screening, CV shortlisting, proctoring, and recruiter analytics."
+        "GenHire connects CV screening, AI interviews and role-based online assessments with coding, SQL and MCQs. Recruiters control each next round; candidates can prepare with interviews and mock OAs."
       );
     }
   }, []);
 
   // Auto-rotate workflow steps within the selected tab
   useEffect(() => {
+    if (animationPaused || reducedMotion || !pageVisible) return;
     const interval = setInterval(() => {
       setActiveStep((prev) => (prev + 1) % 4);
-    }, 4000);
+    }, 2000);
     return () => clearInterval(interval);
-  }, [workflowTab]);
+  }, [workflowTab, animationPaused, reducedMotion, pageVisible]);
 
   const features = [
-    {
-      icon: "🤖",
-      title: "AI Interview Automation",
-      description: "Run structured AI interviews with real-time candidate evaluation, scoring, transcripts, and hiring recommendations.",
-      gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-    },
-    {
-      icon: "📄",
-      title: "AI CV Screening & Shortlisting",
-      description: "Screen resumes, match CVs against job descriptions, shortlist qualified candidates, and identify skill gaps faster.",
-      gradient: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
-    },
-    {
-      icon: "👁️",
-      title: "Proctoring & Monitoring",
-      description: "Ensure interview integrity with AI-powered gaze tracking and behavior analysis.",
-      gradient: "linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)"
-    },
-    {
-      icon: "📊",
-      title: "Recruitment Analytics",
-      description: "Track interview performance, CV fit, proctoring signals, recruiter spend, and candidate readiness with actionable reports.",
-      gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
-    },
-    {
-      icon: "🎯",
-      title: "Practice Mode",
-      description: "Candidates can practice unlimited interviews to improve their skills before the real assessment.",
-      gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
-    },
-    {
-      icon: "🔒",
-      title: "Secure & Reliable",
-      description: "Secure hiring workflows with protected data, controlled access, and reliable interview assessment infrastructure.",
-      gradient: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)"
-    }
+    { icon: "🎙", title: "AI screening interviews", description: "Review CV fit, structured interview answers and proctoring signals before deciding who moves forward.", gradient: "linear-gradient(135deg, #667eea, #764ba2)" },
+    { icon: "💻", title: "Role-based online assessments", description: "Build OAs with coding, SQL and single- or multiple-answer MCQs. Mix question types to match the role.", gradient: "linear-gradient(135deg, #11998e, #38ef7d)" },
+    { icon: "✍", title: "AI, manual or hybrid questions", description: "Start with a role preset, describe what AI should generate, or add your own questions, testcases and marks.", gradient: "linear-gradient(135deg, #4facfe, #00b4d8)" },
+    { icon: "🧭", title: "Your hiring process, your rules", description: "Set screening thresholds and application deadlines. Invite qualified candidates automatically or review them before choosing an OA or company round.", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)" },
+    { icon: "🛡", title: "Secure assessment sessions", description: "Use Secure Browser for OAs, with timed sections, saved answers and configured integrity controls. Review signals alongside performance.", gradient: "linear-gradient(135deg, #f97316, #ec4899)" },
+    { icon: "🎯", title: "Practice with useful feedback", description: "Prepare for AI interviews and, where available, role-based mock OAs. Review scores and feedback to decide what to work on next.", gradient: "linear-gradient(135deg, #fa709a, #d946ef)" }
   ];
 
   const candidateSteps = [
-    { step: 1, title: "Create Profile", description: "Sign up and build your professional profile with CV upload", icon: "👤" },
-    { step: 2, title: "Browse Jobs", description: "Explore opportunities matching your skills and preferences", icon: "🔍" },
-    { step: 3, title: "Apply & Interview", description: "Submit applications and take AI-powered mock interviews", icon: "🎤" },
-    { step: 4, title: "Get Hired", description: "Receive feedback, improve, and land your dream job", icon: "🎉" }
+    { step: 1, title: "Find a role & apply", description: "Build your profile, upload your CV and apply before the job deadline.", icon: "🔎" },
+    { step: 2, title: "Complete AI screening", description: "Take your screening interview within its window and track your application status.", icon: "🎙" },
+    { step: 3, title: "Take an OA if invited", description: "Complete the role's coding, SQL or MCQ sections in Secure Browser before the assessment closes.", icon: "💻" },
+    { step: 4, title: "Hear about company rounds", description: "The recruiter reviews results and decides the next technical, HR or other company-led round.", icon: "🤝" }
   ];
 
   const recruiterSteps = [
-    { step: 1, title: "Post Jobs", description: "Create detailed job postings with custom requirements", icon: "📝" },
-    { step: 2, title: "Auto-Screen", description: "AI automatically scores and ranks candidates by fit", icon: "🤖" },
-    { step: 3, title: "Review Results", description: "Access detailed interview reports and analytics", icon: "📊" },
-    { step: 4, title: "Hire Talent", description: "Make data-driven hiring decisions confidently", icon: "✅" }
+    { step: 1, title: "Design the role & timeline", description: "Create the JD, choose an optional OA and set questions, marks, timing and application deadlines.", icon: "📝" },
+    { step: 2, title: "Screen with clear thresholds", description: "Review CV fit, interview scores and integrity signals using your screening criteria.", icon: "🎙" },
+    { step: 3, title: "Assess the right skills", description: "Automatically invite screening-cleared candidates or review them first. Use coding, SQL and MCQs as needed.", icon: "💻" },
+    { step: 4, title: "Review & arrange next rounds", description: "Review scores, release results, export shortlisted contacts or send approved company-round messages.", icon: "📊" }
   ];
 
   const stats = [
-    { value: "10K+", label: "Interviews Conducted" },
-    { value: "500+", label: "Companies Trust Us" },
-    { value: "95%", label: "Satisfaction Rate" },
-    { value: "50%", label: "Time Saved" }
+    { value: "Screen", label: "CV fit + AI interviews" },
+    { value: "Assess", label: "Coding, SQL + MCQs" },
+    { value: "Decide", label: "Recruiter-controlled next rounds" },
+    { value: "Prepare", label: "Interview + OA practice" }
   ];
 
-  const testimonials = [
-    {
-      quote: "GenHire transformed our hiring process. We reduced time-to-hire by 60% while improving candidate quality.",
-      author: "Sarah Johnson",
-      role: "HR Director, TechCorp",
-      avatar: "S"
-    },
-    {
-      quote: "The AI interview practice helped me prepare better than any other platform. I landed my dream job!",
-      author: "Rahul Sharma",
-      role: "Software Engineer",
-      avatar: "R"
-    },
-    {
-      quote: "Detailed analytics and proctoring features give us confidence in our remote hiring decisions.",
-      author: "Michael Chen",
-      role: "Talent Acquisition Lead",
-      avatar: "M"
-    }
+  const roleExamples = [
+    { title: "Software engineering", description: "Combine coding problems with difficulty, language and testcase choices, plus knowledge MCQs." },
+    { title: "Data & analytics", description: "Assess SQL query skills and analytical knowledge with weighted datasets and MCQs." },
+    { title: "Product & DevOps", description: "Start with a role preset and tailor knowledge questions and relevant technical tasks to the position." }
   ];
 
   const seoServices = [
-    {
-      title: "AI Recruitment Platform",
-      description:
-        "GenHire brings job posting, candidate screening, AI interviews, interview evaluation, and recruiter analytics into one hiring automation workflow."
-    },
-    {
-      title: "Automated Candidate Screening",
-      description:
-        "Recruiters can reduce manual screening by using AI to compare candidate profiles, CV data, job requirements, skills, and interview performance."
-    },
-    {
-      title: "AI Resume Screening Software",
-      description:
-        "Upload CVs and resumes, score job-description match, identify skill gaps, and shortlist candidates for the next hiring round with clearer evidence."
-    },
-    {
-      title: "AI Interview Evaluation",
-      description:
-        "Run structured AI interviews, capture transcripts, evaluate answers, track proctoring signals, and generate hiring reports for faster decisions."
-    },
-    {
-      title: "CV Shortlisting for Recruiters",
-      description:
-        "GenHire helps hiring teams shortlist applicants by role fit, assessment score, CV score, and interview readiness instead of only keyword matching."
-    },
-    {
-      title: "Talent Acquisition Automation",
-      description:
-        "Use GenHire for AI hiring, recruitment automation, interview analytics, candidate assessment, resume screening, and remote interview monitoring."
-    }
+    { title: "One role setup", description: "Plan screening and an optional OA while creating the role. Choose total or section timing and publish reviewed content." },
+    { title: "A workspace for coding", description: "Candidates edit code, run sample or custom input and submit against hidden tests. Weighted passing tests determine coding marks." },
+    { title: "SQL & MCQ assessment", description: "Use public sample and hidden SQL datasets, single-answer MCQs or multiple-answer MCQs with configurable marks." },
+    { title: "Clear application stages", description: "Distinguish screening cleared, OA invited, assessment outcomes and company rounds. Clearing screening does not guarantee another invitation." },
+    { title: "Company-led next rounds", description: "Your team chooses what follows the OA. Track decisions, export contacts and prepare approved messages for the shortlist." },
+    { title: "Practice before the real thing", description: "Candidates can use separate interview and mock OA practice. Availability and the exact credit quote are shown before purchase." }
   ];
 
   const creditUsage = {
     candidate: [
-      { action: "Practice Interview", cost: "30 credits" },
-      { action: "Practice Interview + Proctoring", cost: "50 credits" },
-      { action: "Signup Welcome Bonus", cost: "+100 free", highlight: true },
+      { action: "Practice Interview", cost: `${credits('practice_interview')} credits` },
+      { action: "Practice Interview + Proctoring", cost: `${credits('practice_interview_proctored')} credits` },
+      { action: "Role-based mock OA (when available)", cost: `${credits('mock_oa')} credits base` },
+      { action: "Signup Welcome Bonus", cost: `${credits('signup_bonus')} free`, highlight: true },
     ],
     recruiter: [
-      { action: "Real Candidate Interview", cost: "30 credits" },
-      { action: "Interview + Proctoring", cost: "50 credits" },
-      { action: "AI Job Description Generation", cost: "10 credits" },
-      { action: "Candidate Invite (per email)", cost: "1 credit" },
-      { action: "Signup Welcome Bonus", cost: "+100 free", highlight: true },
+      { action: "Real Candidate Interview", cost: `${credits('screening')} credits` },
+      { action: "Interview + Proctoring", cost: `${credits('screening_proctored')} credits` },
+      { action: "AI JD + selected OA questions", cost: `${credits('ai_jd')} credits` },
+      { action: "Candidate Invite (per email)", cost: `${credits('candidate_invite')} credits` },
+      { action: "OA setup (when available)", cost: `${credits('oa_setup')} credits` },
+      { action: "Accepted recruitment OA attempt", cost: `${credits('oa_attempt')} credits base` },
+      { action: "Signup Welcome Bonus", cost: `${credits('signup_bonus')} free`, highlight: true },
     ],
   };
 
@@ -170,7 +133,7 @@ const LandingPage = () => {
     {
       question: "What is GenHire?",
       answer:
-        "GenHire is an AI hiring and recruitment automation platform for AI interviews, CV screening, candidate evaluation, resume shortlisting, and recruiter analytics."
+        "GenHire connects CV screening, AI interviews, role-based online assessments and recruiter-led next rounds. Candidates can also prepare with interview and mock OA practice."
     },
     {
       question: "Does GenHire support AI CV screening?",
@@ -183,24 +146,37 @@ const LandingPage = () => {
         "Yes. GenHire supports AI-powered interviews with answer evaluation, reports, transcripts, proctoring signals, and analytics for hiring decisions."
     },
     {
+      question: "What can an online assessment include?",
+      answer: "Recruiters can combine coding, SQL and single- or multiple-answer MCQs, use AI-generated or manual questions, and set marks and assessment timing. Coding supports sample/custom input runs and hidden-test grading; SQL runs use sample datasets and submissions are checked against the authored datasets."
+    },
+    {
+      question: "Does everyone who clears screening take an OA?",
+      answer: "No. The recruiter can enable automatic invitations, review screening-cleared candidates first, or choose a different next round. Follow the status and deadlines on your application; the company arranges its own later interviews."
+    },
+    {
+      question: "Can candidates practice an OA?",
+      answer: "Role-based mock OAs are available when practice assessments are enabled. Review the quoted credit cost before confirming, complete the timed assessment in Secure Browser, then review your score and feedback. Practice is separate from real job applications."
+    },
+    {
       question: "How do wallet credits work?",
       answer:
-        "Credits are a fixed-cost currency — no subscriptions, no surprises. Candidates spend 30 credits per practice interview (50 with proctoring). Recruiters spend 30 credits per real interview (50 with proctoring), 10 credits for AI job description generation, and 1 credit per candidate invited by email (auto-refunded if the email fails to send). Credits never expire and are only deducted when a session completes successfully."
+        "Current server prices are shown below. OA purchases show an exact quote before approval. Reservations, capture and technical-failure returns follow the disclosed operation policy; mock OA generation captures when validated content is ready. New attempts are separate purchases. Wallet history records charges and returned funds."
     },
     {
       question: "What is interview proctoring?",
       answer:
-        "Proctoring uses AI-powered gaze tracking and behaviour analysis to monitor candidates during the session. It detects off-screen looks and suspicious gaze patterns, then generates a risk score and plain-English summary so recruiters can assess interview integrity without guesswork."
+        "Proctoring uses AI-powered gaze tracking and behaviour analysis to monitor candidates during the session. Integrity signals help recruiters review a session; they are not proof of misconduct and should be considered alongside the candidate's performance."
     },
     {
       question: "Can I try GenHire before paying?",
       answer:
-        "Yes. Every new account — both candidate and recruiter — receives 100 free credits on signup with no payment required. That covers 3 full practice interviews before you decide to top up."
+        `New accounts receive the configured signup bonus: ${credits('signup_bonus')} credits. Current activity prices determine how far that balance goes.`
     }
   ];
 
   return (
     <div className={styles.landingPage}>
+      <a className={styles.skipLink} href="#main-content">Skip to content</a>
       {/* Navigation */}
       <nav className={`${styles.navbar} ${isScrolled ? styles.scrolled : ""}`}>
         <div className={styles.navContainer}>
@@ -221,7 +197,7 @@ const LandingPage = () => {
             <a href="#how-it-works">How It Works</a>
             <a href="#pricing">Pricing</a>
             <a href="#credits">Credits</a>
-            <a href="#testimonials">Testimonials</a>
+            <a href="#roles">Roles</a>
           </div>
 
           <div className={styles.navActions}>
@@ -242,7 +218,10 @@ const LandingPage = () => {
           <button 
             className={styles.mobileMenuBtn}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
+            id="landing-menu-toggle"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="landing-mobile-menu"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               {mobileMenuOpen ? (
@@ -255,12 +234,13 @@ const LandingPage = () => {
         </div>
 
         {/* Mobile Nav Drawer */}
-        <div className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
+        <div id="landing-mobile-menu" inert={!mobileMenuOpen} aria-hidden={!mobileMenuOpen} className={`${styles.mobileDrawer} ${mobileMenuOpen ? styles.drawerOpen : ''}`}>
           <div className={styles.mobileNavLinks}>
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)}>How It Works</a>
             <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
-            <a href="#testimonials" onClick={() => setMobileMenuOpen(false)}>Testimonials</a>
+            <a href="#roles" onClick={() => setMobileMenuOpen(false)}>Roles</a>
+            <a href="#credits" onClick={() => setMobileMenuOpen(false)}>Credits</a>
           </div>
           <div className={styles.mobileNavActions}>
             <button
@@ -283,6 +263,7 @@ const LandingPage = () => {
         )}
       </nav>
 
+      <main id="main-content" tabIndex={-1}>
       {/* Hero Section */}
       <section className={styles.hero}>
         <div className={styles.heroBackground}>
@@ -297,21 +278,20 @@ const LandingPage = () => {
               GenHire AI Recruitment Platform
             </div>
             <h1 className={styles.heroTitle}>
-              AI Hiring That Screens, Interviews, <br />
-              <span className={styles.gradientText}>and Shortlists Talent</span>
+              Screen with AI. Assess skills. <br />
+              <span className={styles.gradientText}>Choose what comes next.</span>
             </h1>
             <p className={styles.heroSubtitle}>
-              GenHire helps teams automate recruitment with AI interviews, AI
-              candidate evaluation, CV screening, resume shortlisting, secure
-              proctoring, and recruiter analytics. Save time, reduce manual
-              screening, and hire better talent.
+              Bring CV screening, AI interviews and role-based online assessments
+              into one hiring journey. Test coding, SQL and MCQ skills, review the
+              evidence, and choose the next round for your team.
             </p>
             <div className={styles.heroCta}>
               <button
                 className={styles.primaryBtn}
                 onClick={() => navigate("/register")}
               >
-                <span>Start Free Trial</span>
+                <span>Join as a candidate</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M5 12h14M12 5l7 7-7 7"></path>
                 </svg>
@@ -324,16 +304,16 @@ const LandingPage = () => {
                   <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                   <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
                 </svg>
-                <span>For Recruiters</span>
+                <span>Create a hiring workspace</span>
               </button>
             </div>
             <div className={styles.heroTrust}>
-              <span>Trusted by leading companies:</span>
+              <span>Built around the skills your role needs</span>
               <div className={styles.trustLogos}>
-                <div className={styles.trustLogo}>TechCorp</div>
-                <div className={styles.trustLogo}>InnovateLabs</div>
-                <div className={styles.trustLogo}>DataDriven</div>
-                <div className={styles.trustLogo}>FutureHR</div>
+                <span className={styles.trustLogo}>Coding</span>
+                <span className={styles.trustLogo}>SQL</span>
+                <span className={styles.trustLogo}>MCQs</span>
+                <span className={styles.trustLogo}>AI screening</span>
               </div>
             </div>
           </div>
@@ -344,13 +324,13 @@ const LandingPage = () => {
                 <div className={styles.previewDots}>
                   <span></span><span></span><span></span>
                 </div>
-                <span>Interview Dashboard</span>
+                <span>Hiring pipeline / Example</span>
               </div>
               <div className={styles.previewContent}>
                 <div className={styles.previewCard}>
                   <div className={styles.candidateAvatar}>JD</div>
                   <div className={styles.candidateInfo}>
-                    <h4>John Doe</h4>
+                    <h4>Sample Candidate</h4>
                     <p>Software Engineer</p>
                   </div>
                   <div className={styles.scoreCircle}>
@@ -377,7 +357,7 @@ const LandingPage = () => {
                     <span className={styles.metricValue}>85%</span>
                   </div>
                   <div className={styles.metric}>
-                    <span className={styles.metricLabel}>Proctoring</span>
+                    <span className={styles.metricLabel}>OA score</span>
                     <div className={styles.metricBar}>
                       <div style={{ width: "92%", background: "#8b5cf6" }}></div>
                     </div>
@@ -400,17 +380,17 @@ const LandingPage = () => {
               {/* Below dashboard - Position 5 (left side) */}
               <div className={`${styles.floatingCard} ${styles.card3}`}>
                 <span className={styles.floatingIcon}>🎯</span>
-                <span>AI Matching</span>
+                <span>Role-based OAs</span>
               </div>
               {/* Below dashboard - Position 3 (bottom center) */}
               <div className={`${styles.floatingCard} ${styles.card4}`}>
                 <span className={styles.floatingIcon}>✓</span>
-                <span>Interview Complete</span>
+                <span>Screening / OA</span>
               </div>
               {/* Below dashboard - Position 4 (bottom right) */}
               <div className={`${styles.floatingCard} ${styles.card5}`}>
                 <span className={styles.floatingIcon}>⚡</span>
-                <span>Fast Screening</span>
+                <span>Flexible next rounds</span>
               </div>
               {/* Below dashboard - Position 6 (right side) */}
               <div className={`${styles.floatingCard} ${styles.card6}`}>
@@ -451,7 +431,7 @@ const LandingPage = () => {
               Everything You Need for <span className={styles.gradientText}>AI Hiring</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              AI recruitment tools for automated interviews, CV screening, candidate shortlisting, proctoring, and hiring analytics.
+              Screening, skills assessment and next-round decisions, connected in one workspace.
             </p>
           </div>
 
@@ -481,9 +461,8 @@ const LandingPage = () => {
               What <span className={styles.gradientText}>GenHire</span> Does for Hiring Teams
             </h2>
             <p className={styles.sectionSubtitle}>
-              GenHire is built for recruiters and candidates searching for AI hiring,
-              automated interviews, AI evaluation, CV screening, resume screening,
-              candidate shortlisting, and end-to-end recruitment automation.
+              Start with the role, choose the skills to assess, and keep candidates
+              informed as they move through your hiring process.
             </p>
           </div>
 
@@ -504,15 +483,16 @@ const LandingPage = () => {
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTag}>How It Works</span>
             <h2 className={styles.sectionTitle}>
-              Simple Steps to <span className={styles.gradientText}>Success</span>
+              From application to <span className={styles.gradientText}>next-round decisions</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              Whether you're a candidate or recruiter, our platform makes the process seamless
+              An OA is optional. Recruiters decide when it fits and what follows it.
             </p>
           </div>
 
-          <div className={styles.workflowTabs}>
+          <div className={styles.workflowTabs} role="group" aria-label="Choose a hiring journey">
             <button
+              aria-pressed={workflowTab === "candidate"}
               className={`${styles.workflowTab} ${workflowTab === "candidate" ? styles.active : ""}`}
               onClick={() => { setWorkflowTab("candidate"); setActiveStep(0); }}
             >
@@ -520,6 +500,7 @@ const LandingPage = () => {
               For Candidates
             </button>
             <button
+              aria-pressed={workflowTab === "recruiter"}
               className={`${styles.workflowTab} ${workflowTab === "recruiter" ? styles.active : ""}`}
               onClick={() => { setWorkflowTab("recruiter"); setActiveStep(0); }}
             >
@@ -528,24 +509,31 @@ const LandingPage = () => {
             </button>
           </div>
 
+          <div className={styles.animationControls}>
+            <span>{reducedMotion ? 'Motion reduced. Select any step to explore.' : 'A new step every 2 seconds. Select one to pause and read.'}</span>
+            {!reducedMotion && <button type="button" aria-pressed={animationPaused} onClick={() => setAnimationPaused(value => !value)}>{animationPaused ? 'Resume animation' : 'Pause animation'}</button>}
+          </div>
           <div className={styles.workflowContent}>
             <div className={styles.workflowSteps}>
               {(workflowTab === "candidate" ? candidateSteps : recruiterSteps).map((item, index) => (
-                <div
+                <button
+                  type="button"
+                  aria-label={`Step ${item.step}: ${item.title}`}
+                  aria-pressed={activeStep === index}
                   key={index}
                   className={`${styles.workflowStep} ${activeStep === index ? styles.activeStep : ""}`}
-                  onClick={() => setActiveStep(index)}
+                  onClick={() => { setActiveStep(index); setAnimationPaused(true); }}
                 >
-                  <div className={styles.stepNumber}>
+                  <span className={styles.stepNumber}>
                     <span>{item.step}</span>
-                  </div>
-                  <div className={styles.stepContent}>
-                    <div className={styles.stepIcon}>{item.icon}</div>
-                    <h4>{item.title}</h4>
-                    <p>{item.description}</p>
-                  </div>
-                  {index < 3 && <div className={styles.stepConnector}></div>}
-                </div>
+                  </span>
+                  <span className={styles.stepContent}>
+                    <span className={styles.stepIcon}>{item.icon}</span>
+                    <strong>{item.title}</strong>
+                    <span className={styles.stepDescription}>{item.description}</span>
+                  </span>
+                  {index < 3 && <span className={styles.stepConnector}></span>}
+                </button>
               ))}
             </div>
 
@@ -618,10 +606,11 @@ const LandingPage = () => {
               Simple, Transparent <span className={styles.gradientText}>Wallet Recharge</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              Non-expiring credits, fixed deductions, and full transaction visibility.
+              Use wallet credits for screening, assessments and practice. Review each activity's current price before confirming.
             </p>
             <p className={styles.sectionSubtitle}>
-              Every new account gets a one-time 100 free signup credits bonus.
+              New accounts receive the configured one-time signup bonus: {credits('signup_bonus')} credits.
+              {pricingError && <button onClick={reloadPricing}>Retry current prices</button>}
             </p>
           </div>
 
@@ -633,10 +622,10 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>100 one-time wallet credits on signup</p>
+                <p>{credits('signup_bonus')} one-time wallet credits on signup</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 credits added on first signup</li>
+                <li><span>✓</span> {credits('signup_bonus')} credits added on first signup</li>
                 <li><span>✓</span> Non-expiring wallet credits</li>
                 <li><span>✓</span> Auto-applied, no payment required</li>
                 <li><span>✓</span> Available to every new account</li>
@@ -647,21 +636,21 @@ const LandingPage = () => {
             </div>
 
             <div className={`${styles.pricingCard} ${styles.popular}`}>
-              <div className={styles.popularBadge}>Most Popular</div>
+              <div className={styles.popularBadge}>Wallet recharge</div>
               <div className={styles.pricingHeader}>
                 <h3>Candidate Pro</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>499.00</span>
+                  <span className={styles.currency}>{pricing?.currency || ''}</span>
+                  <span className={styles.amount}>{packAmount('candidate_pro')}</span>
                   <span className={styles.period}>one-time</span>
                 </div>
-                <p>500 non-expiring wallet credits</p>
+                <p>{packCredits('candidate_pro')} non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 500 non-expiring credits</li>
-                <li><span>✓</span> Practice interview deductions at fixed rates</li>
+                <li><span>✓</span> {packCredits('candidate_pro')} non-expiring credits</li>
+                <li><span>✓</span> Interview practice and available mock OAs</li>
                 <li><span>✓</span> Real-time wallet activity tracking</li>
-                <li><span>✓</span> 100 signup bonus credits on first signup</li>
+                <li><span>✓</span> {credits('signup_bonus')} signup bonus credits on first signup</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/register")}>
                 Start and Recharge
@@ -672,15 +661,15 @@ const LandingPage = () => {
               <div className={styles.pricingHeader}>
                 <h3>Candidate Max</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>999.00</span>
+                  <span className={styles.currency}>{pricing?.currency || ''}</span>
+                  <span className={styles.amount}>{packAmount('candidate_max')}</span>
                   <span className={styles.period}>one-time</span>
                 </div>
-                <p>1,000 non-expiring wallet credits</p>
+                <p>{packCredits('candidate_max')} non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 1,000 non-expiring credits</li>
-                <li><span>✓</span> Practice interview deductions at fixed rates</li>
+                <li><span>✓</span> {packCredits('candidate_max')} non-expiring credits</li>
+                <li><span>✓</span> Interview practice and available mock OAs</li>
                 <li><span>✓</span> Real-time wallet activity tracking</li>
                 <li><span>✓</span> Recharge anytime</li>
               </ul>
@@ -698,10 +687,10 @@ const LandingPage = () => {
                 <div className={styles.pricingPrice}>
                   <span className={styles.amount}>Free</span>
                 </div>
-                <p>100 one-time wallet credits on signup</p>
+                <p>{credits('signup_bonus')} one-time wallet credits on signup</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 100 credits added on first signup</li>
+                <li><span>✓</span> {credits('signup_bonus')} credits added on first signup</li>
                 <li><span>✓</span> Non-expiring wallet credits</li>
                 <li><span>✓</span> Auto-applied, no payment required</li>
                 <li><span>✓</span> Available to every new account</li>
@@ -712,22 +701,22 @@ const LandingPage = () => {
             </div>
 
             <div className={`${styles.pricingCard} ${styles.popular}`}>
-              <div className={styles.popularBadge}>Most Popular</div>
+              <div className={styles.popularBadge}>Wallet recharge</div>
               <div className={styles.pricingHeader}>
                 <h3>Recruiter Pro</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>4,999.00</span>
+                  <span className={styles.currency}>{pricing?.currency || ''}</span>
+                  <span className={styles.amount}>{packAmount('recruiter_pro')}</span>
                   <span className={styles.period}>one-time</span>
                 </div>
-                <p>5,000 non-expiring wallet credits</p>
+                <p>{packCredits('recruiter_pro')} non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 5,000 non-expiring credits</li>
+                <li><span>✓</span> {packCredits('recruiter_pro')} non-expiring credits</li>
                 <li><span>✓</span> AI JD generation billed at fixed credits</li>
-                <li><span>✓</span> Real interview deductions at fixed credits</li>
-                <li><span>✓</span> Candidate email invites at 1 credit each</li>
-                <li><span>✓</span> 100 signup bonus credits on first signup</li>
+                <li><span>✓</span> AI screening and quoted OA activities</li>
+                <li><span>✓</span> Candidate email invites at {credits('candidate_invite')} credits each</li>
+                <li><span>✓</span> {credits('signup_bonus')} signup bonus credits on first signup</li>
               </ul>
               <button className={`${styles.pricingBtn} ${styles.primaryPricingBtn}`} onClick={() => navigate("/recruiter-signup")}>
                 Start and Recharge
@@ -738,17 +727,17 @@ const LandingPage = () => {
               <div className={styles.pricingHeader}>
                 <h3>Recruiter Max</h3>
                 <div className={styles.pricingPrice}>
-                  <span className={styles.currency}>₹</span>
-                  <span className={styles.amount}>9,999.00</span>
+                  <span className={styles.currency}>{pricing?.currency || ''}</span>
+                  <span className={styles.amount}>{packAmount('recruiter_max')}</span>
                   <span className={styles.period}>one-time</span>
                 </div>
-                <p>10,000 non-expiring wallet credits</p>
+                <p>{packCredits('recruiter_max')} non-expiring wallet credits</p>
               </div>
               <ul className={styles.pricingFeatures}>
-                <li><span>✓</span> 10,000 non-expiring credits</li>
+                <li><span>✓</span> {packCredits('recruiter_max')} non-expiring credits</li>
                 <li><span>✓</span> AI JD generation billed at fixed credits</li>
-                <li><span>✓</span> Real interview deductions at fixed credits</li>
-                <li><span>✓</span> Candidate email invites at 1 credit each</li>
+                <li><span>✓</span> AI screening and quoted OA activities</li>
+                <li><span>✓</span> Candidate email invites at {credits('candidate_invite')} credits each</li>
                 <li><span>✓</span> Recharge anytime</li>
               </ul>
               <button className={styles.pricingBtn} onClick={() => navigate("/recruiter-signup")}>
@@ -768,7 +757,7 @@ const LandingPage = () => {
               Know Exactly <span className={styles.gradientText}>What You Pay</span>
             </h2>
             <p className={styles.sectionSubtitle}>
-              Fixed deductions per action. Credits never expire and are only spent when a session completes.
+              Current prices come from the server. One AI drafting price includes the JD and selected OA questions. Candidate attempts and optional extras are quoted separately.
             </p>
           </div>
 
@@ -805,40 +794,19 @@ const LandingPage = () => {
           </div>
 
           <p className={styles.creditNote}>
-            Credits are deducted only when a session completes successfully — cancelled or failed sessions are not charged.
+            Charges follow each activity quote. Mock OA generation is charged when validated content is ready; accepted recruitment OA attempts can also incur a charge. Review wallet history for charges and returns.
           </p>
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section id="testimonials" className={styles.testimonialsSection}>
+      <section id="roles" className={styles.featuresSection} aria-labelledby="roles-title">
         <div className={styles.container}>
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionTag}>Testimonials</span>
-            <h2 className={styles.sectionTitle}>
-              What Our Users <span className={styles.gradientText}>Say</span>
-            </h2>
+            <span className={styles.sectionTag}>Beyond software engineering</span>
+            <h2 id="roles-title" className={styles.sectionTitle}>Assess for the <span className={styles.gradientText}>role you are hiring</span></h2>
+            <p className={styles.sectionSubtitle}>Use a preset as a starting point, then review and tailor every question to your requirements.</p>
           </div>
-
-          <div className={styles.testimonialsGrid}>
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className={styles.testimonialCard}>
-                <div className={styles.testimonialQuote}>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-                  </svg>
-                </div>
-                <p className={styles.testimonialText}>{testimonial.quote}</p>
-                <div className={styles.testimonialAuthor}>
-                  <div className={styles.authorAvatar}>{testimonial.avatar}</div>
-                  <div>
-                    <h4>{testimonial.author}</h4>
-                    <p>{testimonial.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className={styles.featuresGrid}>{roleExamples.map(role => <article key={role.title} className={styles.featureCard}><h3>{role.title}</h3><p>{role.description}</p></article>)}</div>
         </div>
       </section>
 
@@ -848,7 +816,7 @@ const LandingPage = () => {
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTag}>FAQ</span>
             <h2 id="genhire-faq-title" className={styles.sectionTitle}>
-              AI Hiring and <span className={styles.gradientText}>Recruitment Automation</span> FAQs
+              Screening, OAs and <span className={styles.gradientText}>next rounds</span>
             </h2>
           </div>
 
@@ -868,7 +836,7 @@ const LandingPage = () => {
         <div className={styles.container}>
           <div className={styles.ctaContent}>
             <h2>Ready to Automate Hiring with GenHire?</h2>
-            <p>Use GenHire for AI interviews, AI CV screening, candidate evaluation, shortlisting, and recruitment analytics.</p>
+            <p>Screen with AI, assess role-specific skills and keep the next hiring decision in your hands.</p>
             <div className={styles.ctaButtons}>
               <button
                 className={styles.ctaPrimary}
@@ -887,6 +855,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      </main>
       {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.container}>
@@ -903,48 +872,17 @@ const LandingPage = () => {
                 </div>
                 <span>GenHire</span>
               </div>
-              <p>GenHire is an AI recruitment platform for automated hiring, AI interviews, CV screening, resume shortlisting, candidate evaluation, and recruiter analytics.</p>
-              <div className={styles.socialLinks}>
-                <a href="https://x.com" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" /></svg>
-                </a>
-                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" /></svg>
-                </a>
-                <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" /></svg>
-                </a>
-              </div>
+              <p>AI screening, role-based online assessments and flexible company rounds. A connected workspace for recruiters and candidates.</p>
             </div>
 
             <div className={styles.footerLinks}>
-              <h4>Product</h4>
-              <ul>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#pricing">Pricing</a></li>
-                <li><a href="/login">API</a></li>
-                <li><a href="/login">Integrations</a></li>
-              </ul>
+              <h4>Explore</h4><ul><li><a href="#features">Screening & OAs</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#roles">Role-based assessments</a></li><li><a href="#pricing">Wallet pricing</a></li></ul>
             </div>
-
             <div className={styles.footerLinks}>
-              <h4>Company</h4>
-              <ul>
-                <li><a href="#features">About</a></li>
-                <li><a href="/">Blog</a></li>
-                <li><a href="/register">Careers</a></li>
-                <li><a href="mailto:support@genhire.ai">Contact</a></li>
-              </ul>
+              <h4>Candidates</h4><ul><li><Link to="/register">Create an account</Link></li><li><Link to="/login">Applications & practice</Link></li><li><a href="#credits">Practice credits</a></li></ul>
             </div>
-
             <div className={styles.footerLinks}>
-              <h4>Legal</h4>
-              <ul>
-                <li><a href="/">Privacy Policy</a></li>
-                <li><a href="/">Terms of Service</a></li>
-                <li><a href="/">Cookie Policy</a></li>
-                <li><a href="/">GDPR</a></li>
-              </ul>
+              <h4>Recruiters</h4><ul><li><Link to="/recruiter-signup">Create a workspace</Link></li><li><Link to="/login">Manage hiring</Link></li><li><a href="#credits">Assessment credits</a></li></ul>
             </div>
           </div>
 

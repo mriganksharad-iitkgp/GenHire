@@ -124,7 +124,7 @@ const Login = () => {
       <AuthStory
         title={userType === "recruiter" ? "Find the people." : userType === "admin" ? "Keep things moving." : "Your next chapter."}
         accent={userType === "recruiter" ? "Build the future." : userType === "admin" ? "With confidence." : "Starts with you."}
-        description={userType === "recruiter" ? "Bring applications, interviews and candidate insights into one thoughtful hiring journey." : userType === "admin" ? "One workspace to support your people and keep your hiring operations running smoothly." : "Explore opportunities, practice your interview and bring your experience to the conversation."}
+        description={userType === "recruiter" ? "Bring CV screening, AI interviews, online assessments and company-round decisions into one hiring workspace." : userType === "admin" ? "One workspace to support your people and keep your hiring operations running smoothly." : "Explore opportunities, prepare with AI interviews and mock OAs, and track screening and assessment invitations."}
       />
 
       <section className={styles.formPanel} aria-labelledby="login-title">

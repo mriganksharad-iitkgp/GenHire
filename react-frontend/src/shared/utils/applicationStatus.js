@@ -1,7 +1,8 @@
 // Canonical application-status helpers.
 //
-// GenHire only screens candidates — it never hires — so the terminal positive
-// status is "screening_cleared" (displayed as "Screening Cleared") and
+// Legacy jobs use screening-only statuses. Managed applications carry a
+// server-derived workflow label; company outcomes are recorded by recruiters.
+// The legacy positive status is "screening_cleared" and
 // "rejected" is displayed as "Screening Not Cleared". The backend may still
 // return the legacy value "selected" for documents created before the
 // rename migration ran; normalizeStatus folds it into the canonical value.
@@ -43,6 +44,9 @@ export const candidateStatusLabel = (status) =>
 // the application record on hand should use this instead of the plain label.
 // `app` needs only interview_score and/or interviewed_at to disambiguate.
 export const applicationStatusLabel = (app, { candidateFacing = false } = {}) => {
+  if (app?.workflow_version_id && typeof app?.workflow_label === "string" && app.workflow_label.trim()) {
+    return app.workflow_label;
+  }
   const status = normalizeStatus(app?.status);
   if (status === "rejected") {
     const reachedInterview =

@@ -1,4 +1,5 @@
 import React from "react";
+import HiringSetupSummary from './HiringSetupSummary';
 import styles from "./JobDetailsModal.module.css";
 import { companyLabel } from "shared/constants/company";
 
@@ -57,6 +58,7 @@ const JobDetailsModal = ({ isOpen, onClose, job, onEdit }) => {
 				</div>
 
 				<div className={styles.modalBody}>
+                    <HiringSetupSummary job={job} />
 					{/* Job Title and Status */}
 					<div className={styles.jobTitleSection}>
 						<div className={styles.titleInfo}>

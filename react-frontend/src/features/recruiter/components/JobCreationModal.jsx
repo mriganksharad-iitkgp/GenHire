@@ -1,124 +1,21 @@
 import { PROCTORING_OPTIONS } from "shared/constants/proctoringOptions";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { generateJobWithAI } from 'shared/api/endpoints';
 import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import styles from './JobForm.module.css';
+import useJobSetup from '../hooks/useJobSetup';
+import useJobDraftRecovery from '../hooks/useJobDraftRecovery';
+import JobDraftNotice from './JobDraftNotice';
+import JobAIDraftBuilder from './JobAIDraftBuilder';
+import questionDraftConfiguration from '../utils/questionDraftConfiguration';
+import useJobWizardScroll from '../hooks/useJobWizardScroll';
+import JobQuestionDrafts from './JobQuestionDrafts';
+import attachJobQuestions from '../utils/attachJobQuestions';
+import {SetupNotice,PricingNote} from './HiringSetupWizard';
+import RoleAssessmentTemplateControls from './RoleAssessmentTemplateControls';
+import JobHiringSections,{revealJobSection,revealInvalidJobField} from './JobHiringSections';
 
-// Predefined data for auto-suggestions
-const JOB_TEMPLATES = {
-  'Software Engineer': {
-    department: 'Engineering',
-    skills: ['JavaScript', 'React', 'Node.js', 'MongoDB', 'Git'],
-    experience: '2-4 years',
-    salary: '₹12,00,000 - ₹18,00,000',
-    description: 'We are seeking a talented Software Engineer to join our dynamic development team. You will be responsible for building scalable web applications and contributing to our product development lifecycle.',
-    responsibilities: [
-      'Develop and maintain web applications using modern technologies',
-      'Collaborate with cross-functional teams to design and implement new features',
-      'Write clean, maintainable, and well-documented code',
-      'Participate in code reviews and maintain coding standards',
-      'Debug and resolve technical issues'
-    ],
-    requirements: [
-      'Bachelor\'s degree in Computer Science or related field',
-      'Proficiency in JavaScript and modern frameworks',
-      'Experience with database systems and API development',
-      'Strong problem-solving and analytical skills',
-      'Excellent communication and teamwork abilities'
-    ],
-    benefits: [
-      'Competitive salary and equity options',
-      'Health, dental, and vision insurance',
-      'Flexible working hours and remote work options',
-      'Professional development opportunities',
-      'Modern office environment with latest tools'
-    ]
-  },
-  'Data Scientist': {
-    department: 'Data & Analytics',
-    skills: ['Python', 'SQL', 'Machine Learning', 'TensorFlow', 'Pandas', 'Jupyter'],
-    experience: '3-5 years',
-    salary: '₹18,00,000 - ₹25,00,000',
-    description: 'Join our data science team to extract insights from large datasets and build predictive models that drive business decisions.',
-    responsibilities: [
-      'Analyze large datasets to identify trends and patterns',
-      'Build and deploy machine learning models',
-      'Create data visualizations and reports for stakeholders',
-      'Collaborate with engineering teams to implement ML solutions',
-      'Stay updated with latest ML techniques and tools'
-    ],
-    requirements: [
-      'Master\'s degree in Data Science, Statistics, or related field',
-      'Strong programming skills in Python and SQL',
-      'Experience with ML frameworks and statistical analysis',
-      'Knowledge of data visualization tools',
-      'Strong analytical and problem-solving skills'
-    ],
-    benefits: [
-      'Competitive compensation package',
-      'Access to cutting-edge ML tools and platforms',
-      'Conference and training budget',
-      'Collaborative research environment',
-      'Opportunity to work on high-impact projects'
-    ]
-  },
-  'Product Manager': {
-    department: 'Product',
-    skills: ['Product Strategy', 'Agile', 'Analytics', 'User Research', 'Roadmap Planning'],
-    experience: '4-6 years',
-    salary: '₹25,00,000 - ₹35,00,000',
-    description: 'Lead product development initiatives and work cross-functionally to deliver exceptional user experiences.',
-    responsibilities: [
-      'Define product roadmap and strategy',
-      'Conduct market research and competitive analysis',
-      'Collaborate with engineering and design teams',
-      'Analyze product metrics and user feedback',
-      'Manage product launches and feature rollouts'
-    ],
-    requirements: [
-      'Bachelor\'s degree in Business, Engineering, or related field',
-      'Proven experience in product management',
-      'Strong analytical and data-driven approach',
-      'Excellent communication and leadership skills',
-      'Experience with agile development methodologies'
-    ],
-    benefits: [
-      'Competitive salary and bonus structure',
-      'Stock options and equity participation',
-      'Professional development and mentorship',
-      'Flexible work arrangements',
-      'Impact on product direction and strategy'
-    ]
-  },
-  'UX Designer': {
-    department: 'Design',
-    skills: ['Figma', 'Sketch', 'User Research', 'Prototyping', 'Design Systems'],
-    experience: '2-4 years',
-    salary: '₹8,00,000 - ₹15,00,000',
-    description: 'Design intuitive and engaging user experiences for our digital products.',
-    responsibilities: [
-      'Create wireframes, prototypes, and high-fidelity designs',
-      'Conduct user research and usability testing',
-      'Collaborate with product and engineering teams',
-      'Maintain and evolve design systems',
-      'Present design concepts to stakeholders'
-    ],
-    requirements: [
-      'Bachelor\'s degree in Design, HCI, or related field',
-      'Proficiency in design tools like Figma or Sketch',
-      'Strong portfolio demonstrating UX design skills',
-      'Understanding of user-centered design principles',
-      'Excellent visual design and communication skills'
-    ],
-    benefits: [
-      'Creative and collaborative work environment',
-      'Latest design tools and software',
-      'Design conference attendance',
-      'Mentorship from senior designers',
-      'Opportunity to shape product design'
-    ]
-  }
-};
+import { JOB_TEMPLATES } from '../utils/jobTemplates';
+import JobTemplatePicker from './JobTemplatePicker';
 
 const COMMON_SKILLS = [
   // Technical Skills
@@ -188,14 +85,27 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useJobWizardScroll(isOpen);
+  const [questionDrafts, setQuestionDrafts] = useState({editor:null,questions:[]});
+  const [questionBusy, setQuestionBusy] = useState(false);
+  const setup = useJobSetup({ isOpen, jobTitle: jobData.title, onResume: fields => setJobData(current => ({ ...current, ...fields,
+    responsibilities: Array.isArray(fields.responsibilities) ? fields.responsibilities.join('\n') : fields.responsibilities ?? current.responsibilities,
+    requirements: Array.isArray(fields.requirements) ? fields.requirements.join('\n') : fields.requirements ?? current.requirements,
+    benefits: Array.isArray(fields.benefits) ? fields.benefits.join('\n') : fields.benefits ?? current.benefits,
+  })) });
+  useEffect(()=>{if(setup.configuration?.oa.source)setAuthoringMode(setup.configuration.oa.source==='ai'?'ai':'manual');},[setup.configuration?.oa.source]);
+  const saveHiringDraft = async () => {
+    try { await setup.save(jobData); } catch (error) { notify(error.message); }
+  };
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [jdFile, setJdFile] = useState(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState('');
+  const [authoringMode,setAuthoringMode] = useState('manual');
+  const [generation,setGeneration] = useState(null);
+  const [createdJobId, setCreatedJobId] = useState(null);
   
   const departmentDropdownRef = useRef(null);
   const locationDropdownRef = useRef(null);
@@ -231,16 +141,23 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     setSkillInput('');
     setFilteredSuggestions([]);
     setActiveDropdown(null);
-    setShowTemplates(false);
     setJdFile(null);
     setAiPrompt('');
-    setAiError('');
+    setQuestionDrafts({editor:null,questions:[]}); setCreatedJobId(null); setGeneration(null); setAuthoringMode('manual');
   }, []);
 
+  const recovery=useJobDraftRecovery({isOpen,hold:setup.loading||!!setup.savedDraft,value:{jobFields:jobData,configuration:setup.configuration,questionDrafts,createdJobId,authoringMode,generation,aiPrompt,jdFileName:jdFile?.name||''},onRestore:value=>{
+    setCreatedJobId(value.createdJobId||null);setAuthoringMode(value.authoringMode||'manual');setGeneration(value.generation||null);setQuestionDrafts(value.questionDrafts||{editor:null,questions:[]});setJobData(value.jobFields);if(value.configuration)setup.restoreConfiguration(value.configuration);
+setAiPrompt(value.aiPrompt||'');
+  }});
+
+  const flushRecovery=recovery.flush;
   const handleCancel = useCallback(() => {
+    if (questionBusy || isSubmitting) return;
+    flushRecovery();
     resetForm();
     onClose();
-  }, [resetForm, onClose]);
+  }, [resetForm, onClose, flushRecovery, questionBusy, isSubmitting]);
 
   // Auto-suggestion filtering
   useEffect(() => {
@@ -270,50 +187,6 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownRefs]);
 
-  // Handle AI generation — from a text prompt, an uploaded JD file (parsed
-  // and structured by AI), or both.
-  const handleAiGenerate = async () => {
-    if (!aiPrompt.trim() && !jdFile) return;
-    setIsAiGenerating(true);
-    setAiError('');
-    try {
-      const response = await generateJobWithAI(aiPrompt.trim(), jdFile);
-      const ai = response.job_data;
-      setJobData({
-        title: ai.title || '',
-        department: ai.department || '',
-        location: String(ai.location || '').trim() || 'Remote (India)',
-        type: ai.type || 'Full-time',
-        experience: ai.experience || '',
-        salary: ai.salary || '',
-        deadline: getDefaultDeadline(),
-        skills: Array.isArray(ai.skills) ? ai.skills : [],
-        description: ai.description || '',
-        responsibilities: Array.isArray(ai.responsibilities) ? ai.responsibilities.join('\n') : '',
-        requirements: Array.isArray(ai.requirements) ? ai.requirements.join('\n') : '',
-        benefits: Array.isArray(ai.benefits) ? ai.benefits.join('\n') : '',
-        status: 'draft',
-        minimum_cv_score: ai.minimum_cv_score || 50,
-        gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap),
-        proctoring_config: {
-          ...DEFAULT_PROCTORING_CONFIG,
-          ...(jobData.proctoring_config || {})
-        }
-      });
-      setAiPrompt('');
-    } catch (err) {
-      const refund = err?.data?.credit_refund;
-      const refunded = Boolean(refund?.success);
-      setAiError(
-        `${err.message || 'Failed to generate. Please try again.'}${
-          refunded ? ' Credits were refunded to your wallet.' : ''
-        }`,
-      );
-    } finally {
-      setIsAiGenerating(false);
-    }
-  };
-
   // Handle template selection
   const applyTemplate = (templateName) => {
     const template = JOB_TEMPLATES[templateName];
@@ -337,7 +210,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
           ...(prev.proctoring_config || {})
         }
       }));
-      setShowTemplates(false);
+
     }
   };
 
@@ -393,10 +266,10 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
     }
   };
 
-  // Generate deadline suggestion (30 days from now)
+  // Default application window: seven days.
   const getDefaultDeadline = () => {
     const date = new Date();
-    date.setDate(date.getDate() + 30);
+    date.setDate(date.getDate() + 7);
     return date.toISOString().split('T')[0];
   };
 
@@ -413,7 +286,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
   // Handle Escape key to close modal
   useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !questionBusy && !isSubmitting) {
         handleCancel();
       }
     };
@@ -428,7 +301,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, handleCancel]);
+  }, [isOpen, handleCancel, questionBusy, isSubmitting]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -440,6 +313,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (questionBusy || isSubmitting || isAiGenerating || (generation?.key&&!['completed','failed'].includes(generation.state))) return;
+    if (questionDrafts.editor) { notify('Save or discard the open question before saving this job.'); revealJobSection(dialogRef.current,'oa'); return; }
     
     // Enhanced validation
     const requiredFields = ['title', 'department', 'location', 'experience', 'salary', 'description'];
@@ -457,40 +332,24 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
     setIsSubmitting(true);
     try {
-      const success = await onJobCreate({ ...jobData, gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap) }, jdFile);
-      if (success) {
-        resetForm();
-        onClose();
+      let id = createdJobId;
+      if (!id) {
+        const reference = await setup.save(jobData);
+        const success = await onJobCreate({ ...jobData, ...reference, gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap) }, jdFile);
+        if (!success) return;
+        id = success._id || success.id || success.job?._id;
+        if (questionDrafts.questions.length && !id) throw new Error('The server did not return the saved job ID. Open Job details to attach your private questions.');
+        if (id) { setCreatedJobId(id); recovery.checkpoint({createdJobId:id}); }
       }
+      if(setup.configuration?.pipeline.oa_enabled)await attachJobQuestions(id, questionDrafts.questions,questionDrafts.replaceSelection);
+      recovery.clear();
+      resetForm();
+      onClose();
+    } catch (error) {
+      notify(error.message || 'Could not save the job. Your hiring draft is retained.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleJdFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const isPdf = file.type === 'application/pdf';
-      const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-      if (!isPdf && !isTxt) {
-        notify('Please upload a PDF or TXT file');
-        e.target.value = null;
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        notify('File size must be less than 10MB');
-        e.target.value = null;
-        return;
-      }
-      setJdFile(file);
-      setAiError('');
-    }
-  };
-
-  const removeJdFile = () => {
-    setJdFile(null);
-    const fileInput = document.getElementById('jd-file-input');
-    if (fileInput) fileInput.value = '';
   };
 
   // Dropdown component for suggestions
@@ -522,142 +381,29 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
   return (
     <div className={styles.modalOverlay} onClick={handleOverlayClick}>
-      <div className={styles.modalContent}>
+      <div ref={dialogRef} className={styles.modalContent} role="dialog" aria-modal="true" aria-labelledby="create-job-dialog-title">
         <div className={styles.modalHeader}>
-          <h2>Create job</h2>
-          <button type="button" className={styles.closeButton} onClick={handleCancel} aria-label="Close create job dialog">
+          <div><h2 id="create-job-dialog-title">Create job</h2><p className={styles.headerHint}>Create and review your job in one place. Changes autosave on this device.</p></div>
+          <div className={styles.headerActions}><button type="button" className={styles.aiShortcut} disabled={questionBusy || isSubmitting} onClick={()=>revealJobSection(dialogRef.current,'ai')}>Fill with AI</button></div>
+          <button type="button" className={styles.closeButton} disabled={questionBusy || isSubmitting} onClick={handleCancel} aria-label="Close create job dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.jobForm}>
-          {/* Quick Templates Section */}
-          <div className={styles.templateSection}>
-            <div className={styles.templateHeader}>
-              <h3><i className="fa fa-bolt"></i> Job templates</h3>
-              <button
-                type="button"
-                className={styles.toggleTemplates}
-                onClick={() => setShowTemplates(!showTemplates)}
-              >
-                {showTemplates ? 'Hide Templates' : 'Show Templates'}
-                <i className={`fa fa-chevron-${showTemplates ? 'up' : 'down'}`}></i>
-              </button>
-            </div>
-            
-            {showTemplates && (
-              <div className={styles.templateGrid}>
-                {Object.keys(JOB_TEMPLATES).map(templateName => (
-                  <div
-                    key={templateName}
-                    className={styles.templateCard}
-                    onClick={() => applyTemplate(templateName)}
-                  >
-                    <div className={styles.templateIcon}>
-                      <i className={`fa ${
-                        templateName.includes('Engineer') ? 'fa-code' : 
-                        templateName.includes('Data') ? 'fa-database' : 
-                        templateName.includes('Product') ? 'fa-cube' : 'fa-paint-brush'
-                      }`}></i>
-                    </div>
-                    <div className={styles.templateContent}>
-                      <h4>{templateName}</h4>
-                      <p>{JOB_TEMPLATES[templateName].department}</p>
-                      <span className={styles.templateSalary}>{JOB_TEMPLATES[templateName].salary}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* AI Job Description Generator */}
-          <div className={styles.aiSection}>
-            <div className={styles.aiHeader}>
-              <h3><i className="fa fa-magic"></i> Draft a job description</h3>
-              <span className={styles.aiBadge}>AI assistance</span>
-            </div>
-            <p className={styles.aiSubtext}>
-              Describe the role or upload a job description to generate a draft. Review the details before publishing; your note can provide additional instructions.
-            </p>
-            <div className={styles.aiInputRow}>
-              <input
-                type="text"
-                className={styles.aiInput}
-                value={aiPrompt}
-                onChange={(e) => { setAiPrompt(e.target.value); setAiError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAiGenerate(); } }}
-                placeholder='e.g. "Senior React Developer with 5 years experience in Bangalore" or "Entry level data analyst"'
-                disabled={isAiGenerating}
-              />
-              <button
-                type="button"
-                className={styles.aiGenerateButton}
-                onClick={handleAiGenerate}
-                disabled={isAiGenerating || (!aiPrompt.trim() && !jdFile)}
-              >
-                {isAiGenerating ? (
-                  <><i className="fa fa-spinner fa-spin"></i> Generating...</>
-                ) : (
-                  <><i className="fa fa-magic"></i> Generate JD</>
-                )}
-              </button>
-            </div>
-
-            {/* JD file upload — parsed by AI to auto-fill the form, and
-                stored in cloud storage so candidates can download the exact
-                document once the job is created. */}
-            <div className={styles.fileUploadSection} style={{ marginTop: '14px' }}>
-              {!jdFile ? (
-                <div className={styles.fileUploadBox}>
-                  <input
-                    type="file"
-                    accept=".pdf,.txt"
-                    onChange={handleJdFileChange}
-                    className={styles.fileInput}
-                    id="jd-file-input"
-                    disabled={isAiGenerating}
-                  />
-                  <label htmlFor="jd-file-input" className={styles.fileInputLabel}>
-                    <i className="fa fa-cloud-upload"></i>
-                    <span>Or upload a JD file (PDF/TXT) to auto-fill from</span>
-                    <small>Click to browse or drag & drop (Max 10MB)</small>
-                  </label>
-                </div>
-              ) : (
-                <div className={styles.uploadedFile}>
-                  <div className={styles.fileInfo}>
-                    <i className="fa fa-file-pdf-o"></i>
-                    <div className={styles.fileDetails}>
-                      <span className={styles.fileName}>{jdFile.name}</span>
-                      <span className={styles.fileSize}>
-                        {(jdFile.size / 1024).toFixed(1)} KB
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.removeFileButton}
-                    onClick={removeJdFile}
-                    disabled={isAiGenerating}
-                  >
-                    <i className="fa fa-times"></i>
-                  </button>
-                </div>
-              )}
-              <div className={styles.helpText}>
-                This file is stored with the job posting so candidates can download the original document, in addition to being parsed by AI to fill the form.
-              </div>
-            </div>
-
-            {aiError && <p className={styles.aiError}><i className="fa fa-exclamation-circle"></i> {aiError}</p>}
-          </div>
+        <form onSubmit={handleSubmit} onInvalidCapture={revealInvalidJobField} className={styles.jobForm}>
+          {createdJobId && <aside role="status" className={styles.selectionNotice}>Job saved. Finish attaching the saved questions below; this will not create another job.<button type="button" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting?'Attaching...':'Retry attaching questions'}</button></aside>}
+          <fieldset disabled={isSubmitting || setup.saving || questionBusy || !!createdJobId} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <JobDraftNotice setup={setup} draft={recovery} loading={setup.loading}/>
+          <SetupNotice setup={setup} />
+          {isAiGenerating&&<p role="status" className={styles.selectionNotice}>AI is preparing your draft. You can close and resume later. Save the job after generation finishes.</p>}
+          <div>
+          {authoringMode==='manual'&&<JobTemplatePicker onSelect={applyTemplate}/>}
 
           <div className={styles.formGrid}>
             {/* Job Title with Suggestions */}
             <div className={styles.formGroup}>
-              <label>Job Title *</label>
-              <input
+              <label htmlFor="create-job-title">Job Title *</label>
+              <input id="create-job-title"
                 type="text"
                 name="title"
                 value={jobData.title}
@@ -673,9 +419,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Department with Dropdown */}
             <div className={styles.formGroup} ref={dropdownRefs.department}>
-              <label>Department *</label>
+              <label htmlFor="create-job-department">Department *</label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="create-job-department"
                   type="text"
                   name="department"
                   className={styles.enhancedInput}
@@ -708,9 +454,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Location with Suggestions */}
             <div className={styles.formGroup} ref={dropdownRefs.location}>
-              <label>Location *</label>
+              <label htmlFor="create-job-location">Location *</label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="create-job-location"
                   type="text"
                   name="location"
                   className={styles.enhancedInput}
@@ -743,8 +489,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Job Type Enhanced */}
             <div className={styles.formGroup}>
-              <label>Job Type *</label>
-              <select
+              <label htmlFor="create-job-type">Job Type *</label>
+              <select id="create-job-type"
                 name="type"
                 value={jobData.type}
                 onChange={handleInputChange}
@@ -762,9 +508,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Experience with Suggestions */}
             <div className={styles.formGroup} ref={dropdownRefs.experience}>
-              <label>Experience Required *</label>
+              <label htmlFor="create-job-experience">Experience Required *</label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="create-job-experience"
                   type="text"
                   name="experience"
                   className={styles.enhancedInput}
@@ -797,9 +543,9 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Salary with Suggestions */}
             <div className={styles.formGroup} ref={dropdownRefs.salary}>
-              <label>Salary Range *</label>
+              <label htmlFor="create-job-salary">Salary Range *</label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="create-job-salary"
                   type="text"
                   name="salary"
                   className={styles.enhancedInput}
@@ -831,26 +577,26 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             </div>
 
             {/* Application Deadline with Suggestions Default */}
-            <div className={styles.formGroup}>
-              <label>Application Deadline * <span className={styles.autoFilled}> Suggested date</span></label>
-              <input
+            <div className={styles.formGroup} hidden={setup.enabled}>
+              <label htmlFor="create-job-deadline">Application Deadline * <span className={styles.autoFilled}> Suggested date</span></label>
+              <input id="create-job-deadline"
                 type="date"
                 name="deadline"
                   className={styles.enhancedInput}
                 value={jobData.deadline}
                 onChange={handleInputChange}
-                required
+                required={!setup.enabled}
                 min={new Date().toISOString().split('T')[0]}
               />
               <div className={styles.helpText}>
-                 Default: 30 days from today
+                 Default: 7 days from today
               </div>
             </div>
 
             {/* Job Status */}
             <div className={styles.formGroup}>
-              <label>Job Status * <span className={styles.smartIndicator}> Status</span></label>
-              <select
+              <label htmlFor="create-job-status">Job Status * <span className={styles.smartIndicator}> Status</span></label>
+              <select id="create-job-status"
                 name="status"
                 value={jobData.status}
                 onChange={handleInputChange}
@@ -867,8 +613,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Minimum CV Score */}
             <div className={styles.formGroup}>
-              <label>Minimum CV Score * <span className={styles.smartIndicator}> Screening threshold</span></label>
-              <input
+              <label htmlFor="create-job-minimum_cv_score">Minimum CV Score * <span className={styles.smartIndicator}> Screening threshold</span></label>
+              <input id="create-job-minimum_cv_score"
                 type="number"
                 name="minimum_cv_score"
                 value={jobData.minimum_cv_score}
@@ -886,11 +632,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
 
             {/* Interview monitoring */}
             <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
-              <label> Interview monitoring</label>
+              <details className={styles.formAccordion}><summary>Interview monitoring</summary>
               <div className={styles.proctoringSection}>
                 <div className={styles.creditWarning}>
                   <i className="fa fa-exclamation-triangle"></i>
-                  Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
+                  <PricingNote setup={setup} />
                 </div>
                 {PROCTORING_OPTIONS.map(opt => (
                   <div key={opt.key} className={styles.proctoringToggle}>
@@ -921,8 +667,8 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 ))}
               </div>
               <div className={styles.helpText}>
-                AI drafting costs 10 credits. Manual creation is free. Disabled monitoring checks are labelled in reports.
-              </div>
+                Disabled monitoring checks are labelled in reports.
+              </div></details>
             </div>
 
             {/* Skills with Tag System */}
@@ -980,13 +726,13 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
           </div>
 
           {/* Enhanced Text Areas */}
-          <div className={styles.textAreasSection}>
+          <details className={styles.formAccordion} data-job-section="description"><summary>Job description, responsibilities & benefits</summary><div className={styles.textAreasSection}>
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="create-job-description">
                 Job Description * 
                 <span className={styles.smartIndicator}> Suggestions</span>
               </label>
-              <textarea
+              <textarea id="create-job-description"
                 name="description"
                 value={jobData.description}
                 onChange={handleInputChange}
@@ -1001,11 +747,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             </div>
 
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="create-job-responsibilities">
                 Key Responsibilities
                 <span className={styles.optional}>(Optional)</span>
               </label>
-              <textarea
+              <textarea id="create-job-responsibilities"
                 name="responsibilities"
                 value={jobData.responsibilities}
                 onChange={handleInputChange}
@@ -1023,11 +769,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             </div>
 
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="create-job-requirements">
                 Requirements & Qualifications
                 <span className={styles.optional}>(Optional)</span>
               </label>
-              <textarea
+              <textarea id="create-job-requirements"
                 name="requirements"
                 value={jobData.requirements}
                 onChange={handleInputChange}
@@ -1045,11 +791,11 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             </div>
 
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="create-job-benefits">
                 Benefits & Perks
                 <span className={styles.optional}>(Optional)</span>
               </label>
-              <textarea
+              <textarea id="create-job-benefits"
                 name="benefits"
                 value={jobData.benefits}
                 onChange={handleInputChange}
@@ -1066,7 +812,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                  Highlight unique perks that make your company stand out
               </div>
             </div>
-          </div>
+          </div></details>
 
           {/* Form Progress Indicator */}
           <div className={styles.formProgress}>
@@ -1100,6 +846,23 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
             </span>
           </div>
 
+          </div>
+          <JobHiringSections templateControls={<RoleAssessmentTemplateControls onMode={setAuthoringMode} setup={setup} jobTitle={jobData.title} value={questionDrafts} onChange={setQuestionDrafts} onBusy={setQuestionBusy} blocked={questionBusy||isAiGenerating}/>} onAuthoringMode={setAuthoringMode} questionEditor={setup.configuration?.pipeline.oa_enabled ? <JobQuestionDrafts configuration={setup.configuration.oa} value={questionDrafts} onChange={value=>{setQuestionDrafts(value);if(value.questions!==questionDrafts.questions)setup.setConfiguration(current=>questionDraftConfiguration(current,value.questions));}} onBusy={setQuestionBusy} mode={authoringMode}/> : null} setup={setup} onSaveDraft={saveHiringDraft} jobStatus={jobData.status} />
+          <details className={styles.formAccordion} data-job-section="ai"><summary>Fill with AI - {setup.catalog?.prices?.ai_jd??'loading'} credits for the complete draft</summary>
+          <JobAIDraftBuilder jobTitle={jobData.title} mode={authoringMode} onMode={mode=>{setAuthoringMode(mode);setup.setConfiguration(current=>current?({...current,oa:{...current.oa,source:mode}}):current);}}
+            setup={setup} prompt={aiPrompt} onPrompt={setAiPrompt} file={jdFile} onFile={setJdFile} generation={generation}
+            onGeneration={value=>{setGeneration(value);recovery.checkpoint({generation:value});}} onBusy={setIsAiGenerating} isOpen={isOpen}
+            onReady={result=>{
+              const ai=result.job_data;
+              const next={...jobData,...ai,status:'draft',deadline:jobData.deadline||getDefaultDeadline(),
+                responsibilities:Array.isArray(ai.responsibilities)?ai.responsibilities.join('\n'):ai.responsibilities||'',
+                requirements:Array.isArray(ai.requirements)?ai.requirements.join('\n'):ai.requirements||'',benefits:Array.isArray(ai.benefits)?ai.benefits.join('\n'):ai.benefits||''};
+              const nextConfiguration={...(setup.configuration||result.configuration),oa:result.configuration.oa};
+              setJobData(next);setup.restoreConfiguration(nextConfiguration);setQuestionDrafts({editor:null,questions:result.questions,replaceSelection:true});
+              recovery.checkpoint({jobFields:next,configuration:nextConfiguration,generation:{key:generation?.key,state:'completed'},questionDrafts:{editor:null,questions:result.questions,replaceSelection:true},wizardStep:0});
+              revealJobSection(dialogRef.current,result.questions.length?'oa':'description');
+            }}/>
+          </details>
           <div className={styles.formActions}>
             <div className={styles.actionButtons}>
               <button
@@ -1114,7 +877,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <button
                 type="submit"
                 className={styles.submitButton}
-                disabled={isSubmitting || !jobData.title || !jobData.department || !jobData.location || jobData.skills.length === 0}
+                disabled={isSubmitting || isAiGenerating || !setup.catalog || !setup.ready || !jobData.title || !jobData.department || !jobData.location || jobData.skills.length === 0}
               >
                 {isSubmitting ? (
                   <>
@@ -1132,9 +895,7 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
               <div className={styles.quickStats}>
                 <span className={styles.stat}>
                   <i className="fa fa-list"></i>
-                  {Object.values(jobData).filter(val => 
-                    Array.isArray(val) ? val.length > 0 : val && val.toString().trim()
-                  ).length}/7 Fields Completed
+                  {['title','department','location','type','experience','description','skills'].filter(key => Array.isArray(jobData[key]) ? jobData[key].length > 0 : String(jobData[key] || '').trim()).length}/7 Fields Completed
                 </span>
                 <span className={styles.stat}>
                   <i className="fa fa-tag"></i>
@@ -1142,11 +903,12 @@ const JobCreationModal = ({ isOpen, onClose, onJobCreate, showToast }) => {
                 </span>
                 <span className={styles.stat}>
                   <i className="fa fa-clock"></i>
-                  Est. 2-3 min to complete
+                  Review before saving
                 </span>
               </div>
             </div>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

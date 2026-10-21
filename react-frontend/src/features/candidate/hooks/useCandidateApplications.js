@@ -23,6 +23,11 @@ const mapApplication = (a) => {
 
   return {
     id: a._id,
+    workflow_version_id: a.workflow_version_id,
+    workflow_label: a.workflow_label,
+    workflow: a.workflow,
+    hiring_timing: a.hiring_timing,
+    hiring_enrollment_version_id: a.hiring_enrollment_version_id,
     cv_id: a.cv_id,
     company: companyLabel(a.job_details?.company),
     logo: a.job_details?.logo || null,

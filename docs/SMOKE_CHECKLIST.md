@@ -4,8 +4,11 @@ Run the subset touched by a change after each reorganization step; run the
 full list before merging/deploying. Every flow must behave exactly as before
 the reorganization — same pages, same redirects, same data.
 
-> Local runs talk to the live database — stick to reads where possible and
-> reuse existing test accounts instead of creating new data.
+> Check the configured environment before manual checks. Use isolated staging
+> accounts and synthetic data for writes, billing and emails. The OA automated
+> runner creates disposable loopback Mongo databases and does not load app dotenv.
+> Follow the [OA release runbook](oa_release_runbook.md) for the seven new journeys,
+> full-duration entry cutoffs, privacy, accessible accommodations and rollback.
 
 ## 1. Auth & session
 - Login as candidate, recruiter, and admin; each lands on its home

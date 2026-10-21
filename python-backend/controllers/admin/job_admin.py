@@ -99,6 +99,9 @@ class JobAdmin:
             if not job:
                 return {"error": "Job not found"}, 404
 
+            if job.get('workflow_version_id') or job.get('hiring_setup_version_id'):
+                return {'error': 'Workflow jobs must be closed rather than deleted.', 'error_code': 'workflow_action_required'}, 409
+
             # Delete all applications for this job
             self.applications_collection.delete_many({"job_id": str(job["_id"])})
 
@@ -244,8 +247,16 @@ class JobAdmin:
                         }, 400
                     update_data[field] = data[field]
 
-            self.job_repo.update_by_id(job_id, {"$set": update_data}
-            )
+            from services.job_setup_service import require_publishable_setup
+            from models.hiring_workflow import WorkflowError
+            try:
+                require_publishable_setup(self.jobs_collection.database, job, update_data.get('status', job.get('status')))
+            except WorkflowError as exc:
+                return {'error': str(exc), 'error_code': exc.code}, exc.status
+            changed = self.jobs_collection.update_one({'_id': job['_id'],
+                'hiring_setup_version_id': job.get('hiring_setup_version_id'), 'status': job.get('status')}, {'$set': update_data})
+            if changed.matched_count == 0:
+                return {'error': 'Job changed; reload before saving.', 'error_code': 'stale_revision'}, 409
 
             return {
                 "message": f'Job "{job.get("title")}" updated successfully',

@@ -126,7 +126,8 @@ class SavedJobController:
         saved_jobs = []
         for job in jobs:
             job['_id'] = str(job['_id'])
-            job.pop('created_by', None)
+            from utils.job_visibility import candidate_job
+            job = candidate_job(job)
             job['saved_at'] = saved_at_by_job.get(job['_id'])
             job['has_applied'] = job['_id'] in applied_job_ids
             job['can_apply'] = (

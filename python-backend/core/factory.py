@@ -154,6 +154,10 @@ def create_app():
 
     @app.errorhandler(Exception)
     def handle_exception(e):
+        from core.mongo_transactions import AtomicityUnavailable
+        if isinstance(e, AtomicityUnavailable):
+            return jsonify(error="Transactional storage is unavailable. Please retry later.",
+                           error_code="atomicity_unavailable"), 503
         from pydantic import ValidationError
         if isinstance(e, ValidationError):
             details = [{"field": ".".join(str(item) for item in issue["loc"]), "message": issue["msg"]}
@@ -251,6 +255,18 @@ def create_app():
     app.register_blueprint(profile_bp)
     app.register_blueprint(job_bp)
     app.register_blueprint(application_bp)
+    from routes.workflow_routes import create_workflow_routes
+    app.register_blueprint(create_workflow_routes(db))
+    from routes.job_setup_routes import create_job_setup_routes
+    app.register_blueprint(create_job_setup_routes(db))
+    from routes.assessment_authoring_routes import create_assessment_authoring_routes
+    app.register_blueprint(create_assessment_authoring_routes(db))
+    from routes.hiring_progression_routes import create_hiring_progression_routes
+    app.register_blueprint(create_hiring_progression_routes(db))
+    from routes.company_hiring_routes import create_company_hiring_routes
+    app.register_blueprint(create_company_hiring_routes(db))
+    from routes.practice_assessment_routes import create_practice_assessment_routes
+    app.register_blueprint(create_practice_assessment_routes(db))
     app.register_blueprint(file_bp)
     app.register_blueprint(practice_bp)
 

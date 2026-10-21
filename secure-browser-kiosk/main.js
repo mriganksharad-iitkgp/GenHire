@@ -10,9 +10,11 @@ const { createMediaPermissionHandlers } = require('./media-permissions');
 let backendSession = { apiUrl: null, token: null };
 let pendingInitialization = null;
 let rendererReady = false;
+let launchMode = 'interview';
 function captureBackendSession(initData) {
     const payload = parseInitialization(initData);
-    backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token };
+    launchMode = payload.mode === 'oa' ? 'oa' : 'interview';
+    backendSession = { apiUrl: String(payload.apiUrl).replace(/\/$/, ''), token: payload.token || null };
 }
 
 let KIOSK_HTTP_PORT = 0; // Set to 0 to auto-assign a free port to prevent EADDRINUSE
@@ -53,7 +55,7 @@ function handleDeepLink(url) {
         }
     } catch (e) {
         // Launch links contain credentials: never log the URL or payload.
-        console.error('Invalid interview launch link:', e.message);
+        console.error('Invalid secure-browser launch link.');
     }
 }
 
@@ -89,6 +91,7 @@ ipcMain.handle('renderer-ready', () => {
     rendererReady = true;
     return pendingInitialization;
 });
+ipcMain.handle('assessment-runtime', () => ({ release_id: app.getVersion(), kiosk_active: launchMode === 'oa' && isKioskActive }));
 
 // Open URL in default browser (for returning to GenHire dashboard)
 ipcMain.on('open-external', (event, url) => {
@@ -191,7 +194,7 @@ ipcMain.on('enable-kiosk', () => {
                 type: 'warning',
                 title: 'Exit GenHire',
                 message: 'Exit GenHire Secure Browser?',
-                detail: 'This will end your current interview session.',
+                detail: launchMode === 'oa' ? 'Your assessment timer continues. Acknowledged answers remain saved; reopen from your dashboard to resume.' : 'This will end your current interview session.',
                 buttons: ['Cancel', 'Exit GenHire'],
                 defaultId: 0,
                 cancelId: 0,
@@ -277,12 +280,13 @@ function createWindow() {
     const mediaPermissions = createMediaPermissionHandlers({
         origin: `http://localhost:${KIOSK_HTTP_PORT}`,
         webContents: permissionWindow.webContents,
+        typesAllowed: () => launchMode === 'oa' ? ['video'] : ['video', 'audio'],
         ask: async () => {
             const { response } = await dialog.showMessageBox(permissionWindow, {
                 type: 'question', title: 'Camera and microphone access',
-                message: 'Allow GenHire to use your camera and microphone?',
-                detail: 'These devices are used for interview setup, your answers, and the monitoring required for this interview. Access ends when you close the interview.',
-                buttons: ['Allow camera and microphone', 'Not now'], defaultId: 0, cancelId: 1, noLink: true,
+                message: launchMode === 'oa' ? 'Allow GenHire to use your camera?' : 'Allow GenHire to use your camera and microphone?',
+                detail: launchMode === 'oa' ? 'This OA collects the sampled camera images disclosed in preflight. OA audio capture is disabled. Access ends when you close the assessment.' : 'These devices are used for interview setup, your answers, and the monitoring required for this interview. Access ends when you close the interview.',
+                buttons: [launchMode === 'oa' ? 'Allow camera' : 'Allow camera and microphone', 'Not now'], defaultId: 0, cancelId: 1, noLink: true,
             });
             return response === 0;
         },

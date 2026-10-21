@@ -6,6 +6,19 @@
 .closeButton { display:grid; place-items:center; flex-shrink:0; width:36px; height:36px; border:0; background:transparent; color:var(--portal-secondary); cursor:pointer; border-radius:8px; }
 .closeButton:hover { background:#e0e7ff; color:var(--portal-primary); }
 .jobForm { padding:24px; }
+.headerHint { margin:6px 0 0; font-size:13px; color:#475569; line-height:1.5; }
+.selectionNotice { border-left:3px solid #7c3aed; background:#f5f3ff; color:#37306b; padding:12px 16px; border-radius:8px; margin:-12px 0 24px; font-size:13px; line-height:1.6; }
+.monitoringHeading { font-size:13px; font-weight:600; color:var(--portal-text); }
+.templateHeading { cursor:pointer; font-size:16px; font-weight:700; color:#312e81; padding:4px 0; }
+.templateHeading span { font-size:12px; font-weight:500; margin-left:10px; color:#64748b; }
+.templateSearch { display:flex; flex-direction:column; gap:6px; margin:12px 0; font-size:13px; font-weight:600; }
+.templateSearch input { min-height:44px; border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; background:white; color:#1e293b; font:inherit; width:100%; box-sizing:border-box; }
+button.templateCard { font:inherit; text-align:left; display:flex; flex-direction:column; gap:8px; }
+button.templateCard strong { font-size:14px; color:#1e293b; }
+button.templateCard span { font-size:12px; color:#64748b; }
+button.templateCard small { color:#4338ca; font-size:11px; }
+.templateGrid { max-height:330px; overflow-y:auto; padding:3px; }
+.jobForm :is(button,input,select,textarea,summary):focus-visible { outline:3px solid #7c3aed; outline-offset:3px; }
 .formGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
 .formGroup { display:flex; flex-direction:column; min-width:0; gap:8px; margin-bottom:20px; }
 .formGrid .formGroup { margin-bottom:0; }
@@ -99,3 +112,50 @@
 @keyframes spin { to { transform:rotate(360deg); } }
 @media(max-width:800px) { .templateGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .modalOverlay { padding:12px; }.modalContent { max-height:calc(100dvh - 24px); }.modalHeader,.jobForm { padding:18px; }.formGrid { grid-template-columns:minmax(0,1fr); }.aiInputRow { flex-direction:column; }.aiSection { padding:16px; }.templateHeader { align-items:flex-start; }.templateGrid { gap:8px; }.templateCard { padding:12px; }.smartInput,.enhancedInput,.enhancedSelect,.enhancedTextarea,.smartTextarea,.skillInput,.aiInput,.statusSelect { font-size:16px; } }
+.jobForm [hidden] {
+  display: none !important;
+}
+
+/* Constrain intrinsic fieldset widths and keep actions on their own row. */
+.modalContent, .jobForm, .jobForm fieldset { min-width:0; box-sizing:border-box; max-width:100%; }
+.modalContent { overflow-x:hidden; scrollbar-gutter:stable; }
+.jobForm { overflow-wrap:anywhere; }
+.jobForm fieldset { margin-inline:0; }
+.formActions { flex-direction:column; align-items:stretch; }
+.actionButtons { flex-wrap:wrap; min-width:0; }
+.formFooter { margin-top:2px; width:100%; min-width:0; }
+.quickStats { justify-content:flex-end; gap:8px 16px; }
+.aiInputRow > button { flex-shrink:0; }
+.fileInputLabel { padding:12px 16px; flex-direction:row; flex-wrap:wrap; }
+.fileInputLabel i { font-size:18px; }
+.selectionNotice { margin:8px 0 12px; padding:8px 12px; }
+.selectionNotice button { margin:8px; }
+.jobForm button:active:not(:disabled) { transform:translateY(1px); filter:brightness(.94); }
+.jobForm button { transition:background .12s, box-shadow .12s; }
+@media(max-width:600px) { .actionButtons > button { flex:1 1 120px; }.quickStats { justify-content:flex-start; } }
+
+.closeButton:disabled { opacity:.5; cursor:wait; }
+
+.formAccordion { border:1px solid var(--portal-border,#dbe3ed); border-radius:12px; padding:14px 16px; margin:18px 0; min-width:0; max-width:100%; scroll-margin-top:125px; }
+.formAccordion > summary { cursor:pointer; font-weight:650; padding:4px 0; overflow-wrap:anywhere; }
+.formAccordion[open] > summary { margin-bottom:14px; color:#4338ca; }
+.formAccordion :is(input,select,textarea,fieldset) { min-width:0; max-width:100%; box-sizing:border-box; }
+.modalContent .closeButton { transition:transform .18s ease,background .18s ease,color .18s ease; }
+.modalContent .closeButton:hover { background:#fee2e2; color:#b91c1c; transform:rotate(15deg); }
+.modalContent .closeButton:active { transform:rotate(15deg) scale(.9); }
+.modalContent .closeButton:focus-visible { outline:3px solid #a5b4fc; outline-offset:2px; }
+@media(prefers-reduced-motion:reduce) { .modalContent .closeButton { transition:none; transform:none; } }
+
+.headerActions { display:flex; align-items:center; gap:8px; flex:none; }
+.aiShortcut { padding:8px 12px; min-height:36px; border:1px solid #c7d2fe; border-radius:8px; background:white; color:#4338ca; cursor:pointer; font:inherit; font-size:13px; }
+.aiShortcut:hover:not(:disabled) { background:#e0e7ff; }
+.aiShortcut:active:not(:disabled) { transform:translateY(1px); }
+.aiShortcut:focus-visible { outline:3px solid #a5b4fc; outline-offset:2px; }
+.cancelButton:hover:not(:disabled) { background:#fee2e2; border-color:#fecaca; color:#b91c1c; }
+.modalHeader > div:first-child { min-width:0; }
+@media(max-width:540px) { .modalHeader { flex-wrap:wrap; gap:10px; } .modalHeader > div:first-child { flex:1 1 190px; } .headerActions { margin-left:auto; } }
+
+/* Keep the primary save action reachable in long, expandable job forms. */
+.formActions { position:sticky; bottom:0; z-index:2; background:var(--portal-surface,#fff); padding:12px 0; box-shadow:0 -8px 16px #fff; }
+.quickStats { font-size:12px; }
+@media(max-width:600px) { .formActions { padding:10px 0; }.quickStats { display:none; } }

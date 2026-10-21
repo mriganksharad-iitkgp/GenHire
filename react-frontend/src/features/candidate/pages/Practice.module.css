@@ -3,6 +3,11 @@
    =================================== */
 
 /* Import and reuse Dashboard design system variables */
+.practicePage { width: 100%; max-width: 1280px; margin: 0 auto; padding: 24px clamp(16px, 3vw, 32px) 48px; min-width: 0; font-family: Inter, system-ui, sans-serif; }
+.practiceModes { display: flex; flex-wrap: wrap; gap: .5rem; padding: 1rem; margin: 1rem auto; max-width: 1200px; border-radius: 16px; background: #f1f0fc; }
+.practiceModes button { display: inline-flex; align-items: center; justify-content: center; gap: .6rem; flex: 1 1 220px; min-height: 48px; padding: .75rem 1.25rem; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #475569; font: inherit; font-weight: 600; cursor: pointer; }
+.practiceModes button[aria-pressed="true"] { background: #fff; border-color: #c4b5fd; color: #4c1d95; box-shadow: 0 2px 8px #4c1d9514; }
+.practiceModes button:focus-visible { outline: 3px solid #6d28d9; outline-offset: 3px; }
 /* Using same design tokens as Dashboard.module.css */
 
 .practiceContainer {

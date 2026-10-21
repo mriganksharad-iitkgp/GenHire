@@ -2,6 +2,7 @@ import React from 'react';
 import styles from 'features/recruiter/pages/RecruiterDashboard.module.css';
 import { getToken } from "shared/utils/session";
 import { normalizeStatus, statusLabel, applicationStatusLabel } from "shared/utils/applicationStatus";
+import HiringCandidateActions from './HiringCandidateActions';
 
 const CandidateCard = ({ application, updateApplicationStatus, viewInterviewReport, viewProctoringReport }) => {
   const candidateName = String(application.student_name || application.candidate_name || "Candidate");
@@ -185,9 +186,10 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
       <div className={styles.candidateActions}>
         <select
           className={styles.statusSelect}
+          disabled={!!application.workflow_version_id}
           value={normalizeStatus(application.status)}
           onChange={(e) => updateApplicationStatus(application._id, e.target.value)}
-          title={`Current: ${applicationStatusLabel(application)} - Can only progress forward`}
+          title={application.workflow_version_id ? "Managed through audited workflow actions" : `Current: ${applicationStatusLabel(application)} - Can only progress forward`}
           aria-label={`Update application status for ${candidateName}`}
         >
           {availableStatuses.map(status => (
@@ -221,6 +223,7 @@ const CandidateCard = ({ application, updateApplicationStatus, viewInterviewRepo
           <i className="fa fa-file-pdf-o" aria-hidden="true"></i> View CV
         </button>
       </div>
+      <HiringCandidateActions application={application} />
     </div>
   );
 };

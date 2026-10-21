@@ -12,6 +12,10 @@ class Application:
     status: str  # 'pending', 'reviewed', 'shortlisted', 'interviewed', 'screening_cleared', 'rejected' ('selected' = legacy)
     job_title: str
     recruiter_id: str
+    workflow_version_id: Optional[str] = None
+    workflow: Optional[Dict[str, Any]] = None
+    workflow_label: Optional[str] = None
+    hiring_enrollment_version_id: Optional[str] = None
     cv_score: Optional[float] = 85.0
     cv_score_breakdown: Optional[Dict[str, Any]] = None
     interview_score: Optional[float] = None
@@ -41,6 +45,10 @@ class Application:
     def to_dict(self):
         """Convert application object to dictionary for MongoDB storage"""
         return {
+            'workflow_version_id': self.workflow_version_id,
+            'workflow': self.workflow,
+            'workflow_label': self.workflow_label,
+            'hiring_enrollment_version_id': self.hiring_enrollment_version_id,
             'job_id': self.job_id,
             'student_id': self.student_id,
             'student_name': self.student_name,
@@ -70,6 +78,10 @@ class Application:
     def from_dict(cls, data):
         """Create Application object from dictionary"""
         return cls(
+            workflow_version_id=data.get('workflow_version_id'),
+            workflow=data.get('workflow'),
+            workflow_label=data.get('workflow_label'),
+            hiring_enrollment_version_id=data.get('hiring_enrollment_version_id'),
             job_id=data.get('job_id', ''),
             student_id=data.get('student_id', ''),
             student_name=data.get('student_name', ''),

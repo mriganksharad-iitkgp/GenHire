@@ -1,3 +1,5 @@
+from config.workflow import managed, legacy_filter
+from models.hiring_workflow import WorkflowError
 """Interview REST API routes.
 
 The interview engine's HTTP surface (start/question/answer/end, gaze recorder,
@@ -197,6 +199,13 @@ def start_interview(current_user):
     application = applications_collection.find_one({"_id": app_id, "student_id": owner})
     if not application:
         return jsonify({"error": "Application not found"}), 404
+    if managed(application) or application.get('hiring_enrollment_version_id'):
+        from services.hiring_progression_service import HiringProgressionService
+        try:
+            HiringProgressionService(applications_collection.database).screening_start(application, owner)
+            application = applications_collection.find_one({'_id': app_id})
+        except WorkflowError as exc:
+            return jsonify(error=str(exc), error_code=exc.code), exc.status
     if application.get("interview_attempt_locked") or interviews_collection.find_one({
             "application_id": application_id, "user_id": owner, "status": "terminated"}):
         return jsonify({"error": "This interview attempt ended under the monitoring policy. Another attempt for this application is not available.",
@@ -210,7 +219,8 @@ def start_interview(current_user):
             "error_code": "interview_not_eligible"}), 409
     lease_id = uuid.uuid4().hex
     now = datetime.datetime.utcnow()
-    claimed = applications_collection.update_one({"_id": app_id, "student_id": owner, "interview_attempt_locked": {"$ne": True},
+    scope = {'workflow_version_id': application['workflow_version_id'], 'workflow.revision': application['workflow']['revision']} if managed(application) else {'workflow_version_id': {'$in': [None, '']}}
+    claimed = applications_collection.update_one({**scope, "_id": app_id, "student_id": owner, "interview_attempt_locked": {"$ne": True},
         "$or": [{"interview_start_lease": {"$exists": False}},
                 {"interview_start_lease.expires_at": {"$lt": now}}]},
         {"$set": {"interview_start_lease": {"id": lease_id,
@@ -224,7 +234,8 @@ def start_interview(current_user):
             "user_id": owner, "status": {"$in": ["setup", "active"]}})
         if existing:
             return jsonify(_session_payload(existing)), 200
-        return _start_interview(current_user)
+        try: return _start_interview(current_user)
+        except WorkflowError as exc: return jsonify(error=str(exc), error_code=exc.code), exc.status
     finally:
         applications_collection.update_one({"_id": app_id, "interview_start_lease.id": lease_id},
             {"$unset": {"interview_start_lease": ""}})
@@ -301,6 +312,10 @@ def _start_interview(current_user):
                 403,
             )
 
+    if managed(app_doc):
+        from services.hiring_progression_service import HiringProgressionService
+        active_version = HiringProgressionService(applications_collection.database).version(app_doc['workflow_version_id'])
+        job = dict(job, proctoring_config=active_version['screening_proctoring_config'])
     proctoring_config = normalize_proctoring_config(job.get("proctoring_config"))
     if proctoring_config["dual_camera"] and not app_config.mobile_recording_enabled():
         return jsonify({"error": "This job requires two cameras, but the mobile service is unavailable. Please contact the recruiter.",
@@ -407,6 +422,11 @@ def _start_interview(current_user):
         before a usable session exists â€” credits used to simply vanish here."""
         if not (recruiter_deduction and recruiter_deduction.get("success")):
             return
+        # A replacement worker may have created the usable session while this
+        # request was waiting. Its shared idempotent debit must stay captured.
+        if interviews_collection.find_one({'application_id': str(application_id), 'debit_idempotency_key': debit_idempotency_key,
+                'status': {'$in': ['setup', 'active', 'finishing', 'completed']}}):
+            return
         try:
             interview_credit_service.refund_recruiter_debit(
                 db_config.get_db(),
@@ -446,6 +466,8 @@ def _start_interview(current_user):
             if cv_service
             else _format_job_from_doc(job)
         )
+        if managed(app_doc) and (app_doc.get('jd_snapshot') or {}).get('text'):
+            jd_text = app_doc['jd_snapshot']['text']
 
         # Persist as temporary .txt files for the interview document pipeline
         import uuid as _uuid
@@ -508,7 +530,11 @@ def _start_interview(current_user):
             "start_time": time.time(),
         }
 
-        interview_id = interviews_collection.insert_one(interview_doc).inserted_id
+        if managed(app_doc):
+            from services.hiring_progression_service import HiringProgressionService
+            interview_id = HiringProgressionService(applications_collection.database).persist_screening_session(application_id, current_user['_id'], interview_doc)
+        else:
+            interview_id = interviews_collection.insert_one(interview_doc).inserted_id
     except Exception:
         # Any unexpected failure between the debit and a persisted session
         # doc means no interview can ever happen for this charge â€” refund,
@@ -525,6 +551,7 @@ def _start_interview(current_user):
             "conversation_context": session_details.get("conversation_context", {}),
             "question_timeout_seconds": session_details.get("question_timeout_seconds"),
             "question_deadline": None,
+            "screening_finish_by": interview_doc.get('screening_finish_by'),
             "voice_policy": voice_policy(),
             "max_questions": session_details.get("max_questions"),
             "proctoring_config": interview_doc["proctoring_config"],
@@ -554,6 +581,21 @@ def _owned_session(user_id, session_id):
     return None, None, None
 
 
+def _screening_window_error(doc):
+    if not doc or not doc.get('screening_finish_by'): return None
+    from services.hiring_progression_service import utc, now_utc, scheduling_enabled
+    if not scheduling_enabled():
+        return jsonify(error='Screening scheduling is temporarily unavailable. Your answers remain saved.', error_code='scheduling_disabled'), 503
+    if now_utc() >= utc(doc['screening_finish_by']):
+        return jsonify(error='The screening window has closed. Finish the interview to retain your report for recruiter review.', error_code='screening_window_closed'), 409
+    if doc.get('finished_at'):
+        return jsonify(error='Your screening was submitted. Finish report generation to continue.', error_code='screening_submitted'), 409
+    app = applications_collection.find_one({'_id': ObjectId(doc['application_id'])})
+    if not app or (app.get('workflow') or {}).get('lifecycle') != 'active':
+        return jsonify(error='This application is no longer active.', error_code='terminal_application'), 409
+    return None
+
+
 def _session_payload(doc, manager=None):
     if manager is None:
         _, _, manager = _owned_session(doc["user_id"], doc["session_id"])
@@ -563,6 +605,7 @@ def _session_payload(doc, manager=None):
     payload = {
         "session_id": doc["session_id"], "interview_id": str(doc.get("_id", "")),
         "application_id": doc.get("application_id"), "status": doc.get("status"),
+        "screening_finish_by": doc.get('screening_finish_by'),
         "is_practice": bool(doc.get("is_practice")),
         "setup_required": doc.get("status") == "setup",
         "voice_policy": voice_policy(),
@@ -685,6 +728,8 @@ def activate_interview(current_user, session_id):
     doc, collection, manager = _owned_session(current_user["_id"], session_id)
     if not doc:
         return jsonify({"error": "Session not found"}), 404
+    window_error = _screening_window_error(doc)
+    if window_error: return window_error
     if doc.get("status") not in {"setup", "active"}:
         return jsonify({"error": "This interview has ended", "error_code": "session_ended"}), 409
     checks = request.get_json(silent=True) or {}
@@ -734,6 +779,8 @@ def get_interview_question(current_user, session_id):
         return jsonify({"error": "Session not found"}), 404
 
     doc, _, manager = _owned_session(user_id, session_id)
+    window_error = _screening_window_error(doc)
+    if window_error: return window_error
     if doc.get("status") == "terminated":
         return jsonify({"error": "This interview has ended under the monitoring policy.", "error_code": "session_ended"}), 409
     _restore_engine(doc, manager)
@@ -754,6 +801,9 @@ def submit_answer(current_user, session_id):
     doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
     if not doc:
         return jsonify({"error": "Session not found"}), 404
+    window_error = _screening_window_error(doc)
+    if window_error: return window_error
+    received_at = datetime.datetime.now(datetime.timezone.utc)
     if doc.get("status") != "active":
         return jsonify({"error": "Start the interview after completing setup before answering.",
             "error_code": "session_not_active"}), 409
@@ -829,6 +879,8 @@ def submit_answer(current_user, session_id):
         serializable_result = make_json_serializable(result)
 
         if not result.get("repeated_question"):
+            if doc.get('screening_finish_by') and serializable_result.get('interview_complete'):
+                interviews_collection.update_one({'_id': doc['_id'], 'finished_at': {'$exists': False}}, {'$set': {'finished_at': received_at}})
             interviews_collection.update_one({"_id": doc["_id"]}, {
                 "$push": {"qa_pairs": {"question": question, "answer": answer,
                     "evaluation": serializable_result.get("current_evaluation")},
@@ -851,6 +903,7 @@ def submit_answer(current_user, session_id):
 @interview_bp.route("/api/interviews/<session_id>/end", methods=["POST"])
 @token_required
 def end_interview(current_user, session_id):
+    import datetime
     from services.interview_completion_service import complete_in_background
     doc = interviews_collection.find_one({"session_id": session_id, "user_id": str(current_user["_id"])})
     if not doc:
@@ -862,6 +915,10 @@ def end_interview(current_user, session_id):
         data = {}
     if not isinstance(data, dict):
         return jsonify({"error": "Expected a JSON object"}), 400
+    # Record receipt before asynchronous evaluation/queue delay. Never overwrite
+    # a previous finish time on retries or accept a client-provided timestamp.
+    interviews_collection.update_one({'session_id': session_id, 'user_id': str(current_user['_id']), 'finished_at': {'$exists': False}, 'status': {'$in': ['setup', 'active', 'finishing']}},
+        {'$set': {'finished_at': datetime.datetime.now(datetime.timezone.utc)}})
     return complete_in_background(("interview", str(current_user["_id"]), session_id),
                                   lambda: _complete_interview(current_user, session_id, data), interviews_collection)
 
@@ -1134,6 +1191,8 @@ def _complete_interview(current_user, session_id, data):
     )
 
     # Also update the related application with both scores if linked
+    from services.hiring_progression_service import sync_completed_screening
+    sync_completed_screening(interviews_collection, session_doc['_id'])
     if session_doc and session_doc.get("application_id"):
         try:
             application_id = session_doc["application_id"]
@@ -1166,7 +1225,7 @@ def _complete_interview(current_user, session_id, data):
             recruiter_actor_id = str(existing_app.get("recruiter_id") or "")
 
             result = applications_collection.update_one(
-                {"_id": ObjectId(application_id)},
+                legacy_filter({"_id": ObjectId(application_id)}),
                 {
                     "$set": {
                         "interview_score": interview_score,  # Store interview performance score
@@ -1194,6 +1253,9 @@ def _complete_interview(current_user, session_id, data):
                     "proctoring_score": proctoring_score,
                     "proctoring_status": proctoring_status,
                 }
+                if managed(existing_app):
+                    latest = applications_collection.find_one({'_id': existing_app['_id']}) or existing_app
+                    _score_update_payload.update({k: latest.get(k) for k in ('status', 'workflow', 'workflow_version_id', 'workflow_label')})
                 for _room in {
                     str(existing_app.get("student_id", "")),
                     str(existing_app.get("recruiter_id", "")),
@@ -1224,7 +1286,7 @@ def _complete_interview(current_user, session_id, data):
                     job_counter_update.get("interviewed", 0) + 1
                 )
 
-            if job_counter_update:
+            if job_counter_update and result.matched_count:
                 jobs_collection.update_one(
                     {"_id": ObjectId(existing_app["job_id"])},
                     {"$inc": job_counter_update},
@@ -1244,7 +1306,7 @@ def _complete_interview(current_user, session_id, data):
                 _app_id = str(application_id)
                 _email_svc = EmailService()
 
-                if recruiter_doc and recruiter_doc.get("email"):
+                if recruiter_doc and recruiter_doc.get("email") and not managed(existing_app):
                     _rec_name = recruiter_doc.get("name") or "Recruiter"
                     _rec_email = recruiter_doc["email"]
                     threading.Thread(
@@ -1253,7 +1315,7 @@ def _complete_interview(current_user, session_id, data):
                         daemon=True,
                     ).start()
 
-                if current_user.get("email"):
+                if current_user.get("email") and not managed(existing_app):
                     threading.Thread(
                         target=_email_svc.send_interview_complete_candidate_email,
                         args=(current_user["email"], _cand_name, _job_title, _score),
@@ -1319,10 +1381,14 @@ def _complete_interview(current_user, session_id, data):
 
     if session and final_evaluation.get("pending_answers"):
         def publish_refresh(score, evaluation):
+            from services.hiring_progression_service import sync_completed_screening
+            sync_completed_screening(interviews_collection, session_doc['_id'])
             application_id = session_doc.get("application_id")
             if application_id:
-                applications_collection.update_one({"_id": ObjectId(application_id)},
+                changed = applications_collection.update_one(legacy_filter({"_id": ObjectId(application_id)}),
                     {"$set": {"interview_score": score}})
+                if not changed.matched_count:
+                    return
                 payload = {"type": "score_updated", "application": {"_id": application_id,
                     "interview_score": score, "status": "interviewed"}}
                 for room in {session_doc.get("user_id"), session_doc.get("recruiter_id")} - {None, ""}:

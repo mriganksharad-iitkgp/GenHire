@@ -10,9 +10,9 @@ Design Decisions:
 
 import os
 from typing import Dict, Any
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 
-load_dotenv()
+load_environment()
 
 
 class PaymentConfig:

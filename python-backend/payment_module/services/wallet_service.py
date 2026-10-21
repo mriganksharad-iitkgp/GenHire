@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
+from core.mongo_transactions import atomic
+import uuid
 
 from ..config.settings import PaymentConfig
 from ..models.credit_transaction import CreditTransaction, CreditTransactionSchema
@@ -37,17 +39,20 @@ class WalletService:
     # this guard each request would issue multiple index-creation round-trips to
     # MongoDB, adding ~50-100ms of unnecessary latency per request.
     _indexes_created: bool = False
+    _indexed_databases = set()
 
     def _ensure_indexes(self):
-        if WalletService._indexes_created:
+        identity = (id(self.db.client), self.db.name)
+        if WalletService._indexes_created and identity in WalletService._indexed_databases:
             return
         try:
             CreditWalletSchema.create_indexes(self.db)
             CreditTransactionSchema.create_indexes(self.db)
             self.email_signup_registry.create_index("email_lower", unique=True)
             WalletService._indexes_created = True
+            WalletService._indexed_databases.add(identity)
         except Exception as exc:
-            logger.error(f"Failed creating wallet indexes: {exc}")
+            raise RuntimeError("Critical wallet indexes could not be created; billing is unavailable.") from exc
 
 
     def _normalize_audience(self, audience: str) -> str:
@@ -102,7 +107,7 @@ class WalletService:
             "balance_after": balance,
         }
 
-    def get_or_create_wallet(self, owner_id: str, audience: str) -> CreditWallet:
+    def get_or_create_wallet(self, owner_id: str, audience: str, session=None) -> CreditWallet:
         normalized_audience = self._normalize_audience(audience)
         owner_id = str(owner_id)
         now = datetime.utcnow()
@@ -114,6 +119,7 @@ class WalletService:
                     "owner_id": owner_id,
                     "audience": normalized_audience,
                     "balance": 0,
+                    "reserved_credits": 0,
                     "total_credited": 0,
                     "total_debited": 0,
                     "signup_bonus_granted": False,
@@ -123,213 +129,94 @@ class WalletService:
             },
             upsert=True,
             return_document=ReturnDocument.AFTER,
+            session=session,
         )
         return CreditWallet.from_dict(doc)
 
-    def grant_signup_bonus_once(self, owner_id: str, audience: str, email: Optional[str] = None) -> Dict[str, Any]:
-        wallet = self.get_or_create_wallet(owner_id, audience)
-        normalized_email = str(email or "").strip().lower()
-        email_already_used = bool(
-            normalized_email
-            and self.email_signup_registry.find_one({"email_lower": normalized_email})
-        )
+    def grant_signup_bonus_once(self, owner_id, audience, email=None):
+        owner_id, audience = str(owner_id), self._normalize_audience(audience)
+        email = str(email or "").strip().lower()
+        self.get_or_create_wallet(owner_id, audience)
 
-        if wallet.signup_bonus_granted or email_already_used:
-            if email_already_used and not wallet.signup_bonus_granted:
-                # This owner_id is new (recreated account) but the email has
-                # already claimed a bonus before — mark the wallet so it
-                # doesn't re-check the registry on every future call.
-                self.wallet_collection.update_one(
-                    {"owner_id": wallet.owner_id, "audience": wallet.audience},
-                    {"$set": {"signup_bonus_granted": True, "updated_at": datetime.utcnow()}},
-                )
-            return {
-                "success": True,
-                "granted": False,
-                "wallet": self.get_wallet_summary(owner_id, audience),
-            }
-
-        idempotency_key = f"signup-bonus:{wallet.owner_id}:{wallet.audience}"
-        result = self.credit_wallet(
-            owner_id=wallet.owner_id,
-            audience=wallet.audience,
-            credits=int(PaymentConfig.SIGNUP_BONUS_CREDITS),
-            transaction_type="signup_bonus",
-            reference_type="user",
-            reference_id=wallet.owner_id,
-            metadata={"reason": "signup_bonus"},
-            idempotency_key=idempotency_key,
-        )
-
-        if result.get("success"):
-            self.wallet_collection.update_one(
-                {"owner_id": wallet.owner_id, "audience": wallet.audience},
-                {
-                    "$set": {
-                        "signup_bonus_granted": True,
-                        "updated_at": datetime.utcnow(),
-                    }
-                },
-            )
-            if normalized_email:
-                try:
-                    self.email_signup_registry.insert_one(
-                        {
-                            "email_lower": normalized_email,
-                            "audience": wallet.audience,
-                            "owner_id": wallet.owner_id,
-                            "granted_at": datetime.utcnow(),
-                        }
-                    )
-                except DuplicateKeyError:
-                    # Race with a concurrent signup for the same email — the
-                    # registry entry is already there, which is all that matters.
-                    pass
-
-        return {
-            "success": bool(result.get("success")),
-            "granted": bool(result.get("success")),
-            "wallet": self.get_wallet_summary(wallet.owner_id, wallet.audience),
-        }
-
-    def credit_wallet(
-        self,
-        owner_id: str,
-        audience: str,
-        credits: int,
-        transaction_type: str,
-        reference_type: Optional[str] = None,
-        reference_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        owner_id = str(owner_id)
-        normalized_audience = self._normalize_audience(audience)
-        amount = max(0, int(credits or 0))
-        if amount <= 0:
-            return {"success": False, "error": "credits must be > 0"}
-
-        replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
-        if replay:
-            return self._format_result(
-                owner_id,
-                normalized_audience,
-                replay,
-                idempotent_replay=True,
-            )
-
-        wallet = self.get_or_create_wallet(owner_id, normalized_audience)
-        updated_doc = self.wallet_collection.find_one_and_update(
-            {"owner_id": owner_id, "audience": normalized_audience},
-            {
-                "$inc": {"balance": amount, "total_credited": amount},
-                "$set": {"updated_at": datetime.utcnow()},
-            },
-            return_document=ReturnDocument.AFTER,
-        )
-
-        transaction = CreditTransaction(
-            owner_id=owner_id,
-            audience=normalized_audience,
-            delta_credits=amount,
-            balance_after=int(updated_doc.get("balance", wallet.balance + amount)),
-            transaction_type=transaction_type,
-            reference_type=reference_type,
-            reference_id=str(reference_id) if reference_id is not None else None,
-            metadata=metadata or {},
-            idempotency_key=idempotency_key,
-        )
+        def grant(session):
+            wallet = self.wallet_collection.find_one(dict(owner_id=owner_id, audience=audience), session=session)
+            used = email and self.email_signup_registry.find_one({'email_lower': email}, session=session)
+            if wallet.get('signup_bonus_granted') or used:
+                self.wallet_collection.update_one({'_id': wallet['_id']}, {'$set': {'signup_bonus_granted': True}}, session=session)
+                return False
+            if email:
+                self.email_signup_registry.insert_one(dict(email_lower=email, owner_id=owner_id,
+                    audience=audience, granted_at=datetime.utcnow()), session=session)
+            self._change_in_session(session, owner_id, audience, int(PaymentConfig.SIGNUP_BONUS_CREDITS),
+                'signup_bonus', 'user', owner_id, {'reason': 'signup_bonus'}, f'signup-bonus:{owner_id}:{audience}')
+            self.wallet_collection.update_one({'_id': wallet['_id']}, {'$set': {'signup_bonus_granted': True}}, session=session)
+            return True
         try:
-            inserted = self.transaction_collection.insert_one(transaction.to_dict())
-            transaction._id = inserted.inserted_id
+            granted = atomic(self.db, grant)
         except DuplicateKeyError:
-            replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
-            if replay:
-                return {"success": True, "idempotent_replay": True, "transaction": replay}
-            raise
-        return self._format_result(
-            owner_id,
-            normalized_audience,
-            transaction.to_api_response(),
-            wallet_doc=updated_doc,
-        )
+            # Another transaction won the global email/owner claim. Recheck in
+            # a fresh transaction; no credit from this aborted transaction survived.
+            granted = atomic(self.db, grant)
+        return {'success': True, 'granted': granted, 'wallet': self.get_wallet_summary(owner_id, audience)}
 
-    def debit_wallet(
-        self,
-        owner_id: str,
-        audience: str,
-        credits: int,
-        transaction_type: str,
-        reference_type: Optional[str] = None,
-        reference_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        owner_id = str(owner_id)
-        normalized_audience = self._normalize_audience(audience)
-        amount = max(0, int(credits or 0))
-        if amount <= 0:
-            return {"success": False, "error": "credits must be > 0"}
+    def _change_in_session(self, session, owner_id, audience, delta, transaction_type,
+                           reference_type, reference_id, metadata, key):
+        identity = dict(owner_id=owner_id, audience=audience)
+        previous = self.transaction_collection.find_one(dict(identity, idempotency_key=key), session=session)
+        if previous:
+            if (previous['delta_credits'] != delta or previous['transaction_type'] != transaction_type
+                    or previous.get('reference_type') != reference_type or previous.get('reference_id') != reference_id):
+                return {'success': False, 'error_code': 'idempotency_conflict',
+                        'error': 'This operation key was already used for different billing details.'}
+            wallet = self.wallet_collection.find_one(identity, session=session)
+            return self._format_result(owner_id, audience, CreditTransaction.from_dict(previous).to_api_response(),
+                                       idempotent_replay=True, wallet_doc=wallet)
+        query = dict(identity)
+        if delta < 0:
+            query['balance'] = {'$gte': -delta}
+        changes = {'balance': delta, 'total_credited' if delta > 0 else 'total_debited': abs(delta)}
+        wallet = self.wallet_collection.find_one_and_update(query,
+            {'$inc': changes, '$set': {'updated_at': datetime.utcnow()}},
+            return_document=ReturnDocument.AFTER, session=session)
+        if not wallet:
+            current = self.wallet_collection.find_one(identity, session=session) or {}
+            return {'success': False, 'error_code': 'insufficient_credits', 'error': 'Insufficient credits',
+                    'credits_required': -delta, 'credits_remaining': current.get('balance', 0)}
+        transaction = CreditTransaction(owner_id=owner_id, audience=audience, delta_credits=delta,
+            balance_after=wallet['balance'], transaction_type=transaction_type, reference_type=reference_type,
+            reference_id=reference_id, metadata=metadata or {}, idempotency_key=key)
+        transaction._id = self.transaction_collection.insert_one(transaction.to_dict(), session=session).inserted_id
+        return self._format_result(owner_id, audience, transaction.to_api_response(), wallet_doc=wallet)
 
-        replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
-        if replay:
-            return self._format_result(
-                owner_id,
-                normalized_audience,
-                replay,
-                idempotent_replay=True,
-            )
-
-        self.get_or_create_wallet(owner_id, normalized_audience)
-
-        updated_doc = self.wallet_collection.find_one_and_update(
-            {
-                "owner_id": owner_id,
-                "audience": normalized_audience,
-                "balance": {"$gte": amount},
-            },
-            {
-                "$inc": {"balance": -amount, "total_debited": amount},
-                "$set": {"updated_at": datetime.utcnow()},
-            },
-            return_document=ReturnDocument.AFTER,
-        )
-
-        if not updated_doc:
-            wallet_doc = self._get_wallet_doc(owner_id, normalized_audience) or {}
-            return {
-                "success": False,
-                "error": "Insufficient credits",
-                "error_code": "insufficient_credits",
-                "credits_required": amount,
-                "credits_remaining": int(wallet_doc.get("balance", 0) or 0),
-            }
-
-        transaction = CreditTransaction(
-            owner_id=owner_id,
-            audience=normalized_audience,
-            delta_credits=-amount,
-            balance_after=int(updated_doc.get("balance", 0)),
-            transaction_type=transaction_type,
-            reference_type=reference_type,
-            reference_id=str(reference_id) if reference_id is not None else None,
-            metadata=metadata or {},
-            idempotency_key=idempotency_key,
-        )
+    def _change(self, owner_id, audience, credits, transaction_type, reference_type, reference_id,
+                metadata, idempotency_key, direction):
+        if isinstance(credits, bool) or not isinstance(credits, int) or credits <= 0:
+            return {'success': False, 'error': 'credits must be a positive integer', 'error_code': 'invalid_credits'}
+        if not isinstance(transaction_type, str) or not transaction_type:
+            return {'success': False, 'error': 'transaction_type is required', 'error_code': 'invalid_operation'}
+        if idempotency_key is not None and (not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 200):
+            return {'success': False, 'error': 'Invalid operation key', 'error_code': 'invalid_operation'}
+        owner_id, audience = str(owner_id), self._normalize_audience(audience)
+        reference_id = str(reference_id) if reference_id is not None else None
+        key = idempotency_key or 'unkeyed:' + uuid.uuid4().hex
+        self.get_or_create_wallet(owner_id, audience)
+        def change(session):
+            return self._change_in_session(session, owner_id, audience, direction * credits,
+                transaction_type, reference_type, reference_id, metadata, key)
         try:
-            inserted = self.transaction_collection.insert_one(transaction.to_dict())
-            transaction._id = inserted.inserted_id
+            return atomic(self.db, change)
         except DuplicateKeyError:
-            replay = self._find_idempotent(owner_id, normalized_audience, idempotency_key)
-            if replay:
-                return {"success": True, "idempotent_replay": True, "transaction": replay}
-            raise
-        return self._format_result(
-            owner_id,
-            normalized_audience,
-            transaction.to_api_response(),
-            wallet_doc=updated_doc,
-        )
+            return atomic(self.db, change)
+
+    def credit_wallet(self, owner_id, audience, credits, transaction_type, reference_type=None,
+                      reference_id=None, metadata=None, idempotency_key=None):
+        return self._change(owner_id, audience, credits, transaction_type, reference_type,
+                            reference_id, metadata, idempotency_key, 1)
+
+    def debit_wallet(self, owner_id, audience, credits, transaction_type, reference_type=None,
+                     reference_id=None, metadata=None, idempotency_key=None):
+        return self._change(owner_id, audience, credits, transaction_type, reference_type,
+                            reference_id, metadata, idempotency_key, -1)
 
     def add_audit_transaction(
         self,
@@ -420,6 +307,7 @@ class WalletService:
             "owner_id": wallet.owner_id,
             "audience": wallet.audience,
             "credits_balance": balance,
+            "reserved_credits": int(wallet.reserved_credits),
             "current_balance": balance,
             "total_credited": total_credited,
             "total_credits_allocated": total_credited,

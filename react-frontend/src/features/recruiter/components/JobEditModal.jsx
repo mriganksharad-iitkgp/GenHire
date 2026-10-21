@@ -4,6 +4,19 @@ import { INDIA_LOCATION_OPTIONS } from 'shared/constants/jobTaxonomy';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
 import styles from './JobForm.module.css';
 import proctoringStyles from './JobForm.module.css';
+import useJobSetup from '../hooks/useJobSetup';
+import useJobDraftRecovery from '../hooks/useJobDraftRecovery';
+import JobDraftNotice from './JobDraftNotice';
+import JobAIDraftBuilder from './JobAIDraftBuilder';
+import questionDraftConfiguration from '../utils/questionDraftConfiguration';
+import {getAssessmentWorkspace} from '../api/assessmentAuthoringApi';
+import useJobWizardScroll from '../hooks/useJobWizardScroll';
+import JobQuestionDrafts from './JobQuestionDrafts';
+import attachJobQuestions from '../utils/attachJobQuestions';
+import JobTemplatePicker from './JobTemplatePicker';
+import {SetupNotice,PricingNote} from './HiringSetupWizard';
+import RoleAssessmentTemplateControls from './RoleAssessmentTemplateControls';
+import JobHiringSections,{revealJobSection,revealInvalidJobField} from './JobHiringSections';
 
 // Predefined data for auto-suggestions
 const COMMON_SKILLS = [
@@ -101,6 +114,36 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useJobWizardScroll(isOpen);
+  const [questionDrafts, setQuestionDrafts] = useState({editor:null,questions:[]});
+  const [questionBusy, setQuestionBusy] = useState(false);
+  const [questionsLoadError,setQuestionsLoadError]=useState('');
+  const [questionReload,setQuestionReload]=useState(0);
+  const [authoringMode,setAuthoringMode]=useState('manual');
+  const [aiPrompt,setAiPrompt]=useState('');
+  const [generation,setGeneration]=useState(null);
+  const [isAiGenerating,setIsAiGenerating]=useState(false);
+  const setup = useJobSetup({ isOpen, jobTitle:jobData.title, jobId: initialJobData?._id || initialJobData?.id, initialJobData,
+    onResume: fields => setJobData(current => ({ ...current, ...fields,
+      responsibilities: toString(fields.responsibilities ?? current.responsibilities),
+      requirements: toString(fields.requirements ?? current.requirements),
+      benefits: toString(fields.benefits ?? current.benefits),
+    })) });
+  useEffect(()=>{if(setup.configuration?.oa.source)setAuthoringMode(setup.configuration.oa.source==='ai'?'ai':'manual');},[setup.configuration?.oa.source]);
+  useEffect(()=>{
+    if(!isOpen||!setup.assessmentBlueprintId)return;
+    let cancelled=false;setQuestionBusy(true);setQuestionsLoadError('');
+    getAssessmentWorkspace(setup.assessmentBlueprintId).then(workspace=>{
+      if(!cancelled)setQuestionDrafts(current=>current.questions.length||current.editor?current:{...current,questions:(workspace.questions||[]).map(q=>({_id:q._id,type:q.content.type,title:q.content.title,content:q.content})),replaceSelection:true});
+    }).catch(err=>{if(!cancelled)setQuestionsLoadError(err.message||'Assessment questions could not be loaded.');})
+      .finally(()=>{if(!cancelled)setQuestionBusy(false);});
+    return()=>{cancelled=true;};
+  },[isOpen,setup.assessmentBlueprintId,questionReload]);
+  const saveHiringDraft = async () => {
+    try { await setup.save(jobData); } catch (error) {
+      showToast ? showToast(error.message, 'error') : alert(error.message);
+    }
+  };
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [skillInput, setSkillInput] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
@@ -121,9 +164,15 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
     status: statusDropdownRef
   }), []);
 
+  const recovery=useJobDraftRecovery({isOpen,hold:setup.loading||!!setup.savedDraft,jobId:initialJobData?._id||initialJobData?.id,value:{jobFields:jobData,configuration:setup.configuration,questionDrafts,authoringMode,aiPrompt,generation},onRestore:value=>{
+    setAuthoringMode(value.authoringMode||'manual');setAiPrompt(value.aiPrompt||'');setGeneration(value.generation||null);setQuestionDrafts(value.questionDrafts||{editor:null,questions:[]});setJobData(value.jobFields);if(value.configuration)setup.restoreConfiguration(value.configuration);
+
+  }});
+
   // Initialize job data when modal opens or initialJobData changes
   useEffect(() => {
     if (isOpen && initialJobData) {
+      setQuestionDrafts({editor:null,questions:[]});setGeneration(null);setAuthoringMode('manual');setAiPrompt('');
       setJobData({
         title: initialJobData.title || '',
         department: initialJobData.department || '',
@@ -212,8 +261,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
   // Handle Escape key to close modal
   useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        handleCancel();
+      if (e.key === 'Escape' && isOpen && !questionBusy && !isSubmitting) {
+        setShowCancelConfirm(true);
       }
     };
 
@@ -224,11 +273,14 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen]);
+  }, [isOpen, questionBusy, isSubmitting]);
 
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (questionBusy || isSubmitting || isAiGenerating || (generation?.key&&!['completed','failed'].includes(generation.state))) return;
+    if(questionsLoadError){showToast?.('Reload assessment questions before updating this job.', 'error');return;}
+    if (questionDrafts.editor) { const message='Save or discard the open question before saving this job.'; showToast ? showToast(message, 'error') : alert(message); revealJobSection(dialogRef.current,'oa'); return; }
     
     if (!jobData.title.trim()) {
       showToast ? showToast('Please enter a job title', 'error') : alert('Please enter a job title');
@@ -238,9 +290,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
     setIsSubmitting(true);
     
     try {
-      await onJobUpdate({
+      const reference = await setup.save(jobData);
+      const success = await onJobUpdate({
         _id: initialJobData?._id || initialJobData?.id, // Include the job ID
         ...jobData,
+        ...reference,
         skills: jobData.skills,
         responsibilities: jobData.responsibilities.split('\n').filter(item => item.trim()),
         requirements: jobData.requirements.split('\n').filter(item => item.trim()),
@@ -250,12 +304,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
         gaze_proctoring: Boolean(jobData.proctoring_config?.gaze_heatmap)
       });
       
-      onClose();
+      if (success !== false) { if(setup.configuration?.pipeline.oa_enabled)await attachJobQuestions(initialJobData?._id || initialJobData?.id, questionDrafts.questions,questionDrafts.replaceSelection); recovery.clear(); setQuestionDrafts({editor:null,questions:[]}); onClose(); }
     } catch (error) {
       console.error('Error updating job:', error);
       showToast
-        ? showToast('Failed to update job. Please try again.', 'error')
-        : alert('Failed to update job. Please try again.');
+        ? showToast(error.message || 'Failed to update job. Please try again.', 'error')
+        : alert(error.message || 'Failed to update job. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -272,6 +326,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
   // Handle cancel
   const handleCancel = () => {
+    if (questionBusy || isSubmitting) return;
     setShowCancelConfirm(true);
   };
 
@@ -306,24 +361,32 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
   return (
     <div className={styles.modalOverlay}>
-      <div className={styles.modalContent}>
+      <div ref={dialogRef} className={styles.modalContent} role="dialog" aria-modal="true" aria-labelledby="edit-job-dialog-title">
         <div className={styles.modalHeader}>
-          <h2>Edit job</h2>
-          <button onClick={handleCancel} className={styles.closeButton} aria-label="Close">
+          <div><h2 id="edit-job-dialog-title">Edit job</h2><p className={styles.headerHint}>Update the role and hiring plan. Existing candidates keep their current workflow.</p></div>
+          <div className={styles.headerActions}><button type="button" className={styles.aiShortcut} disabled={questionBusy || isSubmitting} onClick={()=>revealJobSection(dialogRef.current,'ai')}>Fill with AI</button></div>
+          <button type="button" disabled={questionBusy || isSubmitting} onClick={handleCancel} className={styles.closeButton} aria-label="Close">
             ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.jobForm}>
+        <form onSubmit={handleSubmit} onInvalidCapture={revealInvalidJobField} className={styles.jobForm}>
+          <fieldset disabled={isSubmitting || setup.saving || questionBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <JobDraftNotice setup={setup} draft={recovery} loading={setup.loading}/>
+          <SetupNotice setup={setup} />
+          {isAiGenerating&&<p role="status" className={styles.selectionNotice}>AI is preparing your draft. You can close and resume later. Save the job after generation finishes.</p>}
+          {questionsLoadError&&<div role="alert" className={styles.aiError}>{questionsLoadError}<button type="button" onClick={()=>setQuestionReload(n=>n+1)}>Retry loading questions</button></div>}
+          <div>
+          {authoringMode==='manual'&&<JobTemplatePicker editing onSelect={(name,t)=>setJobData(current=>({...current,title:name,department:t.department,skills:[...t.skills],experience:t.experience,salary:t.salary,description:t.description,responsibilities:t.responsibilities.join('\n'),requirements:t.requirements.join('\n'),benefits:t.benefits.join('\n')}))}/>}
           {/* Form Grid */}
           <div className={styles.formGrid}>
             {/* Job Title */}
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="edit-job-title">
                 Job Title
                 <span className={styles.smartIndicator}> Suggestions</span>
               </label>
-              <input
+              <input id="edit-job-title"
                 type="text"
                 name="title"
                 value={jobData.title}
@@ -336,12 +399,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Department */}
             <div className={styles.formGroup} ref={dropdownRefs.department}>
-              <label>
+              <label htmlFor="edit-job-department">
                 Department
                 <span className={styles.autoFilled}> Suggestions</span>
               </label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="edit-job-department"
                   type="text"
                   name="department"
                   value={jobData.department}
@@ -375,12 +438,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Location */}
             <div className={styles.formGroup} ref={dropdownRefs.location}>
-              <label>
+              <label htmlFor="edit-job-location">
                 Location
                 <span className={styles.autoFilled}> Locations</span>
               </label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="edit-job-location"
                   type="text"
                   name="location"
                   value={jobData.location}
@@ -414,8 +477,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Job Type */}
             <div className={styles.formGroup}>
-              <label>Job Type</label>
-              <select
+              <label htmlFor="edit-job-type">Job Type</label>
+              <select id="edit-job-type"
                 name="type"
                 value={jobData.type}
                 onChange={handleInputChange}
@@ -430,12 +493,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Experience */}
             <div className={styles.formGroup} ref={dropdownRefs.experience}>
-              <label>
+              <label htmlFor="edit-job-experience">
                 Experience Level
                 <span className={styles.autoFilled}> Suggestions</span>
               </label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="edit-job-experience"
                   type="text"
                   name="experience"
                   value={jobData.experience}
@@ -469,12 +532,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Salary */}
             <div className={styles.formGroup} ref={dropdownRefs.salary}>
-              <label>
+              <label htmlFor="edit-job-salary">
                 Salary Range
                 <span className={styles.autoFilled}> Salary guide</span>
               </label>
               <div className={styles.inputWithDropdown}>
-                <input
+                <input id="edit-job-salary"
                   type="text"
                   name="salary"
                   value={jobData.salary}
@@ -508,12 +571,12 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Job Status */}
             <div className={styles.formGroup} ref={dropdownRefs.status}>
-              <label>
+              <label htmlFor="edit-job-status">
                 Job Status
                 <span className={styles.smartIndicator}> Status</span>
               </label>
               <div className={styles.statusContainer}>
-                <select
+                <select id="edit-job-status"
                   name="status"
                   value={jobData.status}
                   onChange={handleInputChange}
@@ -538,11 +601,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Minimum CV Score */}
             <div className={styles.formGroup}>
-              <label>
+              <label htmlFor="edit-job-minimum_cv_score">
                 Minimum CV Score
                 <span className={styles.smartIndicator}> Screening threshold</span>
               </label>
-              <input
+              <input id="edit-job-minimum_cv_score"
                 type="number"
                 name="minimum_cv_score"
                 value={jobData.minimum_cv_score}
@@ -559,11 +622,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
             {/* Interview monitoring */}
             <div className={styles.formGroup} style={{gridColumn: '1 / -1'}}>
-              <label> Interview monitoring</label>
+              <details className={styles.formAccordion}><summary>Interview monitoring</summary>
               <div className={proctoringStyles.proctoringSection}>
                 <div className={proctoringStyles.creditWarning}>
                   <i className="fa fa-exclamation-triangle"></i>
-                    Real interview billing: 30 credits per candidate when proctoring is off, 50 credits when proctoring is on.
+                    <PricingNote setup={setup} editing />
                 </div>
                 {PROCTORING_OPTIONS.map(opt => (
                   <div key={opt.key} className={proctoringStyles.proctoringToggle}>
@@ -593,8 +656,8 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
                 ))}
               </div>
               <div className={styles.helpText}>
-                AI drafting costs 10 credits. Manual edits are free. Disabled monitoring checks are labelled in reports.
-              </div>
+                Disabled monitoring checks are labelled in reports.
+              </div></details>
             </div>
 
 
@@ -645,13 +708,14 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             </div>
           </div>
 
+          <details className={styles.formAccordion} data-job-section="description"><summary>Job description, responsibilities & benefits</summary>
           {/* Description */}
           <div className={styles.formGroup}>
-            <label>
+            <label htmlFor="edit-job-description">
               Job Description
               <span className={styles.smartIndicator}> Suggestions</span>
             </label>
-            <textarea
+            <textarea id="edit-job-description"
               name="description"
               value={jobData.description}
               onChange={handleInputChange}
@@ -663,11 +727,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
           {/* Responsibilities */}
           <div className={styles.formGroup}>
-            <label>
+            <label htmlFor="edit-job-responsibilities">
               Key Responsibilities
               <span className={styles.autoFilled}> Auto-list</span>
             </label>
-            <textarea
+            <textarea id="edit-job-responsibilities"
               name="responsibilities"
               value={jobData.responsibilities}
               onChange={handleInputChange}
@@ -679,11 +743,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
           {/* Requirements */}
           <div className={styles.formGroup}>
-            <label>
+            <label htmlFor="edit-job-requirements">
               Requirements
               <span className={styles.autoFilled}> Auto-list</span>
             </label>
-            <textarea
+            <textarea id="edit-job-requirements"
               name="requirements"
               value={jobData.requirements}
               onChange={handleInputChange}
@@ -695,11 +759,11 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
 
           {/* Benefits */}
           <div className={styles.formGroup}>
-            <label>
+            <label htmlFor="edit-job-benefits">
               Benefits & Perks
               <span className={styles.optional}> Optional</span>
             </label>
-            <textarea
+            <textarea id="edit-job-benefits"
               name="benefits"
               value={jobData.benefits}
               onChange={handleInputChange}
@@ -709,7 +773,23 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             />
           </div>
 
+          </details>
           {/* Form Actions */}
+          </div>
+          <JobHiringSections templateControls={<RoleAssessmentTemplateControls onMode={setAuthoringMode} setup={setup} jobTitle={jobData.title} value={questionDrafts} onChange={setQuestionDrafts} onBusy={setQuestionBusy} blocked={!!questionsLoadError||questionBusy||isAiGenerating}/>} onAuthoringMode={setAuthoringMode} questionEditor={setup.configuration?.pipeline.oa_enabled ? <JobQuestionDrafts configuration={setup.configuration.oa} value={questionDrafts} onChange={value=>{setQuestionDrafts(value);if(value.questions!==questionDrafts.questions)setup.setConfiguration(current=>questionDraftConfiguration(current,value.questions));}} onBusy={setQuestionBusy} mode={authoringMode}/> : null} setup={setup} onSaveDraft={saveHiringDraft} jobStatus={initialJobData?.status} editing />
+          <details className={styles.formAccordion} data-job-section="ai"><summary>Fill with AI - {setup.catalog?.prices?.ai_jd??'loading'} credits for the complete draft</summary>
+          <JobAIDraftBuilder jobTitle={jobData.title} mode={authoringMode} onMode={mode=>{setAuthoringMode(mode);setup.setConfiguration(current=>current?({...current,oa:{...current.oa,source:mode}}):current);}}
+            setup={setup} prompt={aiPrompt} onPrompt={setAiPrompt} generation={generation}
+            onGeneration={value=>{setGeneration(value);recovery.checkpoint({generation:value});}} onBusy={setIsAiGenerating} isOpen={isOpen}
+            onReady={result=>{
+              const ai=result.job_data;
+              const next={...jobData,...ai,status:jobData.status,responsibilities:toString(ai.responsibilities),requirements:toString(ai.requirements),benefits:toString(ai.benefits)};
+              const nextConfiguration={...(setup.configuration||result.configuration),oa:result.configuration.oa};
+              setJobData(next);setup.restoreConfiguration(nextConfiguration);setQuestionDrafts({editor:null,questions:result.questions,replaceSelection:true});
+              recovery.checkpoint({jobFields:next,configuration:nextConfiguration,generation:{key:generation?.key,state:'completed'},questionDrafts:{editor:null,questions:result.questions,replaceSelection:true},wizardStep:0});
+              revealJobSection(dialogRef.current,result.questions.length?'oa':'description');
+            }}/>
+          </details>
           <div className={styles.formActions}>
             <button
               type="button"
@@ -722,7 +802,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
             <button
               type="submit"
               className={styles.updateButton}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isAiGenerating || !setup.catalog || !setup.ready}
             >
               {isSubmitting ? (
                 <>
@@ -736,6 +816,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
               )}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
 
@@ -743,13 +824,14 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
         isOpen={showCancelConfirm}
         onClose={() => setShowCancelConfirm(false)}
         onConfirm={() => {
+          recovery.flush();
           setShowCancelConfirm(false);
           onClose();
         }}
-        title="Discard changes?"
-        message="Are you sure you want to cancel? All unsaved changes will be lost."
-        confirmText="Discard"
-        confirmVariant="danger"
+        title="Close job editor?"
+        message="Your progress is saved on this device when autosave is available. It has not updated the published job. You can resume it when you return."
+        confirmText="Close editor"
+        confirmVariant="primary"
       />
     </div>
   );

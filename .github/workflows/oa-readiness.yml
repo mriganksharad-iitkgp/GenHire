@@ -1,0 +1,70 @@
+name: OA local readiness
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oa-readiness-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      GENHIRE_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?replicaSet=oaTest
+      GENHIRE_DISABLE_JOBS: '1'
+      GENHIRE_RUN_OA_LOAD: 'true'
+      PYTHONPATH: python-backend:python-backend/tests
+      MPLBACKEND: Agg
+      NO_PROXY: 127.0.0.1,localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python-backend/requirements*.txt
+      - run: pip install -r python-backend/requirements-dev.txt
+      - name: Disposable loopback replica set (no application secrets)
+        run: |
+          docker run --detach --name oa-mongo --publish 127.0.0.1:27017:27017 mongo:8.0 --replSet oaTest --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec oa-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})'; then break; fi
+            sleep 1
+          done
+          docker exec oa-mongo mongosh --quiet --eval 'rs.initiate({_id:"oaTest",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec oa-mongo mongosh --quiet --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Real Mongo transactions, release/security checks and local load
+        run: python -m unittest discover -s python-backend/tests -p 'test_*.py' -v
+      - name: Offline environment schemas, preparation and credential redaction
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oa-local-load
+          path: .tmp/oa-step10-load.json
+          if-no-files-found: warn
+      - if: always()
+        run: docker rm --force oa-mongo
+  frontend-and-kiosk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: react-frontend/package-lock.json
+      - run: npm ci
+        working-directory: react-frontend
+      - run: npm run check:oa
+        working-directory: react-frontend
+      - run: node --test secure-browser-kiosk/tests/runtime-security.test.js secure-browser-kiosk/tests/media-permissions.test.js secure-browser-kiosk/tests/built-assets.test.js

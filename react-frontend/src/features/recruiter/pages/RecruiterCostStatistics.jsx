@@ -1,4 +1,5 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import BillingOperationsPanel from 'shared/components/billing/BillingOperationsPanel';
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
@@ -259,6 +260,7 @@ const RecruiterCostStatistics = () => {
         <div className={styles.usageDashboard}>
           {/* Page Header */}
           <PortalPageHeader title="Cost statistics" eyebrow="Your recruiter wallet" icon="fa-line-chart" subtitle="Track recruitment credits, wallet activity and the cost of your hiring pipeline." />
+          <BillingOperationsPanel/>
 
           {/* Overview Cards */}
           <div className={styles.overviewCards}>

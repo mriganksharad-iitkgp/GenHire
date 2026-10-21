@@ -42,13 +42,22 @@ def fetch_cleared_rows(applications_collection, job_id):
     return rows
 
 
+def spreadsheet_cell(value):
+    """Keep untrusted strings as text in Excel, including whitespace prefixes."""
+    if value is None:
+        return ''
+    if isinstance(value, str) and (value.startswith(('\t', '\r', '\n')) or value.lstrip().startswith(('=', '+', '-', '@'))):
+        return "'" + value
+    return value
+
+
 def build_csv(rows):
     """CSV bytes (UTF-8 with BOM so Excel renders names correctly)."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
     writer.writerow([header for header, _ in COLUMNS])
     for row in rows:
-        writer.writerow([row[field] for _, field in COLUMNS])
+        writer.writerow([spreadsheet_cell(row.get(field)) for _, field in COLUMNS])
     return ("﻿" + buffer.getvalue()).encode("utf-8")
 
 
@@ -66,7 +75,7 @@ def build_xlsx(rows, job_title):
         cell.font = Font(bold=True)
 
     for row in rows:
-        sheet.append([row[field] for _, field in COLUMNS])
+        sheet.append([spreadsheet_cell(row.get(field)) for _, field in COLUMNS])
 
     # Readable column widths
     for index, (header, field) in enumerate(COLUMNS, start=1):
@@ -84,3 +93,24 @@ def safe_filename(job_title, extension):
     stem = (stem or "job").replace(" ", "_")[:60]
     date = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     return f"screening_cleared_{stem}_{date}.{extension}"
+
+
+def build_stage_export(rows, extension):
+    """Explicit owner-facing fields, with spreadsheet formula injection blocked."""
+    columns = [('Application ID', 'application_id'), ('Candidate', 'name'), ('Email', 'email'),
+        ('Current stage', 'stage'), ('State', 'state'), ('Lifecycle', 'lifecycle'), ('Status', 'label'),
+        ('CV score', 'cv_score'), ('Screening score', 'interview_score'), ('Screening proctoring score', 'screening_proctoring_score'),
+        ('OA score', 'oa_score'), ('Objective recommendation', 'oa_recommendation'), ('Integrity review pending', 'integrity_hold'),
+        ('Recruiter OA decision', 'recruiter_decision'), ('Result released', 'result_released')]
+    data = [[header for header, _ in columns]] + [[spreadsheet_cell(row.get(field)) for _, field in columns] for row in rows]
+    if extension == 'csv':
+        buffer = io.StringIO(); writer = csv.writer(buffer, lineterminator='\r\n'); writer.writerows(data)
+        return ('\ufeff'+buffer.getvalue()).encode('utf-8')
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    workbook = Workbook(); sheet = workbook.active; sheet.title = 'Company candidates'
+    for row in data: sheet.append(row)
+    for header in sheet[1]: header.font = Font(bold=True)
+    sheet.freeze_panes = 'A2'; sheet.auto_filter.ref = sheet.dimensions
+    for index, (header, _) in enumerate(columns, 1): sheet.column_dimensions[sheet.cell(1, index).column_letter].width = min(45, max(15, len(header)+2))
+    buffer = io.BytesIO(); workbook.save(buffer); return buffer.getvalue()

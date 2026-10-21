@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import DetailModal, { ModalSection, ModalField, ModalGrid, ModalBadge } from "./DetailModal";
 import * as adminApi from "features/admin/api/adminApi";
 import styles from "./DetailModal.module.css";
+import CompanyReviewPanel from 'features/recruiter/components/CompanyReviewPanel';
+import AssessmentEvaluationReport from 'features/recruiter/components/AssessmentEvaluationReport';
+import AssessmentIntegrityControls from 'features/recruiter/components/AssessmentIntegrityControls';
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
@@ -109,6 +112,7 @@ const ApplicationDetailModal = ({
   };
 
   const getActions = () => {
+    if (data?.application?.workflow_version_id) return [];
     if (editMode) {
       return [
         { label: "Cancel", onClick: () => setEditMode(false), variant: "secondary" },
@@ -235,6 +239,12 @@ const ApplicationDetailModal = ({
           )}
 
           {/* Admin Notes */}
+          {data.application?.workflow_version_id && <ModalSection title="Hiring workflow inspection">
+            <p>{data.application.workflow_label}</p>
+            <AssessmentEvaluationReport attemptId={data.application.workflow?.stages.find(s => s.type === 'oa')?.attempt_id} />
+            <AssessmentIntegrityControls attemptId={data.application.workflow?.stages.find(s => s.type === 'oa')?.attempt_id} />
+            <CompanyReviewPanel key={applicationId} applicationId={applicationId} />
+          </ModalSection>}
           <ModalSection title="Admin Notes">
             <ModalField
               label="Notes"

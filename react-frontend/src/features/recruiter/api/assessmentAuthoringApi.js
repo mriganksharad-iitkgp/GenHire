@@ -1,0 +1,15 @@
+import { request } from 'shared/api/client';
+const post = (url, body, method = 'POST') => request(url, { method, body: JSON.stringify(body) });
+export const getAssessmentWorkspace = id => request(`/assessment-blueprints/${id}/content`);
+export const saveAssessmentWorkspace = (id, body) => post(`/assessment-blueprints/${id}/content`, body, 'PUT');
+export const publishAssessmentContent = (id, body) => post(`/assessment-blueprints/${id}/publish`, body);
+export const listQuestionBank = (after, kind) => request(`/question-bank?limit=20${after ? `&after=${encodeURIComponent(after)}` : ''}${kind ? `&type=${encodeURIComponent(kind)}` : ''}`);
+export const getQuestionVersion = id => request(`/question-bank/versions/${id}`);
+export const saveQuestionVersion = body => post('/question-bank/versions', body);
+export const validateQuestionVersion = (id, body) => post(`/question-bank/versions/${id}/validate`, body);
+export const reviewQuestionVersion = (id, body) => post(`/question-bank/versions/${id}/review`, body);
+export const quoteQuestionGeneration = (id, body) => post(`/assessment-blueprints/${id}/generation-quotes`, body);
+export const enqueueQuestionGeneration = body => post('/assessment-generation-jobs', body);
+export const getQuestionGeneration = id => request(`/assessment-generation-jobs/${id}`);
+export const releaseAssessmentSetupHold = (id, body) => post(`/assessment-blueprints/${id}/release-setup-hold`, body);
+export const getQuestionValidationJob = id => request(`/assessment-validation-jobs/${id}`);

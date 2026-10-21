@@ -17,6 +17,8 @@ class DatabaseConfig:
         """Establish connection to MongoDB and return database instance"""
         if self.db is not None:
             return self.db
+        if not isinstance(self.uri, str) or not self.uri.strip().startswith(('mongodb://', 'mongodb+srv://')):
+            raise RuntimeError('MONGODB_URI must be explicitly configured; refusing MongoDB localhost defaults.')
         self.client = MongoClient(
             self.uri,
             maxPoolSize=env_int('MONGO_MAX_POOL_SIZE', 50),
@@ -32,6 +34,28 @@ class DatabaseConfig:
 
     def _ensure_indexes(self):
         """Create critical indexes used by auth and query paths."""
+        from config.workflow import workflow_enabled
+        if workflow_enabled():
+            from repositories.workflow_repository import ensure_workflow_indexes
+            ensure_workflow_indexes(self.db)
+            from services.job_setup_service import ensure_setup_indexes
+            ensure_setup_indexes(self.db)
+            from services.assessment_authoring_service import ensure_authoring_indexes
+            ensure_authoring_indexes(self.db)
+            from services.assessment_generation_service import ensure_generation_indexes
+            ensure_generation_indexes(self.db)
+            from services.hiring_progression_service import ensure_progression_indexes
+            ensure_progression_indexes(self.db)
+            from services.assessment_runtime_service import ensure_runtime_indexes
+            ensure_runtime_indexes(self.db)
+            from services.assessment_evaluation_service import ensure_evaluation_indexes
+            ensure_evaluation_indexes(self.db)
+            from services.assessment_integrity_service import ensure_integrity_indexes
+            ensure_integrity_indexes(self.db)
+            from services.company_hiring_service import ensure_company_indexes
+            ensure_company_indexes(self.db)
+            from services.practice_assessment_service import ensure_practice_assessment_indexes
+            ensure_practice_assessment_indexes(self.db)
         try:
             self.db['ai_provider_requests'].create_index(
                 [('occurred_at', 1), ('provider', 1)], name='idx_provider_usage_timeline'

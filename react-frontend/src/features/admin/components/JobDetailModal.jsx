@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import DetailModal, { ModalSection, ModalField, ModalGrid, ModalBadge } from "./DetailModal";
 import * as adminApi from "features/admin/api/adminApi";
 import styles from "./DetailModal.module.css";
+import CompanyPipelinePanel from 'features/recruiter/components/CompanyPipelinePanel';
+import CompanyDeliveryInspector from './CompanyDeliveryInspector';
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
@@ -351,6 +353,10 @@ const JobDetailModal = ({
           )}
 
           {/* Meta Info */}
+          <ModalSection title="Canonical hiring pipeline" collapsible>
+            <CompanyPipelinePanel key={jobId} jobId={jobId} />
+            <CompanyDeliveryInspector key={jobId+'-delivery'} jobId={jobId} />
+          </ModalSection>
           <ModalSection title="Metadata">
             <ModalGrid columns={2}>
               <ModalField label="Job ID" value={data.job?.id} />

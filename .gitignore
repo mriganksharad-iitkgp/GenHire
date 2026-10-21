@@ -110,3 +110,10 @@ pip_list.txt
 
 # Private staging load-test tokens
 *.load-test-accounts.json
+
+# Isolated local verification databases and downloaded test tools
+.tmp/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

@@ -1,5 +1,16 @@
 # Production-Readiness Review — what's done, what's left
 
+## OA update — 20 October 2026
+
+The OA integration now has durable workflow/attempt/evaluation services,
+owner-scoped company rounds and mock OA purchases. Release controls, the seven
+journey evidence matrix, isolated migration/restore rehearsal, local 100-client
+benchmark and CI are documented in [the OA release runbook](oa_release_runbook.md)
+and [Step 10's implementation record](oa_integration.md#24-step-10--release-hardening-and-controlled-release).
+This is local readiness work, not public rollout approval. Real provider/device,
+security, staging load/cost and backup recovery gates remain. Existing live
+screening still needs its supported single-worker/sticky topology.
+
 
 ## Request robustness update ? 8 October 2026
 

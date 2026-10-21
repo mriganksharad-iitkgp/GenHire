@@ -8,6 +8,12 @@ implemented today.
 
 ## Start here
 
+For the optional OA pipeline and paid mock assessments, start with
+[the detailed owner setup guide](oa_owner_setup_guide.md),
+[OA integration and progress](oa_integration.md) and the
+[controlled-release runbook](oa_release_runbook.md). Local test evidence does
+not establish live provider/device acceptance or authorize feature rollout.
+
 For a newcomer or AI agent, read [the current stack context](../contex.md) first.
 It includes the owner's Cloud Run/Secret Manager deployment notes and distinguishes active code from optional or legacy integrations.
 

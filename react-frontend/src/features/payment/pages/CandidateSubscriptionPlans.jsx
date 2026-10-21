@@ -1,4 +1,5 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import usePricingCatalog from "shared/hooks/usePricingCatalog";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "shared/components/layout/Navbar";
@@ -26,13 +27,13 @@ const TABS = [
   { id: "history", label: "Payment History", icon: ClockIcon },
 ];
 
-const getCandidateSignupBonusPlan = () => ({
+const getCandidateSignupBonusPlan = (credits) => ({
   id: "candidate-signup-bonus",
   slug: "candidate-signup-bonus",
   name: "Signup Bonus",
   description: "One-time welcome credits added automatically at signup",
   price: 0,
-  recharge_credits: 100,
+  recharge_credits: credits,
   disable_action: true,
   cta_label: "Included at Signup",
 });
@@ -159,6 +160,7 @@ const CreditTransactions = ({ items }) => {
 };
 
 const CandidateSubscriptionPlans = () => {
+  const {catalog, error:pricingError, reload:reloadPricing} = usePricingCatalog();
   const navigate = useNavigate();
   const { subscription, refresh: refreshSubscription } =
     useCandidateSubscription();
@@ -191,42 +193,7 @@ const CandidateSubscriptionPlans = () => {
     },
   });
 
-  const displayError = error || paymentError;
-
-  const getFallbackPlans = () => [
-    {
-      id: "candidate-pro",
-      slug: "candidate-pro",
-      name: "Candidate Pro",
-      description: "500 non-expiring credits",
-      price: 499,
-      currency: "INR",
-      interval: "one_time",
-      features: [
-        { name: "500 non-expiring credits", included: true },
-        { name: "Practice interview wallet billing", included: true },
-        { name: "Real-time credit tracking", included: true },
-      ],
-      monthly_credits: 500,
-      is_popular: true,
-    },
-    {
-      id: "candidate-max",
-      slug: "candidate-max",
-      name: "Candidate Max",
-      description: "1,000 non-expiring credits",
-      price: 999,
-      currency: "INR",
-      interval: "one_time",
-      features: [
-        { name: "1,000 non-expiring credits", included: true },
-        { name: "Practice interview wallet billing", included: true },
-        { name: "Real-time credit tracking", included: true },
-      ],
-      monthly_credits: 1000,
-      is_popular: false,
-    },
-  ];
+  const displayError = error || paymentError || pricingError;
 
   const loadData = useCallback(async () => {
     try {
@@ -251,8 +218,8 @@ const CandidateSubscriptionPlans = () => {
       );
 
       if (!normalizedPlans || normalizedPlans.length === 0) {
-        normalizedPlans = getFallbackPlans();
-        setError("Using fallback recharge packs while plan service is unavailable.");
+        normalizedPlans = [];
+        setError("Recharge prices are unavailable. Retry to load current packs before paying.");
       }
 
       const normalizedWithoutSignup = normalizedPlans.filter((plan) => {
@@ -261,7 +228,7 @@ const CandidateSubscriptionPlans = () => {
         return slug !== "candidate-signup-bonus" && id !== "candidate-signup-bonus";
       });
 
-      setPlans([getCandidateSignupBonusPlan(), ...normalizedWithoutSignup]);
+      setPlans(normalizedWithoutSignup);
 
       const normalizedHistory =
         historyRes?.data?.payments ||
@@ -276,7 +243,7 @@ const CandidateSubscriptionPlans = () => {
       setCreditTransactions(normalizedTx);
     } catch (err) {
       console.error("Error loading candidate wallet data:", err);
-      setPlans(getFallbackPlans());
+      setPlans([]);
       setError("Failed to load recharge wallet data. Please try again.");
     } finally {
       setLoading(false);
@@ -302,7 +269,8 @@ const CandidateSubscriptionPlans = () => {
     setError(null);
     clearPaymentError();
     loadData();
-  }, [loadData, clearPaymentError]);
+    reloadPricing();
+  }, [loadData, clearPaymentError, reloadPricing]);
 
   return (
     <div className={styles.pageContainer}>
@@ -318,7 +286,7 @@ const CandidateSubscriptionPlans = () => {
             <ArrowLeftIcon />
             Back to Dashboard
           </button>
-          <PortalPageHeader title="Recharge your wallet" eyebrow="Candidate credits" icon="fa-credit-card" subtitle="Review recharge packs, available credits and transaction history." />
+          <PortalPageHeader title="Recharge your wallet" eyebrow="Candidate credits" icon="fa-credit-card" subtitle="Recharge for AI interview practice and available mock OAs. Review activity quotes and wallet history before spending." />
         </header>
 
         <TabNav activeView={activeView} onChangeView={setActiveView} />
@@ -333,7 +301,7 @@ const CandidateSubscriptionPlans = () => {
           <LoadingState message="Loading candidate wallet data..." />
         ) : activeView === "plans" ? (
           <PlansGrid
-            plans={plans}
+            plans={[...(Number.isInteger(catalog?.credits?.signup_bonus) ? [getCandidateSignupBonusPlan(catalog.credits.signup_bonus)] : []), ...plans]}
             subscription={subscription}
             loadingPlanId={paymentLoading}
             onSelectPlan={handleSelectPlan}

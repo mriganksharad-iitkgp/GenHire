@@ -79,10 +79,15 @@ const CandidatesFilters = ({
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
         <option value="Reviewed">Reviewed</option>
-        <option value="Shortlisted">Shortlisted</option>
+        <option value="Shortlisted">Eligible for screening</option>
         <option value="Interviewed">Interviewed</option>
         <option value="screening_cleared">Screening Cleared</option>
-        <option value="Rejected">Screening Not Cleared</option>
+        <option value="workflow:oa">Online assessment stage</option>
+        <option value="workflow:company">Company interview stages</option>
+        <option value="lifecycle:hired">Hired</option>
+        <option value="lifecycle:withdrawn">Withdrawn</option>
+        <option value="lifecycle:closed">Closed</option>
+        <option value="Rejected">Not progressing</option>
       </select>
       <select
         className={styles.filterSelect}

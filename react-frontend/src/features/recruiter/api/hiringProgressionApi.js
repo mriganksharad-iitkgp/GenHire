@@ -1,0 +1,10 @@
+import { request } from 'shared/api/client';
+const post = (url, value) => request(url, { method: 'POST', body: JSON.stringify(value) });
+export const getHiringOperations = jobId => request(`/jobs/${jobId}/hiring-operations`);
+export const quoteHiringActivation = (jobId, assessmentVersionId) => post(`/jobs/${jobId}/hiring-activation-quotes`, { assessment_version_id: assessmentVersionId || null });
+export const activateHiring = payload => post('/hiring-activations', payload);
+export const getHiringProgress = appId => request(`/applications/${appId}/hiring-progress`);
+export const enrollHiring = (appId, payload) => post(`/applications/${appId}/hiring-enrollment`, payload);
+export const inviteToOa = (appId, payload) => post(`/applications/${appId}/oa-invitations`, payload);
+export const changeOaWindow = (versionId, payload) => post(`/hiring-versions/${versionId}/oa-window`, payload);
+export const hiringStageAction = (appId, payload) => post(`/applications/${appId}/stage-actions`, payload);

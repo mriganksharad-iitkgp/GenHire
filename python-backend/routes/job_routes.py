@@ -72,6 +72,13 @@ def create_job(current_user):
                 except (ValueError, TypeError):
                     data[field] = [item.strip() for item in raw.split(',') if item.strip()]
 
+    if isinstance(data, dict) and isinstance(data.get('proctoring_config'), str):
+        try:
+            data['proctoring_config'] = json.loads(data['proctoring_config'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid proctoring configuration JSON.'}), 400
+    if isinstance(data, dict) and isinstance(data.get('gaze_proctoring'), str):
+        data['gaze_proctoring'] = data['gaze_proctoring'].lower() == 'true'
     result, status_code = job_controller.create_job(recruiter_id, data, current_user, jd_file=jd_file)
     return jsonify(result), status_code
 
@@ -147,7 +154,7 @@ def update_job(current_user, job_id):
     data = request.get_json()
     recruiter_id = str(current_user['_id'])
     
-    result, status_code = job_controller.update_job(job_id, recruiter_id, data)
+    result, status_code = job_controller.update_job(job_id, recruiter_id, data, recruiter_profile=current_user)
     return jsonify(result), status_code
 
 @job_bp.route('/jobs/<job_id>', methods=['DELETE'])

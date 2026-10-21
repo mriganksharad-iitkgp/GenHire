@@ -25,7 +25,7 @@ export function openKiosk(payload) {
   document.body.appendChild(frame); setTimeout(() => frame.remove(), 5000);
 }
 
-export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false, practice = false, prepareOnly = false }) {
+export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false, practice = false, prepareOnly = false, assessment = false }) {
   const [installed, setInstalled] = useState(installationConfirmed);
   const [showHelp, setShowHelp] = useState(false);
   const [requested, setRequested] = useState(false);
@@ -68,7 +68,7 @@ export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false
   const confirm = (value) => { setInstalled(value); rememberInstallation(value); };
   return createPortal(<div className={styles.reportOverlay}><section ref={dialog} tabIndex={-1} className={`${styles.centerCard} ${styles.launchCard}`} role="dialog" aria-modal="true" aria-labelledby="kiosk-title">
     <header className={styles.reportHeader}><span className={styles.brand}><ShieldCheck size={20}/> GenHire Secure Browser</span><button onClick={onClose} disabled={busy} aria-label="Close installation guide" className={styles.textButton}><X size={20}/></button></header>
-    <h1 id="kiosk-title">{installed ? "Open your" : "Set up your"} {practice ? "practice interview" : "interview"}</h1>
+    <h1 id="kiosk-title">{installed ? "Open your" : "Set up your"} {assessment ? (practice ? "practice assessment" : "assessment") : (practice ? "practice interview" : "interview")}</h1>
     <p>{installed ? "Your installation confirmation is saved on this browser. Open the secure browser and accept the browser prompt to continue." : "Use your laptop or desktop. Install the secure browser once, then return here to start."}</p>
     {needsSetup && <div id="kiosk-installation-help">
       <ol><li>Download the installer for your computer and finish installation.</li><li>Return here and confirm installation below.</li><li>Choose Open Secure Browser and accept the browser's "Open GenHire" prompt.</li></ol>
@@ -84,6 +84,6 @@ export default function KioskLaunchGuide({ isOpen, onClose, onOpen, busy = false
     {launchError && <p className={styles.error} role="alert">{launchError}</p>}
     {installed && <button className={styles.textButton} aria-expanded={showHelp} aria-controls="kiosk-installation-help" onClick={() => setShowHelp(!showHelp)}>{showHelp ? "Hide installation help" : "Need to install or reinstall?"}</button>}
     {requested && <p className={styles.note} role="status">Waiting for the secure browser. If it has not opened, accept the browser prompt, or use installation help to reinstall and try again.</p>}
-    <p className={styles.note}>Keep this tab open. After the interview, Back to applications closes the secure browser; return to this tab to keep your login. Inside the app, check your devices and capture your face. Answer time starts after setup.</p>
+    <p className={styles.note}>{assessment ? "Keep this tab open. Complete the required consent and device checks inside Secure Browser. Your assessment timer starts when you begin the attempt; reconnecting does not reset it. Return here for your results and feedback." : "Keep this tab open. After the interview, Back to applications closes the secure browser; return to this tab to keep your login. Inside the app, check your devices and capture your face. Answer time starts after setup."}</p>
   </section></div>, document.body);
 }

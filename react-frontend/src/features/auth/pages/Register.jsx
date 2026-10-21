@@ -157,7 +157,7 @@ const Register = () => {
   });
 
   return (
-    <AuthShell description="Build your profile, explore opportunities, and prepare for your next interview.">
+    <AuthShell description="Build your profile, explore roles and prepare with AI interviews and role-based mock online assessments.">
       <div className={`${styles.loginCard} ${styles.signupCard}`}>
         <div className={styles.logoSection}>
           <span className={styles.formEyebrow}>YOUR NEXT CHAPTER STARTS HERE</span>

@@ -10,12 +10,15 @@ Run this once after deploying the new authentication features.
 """
 
 import os
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config.env_loader import load_environment
 from pymongo import MongoClient
 from datetime import datetime
 
 # Load environment variables
-load_dotenv()
+load_environment(require_database=True)
 
 def migrate_users():
     """Add new authentication fields to existing users"""

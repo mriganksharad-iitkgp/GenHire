@@ -4,10 +4,10 @@ import json
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 BACKEND = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(BACKEND))
 
 
 def main():
@@ -16,7 +16,8 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.sample_limit <= 1000:
         parser.error("--sample-limit must be between 1 and 1000")
-    load_dotenv(BACKEND / ".env", override=False)
+    from config.env_loader import load_environment
+    load_environment(require_database=True)
     if not os.getenv("MONGODB_URI"):
         raise SystemExit("MONGODB_URI is required.")
     with MongoClient(os.environ["MONGODB_URI"], serverSelectionTimeoutMS=5000) as client:

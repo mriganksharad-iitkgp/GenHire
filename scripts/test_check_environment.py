@@ -11,6 +11,28 @@ spec.loader.exec_module(checks)
 
 
 class EnvironmentChecks(unittest.TestCase):
+    def test_oa_defaults_are_safe_but_missing_provider_values_are_actionable(self):
+        errors, notices = checks.inspect_oa({'GENHIRE_WORKFLOW_ENABLED':'false'})
+        self.assertEqual(errors, [])
+        self.assertTrue(any('SPHERE_COMPILERS_TOKEN' in message for message in notices))
+
+    def test_oa_launch_dependencies_and_invalid_prices_fail_closed(self):
+        errors, _ = checks.inspect_oa({'GENHIRE_OA_RUNTIME_ENABLED':'true', 'GENHIRE_MOCK_OA_CREDITS':'-30'})
+        self.assertTrue(any('GENHIRE_OA_SECURITY_ACCEPTED' in message for message in errors))
+        self.assertTrue(any('GENHIRE_MOCK_OA_CREDITS' in message for message in errors))
+
+    def test_oa_executor_validation_redacts_values_and_rejects_bad_profiles(self):
+        errors, _ = checks.inspect_oa({'GENHIRE_WORKFLOW_ENABLED':'false', 'GENHIRE_ASSESSMENT_EXECUTION_ENABLED':'true',
+            'SPHERE_COMPILERS_ENDPOINT':'https://private-token-fixture@wrong.example/api/v4',
+            'SPHERE_RUNTIME_PROFILES_JSON':'{"private":"fixture"}'})
+        self.assertTrue(any('SPHERE_RUNTIME_PROFILES_JSON' in message for message in errors))
+        self.assertNotIn('private-token-fixture', ' '.join(errors))
+
+    def test_frontend_rejects_prefixed_judge_token_even_without_secret_in_name(self):
+        errors = checks.inspect_frontend({'REACT_APP_SPHERE_TOKEN':'private-fixture'}, {}, False)
+        self.assertTrue(any('REACT_APP_SPHERE_TOKEN' in error for error in errors))
+        self.assertNotIn('private-fixture', ' '.join(errors))
+
     def test_runtime_redis_secret_requires_explicit_file_audit_opt_in(self):
         values = {"REDIS_URL": ""}
         strict, _ = checks.inspect_backend(values, True)
@@ -49,8 +71,18 @@ class EnvironmentChecks(unittest.TestCase):
         self.assertNotIn("synthetic-secret", " ".join(errors))
 
     def test_schema_parity_and_quoted_values_in_all_eight_files(self):
-        errors, _ = checks.audit(schema_only=True)
-        self.assertEqual(errors, [])
+        # CI has no private dotenv files. Test committed templates in an isolated
+        # eight-file fixture; audit the owner's actual files through the CLI.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder in ('python-backend', 'react-frontend'):
+                (root / folder).mkdir()
+                for name in ('.env', '.env.example', '.env.production', '.env.production.example'):
+                    source = '.env.production.example' if 'production' in name else '.env.example'
+                    (root / folder / name).write_text((checks.ROOT / folder / source).read_text(encoding='utf-8'), encoding='utf-8')
+            with patch.object(checks, 'ROOT', root):
+                errors, _ = checks.audit(schema_only=True)
+            self.assertEqual(errors, [])
 
     def test_cloud_adc_placeholders_must_be_empty_in_production(self):
         empty = {"GOOGLE_APPLICATION_CREDENTIALS": "", "GOOGLE_APPLICATION_CREDENTIALS_JSON": ""}

@@ -2,7 +2,7 @@ import os
 import json
 import re
 import logging
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 from typing import Dict, Any, Optional
 from services.llm_fallback_service import (
     get_llm_fallback_service,
@@ -19,7 +19,7 @@ class CVScoringService:
     """
 
     def __init__(self):
-        load_dotenv()
+        load_environment()
         self.llm_service = get_llm_fallback_service()
     def format_cv_details(self, cv_details: Dict[str, Any]) -> str:
         """Format CV details dictionary into readable text for AI processing"""

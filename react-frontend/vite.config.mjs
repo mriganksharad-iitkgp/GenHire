@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { fileURLToPath } from "url";
+import { publicEnvironment } from './config/public-environment.mjs';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,12 +18,13 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 // 2. JSX lives inside some `.js` files (e.g. src/index.js, a few hooks).
 //    esbuild must be told to parse `.js` as JSX or those files fail to build.
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, rootDir, "REACT_APP_");
+  const env = loadEnv(mode, rootDir, ["REACT_APP_", "VITE_"]);
 
   return {
     plugins: [react()],
+    envPrefix: [],
     define: {
-      "process.env": JSON.stringify({ NODE_ENV: mode, ...env }),
+      "process.env": JSON.stringify(publicEnvironment(env, mode)),
     },
     resolve: {
       // Mirrors jsconfig.json baseUrl:"src" — bare imports like

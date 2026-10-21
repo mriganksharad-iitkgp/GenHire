@@ -53,6 +53,12 @@ def start_all(collections, interview_manager):
     integrity_watchdog = IntegrityWatchdog(collections)
     integrity_watchdog.start()
 
+    from jobs.oa_authoring import LocalAuthoringWorker, enabled as local_oa_enabled
+    if local_oa_enabled() and not _handles.get('oa_authoring'):
+        _handles['oa_authoring']=LocalAuthoringWorker(collections['jobs'].database)
+        _handles['oa_authoring'].start()
+        logger.info('[OK] Local OA authoring worker started (production uses the standalone worker)')
+
     _handles.update(
         background_processor=background_processor,
         invite_cleanup_scheduler=invite_cleanup_scheduler,
@@ -64,6 +70,8 @@ def start_all(collections, interview_manager):
 
 def stop_all():
     """Stop every started worker (dev-server shutdown path)."""
+    if _handles.get("oa_authoring"):
+        _handles.pop("oa_authoring").stop()
     if _handles.get("integrity_watchdog"):
         _handles["integrity_watchdog"].stop()
     background_processor = _handles.get("background_processor")

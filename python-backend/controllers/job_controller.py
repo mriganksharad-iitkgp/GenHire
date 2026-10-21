@@ -8,7 +8,6 @@ from bson import ObjectId
 from werkzeug.utils import secure_filename
 from services.pdf_parser_service import get_pdf_parser
 from services import gcs_service
-from dotenv import load_dotenv
 from utils.job_standards import canonicalize_job_role
 from utils.company_resolver import attach_company_info
 from services.usage_telemetry_service import record_usage_event
@@ -159,8 +158,7 @@ class JobController:
                 for job in jobs:
                     job['_id'] = str(job['_id'])
                     # Remove sensitive recruiter info (same as public listing)
-                    job.pop('created_by', None)
-                return jobs, 200
+                return [self._candidate_job(job) for job in jobs], 200
 
             # For candidates: Show active jobs + jobs they have applied to
             # Get job IDs that the user has applied to
@@ -182,8 +180,7 @@ class JobController:
             for job in jobs:
                 job['_id'] = str(job['_id'])
                 # Remove sensitive recruiter info
-                job.pop('created_by', None)
-            return jobs, 200
+            return [self._candidate_job(job) for job in jobs], 200
         
     def create_job(self, recruiter_id, job_data, recruiter_profile, jd_file=None):
         """
@@ -198,6 +195,20 @@ class JobController:
         Returns:
             tuple: (response_dict, status_code)
         """
+        from services.job_setup_service import JobSetupService, setup_reference
+        from models.hiring_workflow import WorkflowError
+        if not isinstance(job_data, dict):
+            return {'error': 'Job data must be a JSON object.'}, 400
+        try:
+            setup_ref = setup_reference(job_data, jd_file)
+            setup_service = JobSetupService(self.jobs_collection.database) if setup_ref else None
+            if setup_service:
+                replay = setup_service.replay_creation(recruiter_profile, *setup_ref)
+                if replay:
+                    replay['_id'] = str(replay['_id'])
+                    return {'message': 'Job already created', 'job': replay, 'idempotent_replay': True}, 201
+        except WorkflowError as exc:
+            return {'error': str(exc), 'error_code': exc.code}, exc.status
         required_fields = ['title', 'department', 'location', 'type', 'experience', 'salary', 'description']
         
         for field in required_fields:
@@ -248,7 +259,6 @@ class JobController:
         raw_status = (job_data.get('status') or 'draft').strip().lower()
         allowed_statuses = {'draft', 'active', 'paused', 'closed'}
         status = raw_status if raw_status in allowed_statuses else 'draft'
-
         # Helpers to normalize list-like fields possibly sent as strings
         def normalize_list_field(val, separator=','):
             if isinstance(val, list):
@@ -353,13 +363,25 @@ class JobController:
             'jd_upload_date': jd_upload_date
         }
         
-        result = self.jobs_collection.insert_one(job_document)
-        job_document['_id'] = str(result.inserted_id)
+        if setup_service:
+            job_document['_id'] = ObjectId()
+            try:
+                job_document = setup_service.attach(recruiter_profile, *setup_ref[:2], job_document, setup_ref[2], creating=True)
+            except WorkflowError as exc:
+                return {'error': str(exc), 'error_code': exc.code}, exc.status
+            job_document['_id'] = str(job_document['_id'])
+        else:
+            if not job_document['deadline']:
+                job_document['deadline'] = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)).isoformat()
+            result = self.jobs_collection.insert_one(job_document)
+            job_document['_id'] = str(result.inserted_id)
         
         return {'message': 'Job created successfully', 'job': job_document}, 201
         
-    def update_job(self, job_id, recruiter_id, job_data):
+    def update_job(self, job_id, recruiter_id, job_data, recruiter_profile=None):
         """Update existing job posting"""
+        if not isinstance(job_data, dict):
+            return {'error': 'Job data must be a JSON object.'}, 400
         # Validate job_id format
         if not job_id or job_id == 'undefined' or job_id == 'null':
             return {'error': 'Invalid job ID provided'}, 400
@@ -465,16 +487,38 @@ class JobController:
         if 'location' in update_fields:
             update_fields['location_key'] = self._normalize_text_key(update_fields['location'])
         
+        from services.job_setup_service import JobSetupService, setup_reference, require_publishable_setup
+        from models.hiring_workflow import WorkflowError
+        try:
+            setup_ref = setup_reference(job_data)
+            if not setup_ref:
+                require_publishable_setup(self.jobs_collection.database, job, update_fields.get('status', job.get('status')))
+            if setup_ref:
+                actor = recruiter_profile or self.users_collection.find_one({'_id': ObjectId(recruiter_id)}) or {}
+                document = dict(update_fields, _id=job_object_id)
+                document['updated_at'] = datetime.datetime.utcnow()
+                saved = JobSetupService(self.jobs_collection.database).attach(actor, *setup_ref[:2], document, setup_ref[2])
+                saved['_id'] = str(saved['_id'])
+                return {'message': 'Job and hiring draft saved', 'job': saved}, 200
+        except WorkflowError as exc:
+            return {'error': str(exc), 'error_code': exc.code}, exc.status
         if update_fields:
             update_fields['updated_at'] = datetime.datetime.utcnow()
-            self.jobs_collection.update_one({'_id': job_object_id}, {'$set': update_fields})
-        
+            changed = self.jobs_collection.update_one({'_id': job_object_id,
+                'hiring_setup_version_id': job.get('hiring_setup_version_id'), 'status': job.get('status')}, {'$set': update_fields})
+            if changed.matched_count == 0:
+                return {'error': 'Job changed; reload before saving.', 'error_code': 'stale_revision'}, 409
         return {'message': 'Job updated successfully'}, 200
         
     def delete_job(self, job_id, recruiter_id):
         """Delete job posting"""
         # Verify job belongs to current recruiter
-        result = self.jobs_collection.delete_one({'_id': ObjectId(job_id), 'created_by': recruiter_id})
+        existing = self.jobs_collection.find_one({'_id': ObjectId(job_id), 'created_by': recruiter_id})
+        if existing and (existing.get('workflow_version_id') or existing.get('hiring_setup_version_id')):
+            return {'error': 'Workflow jobs must be closed, preserving application history.', 'error_code': 'workflow_action_required'}, 409
+        result = self.jobs_collection.delete_one({'_id': ObjectId(job_id), 'created_by': recruiter_id,
+                                                  'workflow_version_id': {'$in': [None, '']},
+                                                  'hiring_setup_version_id': {'$in': [None, '']}})
         if result.deleted_count == 0:
             return {'error': 'Job not found'}, 404
 
@@ -515,6 +559,11 @@ class JobController:
             'filename': job.get('jd_original_filename') or f"{job.get('title', 'job-description')}.pdf",
         }, 200
         
+    @staticmethod
+    def _candidate_job(job):
+        from utils.job_visibility import candidate_job
+        return candidate_job(job)
+
     def get_job_details(self, job_id, user_type, user_id=None):
         """Get single job details with permission checks"""
         try:
@@ -532,8 +581,9 @@ class JobController:
             status = (job.get('status') or '').strip().lower()
             if status not in ['active', ''] and job.get('status') is not None:
                 return {'error': 'Job not available'}, 403
-            # Hide recruiter-only fields
-            job.pop('created_by', None)
+            job = self._candidate_job(job)
+        elif str(job.get('created_by')) != str(user_id):
+            return {'error': 'Job not found or unauthorized'}, 403
 
         job['_id'] = str(job['_id'])
         return job, 200
@@ -588,7 +638,7 @@ class JobController:
             except OSError:
                 pass
 
-    def generate_jd_with_ai(self, prompt_text, recruiter_id=None, jd_file=None):
+    def generate_jd_with_ai(self, prompt_text, recruiter_id=None, jd_file=None, *, charge_credits=True, defer_rate_limits=False):
         """Generate a complete job description using Groq AI, from a text
         prompt, an uploaded JD file (parsed and structured), or both."""
         generation_id = str(uuid.uuid4())
@@ -605,7 +655,7 @@ class JobController:
             }, 400
 
         def refund_ai_jd(reason):
-            if not recruiter_id or not deduction or not deduction.get("success"):
+            if not charge_credits or not recruiter_id or not deduction or not deduction.get("success"):
                 return None
             return self.wallet_service.credit_wallet(
                 owner_id=str(recruiter_id),
@@ -624,7 +674,7 @@ class JobController:
             )
 
         try:
-            if recruiter_id:
+            if recruiter_id and charge_credits:
                 deduction = self.wallet_service.debit_wallet(
                     owner_id=str(recruiter_id),
                     audience="recruiter",
@@ -645,9 +695,9 @@ class JobController:
                         "credits_remaining": int(deduction.get("credits_remaining", 0) or 0),
                     }, 402
 
-            from services.llm_fallback_service import LLMFallbackService
+            from services.llm_fallback_service import create_assessment_llm_service, LLMRateLimitDeferred
             
-            fallback_service = LLMFallbackService()
+            fallback_service = create_assessment_llm_service()
 
             system_prompt = """You are an expert HR recruiter and job description writer. Based on the user's input, generate a complete, professional job posting.
 
@@ -670,7 +720,8 @@ Return ONLY a valid JSON object (no markdown, no code fences, no explanation) wi
 
 Rules:
 - skills should have 4-8 relevant technical/soft skills
-- responsibilities, requirements, benefits should each have 4-6 items
+- responsibilities and requirements should each have 4-6 items
+- Never invent company benefits or compensation. Use only supplied benefits (otherwise []), and use Competitive for unspecified salary.
 - description should be professional, engaging, and 2-3 sentences
 - All values must match the predefined options exactly where specified
 - If the user mentions specific details (salary, location, etc.), use those
@@ -690,10 +741,13 @@ Rules:
             full_prompt = f"{system_prompt}\n\nUser request: {user_request}"
 
             try:
-                result = fallback_service.invoke(full_prompt, json_mode=True)
+                result = fallback_service.invoke(full_prompt, json_mode=True, max_output_tokens=2048,
+                    defer_rate_limits=defer_rate_limits)
                 response_text = result["content"]
                 usage = result.get("usage", {})
             except Exception as e:
+                if defer_rate_limits and isinstance(e, LLMRateLimitDeferred):
+                    raise
                 refund = refund_ai_jd(f"llm_fallback_exhausted: {str(e)}")
                 return {
                     'error': 'AI JD generation failed due to service limits. All providers exhausted.',
@@ -767,7 +821,7 @@ Rules:
 
             return {
                 'job_data': job_data,
-                'credits_deducted': int(PaymentConfig.RECRUITER_AI_JD_CREDITS),
+                'credits_deducted': int(PaymentConfig.RECRUITER_AI_JD_CREDITS) if charge_credits else 0,
                 'usage_deduction': deduction,
                 'wallet': wallet_summary,
             }, 200
@@ -780,6 +834,9 @@ Rules:
                 'credit_refund': refund,
             }, 500
         except Exception as e:
+            from services.llm_fallback_service import LLMRateLimitDeferred
+            if defer_rate_limits and isinstance(e, LLMRateLimitDeferred):
+                raise
             logger.error(f"AI JD generation error: {e}")
             refund = refund_ai_jd("ai_generation_failed")
             return {

@@ -367,6 +367,15 @@ class UserAdmin:
                         "error": "Only super admins can delete other admin accounts"
                     }, 403
 
+            workflow_db = self.applications_collection.database
+            workflow_owner = str(user["_id"])
+            if (workflow_db.jobs.find_one({'created_by': workflow_owner, '$or': [
+                    {'workflow_version_id': {'$type': 'string', '$ne': ''}},
+                    {'hiring_setup_version_id': {'$type': 'string', '$ne': ''}}]})
+                    or workflow_db.applications.find_one({'student_id': workflow_owner, 'workflow_version_id': {'$type': 'string', '$ne': ''}})):
+                return {'error': 'Workflow records require a retention-aware account deletion process.',
+                        'error_code': 'workflow_retention_required'}, 409
+
             # Hard delete the user
             self.user_repo.delete_by_id(user_id)
 

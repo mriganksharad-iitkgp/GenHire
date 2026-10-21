@@ -1,0 +1,21 @@
+.page { max-width:1120px; margin:auto; padding:24px; color:#172033; min-width:0; box-sizing:border-box; }
+.page h1 { font-size:25px; margin:0 0 18px; }
+.page h2 { font-size:19px; }.page h3 { font-size:15px; }
+.page :is(section,fieldset,pre,textarea,select) { min-width:0; max-width:100%; box-sizing:border-box; }
+.page pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; }
+.page button,.monitor button { min-height:42px; padding:9px 14px; border:1px solid #c7d2fe; border-radius:8px; background:#eef2ff; color:#3730a3; font:inherit; cursor:pointer; margin:4px; }
+.page button:disabled,.monitor button:disabled { opacity:.55; cursor:not-allowed; }
+.page button:hover:not(:disabled),.monitor button:hover:not(:disabled) { background:#e0e7ff; }
+.page :is(input,textarea,select) { font:inherit; accent-color:#4f46e5; }
+.page textarea,.page select { padding:10px; border:1px solid #cbd5e1; border-radius:8px; }
+.page [role="alert"],.monitor [role="alert"] { padding:12px; border:1px solid #fecaca; background:#fff1f2; border-radius:8px; color:#9f1239; }
+.toolbar { position:sticky; top:0; z-index:3; display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center; padding:12px 16px; background:#fff; border:1px solid #dbe3ed; border-radius:10px; box-shadow:0 3px 12px #0f172a0a; }
+.toolbar p { margin:0; font-size:14px; }.toolbar [role="timer"] { font-weight:700; font-variant-numeric:tabular-nums; }
+.questions > section { border:1px solid #e2e8f0; border-radius:12px; padding:18px; margin:16px 0; scroll-margin-top:100px; }
+.questions :is(legend,label) { line-height:1.6; }.questions label:has(input[type="radio"]),.questions label:has(input[type="checkbox"]) { padding:10px; border-radius:8px; cursor:pointer; }
+.questions label:has(input:checked) { background:#eef2ff; }
+.monitor { max-width:1100px; margin:auto; padding:16px; color:#172033; }
+.monitor details { border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin:12px 0; }.monitor summary { cursor:pointer; font-weight:600; }
+@media(max-width:640px) { .page { padding:14px; }.questions > section { padding:12px; }.toolbar { gap:6px 12px; padding:10px; } }
+
+.questionNavigation { flex:1 1 100%; font-size:13px; }.questionNavigation summary { cursor:pointer; }.questionNavigation nav { display:flex; flex-wrap:wrap; max-height:140px; overflow-y:auto; gap:4px; margin-top:8px; }.questionNavigation button { min-width:40px; margin:0; }.questions > section:focus { outline:2px solid #a5b4fc; outline-offset:2px; }

@@ -17,6 +17,12 @@ class Job:
     benefits: List[str]
     status: str  # 'draft', 'active', 'paused', 'closed'
     created_by: str  # recruiter user_id
+    workflow_version_id: Optional[str] = None
+    workflow_revision: int = 0
+    active_hiring_version_id: Optional[str] = None
+    hiring_setup_version_id: Optional[str] = None
+    hiring_setup_revision: int = 0
+    hiring_setup_status: Optional[str] = None
     company: Optional[str] = None
     logo: Optional[str] = None
     deadline: Optional[datetime.datetime] = None
@@ -55,6 +61,12 @@ class Job:
     def to_dict(self):
         """Convert job object to dictionary for MongoDB storage"""
         return {
+            'workflow_version_id': self.workflow_version_id,
+            'workflow_revision': self.workflow_revision,
+            'active_hiring_version_id': self.active_hiring_version_id,
+            'hiring_setup_version_id': self.hiring_setup_version_id,
+            'hiring_setup_revision': self.hiring_setup_revision,
+            'hiring_setup_status': self.hiring_setup_status,
             'title': self.title,
             'department': self.department,
             'location': self.location,
@@ -91,6 +103,12 @@ class Job:
     def from_dict(cls, data):
         """Create Job object from dictionary"""
         return cls(
+            workflow_version_id=data.get('workflow_version_id'),
+            workflow_revision=data.get('workflow_revision', 0),
+            active_hiring_version_id=data.get('active_hiring_version_id'),
+            hiring_setup_version_id=data.get('hiring_setup_version_id'),
+            hiring_setup_revision=data.get('hiring_setup_revision', 0),
+            hiring_setup_status=data.get('hiring_setup_status'),
             title=data.get('title', ''),
             department=data.get('department', ''),
             location=data.get('location', ''),

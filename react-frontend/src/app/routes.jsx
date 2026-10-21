@@ -29,6 +29,8 @@ function CandidateProfileRoute() {
 }
 const Dashboard = React.lazy(() => import("features/candidate/pages/Dashboard"));
 const Interview = React.lazy(() => import("features/interview/pages/Interview"));
+const Assessment = React.lazy(() => import("features/assessment/pages/Assessment"));
+const AssessmentCompanion = React.lazy(() => import("features/assessment/pages/AssessmentCompanion"));
 const JobDetails = React.lazy(() => import("features/candidate/pages/JobDetails"));
 const Register = React.lazy(() => import("features/auth/pages/Register"));
 const RecruiterOnboarding = React.lazy(() => import("features/auth/pages/RecruiterOnboarding"));
@@ -147,6 +149,8 @@ export default function AppRoutes() {
         </Route>
 
         <Route path="/interviews/:interviewId" element={<Interview />} />
+        <Route path="/assessments/:invitationId" element={<ProtectedRoute allow="candidate"><Assessment /></ProtectedRoute>} />
+        <Route path="/oa-companion/:invitationId" element={<AssessmentCompanion />} />
 
         {/* Legacy paths (renamed 2026-07) — emails/bookmarks keep working */}
         <Route path="/recruiter-dashboard" element={<LegacyRedirect to="/recruiter/dashboard" />} />

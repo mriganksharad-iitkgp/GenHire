@@ -42,7 +42,8 @@ def is_invite_access_expired(user) -> bool:
     expires_at = user.get("access_expires_at")
     if not expires_at:
         return False  # legacy burner without a window (migration backfills this)
-    return expires_at < datetime.datetime.utcnow()
+    if expires_at.tzinfo is None: expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+    return expires_at <= datetime.datetime.now(datetime.timezone.utc)
 
 
 def decode_user_from_token(token):

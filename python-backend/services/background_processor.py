@@ -116,6 +116,7 @@ class BackgroundProcessor:
         collection = self.collections['applications']
         doc = collection.find_one_and_update(
             {
+                'workflow_version_id': {'$in': [None, '']},
                 'cv_snapshot': {'$ne': None},
                 'cv_score_waived': {'$ne': True},
                 '$or': [
@@ -162,7 +163,7 @@ class BackgroundProcessor:
 
     @staticmethod
     def _task_filter(task):
-        query = {'_id': ObjectId(task['application_id'])}
+        query = {'_id': ObjectId(task['application_id']), 'workflow_version_id': {'$in': [None, '']}}
         if task.get('lease_token'):
             query['scoring_lease_token'] = task['lease_token']
             query['processing_status'] = 'processing'
@@ -378,6 +379,7 @@ class BackgroundProcessor:
 
             # Do not overwrite a recruiter decision that changes after our read.
             result_filter = self._task_filter(task)
+            result_filter['workflow_version_id'] = {'$in': [None, '']}
             result_filter['status'] = (current_app or {}).get('status')
             # Update application with results
             result_update = {
@@ -415,6 +417,8 @@ class BackgroundProcessor:
 
 
             if update_result.modified_count > 0:
+                from services.hiring_progression_service import sync_application_enrollment
+                sync_application_enrollment(applications_collection, application_id)
                 # Update job statistics
                 job_id = jd_data.get('job_id')
                 if job_id:

@@ -2,6 +2,7 @@
 
 import datetime
 from bson import ObjectId
+from config.workflow import managed
 
 
 class ApplicationAdmin:
@@ -12,6 +13,9 @@ class ApplicationAdmin:
 
             if not application:
                 return {"error": "Application not found"}, 404
+            if managed(application):
+                return {"error": "Managed applications require audited workflow actions; history cannot be deleted.",
+                        "error_code": "workflow_action_required"}, 409
 
             if status == "selected":  # legacy name for screening_cleared
                 status = "screening_cleared"
@@ -28,7 +32,7 @@ class ApplicationAdmin:
                     "error": f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
                 }, 400
 
-            self.application_repo.update_by_id(application_id,
+            changed = self.application_repo.update_by_id(application_id,
                 {
                     "$set": {
                         "status": status,
@@ -38,6 +42,8 @@ class ApplicationAdmin:
                 },
             )
 
+            if not changed.matched_count:
+                return {"error": "Application changed; use the current workflow action.", "error_code": "stale_revision"}, 409
             return {
                 "message": "Application status updated",
                 "application_id": application_id,
@@ -86,6 +92,9 @@ class ApplicationAdmin:
                 "application": {
                     "id": str(application["_id"]),
                     "status": application.get("status", "pending"),
+                    "workflow_version_id": application.get("workflow_version_id"),
+                    "workflow": application.get("workflow"),
+                    "workflow_label": application.get("workflow_label"),
                     "cv_score": application.get("cv_score"),
                     "cv_score_breakdown": application.get("cv_score_breakdown"),
                     "interview_score": application.get("interview_score"),
@@ -152,6 +161,9 @@ class ApplicationAdmin:
 
             if not application:
                 return {"error": "Application not found"}, 404
+            if managed(application):
+                return {"error": "Managed applications require audited workflow actions; history cannot be deleted.",
+                        "error_code": "workflow_action_required"}, 409
 
             # Build update data
             update_data = {
@@ -185,9 +197,11 @@ class ApplicationAdmin:
                         }, 400
                     update_data[field] = data[field]
 
-            self.application_repo.update_by_id(application_id, {"$set": update_data}
+            changed = self.application_repo.update_by_id(application_id, {"$set": update_data}
             )
 
+            if not changed.matched_count:
+                return {"error": "Application changed; use the current workflow action.", "error_code": "stale_revision"}, 409
             return {
                 "message": "Application updated successfully",
                 "application_id": application_id,
@@ -203,9 +217,14 @@ class ApplicationAdmin:
 
             if not application:
                 return {"error": "Application not found"}, 404
+            if managed(application):
+                return {"error": "Managed applications require audited workflow actions; history cannot be deleted.",
+                        "error_code": "workflow_action_required"}, 409
 
             # Delete the application
-            self.application_repo.delete_by_id(application_id)
+            deleted = self.application_repo.delete_by_id(application_id)
+            if not deleted.deleted_count:
+                return {"error": "Application changed; history was retained.", "error_code": "stale_revision"}, 409
 
             # Update job applicant count if job exists
             if application.get("job_id"):

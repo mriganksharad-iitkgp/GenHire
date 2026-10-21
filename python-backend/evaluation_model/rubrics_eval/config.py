@@ -2,9 +2,9 @@
 
 import os
 from typing import Optional
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 
-load_dotenv()
+load_environment()
 
 class Config:
     """Configuration class for the evaluation system."""

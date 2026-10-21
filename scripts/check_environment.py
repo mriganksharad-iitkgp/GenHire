@@ -107,13 +107,91 @@ def inspect_backend(values, production, allow_runtime_secrets=False):
     if values.get("MOBILE_RECORDING_ENABLED") == "false":
         warnings.append("MOBILE_RECORDING_ENABLED is false; jobs requiring a second camera cannot start")
 
+    oa_errors, oa_warnings = inspect_oa(values)
+    errors.extend(oa_errors)
+    warnings.extend(oa_warnings)
+    return errors, warnings
+
+
+def inspect_oa(values):
+    """Flag-aware offline readiness checks. Never substitutes for live evidence."""
+    errors, warnings = [], []
+    flags = [key for key in values if key.startswith('GENHIRE_') and key.endswith(('_ENABLED', '_ACCEPTED'))]
+    for key in flags:
+        if values[key] not in ('true', 'false'):
+            errors.append(f'{key} must be true or false')
+    enabled = lambda key: values.get(key) == 'true'
+    dependencies = {
+        'GENHIRE_OA_RUNTIME_ENABLED': ['GENHIRE_WORKFLOW_ENABLED', 'GENHIRE_SCHEDULING_ENABLED',
+            'GENHIRE_OA_INTEGRITY_ENABLED', 'GENHIRE_OA_EVALUATION_ENABLED', 'GENHIRE_OA_EVALUATION_ACCEPTED', 'GENHIRE_OA_SECURITY_ACCEPTED'],
+        'GENHIRE_MOCK_OA_ENABLED': ['GENHIRE_WORKFLOW_ENABLED', 'GENHIRE_ASSESSMENT_GENERATION_ENABLED',
+            'GENHIRE_OA_RUNTIME_ENABLED', 'GENHIRE_MOCK_OA_CONTENT_ACCEPTED'],
+        'GENHIRE_COMPANY_HIRING_ENABLED': ['GENHIRE_WORKFLOW_ENABLED'],
+        'GENHIRE_OA_MEDIA_ENABLED': ['GENHIRE_OA_INTEGRITY_ENABLED', 'GENHIRE_OA_MEDIA_ACCEPTED'],
+    }
+    for key, required in dependencies.items():
+        if enabled(key):
+            for dependency in required:
+                if not enabled(dependency): errors.append(f'{key} requires {dependency}=true after its actual acceptance')
+    for key, raw in values.items():
+        if key.startswith('GENHIRE_') and key.endswith('_CREDITS') and raw and (not raw.isdigit() or len(raw) > 9):
+            errors.append(f'{key} must be a nonnegative integer wallet-credit amount')
+    limits = {'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT': (1, 200), 'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT': (1, 500),
+        'GENHIRE_OA_EXECUTION_CONCURRENCY': (1, 4), 'GENHIRE_OA_EXECUTION_QUEUE_LIMIT': (1, 5000),
+        'GENHIRE_OA_RAW_RETENTION_DAYS': (1, 90), 'GENHIRE_OA_SUMMARY_RETENTION_DAYS': (30, 730)}
+    for key, (lower, upper) in limits.items():
+        raw = values.get(key)
+        if raw is not None and (not raw.isdigit() or not lower <= int(raw) <= upper):
+            errors.append(f'{key} must be an integer between {lower} and {upper}')
+    for key, expected in {'GENHIRE_SQL_REGION': 'europe-west1', 'GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS': '1',
+                          'GENHIRE_SQL_TASK_TIMEOUT_SECONDS': '60'}.items():
+        if key in values and values[key] != expected:
+            errors.append(f'{key} does not match the supported SQL pilot configuration')
+    required = ['SPHERE_COMPILERS_ENDPOINT', 'SPHERE_COMPILERS_TOKEN', 'SPHERE_PROBLEMS_ENDPOINT', 'SPHERE_PROBLEMS_TOKEN',
+        'SPHERE_MASTER_JUDGE_ID', 'SPHERE_TESTCASE_JUDGE_ID', 'SPHERE_RUNTIME_PROFILES_JSON', 'GENHIRE_SQL_PROJECT', 'GENHIRE_SQL_ARTIFACT_BUCKET',
+        'GENHIRE_SQL_POSTGRESQL_JOB', 'GENHIRE_SQL_MYSQL_JOB', 'GENHIRE_EXECUTOR_ISOLATION_POLICY_ID']
+    missing = [key for key in required if not values.get(key) or values[key] == '{}' or PLACEHOLDER.search(values[key])]
+    if 'GENHIRE_WORKFLOW_ENABLED' in values and missing:
+        message = 'OA owner configuration remains unfilled: '+', '.join(missing)
+        (errors if enabled('GENHIRE_ASSESSMENT_EXECUTION_ENABLED') else warnings).append(message)
+    if enabled('GENHIRE_ASSESSMENT_EXECUTION_ENABLED'):
+        for product in ('COMPILERS', 'PROBLEMS'):
+            key = 'SPHERE_'+product+'_ENDPOINT'
+            try:
+                url = urlsplit(values.get(key, ''))
+                valid = (url.scheme == 'https' and url.port in (None, 443) and not url.query and not url.fragment
+                    and not url.username and not url.password and url.path.rstrip('/') == '/api/v4'
+                    and re.fullmatch(r'[a-zA-Z0-9-]+\.'+product.lower()+r'\.sphere-engine\.com', url.hostname or ''))
+            except ValueError:
+                valid = False
+            if not valid: errors.append(f'{key} must use the account-specific HTTPS v4 endpoint without credentials/query')
+        try:
+            profiles = json.loads(values.get('SPHERE_RUNTIME_PROFILES_JSON', '{}'))
+            targets = {'python': '3.12', 'javascript': '22', 'java': '21', 'cpp': 'C++20'}
+            if not isinstance(profiles, dict) or set(profiles) != set(targets): raise ValueError()
+            for language, label in targets.items():
+                p = profiles[language]
+                if (not isinstance(p, dict) or set(p) != {'compiler_id', 'version_id', 'version_name', 'runtime_label'}
+                    or any(type(p.get(k)) is not int or p[k] <= 0 for k in ('compiler_id', 'version_id'))
+                    or not isinstance(p.get('version_name'), str) or not p['version_name'] or p.get('runtime_label') != label): raise ValueError()
+        except (ValueError, TypeError):
+            errors.append('SPHERE_RUNTIME_PROFILES_JSON needs four account-verified positive compiler/version pins with approved runtime labels')
+        for key in ('SPHERE_MASTER_JUDGE_ID', 'SPHERE_TESTCASE_JUDGE_ID'):
+            if not values.get(key, '').isdigit() or int(values[key]) < 1:
+                errors.append(f'{key} must be an account-approved positive integer')
+        warnings.append('Execution is enabled: this offline audit cannot establish current Mongo executor attestation, sandbox isolation or remaining provider quota')
+    if enabled('GENHIRE_OA_RUNTIME_ENABLED'):
+        warnings.append('Candidate starts enabled: verify live workers, accepted device/security/grading evidence and enforce intended private-cohort admission')
     return errors, warnings
 
 
 def inspect_frontend(values, backend, production):
     errors = []
+    public_keys = {"REACT_APP_API_URL", "REACT_APP_API_BASE", "REACT_APP_FRONTEND_URL",
+                   "REACT_APP_GOOGLE_CLIENT_ID", "REACT_APP_TOKEN_KEY", "REACT_APP_USER_KEY",
+                   "REACT_APP_KIOSK_DOWNLOAD_URL", "REACT_APP_KIOSK_MAC_DOWNLOAD_URL"}
     for key in values:
-        if not key.startswith("REACT_APP_") or any(secret in key for secret in ["API_KEY", "SECRET", "CREDENTIAL", "PRIVATE", "REDIS", "MONGODB"]):
+        if key not in public_keys:
             errors.append(f"{key} must not be included in public frontend configuration")
     url = values.get("REACT_APP_API_URL", "")
     parsed = urlsplit(url)

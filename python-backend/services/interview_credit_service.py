@@ -28,6 +28,8 @@ replaying the original key after a refund would return the old transaction and
 the retry would never actually be charged.
 """
 
+from config.workflow import managed, legacy_filter
+
 import datetime
 import logging
 import os
@@ -279,6 +281,7 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
         {
             "$set": {
                 "status": "completed",
+                "finished_at": doc.get('finished_at') or now,
                 "evaluation": final_evaluation,
                 "final_score": interview_score,
                 "proctoring_score": proctoring_score,
@@ -293,13 +296,15 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
     )
 
     application_id = doc.get("application_id")
+    from services.hiring_progression_service import sync_completed_screening
+    sync_completed_screening(interviews, doc['_id'])
     if application_id:
         try:
             existing_app = applications.find_one({"_id": ObjectId(str(application_id))})
-            if existing_app:
+            if existing_app and not managed(existing_app):
                 previous_status = str(existing_app.get("status", "pending")).lower()
-                applications.update_one(
-                    {"_id": existing_app["_id"]},
+                app_update = applications.update_one(
+                    legacy_filter({"_id": existing_app["_id"]}),
                     {
                         "$set": {
                             "interview_score": interview_score,
@@ -323,7 +328,7 @@ def finalize_stale_real_interview(collections, interview_manager, doc, session) 
                     counter_update[previous_status] = -1
                 if previous_status != "interviewed":
                     counter_update["interviewed"] = counter_update.get("interviewed", 0) + 1
-                if counter_update:
+                if counter_update and app_update.matched_count:
                     jobs.update_one(
                         {"_id": ObjectId(str(existing_app["job_id"]))},
                         {"$inc": counter_update},

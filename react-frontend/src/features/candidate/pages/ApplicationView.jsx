@@ -4,6 +4,8 @@ import styles from "./ApplicationView.module.css";
 import { getToken } from "shared/utils/session";
 import { API_BASE, authedFetch } from "shared/api/client";
 import { companyLabel } from "shared/constants/company";
+import { applicationStatusLabel } from "shared/utils/applicationStatus";
+import HiringProgressNotice from '../components/HiringProgressNotice';
 
 const ApplicationView = () => {
 	const { applicationId } = useParams();
@@ -44,6 +46,30 @@ const ApplicationView = () => {
 					}
 
 					const app = await res.json();
+
+					if (app.workflow_version_id) {
+						// Managed timelines use recorded events, never status guesses.
+						const historyResponse = await authedFetch(`${API_BASE}/applications/${applicationId}/stages`);
+						const history = historyResponse.ok ? await historyResponse.json() : { events: [] };
+						setApplication({
+							id: app._id,
+							managedHiring: true,
+							position: app.job_details?.title || app.job_title || "Applied Position",
+							company: companyLabel(app.job_details?.company),
+							jobId: app.job_id,
+							status: applicationStatusLabel(app, { candidateFacing: true }),
+							appliedDate: app.applied_at,
+							timeline: (history.events || []).map((event) => ({
+								id: `workflow-${event.revision}`,
+								date: event.occurred_at,
+								type: event.action === "import" ? "Workflow history imported" : "Hiring stage updated",
+								status: "Completed",
+								description: event.action === "import" ? "Existing application state was preserved. Earlier stage dates are unavailable." : "A change was recorded in your hiring process.",
+								icon: "fa-check-circle",
+							})),
+						});
+						return;
+					}
 
 					// Build a minimal timeline from real fields
 					const appliedDateISO = app.applied_at || new Date().toISOString();
@@ -280,6 +306,7 @@ const ApplicationView = () => {
 					<div className={styles.timelineSection}>
 						<h2>Application Timeline</h2>
 						<div className={styles.timeline}>
+							<HiringProgressNotice applicationId={applicationId} enabled={!!application.managedHiring} />
 							{application.timeline.map((event, index) => (
 								<div
 									key={event.id}

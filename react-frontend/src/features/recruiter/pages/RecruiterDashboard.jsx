@@ -1,4 +1,5 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import CompanyPipelinePanel from "features/recruiter/components/CompanyPipelinePanel";
 import { recruiterTab } from "shared/components/layout/navigation";
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -236,7 +237,14 @@ const RecruiterDashboard = () => {
       };
       const normalizedSelectedStatus = normalizeAppStatus(selectedStatus);
       filtered = filtered.filter(
-        (app) => normalizeAppStatus(app.status) === normalizedSelectedStatus
+        (app) => {
+          if (selectedStatus.startsWith('workflow:')) {
+            const workflow = app.workflow;
+            return workflow?.lifecycle === 'active' && workflow.stages.find(s => s.stage_id === workflow.current_stage_id)?.type === selectedStatus.slice(9);
+          }
+          if (selectedStatus.startsWith('lifecycle:')) return app.workflow?.lifecycle === selectedStatus.slice(10);
+          return normalizeAppStatus(app.status) === normalizedSelectedStatus;
+        }
       );
     }
 
@@ -349,6 +357,12 @@ const RecruiterDashboard = () => {
   };
 
   // Ensure job stats refresh after application status changes
+  useEffect(() => {
+    const refreshHiring = () => { loadJobs(); loadApplications(); };
+    window.addEventListener('hiring-workflow-updated', refreshHiring);
+    return () => window.removeEventListener('hiring-workflow-updated', refreshHiring);
+  }, [loadJobs, loadApplications]);
+
   const handleUpdateApplicationStatus = async (applicationId, newStatus) => {
     const ok = await updateApplicationStatus(applicationId, newStatus);
     if (ok) {
@@ -470,7 +484,7 @@ const RecruiterDashboard = () => {
     if (!id) {
       showToast("Error: Job ID not found", "error");
       console.error("Job ID missing from:", { updatedJob, selectedJob });
-      return;
+      return false;
     }
     const ok = await updateJobPosting(id, updatedJob);
     if (ok) {
@@ -479,6 +493,7 @@ const RecruiterDashboard = () => {
         "success"
       );
     }
+    return ok;
   };
 
   const handleEditFromDetails = (job) => {
@@ -678,7 +693,7 @@ const RecruiterDashboard = () => {
         {/* Tab Content */}
         {activeTab === "overview" && (
           <div className={styles.overviewSection}>
-            <PortalPageHeader title="Dashboard Overview" eyebrow="Your hiring workspace" icon="fa-line-chart" subtitle="Manage your openings, follow candidate progress and keep your hiring pipeline moving." />
+            <PortalPageHeader title="Dashboard Overview" eyebrow="Your hiring workspace" icon="fa-line-chart" subtitle="Follow applications through AI screening, optional online assessments and company-led next rounds." />
 
             <OverviewMetrics
               jobPostingsCount={
@@ -698,7 +713,7 @@ const RecruiterDashboard = () => {
         {activeTab === "jobs" && (
           <div className={styles.jobsContent}>
             <SectionHeader
-              title="Job Postings Management" subtitle="Create opportunities, manage your openings and connect with the right candidates." icon="fa-briefcase"
+              title="Job Postings Management" subtitle="Create a role with screening criteria, an optional OA, questions and hiring timelines in one setup." icon="fa-briefcase"
               actions={
                 <button
                   className={`${styles.primaryButton} ${
@@ -771,7 +786,7 @@ const RecruiterDashboard = () => {
 
         {activeTab === "candidates" && (
           <div className={styles.candidatesContent}>
-            <SectionHeader title="Candidate Management" subtitle="Review applicants, compare their scores and guide the next step in your hiring process." icon="fa-users" />
+            <SectionHeader title="Candidate Management" subtitle="Review screening and OA results, distinguish cleared candidates from invitations, and choose the next company round." icon="fa-users" />
             <CandidatesFilters
               jobPostings={jobPostings}
               selectedPosition={selectedPosition}
@@ -790,6 +805,7 @@ const RecruiterDashboard = () => {
               sortBy={sortBy}
               onSortByChange={setSortBy}
             />
+            <CompanyPipelinePanel key={selectedPosition || 'no-job'} jobId={selectedPosition} />
             {applicationsLoading && applications.length === 0 ? (
               <div className={styles.candidatesTable}>
                 {Array.from({ length: 4 }).map((_, i) => (

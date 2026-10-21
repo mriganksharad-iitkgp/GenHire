@@ -1,9 +1,12 @@
 # Isolated behavioral tests on Python 3.12; no production credentials required.
 Flask==3.1.1
+flask-cors==6.0.1
+flask-talisman==1.1.0
 Flask-SocketIO==5.5.1
 PyJWT==2.10.1
 pymongo==4.13.2
 python-dotenv==1.1.1
+razorpay==2.0.0
 requests==2.32.4
 websocket-client==1.9.0
 numpy==1.26.4
@@ -17,6 +20,11 @@ groq==0.31.1
 google-generativeai==0.8.5
 google-cloud-speech==2.24.1
 google-cloud-texttospeech==2.16.1
+google-auth==2.40.3
+google-cloud-storage==2.18.2
+pandas==2.3.1
+matplotlib==3.10.5
+langdetect==1.0.9
 
 mongomock==4.3.0
 fakeredis[lua]==2.39.0

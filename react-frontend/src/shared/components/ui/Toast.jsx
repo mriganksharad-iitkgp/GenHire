@@ -1,45 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './Toast.module.css';
-
 const Toast = ({ message, type = 'info', duration = 3000, onClose }) => {
-  const [visible, setVisible] = useState(true);
-
-  // Reset toast visibility when message changes
-  useEffect(() => {
+  const [visible,setVisible]=useState(true), close=useRef(onClose), fade=useRef(null), expiry=useRef(null);
+  close.current=onClose;
+  useEffect(()=>{
     setVisible(true);
-    const timer = setTimeout(() => {
-      setVisible(false);
-      // Wait for fade out animation then close
-      setTimeout(() => onClose && onClose(), 300);
-    }, duration);
-
-    return () => clearTimeout(timer);
-  }, [message, duration, onClose]);
-
-  const getIcon = () => {
-    switch (type) {
-      case 'success': return 'fa-check-circle';
-      case 'error': return 'fa-times-circle';
-      case 'warning': return 'fa-exclamation-triangle';
-      default: return 'fa-info-circle';
-    }
-  };
-
-  return (
-    <div className={`${styles.toast} ${styles[type]} ${visible ? styles.visible : styles.hidden}`}>
-      <i className={`fa ${getIcon()}`}></i>
-      <span>{message}</span>
-      <button
-        className={styles.closeButton}
-        onClick={() => {
-          setVisible(false);
-          setTimeout(() => onClose && onClose(), 200);
-        }}
-      >
-        <i className="fa fa-times"></i>
-      </button>
-    </div>
-  );
+    expiry.current=setTimeout(()=>{setVisible(false);fade.current=setTimeout(()=>close.current?.(),300);},duration);
+    return()=>{clearTimeout(expiry.current);clearTimeout(fade.current);};
+  },[message,duration]);
+  const icons={success:'fa-check-circle',error:'fa-times-circle',warning:'fa-exclamation-triangle',info:'fa-info-circle'};
+  return createPortal(<div role={type==='error'?'alert':'status'} aria-live={type==='error'?'assertive':'polite'}
+    className={`${styles.toast} ${styles[type]||styles.info} ${visible?styles.visible:styles.hidden}`}>
+    <i aria-hidden="true" className={`fa ${icons[type]||icons.info}`}/><span>{message}</span>
+    <button type="button" aria-label="Close notification" className={styles.closeButton} onClick={()=>{
+      clearTimeout(expiry.current);clearTimeout(fade.current);setVisible(false);fade.current=setTimeout(()=>close.current?.(),200);
+    }}><i aria-hidden="true" className="fa fa-times"/></button>
+  </div>,document.body);
 };
-
 export default Toast;

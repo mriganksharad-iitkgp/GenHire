@@ -19,6 +19,19 @@ test('camera and microphone require consent once per window and allow device ret
     assert.equal(handlers.check(contents, 'media', origin, { mediaType: 'audio' }), true);
     assert.equal(await request(), true); assert.equal(asks, 1);
 });
+
+test('OA mode grants camera only and never inherits interview microphone consent', async () => {
+    const contents = { getURL: () => `${origin}/index.html`, isDestroyed: () => false };
+    let mode = 'interview';
+    const handlers = createMediaPermissionHandlers({ origin, webContents: contents, ask: async () => true,
+        typesAllowed: () => mode === 'oa' ? ['video'] : ['video', 'audio'] });
+    const request = types => new Promise(resolve => handlers.request(contents, 'media', resolve, { requestingUrl: `${origin}/index.html`, mediaTypes: types }));
+    assert.equal(await request(['video', 'audio']), true);
+    mode = 'oa';
+    assert.equal(handlers.check(contents, 'media', origin, { mediaType: 'audio' }), false);
+    assert.equal(await request(['audio']), false);
+    assert.equal(await request(['video']), true);
+});
 test('declining access allows another explicit request without granting permissions', async () => {
     let allow = false;
     const { contents, handlers, request } = fixture(async () => allow);

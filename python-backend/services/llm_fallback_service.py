@@ -17,6 +17,7 @@ don't keep hammering a provider that already told us "no".
 """
 
 import os
+import json
 import time
 import logging
 import re
@@ -24,9 +25,9 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field, replace
 from threading import Lock
 
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 
-load_dotenv()
+load_environment()
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ _QUOTA_RE = re.compile("|".join(_QUOTA_ERROR_PATTERNS), re.IGNORECASE)
 
 def is_quota_error(error: Exception) -> bool:
     """Return True if *error* looks like a quota/rate-limit problem."""
+    # Local output/schema errors are not provider quota evidence. In particular,
+    # "exceeded its output budget" must never poison the shared provider cache.
+    if isinstance(error, ValueError):
+        return False
+    status = getattr(error, 'status_code', None) or getattr(error, 'http_status', None)
+    if status is not None:
+        return status in (402, 429)
     error_str = str(error)
     # Check the error message text
     if _QUOTA_RE.search(error_str):
@@ -158,6 +166,39 @@ class ProviderConfig:
 class _CooldownEntry:
     exhausted_at: float = 0.0
     cooldown_seconds: float = 300
+    retryable: bool = False
+
+
+class LLMInvalidOutputError(ValueError):
+    """A completed provider response is empty or explicitly truncated."""
+
+
+class LLMRateLimitDeferred(Exception):
+    """A definite temporary refusal; a durable worker may safely retry later."""
+
+    def __init__(self, retry_after):
+        super().__init__('Provider temporarily rate limited this request.')
+        self.retry_after = max(2, min(120, int(retry_after) + 1))
+
+
+def temporary_retry_after(error):
+    """Use bounded provider guidance; never treat daily/funding limits as RPM."""
+    status = getattr(error, 'status_code', None)
+    if status != 429:
+        return None
+    message = str(error).lower()
+    if any(term in message for term in ('tokens per day', 'requests per day', 'daily', 'insufficient_quota')):
+        return None
+    headers = getattr(getattr(error, 'response', None), 'headers', {}) or {}
+    raw = headers.get('retry-after')
+    if raw is None:
+        match = re.search(r'try again in\s+(\d+(?:\.\d+)?)s', message)
+        raw = match.group(1) if match else '60'
+    try:
+        delay = float(raw)
+        return max(2, delay) if 0 <= delay <= 120 else None
+    except (TypeError, ValueError):
+        return None
 
 
 class LLMFallbackService:
@@ -229,11 +270,12 @@ class LLMFallbackService:
                 return False
             return True
 
-    def _mark_exhausted(self, provider_name: str, cooldown_seconds: float):
+    def _mark_exhausted(self, provider_name: str, cooldown_seconds: float, retryable=False):
         with self._lock:
             self._cooldowns[provider_name] = _CooldownEntry(
                 exhausted_at=time.time(),
                 cooldown_seconds=cooldown_seconds,
+                retryable=retryable,
             )
         logger.warning(
             f"Provider '{provider_name}' marked exhausted, "
@@ -299,6 +341,9 @@ class LLMFallbackService:
         images: Optional[List[Tuple[bytes, str]]] = None,
         model_overrides: Optional[Dict[str, str]] = None,
         defer_usage: bool = False,
+        max_output_tokens: Optional[int] = None,
+        defer_rate_limits: bool = False,
+        response_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Invoke the prompt against the provider chain.
@@ -320,6 +365,9 @@ class LLMFallbackService:
             raw_response  – the original LangChain response object
         """
         errors: List[Tuple[str, Exception]] = []
+        retry_delays = []
+        if max_output_tokens is not None and (type(max_output_tokens) is not int or not 512 <= max_output_tokens <= 32768):
+            raise ValueError('max_output_tokens must be 512-32768.')
         primary_name = self._providers[0].name if self._providers else None
 
         payload = self._build_payload(prompt, images)
@@ -334,25 +382,69 @@ class LLMFallbackService:
             if override and override != base_cfg.model:
                 provider_cfg = replace(base_cfg, model=override)
 
+            if json_mode and provider_cfg.provider_type == 'groq':
+                # Groq's default output budget is too small for four-language OA
+                # references and 16 cases, especially with GPT-OSS reasoning.
+                raw_budget = os.getenv('GROQ_JSON_MAX_OUTPUT_TOKENS', '8192')
+                if not raw_budget.isdigit() or not 2048 <= int(raw_budget) <= 32768:
+                    raise ValueError('GROQ_JSON_MAX_OUTPUT_TOKENS must be 2048-32768.')
+                provider_cfg = replace(provider_cfg, max_tokens=provider_cfg.max_tokens or int(raw_budget),
+                    reasoning_effort=provider_cfg.reasoning_effort or ('low' if 'gpt-oss' in provider_cfg.model else None))
+
             if self._is_on_cooldown(provider_cfg.name):
+                if defer_rate_limits:
+                    with self._lock:
+                        entry = self._cooldowns.get(provider_cfg.name)
+                        if entry and entry.retryable:
+                            retry_delays.append(max(2, entry.cooldown_seconds - (time.time() - entry.exhausted_at)))
                 logger.info(f"Skipping provider '{provider_cfg.name}' (on cooldown)")
                 continue
+
+            if max_output_tokens is not None:
+                provider_cfg = replace(provider_cfg, max_tokens=max_output_tokens)
 
             for attempt in range(1, provider_cfg.max_retries + 1):
                 try:
                     llm = self._create_llm(provider_cfg)
+                    plain_llm = llm
                     
                     if json_mode:
                         if provider_cfg.provider_type in ["openai", "deepseek", "groq"]:
-                            llm = llm.bind(response_format={"type": "json_object"})
+                            if response_schema and provider_cfg.provider_type == 'groq' and provider_cfg.model in {'openai/gpt-oss-20b','openai/gpt-oss-120b'}:
+                                llm = llm.bind(response_format={'type':'json_schema','json_schema':{
+                                    'name':'assessment_questions','strict':True,'schema':response_schema}})
+                            else:
+                                llm = llm.bind(response_format={"type": "json_object"})
 
-                    response = llm.invoke(payload)
+                    try:
+                        response = llm.invoke(payload)
+                    except Exception as rejection:
+                        status = getattr(rejection, 'status_code', None)
+                        body = getattr(rejection, 'body', {}) or {}
+                        detail = body.get('error', body) if isinstance(body, dict) else {}
+                        explicit_json_rejection = isinstance(detail, dict) and detail.get('code') in {'json_validate_failed', 'json_validation_failed'}
+                        if not (json_mode and provider_cfg.provider_type == 'groq' and status == 400 and explicit_json_rejection):
+                            raise
+                        # A definite JSON-mode rejection is safe to retry once without
+                        # transport-level formatting. The caller still validates JSON/schema.
+                        logger.warning('Groq rejected JSON transport format; trying one plain JSON response')
+                        response = plain_llm.invoke(payload)
+                        candidate = response.content.strip() if isinstance(response.content, str) else ''
+                        if candidate.startswith('```'):
+                            candidate = re.sub(r'^```(?:json)?\s*|\s*```$', '', candidate)
+                        from services.json_transport import escape_json_strings
+                        candidate = escape_json_strings(candidate)
+                        json.loads(candidate, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Nonfinite JSON')))
+                        response.content = candidate
 
                     content = response.content
                     if not isinstance(content, str):
                         content = str(content)
 
                     if json_mode:
+                        metadata = getattr(response, 'response_metadata', {})
+                        if not content.strip() or (isinstance(metadata, dict) and metadata.get('finish_reason') == 'length'):
+                            raise LLMInvalidOutputError('JSON response was empty or exceeded its output budget.')
                         # Clean up markdown codeblocks if they exist
                         content = content.strip()
                         if content.startswith("```json"):
@@ -380,11 +472,39 @@ class LLMFallbackService:
 
                 except Exception as e:
                     errors.append((provider_cfg.name, e))
+                    body = getattr(e, 'body', {}) or {}
+                    detail = body.get('error', body) if isinstance(body, dict) else {}
+                    provider_code = str(detail.get('code', '')) if isinstance(detail, dict) else ''
+                    if provider_code and re.fullmatch(r'[a-zA-Z0-9_.-]{1,80}', provider_code):
+                        logger.warning('Provider rejection metadata: provider=%s model=%s status=%s code=%s',
+                            provider_cfg.name, provider_cfg.model, getattr(e, 'status_code', None), provider_code)
+                    if getattr(e, 'status_code', None) == 413 and provider_code == 'rate_limit_exceeded' and provider_cfg.max_tokens:
+                        # Groq counts the requested output allowance as well as
+                        # input against its per-request token ceiling. A rejection
+                        # is definite: reduce only the allowance, never the brief.
+                        limit = re.search(r'Limit\s*:?\s*(\d+)', str(e), re.IGNORECASE)
+                        requested = re.search(r'Requested\s*:?\s*(\d+)', str(e), re.IGNORECASE)
+                        if limit and requested:
+                            excess = int(requested.group(1)) - int(limit.group(1))
+                            budget = provider_cfg.max_tokens - excess - 256
+                            if excess > 0 and 512 <= budget < provider_cfg.max_tokens and attempt < provider_cfg.max_retries:
+                                provider_cfg = replace(provider_cfg, max_tokens=budget)
+                                logger.warning('Reduced provider output allowance after definite size refusal: provider=%s budget=%s', provider_cfg.name, budget)
+                                continue
 
                     if is_quota_error(e):
+                        logger.warning('Provider limit metadata: provider=%s status=%s prompt_chars=%s numeric_limits=%s',
+                            provider_cfg.name, getattr(e, 'status_code', None), len(prompt),
+                            re.findall(r'(?:Limit|Requested|Used)\s*:?\s*(\d+)', str(e), re.IGNORECASE))
+                        delay = temporary_retry_after(e) if defer_rate_limits else None
+                        if delay is not None:
+                            retry_delays.append(delay)
+                            self._mark_exhausted(provider_cfg.name, delay + 1, retryable=True)
+                            logger.warning('Temporary provider refusal: provider=%s status=429 retry_after=%ss', provider_cfg.name, delay)
+                            break
                         logger.warning(
                             f"Quota/rate-limit error on '{provider_cfg.name}' "
-                            f"(attempt {attempt}/{provider_cfg.max_retries}): {e}"
+                            f"(attempt {attempt}/{provider_cfg.max_retries}): {type(e).__name__} status={getattr(e, 'status_code', None)}"
                         )
                         # If we still have retries for this provider, wait & retry
                         if attempt < provider_cfg.max_retries:
@@ -402,7 +522,7 @@ class LLMFallbackService:
                         # Non-quota error — log and try next provider immediately
                         logger.error(
                             f"Non-quota error on '{provider_cfg.name}' "
-                            f"(attempt {attempt}): {e}"
+                            f"(attempt {attempt}): {type(e).__name__} status={getattr(e, 'status_code', None)}"
                         )
                         if attempt < provider_cfg.max_retries:
                             delay = provider_cfg.retry_base_delay * (2 ** (attempt - 1))
@@ -412,8 +532,10 @@ class LLMFallbackService:
                             break
 
         # All providers exhausted
+        if retry_delays:
+            raise LLMRateLimitDeferred(min(retry_delays))
         error_summary = "; ".join(
-            f"{name}: {str(err)[:200]}" for name, err in errors
+            f"{name}: {type(err).__name__} (status {getattr(err, 'status_code', 'unknown')})" for name, err in errors
         )
         raise LLMAllProvidersExhaustedError(
             f"All LLM providers failed. Errors: {error_summary}",
@@ -484,3 +606,30 @@ def get_llm_fallback_service() -> LLMFallbackService:
     if _fallback_service is None:
         _fallback_service = LLMFallbackService()
     return _fallback_service
+
+
+def create_assessment_llm_service():
+    """Authoring-only backup model with its own per-model cooldown slot.
+
+    Uses the existing Groq account, never a new credential or external service.
+    An empty setting disables the backup. Other app-wide LLM tasks are unchanged.
+    """
+    backup = os.getenv('GENHIRE_ASSESSMENT_GROQ_FALLBACK_MODEL', '').strip()
+    if backup and not re.fullmatch(r'[A-Za-z0-9_./-]{1,120}', backup):
+        raise ValueError('Invalid GENHIRE_ASSESSMENT_GROQ_FALLBACK_MODEL.')
+    providers = []
+    for config in LLMFallbackService._build_default_providers():
+        providers.append(config)
+        if backup and config.provider_type == 'groq' and backup != config.model:
+            providers.append(replace(config,name='groq_authoring_backup',model=backup))
+    return LLMFallbackService(providers=providers)
+
+
+_assessment_fallback_service = None
+
+
+def get_assessment_llm_service():
+    global _assessment_fallback_service
+    if _assessment_fallback_service is None:
+        _assessment_fallback_service = create_assessment_llm_service()
+    return _assessment_fallback_service

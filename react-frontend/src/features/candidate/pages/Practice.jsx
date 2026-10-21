@@ -1,6 +1,8 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import MockAssessmentPanel from '../components/MockAssessmentPanel';
+import usePricingCatalog from 'shared/hooks/usePricingCatalog';
 import Toast from "shared/components/ui/Toast";
 import SkeletonCard from "shared/components/ui/SkeletonCard";
 import InterviewReportModal from "features/interview/components/InterviewReportModal";
@@ -15,7 +17,8 @@ import { getToken } from "shared/utils/session";
 import KioskLaunchGuide, { openKiosk } from "features/interview/components/KioskLaunchGuide";
 import { API_BASE, authedFetch } from "shared/api/client";
 
-const Practice = () => {
+const InterviewPractice = () => {
+  const {catalog:pricing,error:pricingError,reload:reloadPricing}=usePricingCatalog();
   const navigate = useNavigate();
   const DIFFICULTIES = [
     {
@@ -168,6 +171,7 @@ const Practice = () => {
 
   // Start practice interview - Show CV selection modal first
   const handleStartPractice = () => {
+    if(!pricing){showToast('Load the current practice price before starting.','error');return;}
     // Validation
     if (!selectedRole) {
       showToast("Please select a role to practice", "error");
@@ -364,7 +368,7 @@ const Practice = () => {
       )}
 
       <div className={styles.content}>
-        <PortalPageHeader title="Practice interviews" eyebrow="Your career workspace" icon="fa-comments-o" subtitle="Choose a role, prepare with a realistic AI interview and learn from your feedback." />
+        <PortalPageHeader title="Practice interviews" eyebrow="Your career workspace" icon="fa-comments-o" subtitle="Prepare for screening with a role-based AI interview. Switch to Mock online assessment to practice coding, SQL and MCQs when available." />
 
         <div className={styles.practiceContent}>
           {/* Role Selection */}
@@ -508,7 +512,8 @@ const Practice = () => {
                   Turn on proctoring for practice interview
                 </label>
                 <p style={{ marginTop: "10px", marginBottom: 0, fontSize: "13px", color: "#64748b" }}>
-                  Credit deduction: {proctoringEnabled ? "50" : "30"} credits per practice session.
+                  Credit deduction: {pricing ? (proctoringEnabled ? pricing.credits.practice_interview_proctored : pricing.credits.practice_interview) : 'Load current price before starting'}{pricing ? ' credits per practice session.' : ''}
+                  {pricingError && <button onClick={reloadPricing}>Retry current practice price</button>}
                 </p>
               </div>
             </div>
@@ -789,4 +794,8 @@ const Practice = () => {
   );
 };
 
-export default Practice;
+export default function Practice(){
+  const [params,setParams]=useSearchParams();const mode=params.get('mode')==='oa'?'oa':'interview';
+  const chooseMode = value => setParams(previous => { const next=new URLSearchParams(previous);next.set('mode',value);return next; });
+  return <div className={styles.practicePage}><nav className={styles.practiceModes} aria-label="Practice type"><button type="button" aria-pressed={mode==='interview'} onClick={()=>chooseMode('interview')}><i className="fa fa-comments-o" aria-hidden="true"/> Mock interview</button><button type="button" aria-pressed={mode==='oa'} onClick={()=>chooseMode('oa')}><i className="fa fa-code" aria-hidden="true"/> Mock online assessment</button></nav>{mode==='oa'?<MockAssessmentPanel/>:<InterviewPractice/>}</div>;
+}

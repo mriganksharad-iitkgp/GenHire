@@ -222,3 +222,11 @@
 .preparationAnswer { margin-top: 16px; padding: 16px 20px; background: #f6f4ff; border: 1px solid #e4dfff; border-radius: 12px; }
 .preparationAnswer h4 { margin: 0 0 8px; color: #5344dc; }
 .preparationAnswer p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Keep controls reachable at kiosk zoom and narrow accommodation windows. */
+.answerComposer,.textAnswer,.conversation,.monitorPanel { min-width:0; max-width:100%; }
+.answerActions,.answerMode,.actions { flex-wrap:wrap; }
+.textAnswer textarea { width:100%; min-height:140px; box-sizing:border-box; resize:vertical; max-width:100%; }
+.answerComposer button:focus-visible { outline:3px solid #818cf8; outline-offset:3px; }
+.interviewHeader { min-height:65px; height:auto; flex-wrap:wrap; padding-block:12px; }
+@media(max-width:650px) { .answerActions > button { flex:1 1 140px; }.conversation { overflow-wrap:anywhere; }.answerComposer :is(button,textarea) { font-size:16px; } }

@@ -54,6 +54,10 @@ def run_cleanup_once(db_collections: Dict[str, Any], *, max_age_days: int = 30) 
     for user in users.find(candidate_query):
         user_id_str = str(user["_id"])
         try:
+            # Managed histories survive cleanup even if the imported CV is absent.
+            if applications.find_one({'student_id': user_id_str, 'workflow_version_id': {'$type': 'string', '$ne': ''}}):
+                skipped_engaged += 1
+                continue
             # Engagement exemption: skip users whose applications hold a real CV.
             engaged = applications.find_one(
                 {

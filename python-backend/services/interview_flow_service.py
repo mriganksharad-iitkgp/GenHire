@@ -188,6 +188,10 @@ def schedule_evaluation_refresh(manager, session, collection, on_result=None):
                 {"$set": {"evaluation": evaluation, "final_score": score,
                     "interview_score": score, "qa_pairs": json_safe(session.interview_data),
                     "usage_summary": merge_usage_summaries(saved.get("usage_summary"), additional_usage)}})
+            if updated.matched_count:
+                from services.hiring_progression_service import sync_completed_screening
+                saved_doc = collection.find_one({'session_id': session.session_id}, {'_id': 1})
+                if saved_doc: sync_completed_screening(collection, saved_doc['_id'])
             if updated.matched_count and on_result:
                 on_result(score, evaluation)
         except Exception:

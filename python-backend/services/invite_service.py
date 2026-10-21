@@ -391,6 +391,10 @@ class InviteService:
         # duplicate: new temp password, fresh magic link, extended expiry.
         existing_burner = self._find_burner_account_invited_to_job(normalized, job_id_str)
         if existing_burner is not None:
+            if self.applications.find_one({'student_id': str(existing_burner['_id']), 'job_id': job_id_str,
+                                           'workflow_version_id': {'$type': 'string', '$ne': ''}}):
+                result['reason'] = 'workflow_action_required'
+                return result
             user_id = existing_burner["_id"]
             temp_password = generate_temp_password()
             self.users.update_one(

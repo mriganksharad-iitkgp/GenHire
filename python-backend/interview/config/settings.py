@@ -6,9 +6,9 @@ from dataclasses import dataclass
 import os
 from typing import Dict, List, Optional
 from enum import Enum
-from dotenv import load_dotenv
+from config.env_loader import load_environment
 
-load_dotenv()
+load_environment()
 
 
 class LLMProvider(Enum):

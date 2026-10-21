@@ -100,7 +100,7 @@ const TeamMemberAvatar = ({ member }) => {
 const TeamPage = () => {
   return (
     <div className={styles.teamPage}>
-      <div className={styles.hero}><PortalPageHeader title="Meet the Developers" eyebrow="The people behind GenHire" icon="fa-users" subtitle="Our team builds the recruitment workflows, AI interviews, evaluation and proctoring that bring GenHire together." /></div>
+      <div className={styles.hero}><PortalPageHeader title="Meet the Developers" eyebrow="The people behind GenHire" icon="fa-users" subtitle="Our team builds the recruitment workflows, AI screening, online assessments, evaluation and proctoring that bring GenHire together." /></div>
 
       <section className={styles.gridSection}>
         <div className={styles.grid}>

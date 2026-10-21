@@ -339,7 +339,7 @@ const RecruiterOnboarding = () => {
   });
 
   return (
-    <AuthShell wide title="Build your next team." accent="Start with a connection." description="Create your hiring workspace and turn applications into meaningful conversations.">
+    <AuthShell wide title="Build your next team." accent="Start with a connection." description="Create your hiring workspace for CV screening, AI interviews, optional online assessments and company-led next rounds.">
       <div className={styles.onboardingCard}>
         {/* Header */}
         <div className={styles.header}>

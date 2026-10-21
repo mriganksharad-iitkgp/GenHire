@@ -1,4 +1,5 @@
 import PortalPageHeader from "shared/components/ui/PortalPageHeader";
+import usePricingCatalog from "shared/hooks/usePricingCatalog";
 /**
  * SubscriptionPlans - Dedicated page for wallet recharge management
  * Clean, decoupled architecture using custom hooks and components
@@ -31,13 +32,13 @@ const TABS = [
   { id: "history", label: "Payment History", icon: ClockIcon },
 ];
 
-const getRecruiterSignupBonusPlan = () => ({
+const getRecruiterSignupBonusPlan = (credits) => ({
   id: "recruiter-signup-bonus",
   slug: "recruiter-signup-bonus",
   name: "Signup Bonus",
   description: "One-time welcome credits added automatically at signup",
   price: 0,
-  recharge_credits: 100,
+  recharge_credits: credits,
   disable_action: true,
   cta_label: "Included at Signup",
 });
@@ -203,6 +204,7 @@ const CreditTransactions = ({ items }) => {
  * Main SubscriptionPlans Component
  */
 const SubscriptionPlans = () => {
+  const {catalog, error:pricingError, reload:reloadPricing} = usePricingCatalog();
   const navigate = useNavigate();
 
   // Subscription state from shared hook
@@ -239,50 +241,9 @@ const SubscriptionPlans = () => {
   });
 
   // Combined error state
-  const displayError = error || paymentError;
+  const displayError = error || paymentError || pricingError;
 
-  // Fallback plans when API is unavailable
-  const getFallbackPlans = () => [
-    getRecruiterSignupBonusPlan(),
-    {
-      id: "recruiter-pro",
-      slug: "recruiter-pro",
-      name: "Recruiter Pro",
-      description: "5,000 non-expiring credits",
-      price: 4999,
-      currency: "INR",
-      interval: "one_time",
-      features: [
-        { name: "5,000 non-expiring credits", included: true },
-        { name: "AI JD generation", included: true },
-        { name: "Real interview billing", included: true },
-      ],
-      credits_allocated: 5000,
-      interviews_allowed: 5000,
-      is_popular: true,
-    },
-    {
-      id: "recruiter-max",
-      slug: "recruiter-max",
-      name: "Recruiter Max",
-      description: "10,000 non-expiring credits",
-      price: 9999,
-      currency: "INR",
-      interval: "one_time",
-      features: [
-        { name: "10,000 non-expiring credits", included: true },
-        { name: "AI JD generation", included: true },
-        { name: "Real interview billing", included: true },
-      ],
-      credits_allocated: 10000,
-      interviews_allowed: 10000,
-      is_popular: false,
-    },
-  ];
-
-  /**
-   * Load plans and payment history
-   */
+  // Load authoritative prices; an outage leaves paid packs unavailable.
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -294,15 +255,16 @@ const SubscriptionPlans = () => {
         getCreditTransactions().catch(() => ({ transactions: [] })),
       ]);
 
-      // Normalize plans response or use fallback
+      // Display only plans returned by the service.
       let normalizedPlans =
         plansRes?.data?.plans ||
         plansRes?.plans ||
         (Array.isArray(plansRes) ? plansRes : []);
 
-      // Use fallback plans if API returned empty or failed
+      // Missing server prices must not become purchasable fallback offers.
       if (!normalizedPlans || normalizedPlans.length === 0) {
-        normalizedPlans = getFallbackPlans();
+        normalizedPlans = [];
+        setError("Recharge prices are unavailable. Retry to load current packs before paying.");
       }
 
       const allowedRecruiterPlanSlugs = new Set([
@@ -313,7 +275,7 @@ const SubscriptionPlans = () => {
         allowedRecruiterPlanSlugs.has(String(plan?.slug || "").toLowerCase()),
       );
 
-      setPlans([getRecruiterSignupBonusPlan(), ...recruiterPlans]);
+      setPlans(recruiterPlans);
 
       // Normalize history response
       const normalizedHistory =
@@ -329,8 +291,8 @@ const SubscriptionPlans = () => {
       setCreditTransactions(normalizedTx);
     } catch (err) {
       console.error("Error loading wallet data:", err);
-      // Use fallback plans even on error
-      setPlans(getFallbackPlans());
+      // Never display invented prices after a plan-service failure.
+      setPlans([]);
       setError("Failed to load recharge wallet data. Please try again.");
     } finally {
       setLoading(false);
@@ -364,7 +326,8 @@ const SubscriptionPlans = () => {
     setError(null);
     clearPaymentError();
     loadData();
-  }, [loadData, clearPaymentError]);
+    reloadPricing();
+  }, [loadData, clearPaymentError, reloadPricing]);
 
   return (
     <div className={styles.pageContainer}>
@@ -381,7 +344,7 @@ const SubscriptionPlans = () => {
             <ArrowLeftIcon />
             Back to Dashboard
           </button>
-          <PortalPageHeader title="Recharge your wallet" eyebrow="Recruiter credits" icon="fa-credit-card" subtitle="Review recharge packs, available credits and transaction history." />
+          <PortalPageHeader title="Recharge your wallet" eyebrow="Recruiter credits" icon="fa-credit-card" subtitle="Fund screening and available OAs. Setup, accepted attempts and optional extras have separate quotes; review wallet history here." />
         </header>
 
         {/* Tab Navigation */}
@@ -399,7 +362,7 @@ const SubscriptionPlans = () => {
           <LoadingState message="Loading recharge wallet data..." />
         ) : activeView === "plans" ? (
           <PlansGrid
-            plans={plans}
+            plans={[...(Number.isInteger(catalog?.credits?.signup_bonus) ? [getRecruiterSignupBonusPlan(catalog.credits.signup_bonus)] : []), ...plans]}
             subscription={subscription}
             loadingPlanId={paymentLoading}
             onSelectPlan={handleSelectPlan}

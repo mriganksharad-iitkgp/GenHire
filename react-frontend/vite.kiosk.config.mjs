@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
+  envPrefix: [],
   root: path.join(root, "kiosk"), plugins: [react()],
   publicDir: path.join(root, "public"),
   define: { "process.env": JSON.stringify({ NODE_ENV: "production" }) },
