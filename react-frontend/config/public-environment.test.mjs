@@ -20,6 +20,7 @@ test('accidentally prefixed server secrets fail the build without printing value
 test('documented Vercel Vite/CRA metadata does not fail builds or enter the public config', () => {
   const metadata = Object.fromEntries([...BUILD_METADATA_KEYS].map(key => [key, 'build-metadata-never-embed']));
   assert.ok(BUILD_METADATA_KEYS.has('VITE_VERCEL_GIT_REPO_ID'));
+  assert.ok(BUILD_METADATA_KEYS.has('REACT_APP_VERCEL_OBSERVABILITY_CLIENT_CONFIG'));
   const result = publicEnvironment({ ...metadata, REACT_APP_API_URL: 'https://api.example.test' }, 'production');
   assert.deepEqual(result, { NODE_ENV: 'production', REACT_APP_API_URL: 'https://api.example.test' });
   assert.equal(JSON.stringify(result).includes('build-metadata-never-embed'), false);
