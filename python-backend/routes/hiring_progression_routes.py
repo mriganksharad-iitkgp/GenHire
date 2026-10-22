@@ -278,11 +278,13 @@ def create_hiring_progression_routes(db):
     @bp.get('/assessment-evaluation-operations')
     @endpoint
     def evaluation_operations(actor):
+        from services.onlinecompiler_execution_provider import usage_summary
         if actor.get('user_type') != 'admin' or not ({'*', 'applications.read'} & set(actor.get('permissions', []))):
             raise WorkflowError('forbidden', 'Evaluation operations require administrator access.', 403)
         return dict(jobs=list(db.assessment_evaluation_jobs.aggregate([{'$group': {'_id': '$state', 'count': {'$sum': 1}}}])),
             executions=list(db.assessment_execution_tasks.aggregate([{'$group': {'_id': '$state', 'count': {'$sum': 1}}}])),
             capacity=list(db.assessment_execution_capacity.find({})),
+            provider_usage=usage_summary(db),
             oldest_queued=db.assessment_execution_tasks.find_one({'state': 'queued'}, {'created_at': 1}, sort=[('created_at', 1)]))
 
     @bp.post('/hiring-versions/<version_id>/oa-window')

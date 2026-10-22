@@ -35,10 +35,39 @@ class FakeClient:
 
 class FakeExecutor:
     def __init__(self, db): self.transport, self.available, self.db = FakeClient(), True, db
-    def capabilities(self): return dict(available=self.available)
+    def capabilities(self): return dict(available=self.available,sql_available=self.available)
     def profile_hash(self): return 'TEST_ONLY_FAKE_PROFILE_NOT_AN_ATTESTATION'
-    def client(self, product): return self.transport
-    def reserve_submission(self, key): return ManagedAssessmentValidator(self.db).reserve_submission(key)
+    def execute_case(self, identity, q, case_id, language, purpose):
+        from services.assessment_harness import function_source
+        self.db.oa_provider_requests.insert_one(dict(_id=identity,state='dispatching'))
+        if q['type']=='sql':
+            case=next(c for c in q['sql']['datasets'] if c['id']==case_id)
+            self.transport.calls.append(dict(source=q['sql']['reference_query'],input=case['seed_sql']))
+            result=dict(status='ok',columns=case['columns'],rows=case['expected_rows'])
+        else:
+            c=q['coding'];case=next(t for t in c['tests'] if t['id']==case_id)
+            source=function_source(q,language,case_id) if c['contract']=='function' else c['reference_solutions'][language]
+            try:self.transport.create_submission(source,1,2,'' if c['contract']=='function' else case['input'])
+            except Exception:
+                self.db.oa_provider_requests.update_one({'_id':identity},{'$set':{'state':'dispatch_unknown'}})
+                raise
+            result=self._code_result(q)
+        self.db.oa_provider_requests.update_one({'_id':identity},{'$set':dict(state='complete',result=result)})
+        return result
+    def _code_result(self,q):
+        client=self.transport;c=q['coding'];limits=c['limits']
+        status={11:'compile_error',12:'runtime_error',13:'time_limit',15:'ok',17:'memory_limit',20:'infrastructure_error'}[client.status]
+        if client.size and client.size>limits['output_kb']*1024:status='output_limit'
+        elif client.time is not None and client.time*1000>limits['time_ms']:status='time_limit'
+        elif client.memory is not None and client.memory>limits['memory_mb']*1024:status='memory_limit'
+        result=dict(status=status,stdout=client.stdout)
+        if client.time is not None:result['time_ms']=client.time*1000
+        if client.memory is not None:result['memory_kb']=client.memory
+        return result
+    def execution_result(self,identity,question):
+        if self.transport.fail_get:raise RuntimeError('TEST_ONLY_FAKE journal outage')
+        if question['type']=='coding':return self._code_result(question)
+        return self.db.oa_provider_requests.find_one({'_id':identity})['result']
 
 
 class ScoringTests(unittest.TestCase):
@@ -86,11 +115,10 @@ class EvaluationTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups); self.fixture.setUp()
         self.db, self.runtime, self.base = self.fixture.db, self.fixture.runtime, self.fixture.base
         ensure_evaluation_indexes(self.db)
-        self.flag = patch.dict(os.environ, dict(GENHIRE_OA_EVALUATION_ENABLED='true', GENHIRE_OA_EXECUTION_CONCURRENCY='2', GENHIRE_OA_EXECUTION_QUEUE_LIMIT='1000'))
+        self.flag = patch.dict(os.environ, dict(GENHIRE_OA_EVALUATION_ENABLED='true', OA_MAX_CONCURRENT_EXECUTIONS='2', GENHIRE_OA_EXECUTION_QUEUE_LIMIT='1000'))
         self.flag.start(); self.addCleanup(self.flag.stop)
         self.evaluation = AssessmentEvaluationService(self.runtime)
         self.fake = FakeExecutor(self.db); self.evaluation.execution.executor = self.fake
-        self.evaluation.execution.profiles = lambda: {l: dict(compiler_id=1, version_id=2, runtime_label=v) for l, v in coding()['coding']['runtime_versions'].items()}
         self.admin = dict(_id=ObjectId(), user_type='admin', permissions=['applications.write', 'applications.read'])
 
     def submit(self, question=None, answer=None):
@@ -104,7 +132,7 @@ class EvaluationTests(unittest.TestCase):
             configuration['sql_engine'] = question.get('sql', {}).get('engine', 'postgresql')
             # Test-only seed: no production publication/attestation is manufactured.
             self.db.assessment_versions.update_one({'_id': version['_id']}, {'$set': {'configuration': configuration, 'question_version_ids': [qid]}})
-        with patch.object(ManagedAssessmentValidator, 'capabilities', return_value={'available': True}): self.fixture.start()
+        with patch.object(ManagedAssessmentValidator, 'capabilities', return_value={'available': True,'sql_available':True}): self.fixture.start()
         self.attempt_id, self.qid = self.fixture.identifier, self.fixture.qid
         if answer is not None: self.runtime.save(self.base.candidate, self.attempt_id, 0, 'evaluation-answer-save', {self.qid: answer})
         revision = 1 if answer is not None else 0
@@ -228,7 +256,8 @@ class EvaluationTests(unittest.TestCase):
         with self.assertRaises(WorkflowError): self.evaluation.execution.reconcile(self.admin, str(task['_id']), 'retry_confirmed', 'unsafe-retry-key', 'Confirmed account evidence for this dispatch.')
         with self.assertRaises(WorkflowError): self.evaluation.execution.reconcile(self.base.actor, str(task['_id']), 'bind_provider', 'bind-provider-key', 'Verified account-side source and fixture identity.', 111)
         self.fake.transport.fail_post = False
-        self.evaluation.execution.reconcile(self.admin, str(task['_id']), 'bind_provider', 'bind-provider-key', 'Verified account-side source and fixture identity.', 111)
+        self.db.oa_provider_requests.update_one({'_id':task['provider_id']},{'$set':{'state':'complete'}})
+        self.evaluation.execution.reconcile(self.admin,str(task['_id']),'bind_provider','bind-provider-key','Verified journal recovery for the original request.',task['provider_id'])
         stale = dict(task, state='running', provider_id=110)
         self.evaluation.execution.poll(stale)
         self.assertEqual(self.db.assessment_execution_tasks.find_one({})['state'], 'running')
@@ -259,45 +288,16 @@ class EvaluationTests(unittest.TestCase):
         # This checks wrapper/transport/scoring contracts, not real compilation.
 
     def _sql_grade(self, engine):
-        self.submit(sql(engine), dict(language='sql', source='SELECT value FROM values_table ORDER BY value'))
-        from services.sql_execution_service import SqlExecutionService
-        class Blob:
-            def __init__(blob, storage, path): blob.storage, blob.path = storage, path
-            def upload_from_string(blob, value, **kwargs): blob.storage.objects[blob.path] = value
-            def reload(blob, **kwargs): blob.size = len(blob.storage.objects[blob.path].encode())
-            def download_as_bytes(blob, **kwargs): return blob.storage.objects[blob.path].encode()
-        class Storage:
-            def __init__(storage): storage.objects = {}
-            def bucket(storage, name): return storage
-            def blob(storage, path): return Blob(storage, path)
-        storage = Storage()
-        class Response:
-            status_code = 200
-            def json(response): return {'name': 'projects/genhire-test-project/locations/europe-west1/operations/test-operation'}
-            def close(response): pass
-        class Session:
-            def post(session, url, json=None, **kwargs):
-                env = {v['name']: v['value'] for v in json['overrides']['containerOverrides'][0]['env']}
-                payload = __import__('json').loads(storage.objects[env['SQL_REQUEST_OBJECT']])
-                expected = 9371 if '9371' in payload['seed_sql'] else 2
-                result = dict(execution_evidence_version=2, request_id=payload['request_id'], request_hash=request_identity(payload),
-                    engine=payload['engine'], engine_version=payload['engine_version'], status='ok', columns=['value'], rows=[[expected]])
-                storage.objects[env['SQL_RESULT_OBJECT']] = __import__('json').dumps(result)
-                return Response()
-        def adapter(db): return SqlExecutionService(db, session=Session(), storage=storage)
-        env = dict(GENHIRE_ASSESSMENT_EXECUTION_ENABLED='true', GENHIRE_SQL_PROJECT='genhire-test-project', GENHIRE_SQL_ARTIFACT_BUCKET='genhire-test-bucket',
-            GENHIRE_SQL_REGION='europe-west1', GENHIRE_SQL_POSTGRESQL_JOB='oa-test-pg', GENHIRE_SQL_MYSQL_JOB='oa-test-mysql')
-        with patch.dict(os.environ, env), patch('services.assessment_execution_service.SqlExecutionService', side_effect=adapter):
-            self.evaluation.tick()
-            for _ in range(2): self.evaluation.execution.tick(); self.advance()
-            self.evaluation.tick()
-        self.assertEqual(self.report()['score'], 100)
-        self.assertEqual(self.db.sql_execution_dispatches.count_documents({'state': 'completed'}), 2)
-        self.assertEqual(self.db.sql_execution_limits.find_one({'_id': 'active'})['count'], 0)
-        self.assertNotIn('9371', json.dumps(self.report(), default=str))
+        self.submit(sql(engine),dict(language='sql',source='SELECT value FROM values_table ORDER BY value'))
+        self.evaluation.tick()
+        for _ in range(2):self.evaluation.execution.tick();self.advance()
+        self.evaluation.tick()
+        self.assertEqual(self.report()['score'],100)
+        self.assertEqual(self.db.oa_provider_requests.count_documents({'state':'complete'}),2)
+        self.assertNotIn('9371',json.dumps(self.report(),default=str))
 
-    def test_postgresql_dataset_dispatch_and_hash_bound_result_collection(self): self._sql_grade('postgresql')
-    def test_mysql_dataset_dispatch_and_hash_bound_result_collection(self): self._sql_grade('mysql')
+    def test_sqlite_dataset_dispatch_and_hash_bound_result_collection(self): self._sql_grade('sqlite')
+    def test_duckdb_dataset_dispatch_and_hash_bound_result_collection(self): self._sql_grade('duckdb')
 
     def test_poll_errors_back_off_keep_provider_identity_and_do_not_fail_candidate(self):
         self.submit(coding(), dict(language='python', source='candidate source'))
@@ -307,7 +307,7 @@ class EvaluationTests(unittest.TestCase):
             task = self.db.assessment_execution_tasks.find_one({}); self.evaluation.execution.poll(task)
         task = self.db.assessment_execution_tasks.find_one({})
         self.assertEqual(task['state'], 'running'); self.assertTrue(task['needs_review'])
-        self.assertEqual(len(self.fake.transport.calls), 1); self.assertEqual(task['provider_id'], 101)
+        self.assertEqual(len(self.fake.transport.calls), 1); self.assertTrue(task['provider_id'].startswith('oa-case:'))
         self.assertIsNone(self.report()); self.assertEqual(self.wallet()['reserved_credits'], 5)
         self.fake.transport.fail_get = False
         self.evaluation.execution.reconcile(self.admin, str(task['_id']), 'resume_poll', 'resume-known-poll', 'Provider account and access have been verified restored.')
@@ -342,22 +342,6 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(client.get('/api/assessment-evaluation-operations').status_code, 200)
         self.assertEqual(client.post(path+'/platform-failure', json=dict(operation_key='cannot-refund-usable', reason='This is an already usable evaluated attempt.')).status_code, 409)
 
-    def test_sql_artifact_failure_reuses_unposted_reservation_without_new_quota(self):
-        from services.sql_execution_service import SqlExecutionService
-        engine = self.evaluation.execution
-        task = engine.enqueue('sql-artifact-recovery', sql(), 'hidden1', 'sql', 'SELECT 1', 'grading', 'fixture-attempt')
-        env = dict(GENHIRE_ASSESSMENT_EXECUTION_ENABLED='true', GENHIRE_SQL_PROJECT='genhire-test-project', GENHIRE_SQL_ARTIFACT_BUCKET='genhire-test-bucket',
-            GENHIRE_SQL_REGION='europe-west1', GENHIRE_SQL_POSTGRESQL_JOB='oa-test-pg')
-        with patch.dict(os.environ, env), patch.object(SqlExecutionService, 'dispatch', side_effect=WorkflowError('sql_artifact_unavailable', 'TEST_ONLY_FAKE unavailable artifact', 503)):
-            engine.dispatch(engine.claim())
-        first = self.db.assessment_execution_tasks.find_one({'_id': task['_id']})
-        self.assertEqual(first['state'], 'queued'); self.assertEqual(first['retries'], 0)
-        self.advance()
-        with patch.dict(os.environ, env), patch.object(SqlExecutionService, 'dispatch', return_value={'state': 'running'}): engine.dispatch(engine.claim())
-        second = self.db.assessment_execution_tasks.find_one({'_id': task['_id']})
-        self.assertEqual(second['state'], 'running'); self.assertEqual(second['provider_id'], first['provider_id'])
-        self.assertEqual(self.db.sql_execution_dispatches.count_documents({}), 1)
-        self.assertEqual(self.db.sql_execution_limits.find_one({'_id': 'active'})['count'], 1)
 
 
 if __name__ == '__main__': unittest.main()

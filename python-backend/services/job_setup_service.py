@@ -77,7 +77,7 @@ def quote(configuration, now=None):
 
 def catalog():
     return dict(schema_version=1, workflow_enabled=workflow_enabled(), defaults=default_setup(),
-        templates=[template(key) for key in TEMPLATE_IDS], languages=LANGUAGES, sql_engines=['postgresql', 'mysql'],
+        templates=[template(key) for key in TEMPLATE_IDS], languages=LANGUAGES, sql_engines=['sqlite', 'duckdb', 'postgresql'], postgres_candidate_execution=False,
         coding_contracts=['stdin_stdout', 'function'], question_sources=['ai', 'manual', 'hybrid'],
         prices=prices(), authoring_api=dict(version=2, combined_ai_drafts=True, full_role_templates=True), capabilities=dict(configuration=True, question_authoring=workflow_enabled(),
             ai_question_generation=workflow_enabled() and os.getenv('GENHIRE_ASSESSMENT_GENERATION_ENABLED', '').lower() == 'true',

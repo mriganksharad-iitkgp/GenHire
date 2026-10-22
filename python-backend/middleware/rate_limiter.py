@@ -63,7 +63,7 @@ class CounterStore:
             self.redis = redis.Redis.from_url(
                 url, socket_timeout=socket_timeout,
                 socket_connect_timeout=connect_timeout, health_check_interval=30,
-                retry=Retry(NoBackoff(), 0))
+                max_connections=32, retry=Retry(NoBackoff(), 0))
             self.redis_url = url
         return self.redis
 

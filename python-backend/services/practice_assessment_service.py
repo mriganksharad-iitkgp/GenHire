@@ -1,4 +1,5 @@
 """Candidate-funded practice pools; shared runtime/judge, no hiring applications."""
+from config.assessment_execution import SQL_RUNTIMES, runtime_profiles
 from copy import deepcopy
 from datetime import timedelta
 import json
@@ -74,6 +75,10 @@ class PracticeAssessmentService:
             raise WorkflowError('unsupported_practice_extra', 'Practice supports new AI-generated attempts and disclosed camera tiers; other extras are not sold.', 400)
         if oa['proctoring_level'] in {'camera', 'dual'} and not all(os.getenv(k, '').lower() == 'true' for k in ('GENHIRE_OA_MEDIA_ENABLED', 'GENHIRE_OA_MEDIA_ACCEPTED')):
             raise WorkflowError('media_unavailable', 'Selected monitoring is unavailable and cannot be purchased.', 503)
+        from config.assessment_execution import sql_enabled
+        if any(s['type']=='sql' for s in oa['sections']) and not sql_enabled(oa['sql_engine']):raise WorkflowError('sql_engine_unavailable','Choose SQLite or DuckDB for candidate SQL practice.',503)
+        if any(s['type']=='sql' for s in oa['sections']) and not self.validator.capabilities().get('sql_available'):
+            raise WorkflowError('sql_acceptance_required','SQL purchase requires live isolation acceptance.',503)
         if any(s['type'] != 'mcq' for s in oa['sections']) and not self.validator.capabilities()['available']:
             raise WorkflowError('validator_unavailable', 'Real code/SQL execution acceptance is required before purchase.', 503)
         return oa
@@ -171,7 +176,7 @@ class PracticeAssessmentService:
                 raise WorkflowError('validator_unavailable', 'Current execution acceptance is required to start this content.', 503)
             questions.append(q['content'])
         blueprint_match(purchase['configuration'], questions)
-        if any(q['type']!='mcq' for q in questions):self.validator.acceptance_fence(session,self.clock())
+        if any(q['type']!='mcq' for q in questions):self.validator.acceptance_fence(session,self.clock(),sql=any(q['type']=='sql' for q in questions))
         return version
 
     def accept(self, actor, invitation_id, key):
@@ -277,7 +282,7 @@ class PracticeAssessmentService:
                 specs.append(spec)
             context = dict(role=template(oa['template_id'])['name'], instructions=oa['instructions'], specialization=oa['specialization'],
                 requests=specs, coding_contract=oa['coding_contract'], languages=oa['languages'], sql_engine=oa['sql_engine'],
-                sql_engine_version='17' if oa['sql_engine']=='postgresql' else '8.4', mcq_mode=oa['mcq_mode'])
+                sql_engine_version=SQL_RUNTIMES.get(oa['sql_engine'],'18'), mcq_mode=oa['mcq_mode'])
             if any(s['type']=='coding' for s in specs):
                 from config.assessment_execution import runtime_profiles
                 context['runtime_versions'] = {l: v['runtime_label'] for l, v in runtime_profiles().items()}
@@ -346,7 +351,7 @@ class PracticeAssessmentService:
                     if any(not r or request_identity(r['content'])!=r['content_hash'] or not r.get('practice_validation',{}).get('passed') or (r['content']['type']!='mcq' and r.get('executor_profile')!=self.validator.profile_hash()) for r in records):
                         raise WorkflowError('content_changed','Earlier batch validation changed before publication.')
                     all_questions = [r['content'] for r in records]
-                    if any(q['type']!='mcq' for q in all_questions):self.validator.acceptance_fence(session,self.clock())
+                    if any(q['type']!='mcq' for q in all_questions):self.validator.acceptance_fence(session,self.clock(),sql=any(q['type']=='sql' for q in all_questions))
                     blueprint_match(oa, all_questions)
                     from services.assessment_scoring import fixtures
                     from services.assessment_evaluation_service import grading_case_limit

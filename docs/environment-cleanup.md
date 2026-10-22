@@ -1,5 +1,11 @@
 # Environment cleanup and import checklist
 
+## Final execution migration - 21 October 2026
+
+All four backend profiles select OnlineCompiler.io for coding and generic SQLite/DuckDB SQL. Aiven PostgreSQL 18 is trusted development/reference validation only. New credentials remain blank for manual entry. See [OA_FINAL_SETUP.md](../OA_FINAL_SETUP.md) for exact fields and deployment actions and [the migration inventory](oa_integration.md#retired-environment-settings) for retired names.
+
+Removed obsolete OneCompiler/Sphere/custom GCP SQL judge settings. Kept general GCP, storage, MongoDB, Redis, authentication, AI, email and payment assignments. The preparation tool removes retired names and the audit rejects them. No deployed secrets/configuration or cloud resources were changed. Local private env files remain ignored by Git. Production blank optional ADC and Redis placeholders document settings supplied by the attached identity or Secret Manager; do not overwrite working deployed references with blank values.
+
 Updated 12 October 2026 (IST). Configuration files retain their matching schema;
 the startup recovery is documented in [the recovery guide](backend-startup-and-login-recovery.md).
 
@@ -7,7 +13,7 @@ the startup recovery is documented in [the recovery guide](backend-startup-and-l
 
 | Application | Local / local example | Production / production example |
 | --- | --- | --- |
-| Backend | 180 settings each | 180 settings each |
+| Backend | Matching current schemas | Matching current schemas |
 | Frontend | 8 public settings each | 8 public settings each |
 
 All four files for each application have exactly the same keys and order.

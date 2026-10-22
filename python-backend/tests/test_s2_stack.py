@@ -273,8 +273,6 @@ class UsageTests(unittest.TestCase):
         self.assertAlmostEqual(line["actual_cost_inr"], 0.07)
 
     def test_live_balance_uses_normal_key_and_handles_cny(self):
-        from services.deepseek_billing_service import _cache
-        _cache.update(key=None, at=0, value=None)
         response = MagicMock()
         response.json.return_value = {"is_available": True, "balance_infos": [{"currency": "CNY", "total_balance": "10.00"}]}
         with patch("services.deepseek_billing_service.requests.get", return_value=response) as get:

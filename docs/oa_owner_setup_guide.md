@@ -1,3 +1,5 @@
+> Current execution setup: [OA_FINAL_SETUP.md](../OA_FINAL_SETUP.md). PostgreSQL 18 is trusted Aiven development only; candidate SQL uses SQLite/DuckDB. Follow the final guide for credentials and live acceptance. Earlier provider-specific instructions in this broader workflow guide are superseded.
+
 # OA integration: owner setup guide for local development and production
 
 > Current AI authoring update (21 October): output truncation no longer triggers
@@ -76,13 +78,13 @@ customized/resumed assessments remain intact. Settings outages have explicit
 retry controls; do not overwrite an existing plan when its load failed.
 
 The implementation and local tests exist. Working production OA additionally
-needs funded/approved providers, deployed SQL jobs, continuous workers, current
+needs funded/approved OnlineCompiler.io access, continuous workers, current
 executor acceptance, a tested secure-browser release, and staging acceptance.
 **There is no single “turn everything on” switch.**
 
 Related records: [implementation and evidence](oa_integration.md),
 [release/rollback runbook](oa_release_runbook.md),
-[SQL infrastructure](../infra/oa_sql/README.md),
+[OnlineCompiler.io execution](../OA_FINAL_SETUP.md),
 [baseline backend/Redis setup](required-setup-and-rate-limits.md),
 [environment configuration](environment-configuration.md).
 Older deployment documents describe historical revisions, not a fresh inspection
@@ -97,16 +99,16 @@ of your GCP/Vercel accounts. Confirm current project/service/secret names yourse
 | Workflow, questions, attempts, ledger, queues | Separate local replica-set Mongo database | Your transaction-capable Mongo deployment | Verify replica-set/sharded transactions, indexes, network access and backup. |
 | Request protection | Existing local Redis, or development-only fallback if allowed by current config | Reachable shared Redis | Preserve working production secret/network setup. |
 | AI questions/critique/advice | Existing funded backend AI provider | Same supported provider stack, production credentials | Verify JSON generation, quality, latency and actual cost. |
-| C++/Python/Java/JavaScript execution | Remote Sphere Engine, even when UI/API are local | Sphere Engine Problems v4 + Compilers v4 | Obtain account endpoints, tokens, runtime catalogs and sandbox evidence. |
-| PostgreSQL/MySQL execution | Remote GCP jobs, even when UI/API are local | Two isolated Cloud Run Jobs, europe-west1 | Build/scan images, deploy Terraform, configure IAM and test isolation. |
+| Coding execution | Remote OnlineCompiler.io | OnlineCompiler.io API through the backend | Configure server key and run live acceptance. |
+| SQLite/DuckDB execution | Remote OnlineCompiler.io | OnlineCompiler.io API through the backend | Verify fresh datasets and typed results before publication. |
 | OA durable workers | Seven separate Python processes | Supervised continuous workers | API deployment alone does not run these workers. |
 | Secure Browser | Installed/built Electron 1.3.0 release under test | Tested/signed installer distributed to candidates | Publish compatible installer and public download URL. |
 | Camera evidence | Private GCS + functioning detector, if selected | Private application GCS bucket | Test upload, signed review URL, consent, cleanup and detector coverage. |
 | Hiring email | Real provider only for deliberately approved test recipients | Verified email provider | Test delivery/unknown reconciliation before dispatch flag. |
 
 **Not required:** a persistent Cloud SQL instance or a shared candidate database.
-The approved SQL design creates disposable PostgreSQL 17/MySQL 8.4 processes per
-job execution. Do not connect candidates' SQL to your application Mongo data or
+The SQL adapter sends reproducible schema and seed data to OnlineCompiler.io per
+execution, subject to verified provider isolation. Do not connect candidates' SQL to your application Mongo data or
 any production relational database.
 
 ## 2. Prepare an environment inventory before changing anything
@@ -119,7 +121,7 @@ any production relational database.
 - [ ] Record production frontend/API origins, Vercel project/root directory and
   one stable staging frontend/API pair.
 - [ ] Record a private SQL artifact bucket name, two SQL job names and application
-  evidence bucket name. Use separate nonproduction SQL jobs/bucket where practical.
+  evidence bucket name. Use isolated nonproduction execution/account configuration.
 - [ ] Record installer release/version/download URL, provider account owners,
   an operator for unknown dispatches, and your approved **total** infrastructure budget.
 
@@ -251,188 +253,20 @@ Start the API from an activated backend terminal with `python app.py`. Confirm
 `http://localhost:5000/health`, login and existing screening still work before
 turning on any OA flag. A healthy API alone does not establish OA readiness.
 
-## 5. Configure Sphere Engine in its dashboard
+## 5. Configure OnlineCompiler.io
 
-See [Sphere and SQL setup](oa_sphere_sql_setup.md) for account endpoint updates,
-the read-only judge/runtime discovery command, current SQL Run limitations and
-the latest local flag changes. The implemented SQL path uses GCP jobs; it does
-not require or consume a Sphere Containers token.
+Follow [OnlineCompiler.io setup and acceptance](../OA_FINAL_SETUP.md). Coding and
+generic SQLite/DuckDB SQL both run through the backend adapter. Set the backend API key manually;
+keep acceptance and cohort flags off until live verification passes.
 
-- [ ] Sign in/create the intended Sphere Engine account and arrange access to
-  **both Compilers API v4 and Problems API v4**, sufficient quota and billing.
-- [ ] Obtain each product's account-specific endpoint and token. These can be
-  separate credentials. Ask support if the account catalog/products are incomplete.
-- [ ] Obtain approved **master judge** and **testcase judge** IDs for the Problems
-  canary. Do not guess IDs from examples or use an arbitrary “default judge.”
-- [ ] Retrieve `GET /compilers` through each product using your account credentials.
-  Match real compiler IDs, version IDs and version names in **both catalogs**.
-- [ ] Confirm Python 3.12, Node.js 22, Java 21 and a compiler configuration that
-  actually enables C++20. Merely relabeling a compiler does not change its runtime.
-- [ ] Obtain evidence of network denial, filesystem isolation and hard execution
-  limits for your account's sandbox. Resolve unsupported requirements before accepting it.
+## 6. Preserve existing GCP infrastructure
 
-The adapter requires endpoints shaped as:
-
-```dotenv
-SPHERE_COMPILERS_ENDPOINT=https://YOUR_ACCOUNT.compilers.sphere-engine.com/api/v4
-SPHERE_COMPILERS_TOKEN=YOUR_PRIVATE_COMPILERS_TOKEN
-SPHERE_PROBLEMS_ENDPOINT=https://YOUR_ACCOUNT.problems.sphere-engine.com/api/v4
-SPHERE_PROBLEMS_TOKEN=YOUR_PRIVATE_PROBLEMS_TOKEN
-SPHERE_MASTER_JUDGE_ID=YOUR_APPROVED_POSITIVE_INTEGER
-SPHERE_TESTCASE_JUDGE_ID=YOUR_APPROVED_POSITIVE_INTEGER
-```
-
-The exact suffix, HTTPS and `/api/v4` matter; no query-string token belongs in
-the endpoint variable. Keep tokens backend-only. Avoid token-bearing URLs in
-browser history, shared terminals or screenshots. Official contracts:
-[Compilers v4](https://docs.sphere-engine.com/compilers/api/overview-version-4),
-[Problems v4](https://docs.sphere-engine.com/problems/api/overview-version-4).
-
-Set `SPHERE_RUNTIME_PROFILES_JSON` as a **single-line JSON object**. Shape example
-only: replace every numeric `0` and version-name placeholder with the actual
-positive IDs/names from your account. The zero IDs deliberately cannot pass validation.
-
-```dotenv
-SPHERE_RUNTIME_PROFILES_JSON='{"python":{"compiler_id":0,"version_id":0,"version_name":"ACCOUNT_VERSION_NAME","runtime_label":"3.12"},"javascript":{"compiler_id":0,"version_id":0,"version_name":"ACCOUNT_VERSION_NAME","runtime_label":"22"},"java":{"compiler_id":0,"version_id":0,"version_name":"ACCOUNT_VERSION_NAME","runtime_label":"21"},"cpp":{"compiler_id":0,"version_id":0,"version_name":"ACCOUNT_VERSION_NAME","runtime_label":"C++20"}}'
-```
-
-In a GCP environment-variable field, paste the raw JSON object **without the
-outer dotenv single quotes**. Do not add C/C17: this milestone supports the four
-approved languages. If a required runtime is absent, keep publication blocked
-and resolve the provider/runtime mismatch with engineering.
-
-## 6. Configure Google Cloud identity, SQL images and jobs
-
-### 6.1 Select the existing project and enable required APIs
-
-Use the actual existing GenHire project and `europe-west1`. Do not infer project
-ID from the backend URL's project number. You need access to billing, API
-enablement, Artifact Registry, Cloud Run, IAM, Storage and the relevant secrets.
-
-```powershell
-gcloud auth login
-gcloud config set project PROJECT_ID
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com storage.googleapis.com secretmanager.googleapis.com iamcredentials.googleapis.com billingbudgets.googleapis.com --project PROJECT_ID
-```
-
-For local builds below, Docker performs the builds. If your team chooses Cloud
-Build instead, enable/configure it separately. Do not grant project Owner to
-runtime accounts to work around a permission error.
-
-### 6.2 Build the two SQL images
-
-Create a Docker Artifact Registry repository in europe-west1, or select an
-existing suitable repository. The following creates one **only if needed**:
-
-```powershell
-gcloud artifacts repositories create REPOSITORY --repository-format=docker --location=europe-west1 --project=PROJECT_ID
-gcloud auth configure-docker europe-west1-docker.pkg.dev
-Set-Location D:\Projects\GenHire
-docker build --platform linux/amd64 -f infra/oa_sql/Dockerfile.postgresql -t europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-postgresql:review1 infra/oa_sql
-docker build --platform linux/amd64 -f infra/oa_sql/Dockerfile.mysql -t europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-mysql:review1 infra/oa_sql
-docker push europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-postgresql:review1
-docker push europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-mysql:review1
-```
-
-Inspect Artifact Registry for the pushed image **digests**, scan/review the
-images and record each full `.../IMAGE@sha256:...` reference. Terraform rejects
-tag-only image references. Read the existing Dockerfiles/runner before approving
-them; build success alone does not prove SQL isolation. Official image-push
-reference: [Artifact Registry](https://cloud.google.com/artifact-registry/docs/docker/pushing-and-pulling).
-
-### 6.3 Plan and provision the repository's SQL Terraform
-
-In a private tfvars file outside Git, supply:
-
-```hcl
-project_id              = "PROJECT_ID"
-billing_account         = "YOUR_BILLING_ACCOUNT_ID"
-backend_service_account = "BACKEND_SA_EMAIL"
-artifact_bucket         = "YOUR_GLOBALLY_UNIQUE_PRIVATE_SQL_BUCKET"
-postgresql_image        = "europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-postgresql@sha256:ACTUAL_DIGEST"
-mysql_image             = "europe-west1-docker.pkg.dev/PROJECT_ID/REPOSITORY/oa-mysql@sha256:ACTUAL_DIGEST"
-budget_currency         = "USD"
-budget_units            = "10"
-```
-
-The digest placeholders are intentionally invalid. If your billing currency is
-INR, use its actual currency code and an approved current USD-10 equivalent;
-do not configure a budget of INR 10 by copying the dollar value. Review the
-actual billing-account currency and target before applying.
-
-```powershell
-terraform -chdir=infra/oa_sql init
-terraform -chdir=infra/oa_sql validate
-terraform -chdir=infra/oa_sql plan -var-file=C:/PRIVATE_PATH/oa-sql.tfvars -out=C:/PRIVATE_PATH/oa-sql.tfplan
-```
-
-Review the plan with your GCP/IaC operator. Check IAM scope, private bucket,
-one-day SQL object lifecycle, image digests, job identities/resources, budget
-filter/recipients and that no existing unrelated resource will be replaced.
-Resolve any provider/schema/validation error in engineering; do not bypass it.
-Only after approving the concrete plan:
-
-```powershell
-terraform -chdir=infra/oa_sql apply C:/PRIVATE_PATH/oa-sql.tfplan
-terraform -chdir=infra/oa_sql output
-```
-
-Secure Terraform state/plans/tfvars; do not commit them. This template creates
-`genhire-oa-sql-postgresql`, `genhire-oa-sql-mysql`, a SQL runner service account,
-private artifact bucket, scoped IAM and an alerts-only budget. It does **not**
-deploy your Flask API, durable OA workers, Redis, Vercel, detector models or installer.
-The SQL runner account is different from the API/worker account.
-
-### 6.4 IAM and backend values
-
-The template's configured backend identity gets access to the two SQL jobs and
-artifact bucket. If workers use another identity, grant that identity the same
-necessary job-specific execution/override and artifact permissions explicitly.
-The local impersonated identity needs them too. Do not grant those rights to
-the browser or candidate accounts. Confirm same-project images can be pulled by
-Cloud Run; cross-project registries need additional deliberate IAM.
-
-```dotenv
-GENHIRE_SQL_PROJECT=PROJECT_ID
-GENHIRE_SQL_REGION=europe-west1
-GENHIRE_SQL_ARTIFACT_BUCKET=YOUR_PRIVATE_SQL_BUCKET
-GENHIRE_SQL_POSTGRESQL_JOB=genhire-oa-sql-postgresql
-GENHIRE_SQL_MYSQL_JOB=genhire-oa-sql-mysql
-GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT=200
-GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS=1
-GENHIRE_SQL_TASK_TIMEOUT_SECONDS=60
-GENHIRE_SQL_MONTHLY_BUDGET_USD=10
-GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT=500
-```
-
-The application currently caps SQL at 200 dispatches/month, globally one active
-SQL execution, and a 60-second task timeout; Sphere is capped at 500 submissions/
-month. Some are hard pilot constraints, not values you can raise arbitrarily by
-editing `.env`. See step 16 before planning continuous production traffic.
-
-### 6.5 Local Application Default Credentials versus Cloud Run
-
-`gcloud auth login` configures CLI access, **not automatically Python SDK ADC**.
-For local SDK access, arrange a dedicated approved service-account identity and
-the necessary impersonation permission, then:
-
-```powershell
-gcloud auth application-default login --impersonate-service-account=YOUR_LOCAL_TEST_SA_EMAIL
-gcloud auth application-default set-quota-project PROJECT_ID
-```
-
-Use an identity with only the nonproduction resources it needs. Follow
-[Google's impersonation/ADC guide](https://cloud.google.com/docs/authentication/use-service-account-impersonation).
-Remove stale nonempty credential-file overrides from your local configuration
-when using ADC. Existing dummy paths take precedence and break authentication.
-If using a local key file instead, keep it private, uncommitted and never package
-it in an installer/image; use the existing supported credential fields.
-
-On Cloud Run, attach the correct runtime service account and use its ADC.
-**Omit** `GOOGLE_APPLICATION_CREDENTIALS`,
-`GOOGLE_APPLICATION_CREDENTIALS_JSON`, `GCS_SERVICE_ACCOUNT_KEY` and
-`GCS_SERVICE_ACCOUNT_JSON` overrides there when using attached identity. Never
-paste `C:\Users\...` or the template's `path/to/service-account.json` into GCP.
+The API, continuous grading workers, private evidence storage, Google identities,
+Redis and MongoDB remain in use. The old SQL judge jobs, Dockerfiles, provisioning
+configuration and invocation code have been removed from this repository.
+Do not provision replacement SQL jobs. No deployed resource has been deleted.
+The migration guide identifies the retired resources for a separate approved
+cloud decommissioning change.
 
 ## 7. Configure AI, private evidence storage, email and payments
 
@@ -458,7 +292,7 @@ Mock OA generation needs AI; it is not a static question bank fallback.
 
 - [ ] Configure `GCS_BUCKET_NAME` to the private application artifact/evidence
   bucket. OA camera objects use `oa-evidence/`. This is **separate** from
-  `GENHIRE_SQL_ARTIFACT_BUCKET`, whose one-day lifecycle is for SQL artifacts.
+  the retired SQL artifact bucket, which is no longer used for execution.
 - [ ] Give the API/media/retention identities object upload/read/delete rights
   on the intended bucket/prefixes. Keep public access blocked.
 - [ ] Configure signed-URL capability (`iam.serviceAccounts.signBlob`) on the
@@ -517,7 +351,7 @@ GENHIRE_OA_VARIANTS_ENABLED=false
 GENHIRE_OA_SIMILARITY_ENABLED=false
 GENHIRE_EXECUTOR_ISOLATION_POLICY_ID=
 GENHIRE_OA_KIOSK_RELEASE_ID=1.3.0
-GENHIRE_OA_EXECUTION_CONCURRENCY=2
+OA_MAX_CONCURRENT_EXECUTIONS=20
 GENHIRE_OA_EXECUTION_QUEUE_LIMIT=1000
 GENHIRE_OA_GRADING_CASE_LIMIT=200
 GENHIRE_OA_RAW_RETENTION_DAYS=30
@@ -634,67 +468,14 @@ for the required secure-context/device/native URL policy. Test real permission
 denial, disconnection, pairing expiry and browser/camera waivers. Client-reported
 release/kiosk activity is not cryptographic native attestation.
 
-## 11. Run real executor acceptance in a deliberately selected test environment
+## 11. Run live OnlineCompiler.io acceptance
 
-This step consumes paid provider quota and writes acceptance records to the
-selected Mongo database. Do not run against production accidentally. Stop the
-authoring worker during initial acceptance; do not have another operator start
-a competing preflight on the same environment/profile.
-
-1. Complete actual sandbox/image/isolation security tests with a qualified
-   engineer, including file/network/role escape, output bounds and crash recovery.
-   Terraform source and an image scan alone do not establish these properties.
-2. Choose `GENHIRE_EXECUTOR_ISOLATION_POLICY_ID`, e.g. your internally approved
-   versioned review identifier. Record image digests, account sandbox policy,
-   runtime pins and private evidence references.
-3. Create a private JSON file outside Git with the shape below. Initially keep
-   the booleans false; set each true **only after its actual review/test passes**.
-
-```json
-{
-  "policy_id": "YOUR_REVIEWED_POLICY_ID",
-  "reviewed_by": "YOUR_OPERATOR_IDENTIFIER",
-  "evidence_reference": "YOUR_PRIVATE_REVIEW_REPORT_ID",
-  "reviewed_at": "ACTUAL_RECENT_ISO_TIMESTAMP_WITH_TIMEZONE",
-  "code_network_denied": false,
-  "code_filesystem_isolated": false,
-  "code_hard_resource_limits": false,
-  "sql_network_denied": false,
-  "sql_file_access_denied": false,
-  "sql_role_escape_denied": false,
-  "sql_output_limit_verified": false,
-  "sql_crash_recovery_verified": false,
-  "images_scanned_and_digest_pinned": false
-}
-```
-
-4. Confirm the correct database/providers/SQL jobs, then temporarily set
-   `GENHIRE_ASSESSMENT_EXECUTION_ENABLED=true` **in that environment**. Keep
-   candidate runtime and acceptance flags false. The review policy ID must match;
-   its timestamp must be timezone-aware and no older than seven days.
-5. From an activated `python-backend` terminal:
-
-```powershell
-python scripts/admin/validate_assessment_executors.py --execute-live --security-review C:/PRIVATE_PATH/oa-security-review.json
-```
-
-6. Require a real `state: passed` result. It checks both catalogs, four languages,
-   stdin/function contracts, wrong/timeout results, SQL fixtures/DDL denial/timeouts
-   and the Problems reference-versus-wrong-answer path. It creates a private
-   Sphere Problems canary; record IDs for later reviewed cleanup.
-   A preliminary read-only quota check refuses an already impossible run with
-   `preflight_budget_insufficient` before dispatch or attestation changes. Other
-   traffic can still consume quota after that snapshot; it is not a reservation.
-7. A pass writes a profile-bound Mongo attestation valid for **24 hours**. It is
-   **not** a recruiter-credit charge. A failed recheck revokes the old acceptance.
-   Unknown POSTs retain identity/capacity; reconcile provider/cloud records before
-   retrying. Never manually insert a fake passed attestation to unblock publication.
-8. Repeat genuine acceptance for each environment/database. Local Mongo evidence
-   does not automatically populate staging/production. Changing image policy,
-   endpoints, runtime pins or SQL configuration requires fresh acceptance.
-
-Resolve step 16's renewal/quota conflict before treating this as a sustainable
-always-on production approval. Do not enable an unattended daily cron yet.
+Use the explicit operator command and current security-review JSON documented in
+[OnlineCompiler.io setup](../OA_FINAL_SETUP.md). It consumes real credits. Coding
+acceptance and SQL isolation acceptance are recorded separately; coding can pass
+while SQL remains unavailable. A key, environment flag or synthetic test cannot
+establish SQL readiness. Attestations expire after 24 hours and are bound to the
+provider account, endpoint, timeout and reviewed isolation policy.
 
 ## 12. Enable features in stages, with evidence
 
@@ -802,7 +583,7 @@ keep-warm ping is not worker supervision.
 Use a supervised existing always-on host, or configure Cloud Run **worker pools**
 after reviewing availability and cost in europe-west1. Worker pools support
 continuous background containers and use manually configured instance counts;
-they are different from the two disposable SQL Jobs. Official references:
+they remain required after the OnlineCompiler.io migration. Official references:
 [worker pools](https://docs.cloud.google.com/run/docs/deploy-worker-pools),
 [deployment CLI](https://docs.cloud.google.com/sdk/gcloud/reference/run/worker-pools/deploy).
 
@@ -863,55 +644,15 @@ containers. Backend OA flags belong in GCP. Every `REACT_APP_*` value is public.
 Official references: [Vite deployment](https://vercel.com/docs/frameworks/frontend/vite),
 [environment scopes/redeployment](https://vercel.com/docs/environment-variables).
 
-## 16. Resolve the remaining production blockers with engineering
+## 16. Complete provider and device acceptance
 
-These require evidence or code/infrastructure work; they cannot all be solved
-by you pasting credentials into `.env`.
-
-| Pending item | What you explicitly need to arrange |
-|---|---|
-| **24-hour attestation versus monthly quotas** | Approve an operating design for renewal, security evidence freshness, quotas and cost. Do not bypass expiry or edit Mongo attestation dates. |
-| **Continuous worker deployment** | A reviewed worker-pool/supervisor configuration, capacity, identities, secrets, restarts and monitoring; not supplied by the SQL Terraform. |
-| **100-candidate start latency** | Actual staging HTTP/Redis/Mongo/provider load and tuning. Local p95 start was 18.5 seconds; this is not an acceptable-capacity certification. Agree a user-facing latency target before a real cohort. |
-| **Real execution isolation** | Provider sandbox guarantees, image scans and actual escape/resource/recovery tests. Terraform alone does not establish egress isolation; add controls if the review finds a gap. |
-| **Backend image validation** | Source now uses tested Python 3.12; build/scan/test and deploy the new image rather than assuming the running 3.11 image changed. |
-| **Device/accessibility/storage** | Installed signed release, real desktop/phone/Monaco/permission tests, keyboard/screen-reader/zoom, accommodations, GCS signing/detector and cleanup. |
-| **Private rollout admission** | Separate staging or an enforced production cohort boundary; global flags alone are not per-tenant access controls. |
-| **Backup and restoration** | Real production backup/PITR restored into staging and a reconciliation/drain plan before any legacy adoption. |
-
-### Why daily acceptance renewal is not currently a complete production plan
-
-From the current canary definitions, a fully successful fresh preflight is
-expected to dispatch **28 Sphere submissions and 12 SQL executions**, excluding
-additional failures/retries and unrelated traffic. This is a source-derived
-estimate, not a live bill: 16 correct coding contract/case/language executions,
-8 wrong-output checks, 2 Python timeouts and 2 Problems submissions; both SQL
-engines each run two datasets for correct, denied-DDL and timeout checks.
-
-Daily runs for 30 days would consume roughly **840 Sphere + 360 SQL** calls,
-already above the enforced **500 + 200 monthly caps**, before reference validation,
-candidate grading or public Run. The security review timestamp also expires
-after seven days; rerunning with a stale review is rejected. There is no completed
-automatic renewal/reconciliation service supplied here.
-
-For a short controlled test, perform genuine acceptance shortly before its
-24-hour window and budget the canaries. For continuous production, have
-engineering resolve/review the quota/renewal policy and cost envelope first.
-Raising env values above the hard pilot caps will fail validation; weakening
-acceptance without an approved redesign is not a setup instruction.
-
-Judge quotas count **executions/cases**, not candidates. A 100-candidate SQL OA
-with two datasets can consume 200 SQL dispatches from grading alone, leaving no
-room under the present cap for reference validation/preflight/Run. Estimate:
-reference validation sums languages × cases; final grading uses submitted
-language × grading cases; public Run and renewed preflights add more. Get actual
-account prices and measure before deciding wallet prices or promising volume.
-
-Local/staging calls still use real paid external accounts. Test wallet credits
-do not pay Sphere/GCP invoices. Separate Mongo databases have separate local
-usage counters, so they do not jointly enforce a shared provider account's total
-usage; track combined development/staging/production consumption or use explicitly
-separated provider accounts and budgets.
+Run current OnlineCompiler.io acceptance in each intended environment. Review actual
+vendor resource limits, dataset isolation, runtime versions, credit usage and
+24-hour renewal cost. The API has no documented version selector or per-request
+credit debit field: versions are observed, and credit estimates stay separate
+from account balance snapshots. Production SQL must remain blocked when dataset
+control or typed results cannot be verified. Existing device, grading, billing,
+media, email and workflow acceptance requirements still apply.
 
 ## 17. Production acceptance, monitoring and rollback
 

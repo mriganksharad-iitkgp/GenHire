@@ -1,3 +1,5 @@
+> ARCHIVED: historical provider/provisioning record. Do not follow these deployment or credential instructions. Current setup: [OA_FINAL_SETUP.md](../../OA_FINAL_SETUP.md).
+
 # Disposable SQL validation jobs
 
 Target: existing GenHire project, `europe-west1`, PostgreSQL 17 and MySQL 8.4.

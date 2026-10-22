@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from models.hiring_workflow import WorkflowError, validate_stages
 
-LANGUAGES = ['python', 'javascript', 'java', 'cpp']
+LANGUAGES = ['python', 'javascript', 'java', 'cpp', 'c', 'nodejs']
 JOB_FIELDS = {'title', 'department', 'location', 'type', 'experience', 'salary', 'description',
               'skills', 'responsibilities', 'requirements', 'benefits', 'deadline', 'status',
               'minimum_cv_score', 'proctoring_config', 'gaze_proctoring'}
@@ -126,8 +126,8 @@ def default_setup(now=None):
     return dict(schema_version=1,
         pipeline=dict(oa_enabled=False, advancement='manual', company_stages=[]),
         qualification=dict(interview_minimum=60, require_proctoring=False, proctoring_minimum=70, oa_minimum=None),
-        oa=dict(template_id='sde', specialization='general', source='ai', instructions='', languages=LANGUAGES[:],
-            sql_engine='postgresql', coding_contract='stdin_stdout', mcq_mode='single', sections=preset['sections'],
+        oa=dict(template_id='sde', specialization='general', source='ai', instructions='', languages=LANGUAGES[:4],
+            sql_engine='sqlite', coding_contract='stdin_stdout', mcq_mode='single', sections=preset['sections'],
             timer_mode='shared', duration_minutes=preset['duration_minutes'], revisit_allowed=True,
             proctoring_level='basic', variant_count=1, advanced_analytics=False, plagiarism_check=False),
         schedule=default_schedule(now))
@@ -164,8 +164,9 @@ def validate_setup(value):
     oa['instructions'] = text(oa['instructions'], 'Assessment instructions', 4000)
     if not isinstance(oa['languages'], list) or any(not isinstance(x, str) or x not in LANGUAGES for x in oa['languages']) or len(set(oa['languages'])) != len(oa['languages']):
         invalid('Choose unique supported programming languages.')
-    choice(oa['sql_engine'], {'postgresql', 'mysql'}, 'SQL engine')
+    choice(oa['sql_engine'], {'sqlite', 'duckdb', 'postgresql', 'mysql'}, 'SQL engine')
     choice(oa['coding_contract'], {'stdin_stdout', 'function'}, 'coding contract')
+    if oa['coding_contract']=='function' and 'c' in oa['languages']: invalid('C questions use standard input/output.')
     choice(oa['mcq_mode'], {'single', 'multiple', 'mixed'}, 'MCQ mode')
     choice(oa['timer_mode'], {'shared', 'section'}, 'timer mode')
     choice(oa['proctoring_level'], {'basic', 'camera', 'dual'}, 'proctoring level')

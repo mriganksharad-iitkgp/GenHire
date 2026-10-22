@@ -9,11 +9,56 @@ ROOT = Path(__file__).resolve().parents[1]
 PLACEHOLDER = re.compile(r"(?i)(replace_with|your[-_ ]|placeholder|change[-_ ]?me|xxxx|<[^>]+>)")
 CLOUD_ADC_OVERRIDES = {"GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_APPLICATION_CREDENTIALS_JSON"}
 OBSOLETE_SETTINGS = {
-    "OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_CV_MODEL", "LLM_OPENAI_MODEL",
-    "FACE_MATCH_OPENAI_MODEL", "OPENAI_ADMIN_API_KEY", "OPENAI_CREDIT_BALANCE_USD",
-    "INFRA_MONTHLY_OPENAI_INR", "MAILGUN_API_KEY", "MAILGUN_DOMAIN",
-    "MAILGUN_FROM_EMAIL", "MAILGUN_FROM_NAME", "LLM_PRIMARY_PROVIDER",
-    "LLM_SECONDARY_PROVIDER", "LLM_TERTIARY_PROVIDER", "CV_SCORING_MODEL", "GROQ_CV_MODEL",
+    'CV_SCORING_MODEL',
+    'FACE_MATCH_OPENAI_MODEL',
+    'GENHIRE_OA_EXECUTION_CONCURRENCY',
+    'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT',
+    'GENHIRE_SQL_ARTIFACT_BUCKET',
+    'GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS',
+    'GENHIRE_SQL_MONTHLY_BUDGET_USD',
+    'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT',
+    'GENHIRE_SQL_MYSQL_JOB',
+    'GENHIRE_SQL_POSTGRESQL_JOB',
+    'GENHIRE_SQL_PROJECT',
+    'GENHIRE_SQL_REGION',
+    'GENHIRE_SQL_TASK_TIMEOUT_SECONDS',
+    'GROQ_CV_MODEL',
+    'INFRA_MONTHLY_OPENAI_INR',
+    'LLM_OPENAI_MODEL',
+    'LLM_PRIMARY_PROVIDER',
+    'LLM_SECONDARY_PROVIDER',
+    'LLM_TERTIARY_PROVIDER',
+    'MAILGUN_API_KEY',
+    'MAILGUN_DOMAIN',
+    'MAILGUN_FROM_EMAIL',
+    'MAILGUN_FROM_NAME',
+    'OA_JUDGE_PROVIDER',
+    'OA_SQL_MYSQL_JOB',
+    'OA_SQL_MYSQL_REGION',
+    'OA_SQL_POSTGRES_JOB',
+    'OA_SQL_POSTGRES_REGION',
+    'OA_SQL_PROVIDER',
+    'ONECOMPILER_API_BASE_URL',
+    'ONECOMPILER_API_KEY',
+    'ONECOMPILER_API_SECRET',
+    'ONECOMPILER_API_URL',
+    'ONECOMPILER_AUTH_TOKEN',
+    'OPENAI_ADMIN_API_KEY',
+    'OPENAI_API_KEY',
+    'OPENAI_CREDIT_BALANCE_USD',
+    'OPENAI_CV_MODEL',
+    'OPENAI_MODEL',
+    'SPHERE_COMPILERS_API_TOKEN',
+    'SPHERE_COMPILERS_API_URL',
+    'SPHERE_COMPILERS_ENDPOINT',
+    'SPHERE_COMPILERS_TOKEN',
+    'SPHERE_MASTER_JUDGE_ID',
+    'SPHERE_PROBLEMS_API_TOKEN',
+    'SPHERE_PROBLEMS_API_URL',
+    'SPHERE_PROBLEMS_ENDPOINT',
+    'SPHERE_PROBLEMS_TOKEN',
+    'SPHERE_RUNTIME_PROFILES_JSON',
+    'SPHERE_TESTCASE_JUDGE_ID',
 }
 
 
@@ -136,50 +181,41 @@ def inspect_oa(values):
     for key, raw in values.items():
         if key.startswith('GENHIRE_') and key.endswith('_CREDITS') and raw and (not raw.isdigit() or len(raw) > 9):
             errors.append(f'{key} must be a nonnegative integer wallet-credit amount')
-    limits = {'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT': (1, 200), 'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT': (1, 500),
-        'GENHIRE_OA_EXECUTION_CONCURRENCY': (1, 4), 'GENHIRE_OA_EXECUTION_QUEUE_LIMIT': (1, 5000),
+    limits = {'OA_EXECUTION_TIMEOUT_MS': (1000, 120000), 'OA_MAX_CONCURRENT_EXECUTIONS': (1, 100),
+        'OA_MAX_PRACTICE_RUNS_PER_QUESTION': (1, 100), 'ONLINECOMPILER_TEST_BATCH_SIZE':(1,80), 'ONLINECOMPILER_RUNS_PER_MINUTE':(1,100000), 'GENHIRE_OA_EXECUTION_QUEUE_LIMIT': (1, 5000),
         'GENHIRE_OA_RAW_RETENTION_DAYS': (1, 90), 'GENHIRE_OA_SUMMARY_RETENTION_DAYS': (30, 730)}
     for key, (lower, upper) in limits.items():
         raw = values.get(key)
         if raw is not None and (not raw.isdigit() or not lower <= int(raw) <= upper):
             errors.append(f'{key} must be an integer between {lower} and {upper}')
-    for key, expected in {'GENHIRE_SQL_REGION': 'europe-west1', 'GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS': '1',
-                          'GENHIRE_SQL_TASK_TIMEOUT_SECONDS': '60'}.items():
-        if key in values and values[key] != expected:
-            errors.append(f'{key} does not match the supported SQL pilot configuration')
-    required = ['SPHERE_COMPILERS_ENDPOINT', 'SPHERE_COMPILERS_TOKEN', 'SPHERE_PROBLEMS_ENDPOINT', 'SPHERE_PROBLEMS_TOKEN',
-        'SPHERE_MASTER_JUDGE_ID', 'SPHERE_TESTCASE_JUDGE_ID', 'SPHERE_RUNTIME_PROFILES_JSON', 'GENHIRE_SQL_PROJECT', 'GENHIRE_SQL_ARTIFACT_BUCKET',
-        'GENHIRE_SQL_POSTGRESQL_JOB', 'GENHIRE_SQL_MYSQL_JOB', 'GENHIRE_EXECUTOR_ISOLATION_POLICY_ID']
-    missing = [key for key in required if not values.get(key) or values[key] == '{}' or PLACEHOLDER.search(values[key])]
+    for key in ('OA_EXECUTION_PROVIDER','OA_GENERIC_SQL_PROVIDER'):
+        if values.get(key,'onlinecompiler')!='onlinecompiler':errors.append(f'{key} must be onlinecompiler')
+    for key in ('OA_ENABLE_SQLITE','OA_ENABLE_DUCKDB','OA_POSTGRES_QUESTION_AUTHORING_ENABLED','OA_POSTGRES_CANDIDATE_EXECUTION_ENABLED','AIVEN_POSTGRES_SSL_REQUIRED'):
+        if key in values and values[key] not in ('true','false'):errors.append(f'{key} must be true or false')
+    if values.get('OA_POSTGRES_CANDIDATE_EXECUTION_ENABLED','false')!='false':errors.append('OA_POSTGRES_CANDIDATE_EXECUTION_ENABLED must remain false; shared Aiven is not a candidate judge')
+    if values.get('AIVEN_POSTGRES_SSL_REQUIRED','true')!='true':errors.append('AIVEN_POSTGRES_SSL_REQUIRED must be true')
+    if values.get('AIVEN_POSTGRES_PURPOSE','question_validation')!='question_validation':errors.append('AIVEN_POSTGRES_PURPOSE must be question_validation')
+    required=['ONLINECOMPILER_API_KEY','GENHIRE_EXECUTOR_ISOLATION_POLICY_ID']
+    missing=[key for key in required if not values.get(key) or PLACEHOLDER.search(values[key])]
     if 'GENHIRE_WORKFLOW_ENABLED' in values and missing:
-        message = 'OA owner configuration remains unfilled: '+', '.join(missing)
+        message='OA owner configuration remains unfilled: '+', '.join(missing)
         (errors if enabled('GENHIRE_ASSESSMENT_EXECUTION_ENABLED') else warnings).append(message)
-    if enabled('GENHIRE_ASSESSMENT_EXECUTION_ENABLED'):
-        for product in ('COMPILERS', 'PROBLEMS'):
-            key = 'SPHERE_'+product+'_ENDPOINT'
+    if values.get('ONLINECOMPILER_API_BASE_URL','https://api.onlinecompiler.io').rstrip('/')!='https://api.onlinecompiler.io':errors.append('ONLINECOMPILER_API_BASE_URL must use the official HTTPS endpoint')
+    if enabled('OA_POSTGRES_QUESTION_AUTHORING_ENABLED'):
+        if not values.get('AIVEN_POSTGRES_URL') or PLACEHOLDER.search(values.get('AIVEN_POSTGRES_URL','')):
+            warnings.append('AIVEN_POSTGRES_URL is required for trusted PostgreSQL authoring; candidate execution is separate')
+        else:
             try:
-                url = urlsplit(values.get(key, ''))
-                valid = (url.scheme == 'https' and url.port in (None, 443) and not url.query and not url.fragment
-                    and not url.username and not url.password and url.path.rstrip('/') == '/api/v4'
-                    and re.fullmatch(r'[a-zA-Z0-9-]+\.'+product.lower()+r'\.sphere-engine\.com', url.hostname or ''))
-            except ValueError:
-                valid = False
-            if not valid: errors.append(f'{key} must use the account-specific HTTPS v4 endpoint without credentials/query')
-        try:
-            profiles = json.loads(values.get('SPHERE_RUNTIME_PROFILES_JSON', '{}'))
-            targets = {'python': '3.12', 'javascript': '22', 'java': '21', 'cpp': 'C++20'}
-            if not isinstance(profiles, dict) or set(profiles) != set(targets): raise ValueError()
-            for language, label in targets.items():
-                p = profiles[language]
-                if (not isinstance(p, dict) or set(p) != {'compiler_id', 'version_id', 'version_name', 'runtime_label'}
-                    or any(type(p.get(k)) is not int or p[k] <= 0 for k in ('compiler_id', 'version_id'))
-                    or not isinstance(p.get('version_name'), str) or not p['version_name'] or p.get('runtime_label') != label): raise ValueError()
-        except (ValueError, TypeError):
-            errors.append('SPHERE_RUNTIME_PROFILES_JSON needs four account-verified positive compiler/version pins with approved runtime labels')
-        for key in ('SPHERE_MASTER_JUDGE_ID', 'SPHERE_TESTCASE_JUDGE_ID'):
-            if not values.get(key, '').isdigit() or int(values[key]) < 1:
-                errors.append(f'{key} must be an account-approved positive integer')
-        warnings.append('Execution is enabled: this offline audit cannot establish current Mongo executor attestation, sandbox isolation or remaining provider quota')
+                uri=urlsplit(values['AIVEN_POSTGRES_URL'])
+                if uri.scheme not in ('postgres','postgresql') or not (uri.hostname or '').endswith('.aivencloud.com') or not uri.username or not uri.password:raise ValueError()
+            except ValueError:errors.append('AIVEN_POSTGRES_URL must be the dedicated Aiven PostgreSQL service URI')
+        if not values.get('AIVEN_POSTGRES_SSL_ROOT_CERT'):warnings.append('AIVEN_POSTGRES_SSL_ROOT_CERT must point to the Aiven service CA certificate for trusted verify-full TLS')
+    price=values.get('ONLINECOMPILER_MONTHLY_PLAN_USD','0')
+    try:
+        if not 0<=float(price)<=100000:raise ValueError()
+    except ValueError:errors.append('ONLINECOMPILER_MONTHLY_PLAN_USD must be a finite nonnegative reporting amount')
+    if enabled('GENHIRE_ASSESSMENT_EXECUTION_ENABLED'):
+        warnings.append('Execution is enabled: this offline audit cannot establish live provider acceptance or SQLite/DuckDB isolation')
     if enabled('GENHIRE_OA_RUNTIME_ENABLED'):
         warnings.append('Candidate starts enabled: verify live workers, accepted device/security/grading evidence and enforce intended private-cohort admission')
     return errors, warnings
@@ -237,10 +273,16 @@ def audit(profile="local", schema_only=False, allow_runtime_secrets=False):
             if folder == "python-backend":
                 for key in sorted(set(maps[name]) & OBSOLETE_SETTINGS):
                     errors.append(f"{folder}/{name}: remove obsolete {key}; use the canonical provider settings")
+        def schema_keys(name, runtime_comparison=False):
+            # Cloud Run may inject Redis directly from Secret Manager. Do not
+            # require an empty dotenv assignment that could overwrite it.
+            deferred = folder == "python-backend" and allow_runtime_secrets and runtime_comparison
+            return [key for key in maps[name] if not (deferred and key == "REDIS_URL")]
+
         for active, example in [(".env", ".env.example"), (".env.production", ".env.production.example")]:
-            if list(maps[active]) != list(maps[example]):
+            if schema_keys(active, active == ".env.production") != schema_keys(example, active == ".env.production"):
                 errors.append(f"{folder}: {active}/{example} keys or order differ")
-        if list(maps[".env"]) != list(maps[".env.production"]):
+        if schema_keys(".env", True) != schema_keys(".env.production", True):
             errors.append(f"{folder}: local/production keys or order differ")
         local_maps[folder], production_maps[folder] = maps[".env"], maps[".env.production"]
     if not schema_only:

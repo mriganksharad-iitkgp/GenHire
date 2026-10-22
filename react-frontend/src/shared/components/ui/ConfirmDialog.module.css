@@ -6,13 +6,13 @@
 .modalContent {
   width: min(460px,100%); max-height: calc(100dvh - 40px); overflow-y: auto;
   background: var(--portal-surface); color: var(--portal-text); border: 1px solid var(--portal-border);
-  border-radius: 18px; box-shadow: 0 24px 70px #0f172a33; font-family: inherit;
+  border-radius: var(--ui-radius-dialog); box-shadow: 0 24px 70px #0f172a33; font-family: inherit;
 }
 .modalContent:focus { outline: none; }
 .modalHeader {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 20px 24px; border-bottom: 1px solid var(--portal-border);
-  background: linear-gradient(135deg,#eef2ff,#f5f3ff);
+  background: var(--portal-header);
 }
 .modalHeader h2 { margin: 0; font-size: 20px; line-height: 1.4; color: var(--portal-text); }
 .closeButton {
@@ -20,15 +20,15 @@
   border: 0; border-radius: 9px; background: transparent; color: var(--portal-secondary);
   font: inherit; font-size: 25px; cursor: pointer;
 }
-.closeButton:hover { background: #fff; }
+.closeButton:hover { background: var(--portal-surface); }
 .modalBody { padding: 22px 24px; }
 .modalBody p { margin: 0; color: var(--portal-secondary); font-size: 14px; line-height: 1.7; }
 .modalActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 16px 24px 22px; }
 .cancelButton,.dangerButton,.primaryButton {
-  min-height: 44px; padding: 11px 16px; border-radius: 10px;
+  min-height: 44px; padding: 11px 16px; border-radius: var(--ui-radius-control);
   font-size: 13px; line-height: 1.5; font-weight: 600; font-family: inherit; cursor: pointer;
 }
-.cancelButton { background: #fff; border: 1px solid var(--portal-border); color: var(--portal-secondary); }
+.cancelButton { background: var(--portal-surface); border: 1px solid var(--portal-border); color: var(--portal-secondary); }
 .cancelButton:hover { background: var(--portal-primary-soft); }
 .dangerButton,.primaryButton { border: 1px solid transparent; color: #fff; }
 .dangerButton { background: var(--portal-danger); }.dangerButton:hover { background: #991b1b; }

@@ -370,6 +370,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           </button>
         </div>
 
+        <nav className={styles.workspaceNav} aria-label="Job workspace sections">{[['details','Details'],['oa','Assessment'],['schedule','Schedule & credits'],['ai','AI drafting']].map(([section,label])=><button key={section} type="button" onClick={()=>revealJobSection(dialogRef.current,section)}>{label}</button>)}</nav>
         <form onSubmit={handleSubmit} onInvalidCapture={revealInvalidJobField} className={styles.jobForm}>
           <fieldset disabled={isSubmitting || setup.saving || questionBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <JobDraftNotice setup={setup} draft={recovery} loading={setup.loading}/>
@@ -379,7 +380,7 @@ const JobEditModal = ({ isOpen, onClose, onJobUpdate, jobData: initialJobData, s
           <div>
           {authoringMode==='manual'&&<JobTemplatePicker editing onSelect={(name,t)=>setJobData(current=>({...current,title:name,department:t.department,skills:[...t.skills],experience:t.experience,salary:t.salary,description:t.description,responsibilities:t.responsibilities.join('\n'),requirements:t.requirements.join('\n'),benefits:t.benefits.join('\n')}))}/>}
           {/* Form Grid */}
-          <div className={styles.formGrid}>
+          <div className={styles.formGrid} data-job-section="details">
             {/* Job Title */}
             <div className={styles.formGroup}>
               <label htmlFor="edit-job-title">

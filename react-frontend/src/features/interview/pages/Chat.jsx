@@ -15,6 +15,7 @@ import { startLiveCaptions } from "../utils/liveCaptions";
 import { createVoiceTurn, voicePolicy } from "../utils/voiceActivity";
 import { interviewRequest, interviewScore, isPracticeSession, mediaMimeType, microphoneLevel, mobilePairingUrl, recordingPartId, reconcileAnswer, scorePercent, socketAcknowledgement, terminalPhase, transcriptionAudio } from "../utils/session";
 import styles from "./InterviewExperience.module.css";
+import GenHireBrand from "shared/components/ui/GenHireBrand";
 import { captureProgress, createFaceDetector, facePosition, faceSnapshot } from "../utils/faceCapture";
 
 const CACHE_KEY = "genhire-interview-session";
@@ -553,7 +554,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     confirmText="Leave without recording" />;
   const step = phase === "devices" ? 0 : phase === "face" ? 1 : phase === "phone" ? 2 : 3;
   if (["loading", "start_failed", "ending", "end_failed", "recovery_failed"].includes(phase)) return <main className={styles.shell}><div className={styles.centerCard}>
-    <span className={styles.brand}><ShieldCheck size={20} /> GenHire interview</span>{["loading", "ending"].includes(phase) && <div className={styles.spinner} />}
+    <GenHireBrand label="Interview" />{["loading", "ending"].includes(phase) && <div className={styles.spinner} />}
     <h1>{phase === "loading" ? "Preparing your interview" : phase === "ending" ? "Your answers are saved" : phase === "end_failed" ? "Complete your report" : phase === "recovery_failed" ? "Recover your saved answers" : "Unable to open the interview"}</h1>
     <p>{phase === "loading" ? "Loading your role and question. Device checks come next." : phase === "ending" ? "Generating your evaluation. Your recording uploads separately." : "Retry to continue with the same session."}</p>{renderError(error)}
     {["end_failed", "recovery_failed"].includes(phase) && <button className={styles.primary} onClick={finish}>{phase === "recovery_failed" ? "Finish with saved answers" : "Retry report generation"}</button>}{phase === "start_failed" && <button className={styles.primary} onClick={() => window.location.reload()}>Retry</button>}
@@ -571,7 +572,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
     {leaveConfirm}</section></main>;
   }
   if (phase !== "active") return <main className={styles.shell}><div className={styles.setupLayout}>
-    <aside className={styles.setupAside}><span className={styles.brand}><ShieldCheck size={22} /> GenHire</span><span className={styles.eyebrow}>{isPractice ? "Practice interview" : "Your next opportunity"}</span><h1>Prepare for your interview</h1><p>Check your camera, microphone and speakers, register your face, then start your interview.</p>
+    <aside className={styles.setupAside}><GenHireBrand label={isPractice ? "Practice interview" : "Interview"} /><span className={styles.eyebrow}>{isPractice ? "Practice interview" : "Your next opportunity"}</span><h1>Prepare for your interview</h1><p>Check your camera, microphone and speakers, register your face, then start your interview.</p>
       <ol className={styles.steps}>{["Laptop checks", "Face registration", ...(dualRequired ? ["Connect your phone"] : []), "Start interview"].map((label, index) => { const position = !dualRequired && index === 2 ? 3 : index; return <li key={label} className={position === step ? styles.currentStep : position < step ? styles.doneStep : ""}><span>{position < step ? <Check size={16} /> : index + 1}</span>{label}</li>; })}</ol>
       <div className={styles.privacyNote}><ShieldCheck size={20} /><p>Your camera remains visible. Monitoring warnings are recorded for review; a warning alone is not a decision about your performance.</p></div>
     </aside><section className={styles.setupCard}>
@@ -590,7 +591,7 @@ export default function Chat({ interviewId, apiBase = API_BASE, webOrigin = proc
         {!connected && renderError("Connecting to interview monitoring. Check your internet connection if this takes more than a few seconds.")}{dualRequired && !phone.ready && renderError("Your phone disconnected. Reopen its companion page before starting.")}{renderError(error)}<div className={styles.actions}><button className={styles.secondary} onClick={() => setPhase(dualRequired ? "phone" : "face")}>Back</button><button className={styles.primary} onClick={activate} disabled={busy || !deviceReady || !rulesAccepted || !connected || (dualRequired && !phone.ready)}>{busy ? "Starting…" : "Start interview"}<ChevronRight size={18} /></button></div></>}
     </section></div></main>;
 
-  return <main className={styles.interviewShell}><header className={styles.interviewHeader}><span className={styles.brand}><ShieldCheck size={22} /> GenHire <small>{isPractice ? "Practice" : "Interview"}</small></span><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack} role="progressbar" aria-label="Interview question progress" aria-valuemin={1} aria-valuemax={maxQuestions} aria-valuenow={Math.min(questionCount, maxQuestions)}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
+  return <main className={styles.interviewShell}><header className={styles.interviewHeader}><GenHireBrand label={isPractice ? "Practice interview" : "Interview"} /><span>Question {questionCount} of {maxQuestions}</span><span className={styles.elapsed}>{formatTime(elapsed)}</span></header><div className={styles.progressTrack} role="progressbar" aria-label="Interview question progress" aria-valuemin={1} aria-valuemax={maxQuestions} aria-valuenow={Math.min(questionCount, maxQuestions)}><i style={{ width: `${Math.min(100, (questionCount / maxQuestions) * 100)}%` }} /></div>
     {warning && <div className={styles.warningToast} role="status"><CircleAlert size={19} /><div><strong>{warning.title}</strong><p>{warning.message}</p>{warning.recorded && <small>Monitoring events are saved for review. Your interview continues.</small>}</div></div>}
     {session?.screening_finish_by && <p className={styles.note}>Screening must finish by {new Date(session.screening_finish_by).toLocaleString()}. The hiring window continues during a disconnect.</p>}
     <section className={styles.interviewGrid}>

@@ -2,17 +2,15 @@ import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 
 import { useParams } from 'react-router-dom';
 import { request, API_BASE } from 'shared/api/client';
 import { setToken } from 'shared/utils/session';
-import CodeEditor from 'shared/components/ui/CodeEditor';
 import useAssessmentIntegrity from '../hooks/useAssessmentIntegrity';
-import styles from './Assessment.module.css';
 import ConfirmDialog from 'shared/components/ui/ConfirmDialog';
-import PracticeAssessmentReport from '../components/PracticeAssessmentReport';
+import AssessmentExperience from '../components/AssessmentExperience';
 import KioskLaunchGuide, { openKiosk } from '../../interview/components/KioskLaunchGuide';
 const ScopedAssessment = lazy(() => import('../components/ScopedAssessment'));
 
 const key = () => `oa-${crypto.randomUUID()}`;
 
-export default function Assessment({ invitationId: providedId, oaRequest, secureContext, onAccessToken, onAttempt } = {}) {
+export default function Assessment({ invitationId: providedId, oaRequest, secureContext, onAccessToken, onAttempt, developerPreview = false } = {}) {
   const params = useParams();
   const invitationId = providedId || params.invitationId;
   const call = oaRequest || request;
@@ -140,7 +138,7 @@ export default function Assessment({ invitationId: providedId, oaRequest, secure
   useEffect(() => {
     if (!run || !['queued', 'running', 'dispatching'].includes(run.state)) return undefined;
     const timer = setInterval(() => call(`/assessment-attempts/${attemptRef.current.attempt_id}/runs/${run.run_id}`)
-      .then(setRun).catch(err => setError(err.message)), 2500);
+      .then(result => setRun(current => ({ ...result, question_id: result.question_id || current?.question_id }))).catch(err => setError(err.message)), 2500);
     return () => clearInterval(timer);
   }, [run, call]);
   useAssessmentIntegrity(call, attempt, secureContext);
@@ -183,7 +181,7 @@ export default function Assessment({ invitationId: providedId, oaRequest, secure
       let input = custom[q.id] ?? '';
       if (useCustom && q.type === 'coding' && q.coding.contract === 'function') input = JSON.parse(input);
       const result = await post(`/assessment-attempts/${attempt.attempt_id}/runs`, { operation_key: key(), question_id: q.id, answer, ...(useCustom ? { custom_input: input } : {}) });
-      setRun({ ...result, state: 'queued' });
+      setRun({ ...result, question_id: q.id, state: 'queued' });
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
   const launch = async () => {
@@ -196,77 +194,17 @@ export default function Assessment({ invitationId: providedId, oaRequest, secure
     } catch (failure) { setError(failure.message); } finally { setBusy(false); }
   };
   if (browserLaunch) return <Suspense fallback={<p>Opening accommodated assessment…</p>}><ScopedAssessment launch={browserLaunch} /></Suspense>;
-  return <main className={styles.page}>
-    <h1>Online assessment</h1>
-    {error && <p role="alert">{error}</p>}
-    {!invitation&&!attempt&&!error&&<p role="status">Loading assessment details...</p>}
-    {!attempt ? <section aria-label="Assessment preflight">
-      {invitation?.security_required && !secureContext && <>
-        <p>This OA requires {invitation.integrity_policy.mode === 'browser' ? 'the approved browser accommodation' : 'GenHire Secure Browser'}. Device preflight does not start your timer. Contact {invitation.pool === 'practice' ? 'support' : 'the recruiter'} to request extra time or an accessible browser/camera accommodation.</p>
-        <button disabled={busy} onClick={() => invitation.integrity_policy.mode === 'browser' ? launch() : setLaunchGuide(true)}>Open secure assessment</button>
-        <KioskLaunchGuide assessment practice={invitation.pool==='practice'} isOpen={launchGuide} onClose={() => setLaunchGuide(false)} onOpen={launch} busy={busy} />
-      </>}
-      <p>Save your work regularly. The server timer continues during disconnection. Only acknowledged saves are guaranteed; unsent drafts can be recovered in this browser tab.</p>
-      <p>Use only permitted resources. Your answers are stored for assessment evaluation. Submission locks the attempt; Run uses public examples or your custom input and does not determine your final score.</p>
-      {invitation && <p>Duration: {invitation.duration_minutes} minutes. Start between {new Date(invitation.opens_at).toLocaleString()} and {new Date(invitation.start_closes_at).toLocaleString()}. A timely start receives the full duration even after the entry window closes.</p>}
-      <label><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I accept these assessment rules and am ready to start the timer.</label>
-      <p><button disabled={!consent || !invitation?.runtime_ready || busy || (invitation?.security_required && !secureContext)} onClick={start}>Start assessment</button></p>
-      {invitation && !invitation.runtime_ready && <p>The assessment is awaiting launch readiness. Contact {invitation.pool === 'practice' ? 'support' : 'the recruiter'} for availability.</p>}
-    </section> : attempt.state !== 'in_progress' ? <section role="status"><h2>Assessment submitted</h2>
-      {invitation?.pool === 'practice' && <><PracticeAssessmentReport attemptId={attempt.attempt_id} oaRequest={call}/><p><a href="/practice?mode=oa">Return to mock OA history</a></p></>}
-      <p>{invitation?.pool === 'practice' ? 'Your practice answers are locked. Objective results and educational feedback appear after evaluation; unavailable execution never becomes a guessed score.' : attempt.state === 'completed' ? 'Evaluation is complete. Check your application for any recruiter-released result and next steps.' : attempt.state === 'unavailable' ? 'Evaluation needs technical review. No final score has been assigned; the recruiter will confirm the next step.' : 'Your saved answers are locked and awaiting evaluation. The recruiter will confirm the next step.'}</p>
-      {secureContext && <><button onClick={async () => { try { await post(`/assessment-attempts/${attempt.attempt_id}/evidence-privacy`, { operation_key: key(), action: 'request_deletion', reason: 'Please review deletion of my retained OA evidence.' }); setPrivacyNotice('Evidence deletion review requested. Scores/history and any reasoned preservation hold follow their separate policies.'); } catch (failure) { setError(failure.message); } }}>Request evidence deletion review</button>{privacyNotice && <p>{privacyNotice}</p>}</>}
-    </section> : <>
-      <div className={styles.toolbar}><p role="timer" aria-label="Total time remaining">Time remaining: {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</p>
-      {attempt.timer_mode === 'section' && sectionRemaining !== null && <p role="timer" aria-label="Section time remaining">Section remaining: {Math.floor(sectionRemaining / 60)}:{String(sectionRemaining % 60).padStart(2, '0')}</p>}
-      <p role="status">{saving ? 'Saving…' : dirty ? 'Unsaved local changes' : 'All changes acknowledged by server'}</p>
-        <details className={styles.questionNavigation}><summary>Jump to question ({attempt.questions.filter(q=>answers[q.id]?.option_ids?.length||answers[q.id]?.source?.trim()).length}/{attempt.questions.length} answered)</summary>
-          <nav aria-label="Assessment question navigation">{attempt.questions.map((q,index)=><button key={q.id} type="button" aria-label={`Go to question ${index+1}: ${q.title}`} onClick={()=>{const target=document.getElementById(`oa-question-${q.id}`);target?.scrollIntoView?.({block:'start',behavior:'auto'});target?.focus({preventScroll:true});}}>{index+1}{answers[q.id]?.option_ids?.length||answers[q.id]?.source?.trim()?' *':''}</button>)}</nav>
-        </details>
-      </div>
-      {attempt.timer_mode === 'section' && <p>Sections have fixed server windows. Closed sections cannot be revisited. {attempt.sections.map(s => `${s.type}: ${new Date(s.opens_at).toLocaleTimeString()}–${new Date(s.closes_at).toLocaleTimeString()}`).join('; ')}</p>}
-      <button onClick={save} disabled={saving || !dirty}>Retry / save answers</button>{' '}
-      <button disabled={busy || saving} onClick={()=>dirty?setConfirmReload(true):reloadAnswers()}>Reload server answers</button>
-      <fieldset className={styles.questions} disabled={busy} style={{ border: 0, padding: 0 }}><legend>Assessment questions</legend>
-      {attempt.questions.map((q, index) => <section id={`oa-question-${q.id}`} tabIndex={-1} key={q.id} aria-label={`Question ${index + 1}`} style={{ borderTop: '1px solid #ccd2dd', marginTop: 24, paddingTop: 16 }}>
-        <h2>{index + 1}. {q.title} ({q.marks} marks)</h2><p style={{ whiteSpace: 'pre-wrap' }}>{q.statement}</p>
-        {q.type === 'mcq' ? <fieldset><legend>{q.mcq.selection === 'single' ? 'Select one answer' : 'Select all correct answers'}</legend>
-          {q.mcq.options.map(option => <label key={option.id} style={{ display: 'block', padding: 8 }}><input type={q.mcq.selection === 'single' ? 'radio' : 'checkbox'} name={q.id}
-            checked={(answers[q.id]?.option_ids || []).includes(option.id)} onChange={e => change(q.id, { option_ids: q.mcq.selection === 'single' ? [option.id] : e.target.checked ? [...(answers[q.id]?.option_ids || []), option.id] : (answers[q.id]?.option_ids || []).filter(id => id !== option.id) })} /> {option.text}</label>)}
-          <button onClick={() => change(q.id, { option_ids: [] })}>Clear selection</button>
-        </fieldset> : <>
-          {q.type === 'coding' ? <>
-            {q.coding.signature && <pre aria-label="Function signature">{JSON.stringify(q.coding.signature, null, 2)}</pre>}
-            <h3>Input format</h3><p>{q.coding.input_format}</p><h3>Output format</h3><p>{q.coding.output_format}</p><h3>Constraints</h3><p>{q.coding.constraints}</p>
-            <label>Language <select value={answers[q.id]?.language || q.coding.languages[0]} onChange={e => {const next={language:e.target.value,source:q.coding.starter_code[e.target.value]};const current=answers[q.id];if(current?.source?.trim()&&current.source!==q.coding.starter_code[current.language])setLanguageChange({questionId:q.id,answer:next});else change(q.id,next);}}>
-              {q.coding.languages.map(language => <option key={language} value={language}>{language} — {q.coding.runtime_versions[language]}</option>)}
-            </select></label>
-          </> : <><p>Dialect: {q.sql.engine} {q.sql.engine_version}</p><pre aria-label="Database schema">{q.sql.schema_sql}</pre></>}
-          <h3>Public examples</h3><pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(q.type === 'coding' ? q.coding.examples : q.sql.examples, null, 2)}</pre>
-          <CodeEditor label={`Answer for ${q.title}`} readOnly={busy} language={answers[q.id]?.language || (q.type === 'sql' ? 'sql' : q.coding.languages[0])}
-            clipboardRef={secureContext?.clipboard === 'internal_editor' ? clipboard : undefined}
-            value={answers[q.id]?.source ?? (q.type === 'coding' ? q.coding.starter_code[q.coding.languages[0]] : '')}
-            onChange={source => change(q.id, { language: answers[q.id]?.language || (q.type === 'sql' ? 'sql' : q.coding.languages[0]), source })} />
-          {q.type === 'coding' && <label>{q.coding.contract === 'function' ? 'Custom input (JSON object keyed by parameter names)' : 'Custom standard input'}<textarea style={{ display: 'block', width: '100%' }} value={custom[q.id] || ''} onChange={e => setCustom({ ...custom, [q.id]: e.target.value })} /></label>}
-          <button onClick={() => runCode(q)} disabled={busy || ['queued', 'running', 'dispatching'].includes(run?.state)}>Run public example</button>
-          {q.type === 'coding' && <button onClick={() => runCode(q, true)} disabled={busy || ['queued', 'running', 'dispatching'].includes(run?.state)}>Run custom input</button>}
-        </>}
-      </section>)}
-      </fieldset>
-      {run && <section aria-label="Run output"><h2>Run output</h2>
-        <p role="status">{(run.result?.status || run.state).replaceAll('_', ' ')}</p>
-        {run.result?.stdout !== undefined && <pre style={{ whiteSpace: 'pre-wrap' }}>{run.result.stdout}</pre>}
-        {run.result?.diagnostics && <pre aria-label="Compiler or runtime diagnostics" style={{ whiteSpace: 'pre-wrap' }}>{run.result.diagnostics}</pre>}
-        {run.result?.columns && <div style={{ overflowX: 'auto' }}><table><caption>Query result</caption>
-          <thead><tr>{run.result.columns.map((column, index) => <th key={index} scope="col">{column}</th>)}</tr></thead>
-          <tbody>{run.result.rows?.map((row, index) => <tr key={index}>{row.map((cell, column) => <td key={column}>{cell === null ? 'NULL' : String(cell)}</td>)}</tr>)}</tbody>
-        </table></div>}
-      </section>}
-      {['dispatch_unknown', 'blocked'].includes(run?.state) && <p role="status">This run needs operator reconciliation. Your timer continues; you can still save answers and submit your assessment.</p>}
-      <p><button onClick={()=>setConfirmSubmit(true)} disabled={busy || saving}>Submit and lock assessment</button></p>
-    </>}
+  return <>
+    <AssessmentExperience invitation={invitation} attempt={attempt} answers={answers} error={error} busy={busy} saving={saving} dirty={dirty}
+      remaining={remaining} sectionRemaining={sectionRemaining} consent={consent} setConsent={setConsent} start={start} launch={launch} openGuide={() => setLaunchGuide(true)}
+      save={save} reload={() => dirty ? setConfirmReload(true) : reloadAnswers()} submit={() => setConfirmSubmit(true)} change={change}
+      languageChange={(question, language) => { const next = { language, source: question.coding.starter_code[language] }; const current = answers[question.id];
+        if (current?.source?.trim() && current.source !== question.coding.starter_code[current.language]) setLanguageChange({ questionId: question.id, answer: next }); else change(question.id, next); }}
+      runCode={runCode} run={run} custom={custom} setCustom={setCustom} secureContext={secureContext} clipboard={clipboard} developerPreview={developerPreview}
+      call={call} privacyNotice={privacyNotice} requestPrivacy={async () => { try { await post(`/assessment-attempts/${attempt.attempt_id}/evidence-privacy`, { operation_key: key(), action: 'request_deletion', reason: 'Please review deletion of my retained OA evidence.' }); setPrivacyNotice('Evidence deletion review requested. Scores/history and any reasoned preservation hold follow their separate policies.'); } catch (failure) { setError(failure.message); } }} />
+    <KioskLaunchGuide assessment practice={invitation?.pool === 'practice'} isOpen={launchGuide} onClose={() => setLaunchGuide(false)} onOpen={launch} busy={busy} />
     <ConfirmDialog isOpen={confirmReload} title="Reload saved answers?" message="This replaces your unsaved edits with the server's saved answers. Your local work is retained if the reload fails." confirmText="Reload saved answers" cancelText="Keep local answers" onConfirm={reloadAnswers} onClose={()=>setConfirmReload(false)} isLoading={busy}/>
     <ConfirmDialog isOpen={!!languageChange} title="Change coding language?" message="This replaces the current editor content with the selected language's starter code. Keep your current language to retain your work." confirmText="Change language" cancelText="Keep current code" onConfirm={()=>{if(languageChange)change(languageChange.questionId,languageChange.answer);setLanguageChange(null);}} onClose={()=>setLanguageChange(null)}/>
     <ConfirmDialog isOpen={confirmSubmit} title="Submit your assessment?" message="Your latest answers will be saved first. Submission locks all answers; you cannot edit them afterwards. Unanswered questions receive no marks." confirmText="Save and submit" cancelText="Keep working" onConfirm={submit} onClose={()=>setConfirmSubmit(false)} isLoading={busy||saving}/>
-  </main>;
+  </>;
 }

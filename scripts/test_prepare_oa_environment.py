@@ -18,20 +18,22 @@ class PreparationTests(unittest.TestCase):
                 for name in prepare.FILES:
                     (root / folder / name).write_text('PRIVATE_KEY="secret-'+name+'"\n')
             local = root / 'python-backend/.env'
-            local.write_text(local.read_text()+'GENHIRE_OA_ATTEMPT_CREDITS=""\nGENHIRE_SQL_POSTGRESQL_JOB="custom-existing-job"\n')
+            local.write_text(local.read_text()+'GENHIRE_OA_ATTEMPT_CREDITS=""\nCUSTOM_EXISTING_FIELD="custom-existing-value"\n'
+                +'\n'.join(key+'="retired-value"' for key in prepare.RETIRED_OA_SETTINGS)+'\n')
             plans, report = prepare.prepare(root)
             for path, text in plans.items():
                 before = prepare.blocks(path.read_text())
                 after = prepare.blocks(text)
                 self.assertEqual(after['PRIVATE_KEY'][1], before['PRIVATE_KEY'][1])
                 self.assertNotIn('secret-', str(report))
+                self.assertTrue(prepare.RETIRED_OA_SETTINGS.isdisjoint(after))
                 if path.parent.name == 'python-backend':
                     for key in prepare.OA:
-                        if key.endswith(('_ENABLED', '_ACCEPTED')):
+                        if key.startswith('GENHIRE_') and key.endswith(('_ENABLED', '_ACCEPTED')):
                             self.assertEqual(prepare.value(after[key][1]), 'false')
                 path.write_text(text)
             self.assertEqual(prepare.value(prepare.blocks(plans[local])['GENHIRE_OA_ATTEMPT_CREDITS'][1]), '30')
-            self.assertIn('custom-existing-job', plans[local])
+            self.assertIn('custom-existing-value', plans[local])
             self.assertEqual(plans, prepare.prepare(root)[0])
 
     def test_unknown_private_fields_are_not_copied_to_other_profiles(self):

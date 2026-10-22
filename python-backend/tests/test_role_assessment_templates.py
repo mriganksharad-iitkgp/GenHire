@@ -15,7 +15,7 @@ from workflow_test_support import MongoTestCase
 class RoleTemplateContractTests(unittest.TestCase):
     def test_all_presets_complete_private_and_match_both_sql_engines(self):
         for role in TEMPLATE_IDS:
-            for engine in ('postgresql','mysql'):
+            for engine in ('sqlite','duckdb','postgresql'):
                 with self.subTest(role=role,engine=engine):
                     built=build_template(role,engine)
                     blueprint_match(built['oa'],built['questions'])
@@ -52,7 +52,7 @@ class RoleTemplateContractTests(unittest.TestCase):
         q['coding']['tests']=[q['coding']['tests'][0],q['coding']['tests'][-1]]
         with self.assertRaises(WorkflowError):parse_generated(json.dumps(dict(questions=[q])),[spec])
     def test_invalid_inputs_rejected(self):
-        for args in [('missing',),('sde','sqlite'),('sde','postgresql',['ruby']),('sde','postgresql',[{}])]:
+        for args in [('missing',),('sde','unsupported'),('sde','postgresql',['ruby']),('sde','postgresql',[{}])]:
             with self.assertRaises(WorkflowError):build_template(*args)
 
 class RoleTemplateStorageTests(MongoTestCase):

@@ -191,3 +191,12 @@ body.dark .ellipsis,
   }
 }
 
+
+/* Same control palette and geometry as other portal actions. */
+.paginationContainer { border-color:var(--portal-border); gap:16px; padding-block:20px; margin-top:20px; }
+.paginationInfo { color:var(--portal-muted); font-size:var(--ui-caption); }
+.paginationInfo strong { color:var(--portal-text); }
+.pageButton { border-color:var(--portal-border); border-radius:var(--ui-radius-control); background:var(--portal-surface); color:var(--portal-secondary); font-size:var(--ui-control); }
+.pageButton:hover:not(:disabled):not(.active) { border-color:var(--portal-accent); background:var(--portal-primary-soft); color:var(--portal-primary); transform:none; }
+.pageButton.active { background:var(--portal-gradient); border-color:transparent; box-shadow:none; transform:none; }
+@media(max-width:600px) { .pageButton { min-width:44px; height:44px; } }

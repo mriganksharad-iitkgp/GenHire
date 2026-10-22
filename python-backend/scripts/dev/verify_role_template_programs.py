@@ -11,7 +11,7 @@ import time
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from services.role_assessment_templates import coding
 root=Path(__file__).resolve().parents[3];work=root/'.tmp'/'role-template-verification';work.mkdir(parents=True,exist_ok=True)
-report=dict(environment='Local trusted code only; not Sphere runtime acceptance',timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),references=[],baselines=[],unavailable=[])
+report=dict(environment='Local trusted code only; not OnlineCompiler.io runtime acceptance',timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),references=[],baselines=[],unavailable=[])
 runtimes=['python','javascript','cpp']
 if not shutil.which('javac'):report['unavailable'].append('Java 21 compiler/runtime unavailable locally; managed validation required.')
 else:runtimes.append('java')

@@ -16,6 +16,7 @@
     "smoke:gaze": "npx --yes serve@14 . -l 3333",
     "test": "node --test tests/*.test.js",
     "test:face-runtime": "electron scripts/face-runtime-smoke.cjs",
+    "test:format-runtime": "electron scripts/format-runtime-smoke.cjs",
     "build": "electron-builder --win",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",

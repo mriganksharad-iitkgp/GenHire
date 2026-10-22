@@ -265,14 +265,19 @@ class AssessmentAuthoringService:
                 review = self.db.question_reviews.find_one({'_id': ObjectId(quality['review_id'])}, session=session) if quality.get('review_id') else None
                 if not validation or not validation['passed'] or not review or review['decision'] != 'approve' or review['validation_id'] != str(validation['_id']) or review['content_hash'] != q['content_hash']:
                     raise WorkflowError('review_required', 'Every selected question requires current validation and explicit approval.')
+                if q['content']['type']=='sql':
+                    from config.assessment_execution import sql_enabled
+                    if not sql_enabled(q['content']['sql']['engine']):raise WorkflowError('sql_engine_unavailable','PostgreSQL questions are trusted authoring only; publish enabled SQLite/DuckDB questions for candidates.',503)
                 if q['content']['type'] != 'mcq':
                     capabilities = self.validator.capabilities()
+                    if q['content']['type']=='sql' and not capabilities.get('sql_available'):
+                        raise WorkflowError('sql_acceptance_required','SQL publication requires live controlled-dataset isolation acceptance.',503)
                     profile_hash = capabilities.get('profile_hash')
                     if (not capabilities['available'] or not profile_hash or validation['evidence'].get('execution_verified') is not True
                             or validation['evidence'].get('execution_id') != profile_hash + ':' + q['content_hash']):
                         raise WorkflowError('live_validation_required', 'The current execution profile must have a real validated reference run before publication.')
                     attested = self.db.assessment_executor_attestations.update_one({'profile_hash': profile_hash, 'state': 'passed',
-                        'expires_at': {'$gt': datetime.now(timezone.utc)}}, {'$inc': {'publication_fence': 1}}, session=session)
+                        'expires_at': {'$gt': datetime.now(timezone.utc)}, **({'sql_verified':True} if q['content']['type']=='sql' else {})}, {'$inc': {'publication_fence': 1}}, session=session)
                     if attested.matched_count != 1: raise WorkflowError('live_validation_required', 'Execution attestation expired or changed.')
                 evidence.append(dict(question_version_id=version_id, validation_id=str(validation['_id']), review_id=str(review['_id'])))
                 # Prevent snapshot write-skew with concurrent validation/rejection.

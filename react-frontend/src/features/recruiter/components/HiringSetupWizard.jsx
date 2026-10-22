@@ -4,7 +4,7 @@ import { roleForTitle } from '../utils/jobTemplates';
 import TermHelp from './TermHelp';
 import styles from './HiringSetupWizard.module.css';
 
-const languageNames = { python: 'Python', javascript: 'JavaScript', java: 'Java', cpp: 'C++' };
+const languageNames = { python: 'Python', javascript: 'JavaScript', java: 'Java', cpp: 'C++', c: 'C', nodejs: 'Node.js' };
 const sectionNames = { coding: 'Coding', mcq: 'MCQ', sql: 'SQL' };
 const termHints={
   Applications:'Cohort: collect applications until one deadline, then screen the group. Rolling: candidates can apply continuously until the final deadline.',
@@ -73,7 +73,7 @@ export default function HiringSetupWizard({ setup, step, onSaveDraft, editing = 
   if (!setup.enabled || step === 0) return null;
   const c = setup.configuration;
   if (!c) return <p role="status">Loading saved hiring configuration…</p>;
-  const change = (group, key, value) => setup.setConfiguration(current => ({ ...current, [group]: { ...current[group], [key]: value } }));
+  const change = (group, key, value) => setup.setConfiguration(current => ({ ...current, [group]: { ...current[group], [key]: value, ...(group === 'oa' && key === 'coding_contract' && value === 'function' ? { languages: current.oa.languages.filter(language => language !== 'c') } : {}) } }));
   const oa = c.oa;
   const sectionChange = (type, transform) => change('oa', 'sections', oa.sections.map(s => s.type === type ? transform(s) : s));
   const dateLabels = { application_closes_at: 'Applications close', screening_opens_at: 'Screening opens',
@@ -156,12 +156,12 @@ export default function HiringSetupWizard({ setup, step, onSaveDraft, editing = 
         <div className={styles.grid}>
           <Select label="Default coding format" value={oa.coding_contract} onChange={v => change('oa', 'coding_contract', v)}
             options={[[ 'stdin_stdout', 'Standard input / output' ], [ 'function', 'Function signature (LeetCode-style)' ]]} />
-          <Select label="SQL engine" value={oa.sql_engine} onChange={v => change('oa', 'sql_engine', v)} options={[[ 'postgresql', 'PostgreSQL' ], [ 'mysql', 'MySQL' ]]} />
+          <Select label="SQL engine" value={oa.sql_engine} onChange={v => change('oa', 'sql_engine', v)} options={[[ 'sqlite', 'SQLite' ], [ 'duckdb', 'DuckDB' ], [ 'postgresql', 'PostgreSQL 18 (authoring only)' ]]} />
           <Select label="MCQ answer types" value={oa.mcq_mode} onChange={v => change('oa', 'mcq_mode', v)}
             options={[[ 'single', 'Single correct' ], [ 'multiple', 'Multiple correct' ], [ 'mixed', 'Both types' ]]} />
         </div>
         <details className={styles.accordion}><summary>Allowed coding languages</summary><div className={styles.languageChoices}>
-          {setup.catalog.languages.map(language => <Toggle key={language} label={languageNames[language]} value={oa.languages.includes(language)} onChange={checked =>
+          {setup.catalog.languages.filter(language => oa.coding_contract !== 'function' || language !== 'c').map(language => <Toggle key={language} label={languageNames[language]} value={oa.languages.includes(language)} onChange={checked =>
             change('oa', 'languages', checked ? [...oa.languages, language] : oa.languages.filter(l => l !== language))} />)}
         </div></details>
         <p className={styles.hint}>Coding earns weighted test-case partial credit. MCQs have no negative marking; multiple-correct answers use exact matching. SQL is graded on returned results.</p>
@@ -208,7 +208,7 @@ export default function HiringSetupWizard({ setup, step, onSaveDraft, editing = 
         <h4>Planned candidate journey</h4>
         <p>Application review → AI screening{c.pipeline.oa_enabled ? ' → Online assessment' : ''}{c.pipeline.company_stages.map(s => ` → ${s.name}`).join('')}</p>
         <p>{c.pipeline.advancement === 'manual' ? 'Cleared candidates await your next-round decision.' : 'Eligible candidates can be invited automatically when the assessment is activated.'}</p>
-        {c.pipeline.oa_enabled && <p>{oa.sections.reduce((total, s) => total + s.count, 0)} questions · {oa.duration_minutes} minutes · {oa.source} authoring · {oa.coding_contract === 'function' ? 'Function tasks' : 'Input/output tasks'} · {oa.sql_engine === 'mysql' ? 'MySQL' : 'PostgreSQL'}</p>}
+        {c.pipeline.oa_enabled && <p>{oa.sections.reduce((total, s) => total + s.count, 0)} questions · {oa.duration_minutes} minutes · {oa.source} authoring · {oa.coding_contract === 'function' ? 'Function tasks' : 'Input/output tasks'} · {({ sqlite: 'SQLite', duckdb: 'DuckDB', postgresql: 'PostgreSQL 18 (authoring only)', mysql: 'MySQL (retired)' }[oa.sql_engine] || oa.sql_engine)}</p>}
         <h4>Credit preview</h4>
         {price ? <>
           <p>Due now for saving configuration: <strong>{price.charges_now} credits</strong>.</p>

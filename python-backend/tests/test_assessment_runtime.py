@@ -44,6 +44,14 @@ class RuntimeTests(unittest.TestCase):
         self.qid = self.runtime.view(self.actor, self.identifier)['questions'][0]['id']
         return result
 
+    def test_invitation_landing_summary_contains_only_public_format(self):
+        value=self.runtime.invitation(self.actor,str(self.invitation['_id']))
+        summary=value['assessment_summary']
+        self.assertGreater(summary['question_count'],0)
+        self.assertTrue(all(set(section)<={'type','count','duration_minutes'} for section in summary['sections']))
+        self.assertNotIn('reference_solutions',json.dumps(summary))
+        self.assertNotIn('question_version_ids',json.dumps(summary))
+
     def save(self, revision=0, key='runtime-save-key', value=None):
         return self.runtime.save(self.actor, self.identifier, revision, key, {self.qid: value or {'option_ids': ['optionA']}})
 
@@ -160,21 +168,16 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(WorkflowError): runs.create(self.actor, self.identifier, 'public-run-first', qid, answer, {'value': 9})
         public = json.dumps(runs.result(self.actor, self.identifier, result['run_id']))
         self.assertNotIn('9371', public); self.assertNotIn('reference_solutions', public)
-        class Client:
-            def create_submission(client, source, *args):
-                self.assertIn('42', source); self.assertNotIn('9371', source); self.assertIn('value + 1', source)
-                return 123
-            def submission(client, identifier): return dict(executing=False, status_code=15, output_size=2)
-            def output(client, identifier, limit): return '43'
-        profiles = {language: dict(compiler_id=1, version_id=2, runtime_label=runtime) for language, runtime in q['coding']['runtime_versions'].items()}
-        with patch.object(runs.executor, 'capabilities', return_value={'available': True}), patch.object(runs.executor, 'profile_hash', return_value='TEST_ONLY_FAKE'), patch.object(runs.executor, 'client', return_value=Client()), patch('services.assessment_public_run_service.runtime_profiles', return_value=profiles):
+        def execute(identity,q,case_id,language,purpose):
+            source=function_source(q,language,case_id)
+            self.assertIn('42',source);self.assertNotIn('9371',source);self.assertIn('value + 1',source)
+            return dict(status='ok',stdout='43')
+        with patch.object(runs.executor,'capabilities',return_value={'available':True}),patch.object(runs.executor,'profile_hash',return_value='TEST_ONLY_FAKE'),patch.object(runs.executor,'execute_case',side_effect=execute),patch.object(runs.executor,'execution_result',return_value=dict(status='ok',stdout='43')):
             runs.tick()
-        self.assertEqual(runs.result(self.actor, self.identifier, result['run_id'])['result'], dict(status='ok', stdout='43'))
-        self.assertEqual(self.db.assessment_executor_limits.find_one({})['count'], 1)
-        with patch.object(runs.executor, 'capabilities', return_value={'available': True}):
-            self.db.assessment_attempts.update_one({'_id': ObjectId(self.identifier)}, {'$set': {'public_run_count': 30}})
-            with self.assertRaises(WorkflowError) as quota: runs.create(self.actor, self.identifier, 'public-run-quota', qid, answer)
-            self.assertEqual(quota.exception.code, 'run_limit')
+        self.assertEqual(runs.result(self.actor,self.identifier,result['run_id'])['result'],dict(status='ok',stdout='43'))
+        with patch.dict(os.environ,{'OA_MAX_PRACTICE_RUNS_PER_QUESTION':'1'}),patch.object(runs.executor,'capabilities',return_value={'available':True}):
+            with self.assertRaises(WorkflowError) as quota:runs.create(self.actor,self.identifier,'public-run-quota',qid,answer)
+            self.assertEqual(quota.exception.code,'run_limit')
 
     def test_http_workspace_contract_and_cross_candidate_denial(self):
         self.start()
@@ -204,41 +207,32 @@ class RuntimeTests(unittest.TestCase):
         self.db.question_versions.insert_one(dict(_id=ObjectId(qid), question_id=qid, revision=1, content=q))
         self.db.assessment_attempts.update_one({'_id': ObjectId(self.identifier)}, {'$set': {'questions': [dict(id=qid, **candidate_question(q))], 'question_bindings': [dict(question_version_id=qid, content_hash=request_identity(q))]}})
         runs = AssessmentPublicRunService(self.runtime)
-        profiles = {language: dict(compiler_id=1, version_id=2, runtime_label=runtime) for language, runtime in q['coding']['runtime_versions'].items()}
-        from unittest.mock import Mock
-        client = Mock(); client.create_submission.side_effect = RuntimeError('TEST_ONLY_FAKE ambiguous network result')
-        with patch.object(runs.executor, 'capabilities', return_value={'available': True}), patch.object(runs.executor, 'profile_hash', return_value='TEST_ONLY_FAKE'), patch.object(runs.executor, 'client', return_value=client), patch('services.assessment_public_run_service.runtime_profiles', return_value=profiles):
-            result = runs.create(self.actor, self.identifier, 'unknown-public-run', qid, dict(language='python', source='print(input())'))
-            runs.tick(); runs.tick()
-            self.assertEqual(client.create_submission.call_count, 1)
-            self.assertEqual(runs.result(self.actor, self.identifier, result['run_id'])['state'], 'dispatch_unknown')
-            self.assertEqual(self.runtime.view(self.actor, self.identifier)['latest_run']['run_id'], result['run_id'])
-            with self.assertRaises(WorkflowError): runs.create(self.actor, self.identifier, 'unknown-next-run', qid, dict(language='python', source='print(2)'))
-            self.db.assessment_public_runs.update_one({'_id': ObjectId(result['run_id'])}, {'$set': {'state': 'dispatching', 'claimed_at': self.base.now-timedelta(minutes=6)}})
-            runs.tick()
-            self.assertEqual(runs.result(self.actor, self.identifier, result['run_id'])['state'], 'dispatch_unknown')
-            self.assertEqual(client.create_submission.call_count, 1)
+        def unknown(identity,*args):
+            self.db.oa_provider_requests.insert_one(dict(_id=identity,state='dispatch_unknown'))
+            raise RuntimeError('TEST_ONLY_FAKE ambiguous network result')
+        with patch.object(runs.executor,'capabilities',return_value={'available':True}),patch.object(runs.executor,'profile_hash',return_value='TEST_ONLY_FAKE'),patch.object(runs.executor,'execute_case',side_effect=unknown) as execute:
+            result=runs.create(self.actor,self.identifier,'unknown-public-run',qid,dict(language='python',source='print(input())'))
+            runs.tick();runs.tick()
+            self.assertEqual(execute.call_count,1)
+            self.assertEqual(runs.result(self.actor,self.identifier,result['run_id'])['state'],'dispatch_unknown')
+            with self.assertRaises(WorkflowError):runs.create(self.actor,self.identifier,'unknown-next-run',qid,dict(language='python',source='print(2)'))
 
     def test_both_sql_public_run_payloads_exclude_hidden_datasets(self):
         self.start(); runs = AssessmentPublicRunService(self.runtime)
-        from services.sql_execution_service import SqlExecutionService
-        env = dict(GENHIRE_ASSESSMENT_EXECUTION_ENABLED='true', GENHIRE_SQL_PROJECT='genhire-test-project', GENHIRE_SQL_ARTIFACT_BUCKET='genhire-test-bucket',
-            GENHIRE_SQL_REGION='europe-west1', GENHIRE_SQL_POSTGRESQL_JOB='oa-test-pg', GENHIRE_SQL_MYSQL_JOB='oa-test-mysql')
-        for engine in ['postgresql', 'mysql']:
+        for engine in ['sqlite','duckdb']:
             with self.subTest(engine=engine):
-                q = sql(engine); qid = str(ObjectId())
-                self.db.question_versions.insert_one(dict(_id=ObjectId(qid), question_id=qid, revision=1, content=q))
-                self.db.assessment_attempts.update_one({'_id': ObjectId(self.identifier)}, {'$set': {'questions': [dict(id=qid, **candidate_question(q))], 'question_bindings': [dict(question_version_id=qid, content_hash=request_identity(q))]}})
-                with patch.dict(os.environ, env), patch.object(runs.executor, 'capabilities', return_value={'available': True}), patch.object(runs.executor, 'profile_hash', return_value='TEST_ONLY_FAKE'), patch.object(SqlExecutionService, 'dispatch', return_value={'state': 'running'}), patch.object(SqlExecutionService, 'result', return_value=dict(status='ok', columns=['n'], rows=[[1]])):
-                    result = runs.create(self.actor, self.identifier, 'sql-run-'+engine, qid, dict(language='sql', source='SELECT 1'))
+                q=sql(engine);qid=str(ObjectId())
+                self.db.question_versions.insert_one(dict(_id=ObjectId(qid),question_id=qid,revision=1,content=q))
+                self.db.assessment_attempts.update_one({'_id':ObjectId(self.identifier)},{'$set':{'questions':[dict(id=qid,**candidate_question(q))],'question_bindings':[dict(question_version_id=qid,content_hash=request_identity(q))]}})
+                with patch.object(runs.executor,'capabilities',return_value={'available':True,'sql_available':True}),patch.object(runs.executor,'profile_hash',return_value='TEST_ONLY_FAKE'),patch.object(runs.executor.provider,'run_sql',return_value=dict(status='ok',columns=['n'],rows=[[1]])) as execute,patch.object(runs.executor,'execution_result',return_value=dict(status='ok',columns=['n'],rows=[[1]])):
+                    q['sql']['engine_version']={'sqlite':'sqlite-3','duckdb':'duckdb-1.5'}[engine]
+                    self.db.question_versions.update_one({'_id':ObjectId(qid)},{'$set':{'content':q}})
+                    self.db.assessment_attempts.update_one({'_id':ObjectId(self.identifier)},{'$set':{'question_bindings':[dict(question_version_id=qid,content_hash=request_identity(q))]}})
+                    result=runs.create(self.actor,self.identifier,'sql-run-'+engine,qid,dict(language='sql',source='SELECT 1'))
                     runs.tick()
-                task = self.db.assessment_execution_tasks.find_one({'identity': 'public:'+result['run_id']})
-                payload = self.db.sql_execution_dispatches.find_one({'_id': task['provider_id']})['payload']
-                self.assertNotIn('9371', json.dumps(payload)); self.assertEqual(payload['query'], 'SELECT 1')
-                self.assertEqual(payload['engine'], engine)
-                self.assertEqual(runs.result(self.actor, self.identifier, result['run_id'])['result']['rows'], [[1]])
-                # The fake result bypasses the real adapter's slot settlement.
-                self.db.sql_execution_limits.delete_many({})
+                args=execute.call_args.args
+                self.assertEqual(args[1]['sql']['engine'],engine);self.assertNotIn('9371',args[2]['seed_sql']);self.assertEqual(args[1]['sql']['reference_query'],'SELECT 1')
+                self.assertEqual(runs.result(self.actor,self.identifier,result['run_id'])['result']['rows'],[[1]])
 
 
 class PublicRunPreparationTests(unittest.TestCase):
@@ -253,7 +247,7 @@ class PublicRunPreparationTests(unittest.TestCase):
     def test_stdout_and_sql_use_public_cases_and_candidate_source(self):
         q, case = AssessmentPublicRunService.prepare(coding(), dict(language='python', source='print(input())'), 'hello')
         self.assertEqual(next(c for c in q['coding']['tests'] if c['id'] == case)['input'], 'hello')
-        for engine in ['postgresql', 'mysql']:
+        for engine in ['sqlite', 'duckdb']:
             q, case = AssessmentPublicRunService.prepare(sql(engine), dict(language='sql', source='SELECT 1'), None)
             self.assertEqual(case, 'sample1'); self.assertEqual(q['sql']['reference_query'], 'SELECT 1')
             public = json.dumps(candidate_question(q))

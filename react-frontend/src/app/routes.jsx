@@ -31,6 +31,8 @@ const Dashboard = React.lazy(() => import("features/candidate/pages/Dashboard"))
 const Interview = React.lazy(() => import("features/interview/pages/Interview"));
 const Assessment = React.lazy(() => import("features/assessment/pages/Assessment"));
 const AssessmentCompanion = React.lazy(() => import("features/assessment/pages/AssessmentCompanion"));
+// Vite removes this import and route from production web/kiosk builds.
+const DeveloperAssessmentPreview = import.meta.env?.DEV ? React.lazy(() => import("features/assessment/dev/DeveloperAssessmentPreview")) : null;
 const JobDetails = React.lazy(() => import("features/candidate/pages/JobDetails"));
 const Register = React.lazy(() => import("features/auth/pages/Register"));
 const RecruiterOnboarding = React.lazy(() => import("features/auth/pages/RecruiterOnboarding"));
@@ -80,6 +82,7 @@ export default function AppRoutes() {
       }
     >
       <Routes>
+        {import.meta.env?.DEV && <Route path="/dev/oa" element={<DeveloperAssessmentPreview />} />}
         {/* Public / auth pages */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

@@ -50,7 +50,7 @@ export default function MockAssessmentPanel(){
       openKiosk({mode:'oa',practice:true,launchCode:grant.launch_code,invitationId:launchInvitation,apiUrl:new URL(API_BASE,window.location.origin).href.replace(/\/api\/?$/,''),webOrigin:window.location.origin,returnToExistingTab:true});
     } catch(err){setError(err.message);throw err;} finally {setBusy(false);}
   };
-  const change=patch=>{setOa(old=>({...old,...patch}));setQuote(null);setApproved(false);};
+  const change=patch=>{setOa(old=>({...old,...patch,...(patch.coding_contract==='function'?{languages:old.languages.filter(language=>language!=='c')}:{})}));setQuote(null);setApproved(false);};
   const rebalance=(sections,duration=oa.duration_minutes)=>{
     const n=sections.length;
     return sections.map((s,i)=>({...s,weight:Math.floor(100/n)+(i===0?100%n:0),duration_minutes:Math.floor(duration/n)+(i===0?duration%n:0)}));
@@ -87,8 +87,8 @@ export default function MockAssessmentPanel(){
       <label>Total duration (minutes)<input type="number" min="5" max="300" value={oa.duration_minutes} onChange={e=>{const minutes=Number(e.target.value);change({duration_minutes:minutes,sections:rebalance(oa.sections,minutes).map((s,i)=>({...s,weight:oa.sections[i].weight}))});}}/></label>
       <label>MCQ selection<select value={oa.mcq_mode} onChange={e=>change({mcq_mode:e.target.value})}>{['single','multiple','mixed'].map(v=><option key={v}>{v}</option>)}</select></label>
       <label>Coding contract<select value={oa.coding_contract} onChange={e=>change({coding_contract:e.target.value})}><option value="stdin_stdout">stdin / stdout</option><option value="function">Typed function</option></select></label>
-      <label>SQL engine<select value={oa.sql_engine} onChange={e=>change({sql_engine:e.target.value})}><option value="postgresql">PostgreSQL 17</option><option value="mysql">MySQL 8.4</option></select></label>
-      </div><fieldset className={panelStyles.choices}><legend>Coding languages</legend>{['python','javascript','java','cpp'].map(language=><label key={language} ><input type="checkbox" checked={oa.languages.includes(language)} onChange={e=>change({languages:e.target.checked?[...oa.languages,language]:oa.languages.filter(v=>v!==language)})}/>{language}</label>)}</fieldset>
+      <label>SQL engine<select value={oa.sql_engine} onChange={e=>change({sql_engine:e.target.value})}><option value="sqlite">SQLite</option><option value="duckdb">DuckDB</option></select></label>
+      </div><fieldset className={panelStyles.choices}><legend>Coding languages</legend>{['python','javascript','java','cpp',...(oa.coding_contract==='stdin_stdout'?['c']:[])].map(language=><label key={language} ><input type="checkbox" checked={oa.languages.includes(language)} onChange={e=>change({languages:e.target.checked?[...oa.languages,language]:oa.languages.filter(v=>v!==language)})}/>{language}</label>)}</fieldset>
       {oa.sections.map((s,index)=><details key={s.type}><summary>{s.type.toUpperCase()}: {s.count} questions</summary><fieldset><legend>{s.type.toUpperCase()} settings</legend><div className={panelStyles.grid}>{['easy','medium','hard'].map(d=><label key={d}>{s.type} {d} count<input type="number" min="0" max={s.type==='mcq'?100:10} value={s.difficulty[d]} onChange={e=>difficulty(index,d,e.target.value)}/></label>)}
         <label>{s.type} marks per question (comma separated)<input value={s.marks.join(',')} onChange={e=>updateSection(index,{marks:e.target.value.split(',').map(Number)})}/></label>
         <label>{s.type} section weight (%)<input type="number" min="0" max="100" value={s.weight} onChange={e=>updateSection(index,{weight:Number(e.target.value)})}/></label>

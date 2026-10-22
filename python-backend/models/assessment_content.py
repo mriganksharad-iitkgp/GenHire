@@ -137,8 +137,9 @@ def validate_question(value):
         elif coding['signature'] is not None: invalid('Input/output questions have no function signature.')
         for name in ('input_format', 'output_format', 'constraints'):
             coding[name] = bounded_text(coding[name], name, 8000)
-        languages = strings(coding['languages'], 'Languages', 4)
+        languages = strings(coding['languages'], 'Languages', len(LANGUAGES))
         if not languages or not set(languages) <= set(LANGUAGES): invalid('Select supported coding languages.')
+        if contract == 'function' and 'c' in languages: invalid('C questions use the stdin/stdout contract.')
         for name in ('runtime_versions', 'starter_code', 'reference_solutions'):
             fields(coding[name], languages, name, languages)
             for language, content in coding[name].items(): bounded_text(content, name, 64000 if name != 'runtime_versions' else 80)
@@ -151,7 +152,7 @@ def validate_question(value):
     else:
         keys = {'engine', 'engine_version', 'schema_sql', 'reference_query', 'datasets', 'ordered', 'numeric_tolerance', 'time_ms'}
         sql = fields(result['sql'], keys, 'SQL question', keys)
-        choice(sql['engine'], {'postgresql', 'mysql'}, 'SQL engine')
+        choice(sql['engine'], {'sqlite', 'duckdb', 'postgresql', 'mysql'}, 'SQL engine')
         bounded_text(sql['engine_version'], 'SQL engine version', 80)
         bounded_text(sql['schema_sql'], 'Schema SQL', 20000)
         bounded_text(sql['reference_query'], 'Reference query', 64000)

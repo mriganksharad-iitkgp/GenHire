@@ -169,7 +169,7 @@ try {
   await input(field('Minimum screening interview score'), '72');
   await step(2); await input(field('Role template'), 'data_analyst');
   await input(field('Question creation method'), 'ai');
-  await input(field('SQL engine'), 'mysql');
+  await input(field('SQL engine'), 'duckdb');
   await input(field('Default coding format'), 'function');
   await input(field('Instructions for assessment generation'), 'SQL joins and analytical reasoning');
   await step(3); await input(field('Timer mode'), 'section'); await tick(350);
@@ -183,7 +183,7 @@ try {
   assert.ok(text().includes('full attempt duration'));
   assert.ok(text().includes('Due now for saving configuration: 0 credits'));
   await click(button('Save hiring draft'));
-  assert.equal(saved.configuration.oa.sql_engine, 'mysql');
+  assert.equal(saved.configuration.oa.sql_engine, 'duckdb');
   assert.equal(saved.configuration.oa.coding_contract, 'function');
   assert.equal(saved.configuration.oa.sections[0].type, 'sql');
   assert.equal(saved.configuration.qualification.interview_minimum, 72);
@@ -203,7 +203,7 @@ try {
   console.log('PASS manual JD fields preserve configured OA and submit its saved revision without AI');
   await mount(compiled.JobCreationModal);
   assert.ok(button('Resume saved draft')); await click(button('Resume saved draft')); await step(2);
-  assert.equal(field('SQL engine').value, 'mysql');
+  assert.equal(field('SQL engine').value, 'duckdb');
   assert.equal(field('Question creation method').value, 'manual');
   console.log('PASS saved draft resumes after reopening');
   // A device copy and server save are two stores for one working draft, not two prompts.

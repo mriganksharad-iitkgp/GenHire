@@ -3,6 +3,7 @@
 Draft generation does not execute code, validate reference outputs or publish.
 Unknown interrupted provider calls fail with released funds, never blind replay.
 """
+from config.assessment_execution import SQL_RUNTIMES, runtime_profiles
 from datetime import datetime, timedelta, timezone
 import json
 import logging
@@ -192,8 +193,8 @@ class JobDraftGenerationService:
                         batch = specs[offset:offset + batch_size]
                         context = dict(job=job_data, brief=job['prompt'], instructions=oa['instructions'], requests=batch,
                             coding_contract=oa['coding_contract'], languages=oa['languages'], mcq_mode=oa['mcq_mode'],
-                            runtime_versions=dict(python='3.12', javascript='22', java='21', cpp='C++20'),
-                            sql_engine=oa['sql_engine'], sql_engine_version='17' if oa['sql_engine'] == 'postgresql' else '8.4',
+                            runtime_versions={language:runtime_profiles()[language]['runtime_label'] for language in oa['languages']},
+                            sql_engine=oa['sql_engine'], sql_engine_version=SQL_RUNTIMES.get(oa['sql_engine'],'18'),
                             previous_question_titles=[q['title'] for q in questions])
                         stage = section['type']
                         heartbeat(phase=stage)

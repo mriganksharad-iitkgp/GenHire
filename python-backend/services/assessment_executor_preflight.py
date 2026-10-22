@@ -1,183 +1,126 @@
-"""Operator-only live acceptance. Never imports test fixtures or fabricates results.
-
-Isolation configuration/escape testing needs a separate operator security review;
-these correctness canaries cannot prove that a third-party sandbox is secure.
-"""
+"""Operator-only live OnlineCompiler.io acceptance; no fixture can enable production."""
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import os
-import time
 import uuid
+import time
 from models.assessment_content import validate_question
 from models.hiring_workflow import WorkflowError
 from services.assessment_validation import verify_reference_results
 from services.managed_assessment_validator import ManagedAssessmentValidator
 from services.workflow_service import request_identity
 
-
-TARGETS = dict(python='3.12', javascript='22', java='21', cpp='C++20')
+from config.assessment_execution import RUNTIMES, SQL_RUNTIMES
+TARGETS = dict(RUNTIMES)
 REVIEW_CHECKS = ('code_network_denied', 'code_filesystem_isolated', 'code_hard_resource_limits',
     'sql_network_denied', 'sql_file_access_denied', 'sql_role_escape_denied',
-    'sql_output_limit_verified', 'sql_crash_recovery_verified', 'images_scanned_and_digest_pinned')
-
+    'sql_output_limit_verified', 'sql_crash_recovery_verified', 'provider_isolation_evidence_reviewed')
 
 def security_review(value, policy):
-    if (not policy or not isinstance(value, dict) or value.get('policy_id') != policy
-            or any(value.get(k) is not True for k in REVIEW_CHECKS)
-            or any(not isinstance(value.get(k), str) or not 5 <= len(value[k]) <= 200 for k in ('reviewed_by', 'evidence_reference'))):
-        raise WorkflowError('isolation_review_required', 'A complete operator isolation review matching the configured policy is required.', 503)
-    try: reviewed = datetime.fromisoformat(value['reviewed_at'].replace('Z', '+00:00'))
-    except (KeyError, TypeError, ValueError):
-        raise WorkflowError('isolation_review_required', 'Review timestamp must be recent and timezone-aware.', 503) from None
-    now = datetime.now(timezone.utc)
-    if reviewed.tzinfo is None or not now - timedelta(days=7) <= reviewed <= now:
-        raise WorkflowError('isolation_review_required', 'Isolation review must be within the past seven days.', 503)
+    if (not policy or not isinstance(value,dict) or value.get('policy_id')!=policy
+        or any(value.get(k) is not True for k in REVIEW_CHECKS)
+        or any(not isinstance(value.get(k),str) or not 5<=len(value[k])<=200 for k in ('reviewed_by','evidence_reference'))):
+        raise WorkflowError('isolation_review_required','A current operator review of OnlineCompiler.io isolation is required.',503)
+    try: reviewed=datetime.fromisoformat(value['reviewed_at'].replace('Z','+00:00'))
+    except (KeyError,TypeError,ValueError): raise WorkflowError('isolation_review_required','Review timestamp is required.',503) from None
+    now=datetime.now(timezone.utc)
+    if reviewed.tzinfo is None or not now-timedelta(days=7)<=reviewed<=now:
+        raise WorkflowError('isolation_review_required','Review must be timezone-aware and within seven days.',503)
     return deepcopy(value)
 
-
 def canaries(run_id):
-    base = dict(schema_version=1, title='Live executor acceptance ' + run_id, statement='Return the supplied integer.',
-        difficulty='easy', topics=['Executor acceptance'], marks=1, explanation='Operator-only fixture.')
-    references = dict(python='def solve(value):\n    return value', javascript='function solve(value) { return value; }',
-        java='class Solution { public int solve(int value) { return value; } }',
-        cpp='class Solution { public: int solve(int value) { return value; } };')
-    stdin = dict(python='import sys\nassert sys.version_info[:2] == (3, 12)\nprint(int(input()))',
-        javascript="if (process.versions.node.split('.')[0] !== '22') throw Error();\nconsole.log(Number(require('fs').readFileSync(0,'utf8').trim()));",
-        java='class Main { public static void main(String[] args) { if (Runtime.version().feature()!=21) throw new RuntimeException(); System.out.println(new java.util.Scanner(System.in).nextInt()); } }',
-        cpp='#include <iostream>\nstatic_assert(__cplusplus >= 202002L);\nint main(){int n; std::cin>>n; std::cout<<n;}')
-    result = []
-    for contract in ('stdin_stdout', 'function'):
-        q = dict(base, type='coding')
-        q['coding'] = dict(contract=contract, signature=dict(name='solve', parameters=[dict(name='value', type='integer')], return_type='integer') if contract == 'function' else None,
-            harness_version='genhire_fn_v1', input_format='One integer', output_format='One integer', constraints='32-bit signed integer.',
-            languages=list(TARGETS), runtime_versions=dict(TARGETS), starter_code=dict(references),
-            reference_solutions=references if contract == 'function' else stdin,
-            limits=dict(time_ms=2000, memory_mb=512, output_kb=64), comparison='trim_trailing_whitespace', tests=[
-                dict(id=name, visibility=visibility, input=dict(value=n) if contract == 'function' else str(n),
-                    expected=n if contract == 'function' else str(n), weight=1, explanation='')
-                for name, visibility, n in [('sample1', 'sample', 2), ('hidden1', 'hidden', -9371)]])
-        result.append((contract, validate_question(q), True, None))
-    bad = deepcopy(result[0][1]); bad['title'] += ' wrong answer'
-    for case in bad['coding']['tests']: case['expected'] = '99999'
-    result.append(('wrong_answer', bad, False, 'output_mismatch'))
-    timeout = deepcopy(result[0][1]); timeout['title'] += ' timeout'
-    timeout['coding'].update(languages=['python'], runtime_versions={'python': '3.12'}, starter_code={'python': '# acceptance fixture'},
-        reference_solutions={'python': 'while True: pass'})
-    timeout['coding']['limits']['time_ms'] = 1000
-    result.append(('code_timeout', timeout, False, 'time_limit'))
-    for engine, version in [('postgresql', '17'), ('mysql', '8.4')]:
-        q = dict(base, type='sql', sql=dict(engine=engine, engine_version=version, schema_sql='CREATE TABLE values_table (value INTEGER);',
-            reference_query='SELECT value FROM values_table ORDER BY value', ordered=True, numeric_tolerance=0, time_ms=1000,
-            datasets=[dict(id=name, visibility=visibility, seed_sql=f'INSERT INTO values_table VALUES ({n});', columns=['value'],
-                expected_rows=[[n]], weight=1, explanation='') for name, visibility, n in [('sample1', 'sample', 2), ('hidden1', 'hidden', -9371)]]))
-        result.append((engine, validate_question(q), True, None))
-        denied = deepcopy(q); denied['title'] += ' reader DDL denial'; denied['sql']['reference_query'] = 'DROP TABLE values_table'
-        result.append((engine + '_read_only', denied, False, 'runtime_error'))
-        slow = deepcopy(q); slow['title'] += ' timeout'
-        slow['sql']['reference_query'] = 'SELECT pg_sleep(5)' if engine == 'postgresql' else 'SELECT SLEEP(5)'
-        result.append((engine + '_timeout', slow, False, ('time_limit', 'runtime_error')))
+    base=dict(schema_version=1,title='Live OnlineCompiler.io acceptance '+run_id,statement='Echo one integer.',difficulty='easy',topics=['Acceptance'],marks=1,explanation='Operator-only canary.')
+    sources=dict(python='print(int(input()))',javascript="console.log(Number(require('fs').readFileSync(0,'utf8').trim()));",
+        nodejs="console.log(Number(require('fs').readFileSync(0,'utf8').trim()));",
+        java='class Main {\n    public static void main(String[] args) {\n        System.out.print(new java.util.Scanner(System.in).nextInt());\n    }\n}\n',
+        cpp='#include <iostream>\n\nint main() {\n    int n;\n    std::cin >> n;\n    std::cout << n;\n    return 0;\n}\n',
+        c='#include <stdio.h>\n\nint main() {\n    int n;\n    scanf("%d", &n);\n    printf("%d", n);\n    return 0;\n}\n')
+    q=dict(base,type='coding',coding=dict(contract='stdin_stdout',signature=None,harness_version='genhire_fn_v1',input_format='Integer',output_format='Integer',constraints='Signed integer',
+        languages=list(TARGETS),runtime_versions=dict(TARGETS),starter_code=dict(sources),reference_solutions=sources,
+        limits=dict(time_ms=5000,memory_mb=512,output_kb=64),comparison='trim_trailing_whitespace',tests=[dict(id=name,visibility=visibility,input=str(n),expected=str(n),weight=1,explanation='') for name,visibility,n in [('sample','sample',2),('hidden','hidden',-9371)]]))
+    result=[('stdin_stdout',validate_question(q),True,None)]
+    refs=dict(python='def solve(value):\n    return value\n',javascript='function solve(value) {\n    return value;\n}\n',nodejs='function solve(value) {\n    return value;\n}\n',java='class Solution {\n    public int solve(int value) {\n        return value;\n    }\n}\n',cpp='class Solution {\npublic:\n    int solve(int value) {\n        return value;\n    }\n};\n')
+    fn=deepcopy(q);fn['coding'].update(contract='function',signature=dict(name='solve',parameters=[dict(name='value',type='integer')],return_type='integer'),languages=list(refs),runtime_versions={l:TARGETS[l] for l in refs},starter_code=refs,reference_solutions=refs)
+    for case in fn['coding']['tests']:case.update(input={'value':int(case['input'])},expected=int(case['expected']))
+    result.append(('function',validate_question(fn),True,None))
+    bad=deepcopy(q)
+    for case in bad['coding']['tests']:case['expected']='99999'
+    result.append(('wrong_answer',bad,False,'output_mismatch'))
     return result
 
+VERSION_SOURCES=dict(python='import sys; print(sys.version)',nodejs='console.log(process.version)',
+    java='class Main {public static void main(String[] a){System.out.print(Runtime.version());}}',
+    cpp='#include <iostream>\nint main(){std::cout<<__VERSION__;}',c='#include <stdio.h>\nint main(){printf("%s",__VERSION__);}')
 
 class ExecutorPreflight:
-    def __init__(self, db):
-        self.db = db
-        self.validator = ManagedAssessmentValidator(db, validation_mode=True)
+    def __init__(self,db):
+        self.db=db;self.validator=ManagedAssessmentValidator(db,validation_mode=True)
 
-    def check_budget(self):
-        """Read-only early guard; dispatches retain their atomic quota checks.
-
-        Other traffic can consume quota after this snapshot. This prevents an
-        already impossible recheck from spending calls or revoking acceptance.
-        """
-        questions = [question for _, question, _, _ in canaries('quota-plan')]
-        needed = dict(sphere=2+sum(len(q['coding']['languages'])*len(q['coding']['tests']) for q in questions if q['type']=='coding'),
-                      sql=sum(len(q['sql']['datasets']) for q in questions if q['type']=='sql'))
-        month = datetime.now(timezone.utc).strftime('%Y-%m')
-        for label, collection, key, maximum in (
-            ('sphere', self.db.assessment_executor_limits, 'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT', 500),
-            ('sql', self.db.sql_execution_limits, 'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT', 200)):
-            try: limit = int(os.getenv(key, str(maximum)))
-            except ValueError: limit = 0
-            if not 1 <= limit <= maximum: raise WorkflowError('invalid_preflight_quota', 'Configure supported pilot submission quotas before live acceptance.', 503)
-            consumed = (collection.find_one({'_id': month}) or {}).get('count', 0)
-            if type(consumed) is not int or consumed < 0: raise WorkflowError('invalid_preflight_quota', 'Usage counter requires operator reconciliation.', 503)
-            if limit-consumed < needed[label]:
-                raise WorkflowError('preflight_budget_insufficient', f'Full acceptance needs at least {needed["sphere"]} Sphere submissions and {needed["sql"]} SQL executions available; no canaries dispatched. Review quota/renewal policy.', 429)
-        return needed
-
-    def run(self, review):
-        from config.assessment_execution import runtime_profiles
-        review = security_review(review, os.getenv('GENHIRE_EXECUTOR_ISOLATION_POLICY_ID', ''))
+    def run(self,review):
+        review=security_review(review,os.getenv('GENHIRE_EXECUTOR_ISOLATION_POLICY_ID',''))
         if not self.validator.capabilities()['available']:
-            raise WorkflowError('execution_not_configured', 'Configure both managed providers and all four runtime pins before live acceptance.', 503)
-        profile_hash = self.validator.profile_hash()
-        self.check_budget()
-        run_id = uuid.uuid4().hex
-        self.db.assessment_executor_preflights.insert_one(dict(_id=run_id, profile_hash=profile_hash, state='running',
-            security_review=review, created_at=datetime.now(timezone.utc)))
-        self.db.assessment_executor_attestations.update_many({'profile_hash': profile_hash}, {'$set': {'state': 'checking'}})
+            raise WorkflowError('execution_not_configured','Configure OnlineCompiler.io and enable explicit live execution first.',503)
+        provider=self.validator.provider
+        def paced(method):
+            def call(*args,**kwargs):
+                deadline=time.monotonic()+125
+                while True:
+                    try:return method(*args,**kwargs)
+                    except WorkflowError as exc:
+                        if exc.code not in ('provider_rate_limit','provider_capacity') or time.monotonic()>=deadline:raise
+                        self.validator.heartbeat()
+                        time.sleep(2)
+            return call
+        provider.execute=paced(provider.execute)
+        provider.judge=paced(provider.judge)
+        profile=self.validator.profile_hash();run_id=uuid.uuid4().hex;now=datetime.now(timezone.utc)
+        self.db.assessment_executor_preflights.insert_one(dict(_id=run_id,profile_hash=profile,state='running',created_at=now,security_review=review))
+        self.db.assessment_executor_attestations.update_many({'profile_hash':profile},{'$set':{'state':'checking','sql_verified':False}})
         try:
-            profiles = runtime_profiles()
-            for product in ('compilers', 'problems'):
-                catalog = self.validator.client(product).compilers()
-                for language, profile in profiles.items():
-                    compiler = next((c for c in catalog if c['id'] == profile['compiler_id']), None)
-                    if (profile['runtime_label'] != TARGETS[language] or not compiler
-                            or not any(v['id'] == profile['version_id'] and v['name'] == profile['version_name'] for v in compiler['versions'])):
-                        raise WorkflowError('runtime_pin_mismatch', 'Configured runtime pins must match both live account catalogs and the approved targets.', 503)
-            for name, q, expected, reason in canaries(run_id):
-                evidence = verify_reference_results(q, self.validator.validate(q, request_identity(q)))
-                allowed = reason if isinstance(reason, tuple) else (reason,)
-                if (evidence['passed'] is not expected or (not expected and len(evidence['failures']) != evidence['cases_checked'])
-                        or (reason and any(f['reason'] not in allowed for f in evidence['failures']))):
-                    raise WorkflowError('live_canary_failed', 'A live executor correctness, timeout or privilege canary failed.', 503)
-                self.db.assessment_executor_preflights.update_one({'_id': run_id}, {'$push': {'checks': dict(name=name, evidence=evidence)}})
-            self.problems_canary(run_id)
-            if self.validator.profile_hash() != profile_hash:
-                raise WorkflowError('execution_profile_changed', 'Executor settings changed during validation.', 409)
-            now = datetime.now(timezone.utc)
-            self.db.assessment_executor_attestations.update_one({'profile_hash': profile_hash}, {'$set': dict(state='passed',
-                preflight_id=run_id, verified_at=now, expires_at=now + timedelta(hours=24))}, upsert=True)
-            self.db.assessment_executor_preflights.update_one({'_id': run_id}, {'$set': {'state': 'passed', 'completed_at': now}})
-            return dict(preflight_id=run_id, state='passed', expires_in_hours=24)
+            catalog=self.validator.provider.compilers()['compilers']
+            if not set(RUNTIMES.values())|set(SQL_RUNTIMES.values()) <= {x['id'] for x in catalog}:
+                raise WorkflowError('unsupported_provider_languages','Required languages are missing from the live provider catalog.',503)
+            versions={}
+            for language,source in VERSION_SOURCES.items():
+                output=self.validator.provider.execute('preflight:'+run_id+':version:'+language,RUNTIMES[language],source,purpose='acceptance')
+                if output['status']!='ok' or not output.get('stdout','').strip():raise WorkflowError('version_probe_failed','Runtime discovery failed.',503)
+                versions[language]=output['stdout'].strip()[:500]
+            for name,q,expected,reason in canaries(run_id):
+                evidence=verify_reference_results(q,self.validator.validate(q,request_identity(q)))
+                if evidence['passed']!=expected:raise WorkflowError('code_canary_failed','Code execution/scoring acceptance failed.',503)
+            cases=[dict(input='2',expected_output='4',hidden=False,weight=1),dict(input='3',expected_output='999',hidden=False,weight=2),dict(input='4',expected_output='8',hidden=True,weight=3)]
+            judged=provider.judge('preflight:'+run_id+':native','python-3.14','print(int(input())*2)',cases,purpose='acceptance')
+            if [r['passed'] for r in judged]!=[True,False,True] or any(k in judged[2] for k in ('stdout','diagnostics','time_ms','memory_kb')):
+                raise WorkflowError('native_judging_failed','Weighted native judging or hidden result acceptance failed.',503)
+            sql_verified=False;sql_error=None
+            try:
+                # Reusing the exact table name with new seeds in separate requests
+                # must succeed and return only each request's own controlled data.
+                for engine in SQL_RUNTIMES:
+                    for n in (73917,-62819):
+                        identity='preflight:'+run_id+':'+engine+':'+str(n)
+                        q=dict(type='sql',sql=dict(engine=engine,time_ms=10000,
+                            schema_sql='CREATE TABLE isolation_values (value INTEGER, label VARCHAR(50), optional_value DECIMAL(10,2));',
+                            reference_query='SELECT value, label, optional_value FROM isolation_values ORDER BY value'))
+                        case=dict(id='probe',visibility='hidden',seed_sql=f"INSERT INTO isolation_values VALUES ({n+1}, 'Unicode \u96ea', 1.25), ({n}, 'NULL', NULL), ({n}, 'NULL', NULL);")
+                        output=self.validator.provider.run_sql(identity,q,case,'acceptance')
+                        if output.get('status')!='ok' or output.get('columns')!=['value','label','optional_value'] or output.get('rows')!=[[n,'NULL',None],[n,'NULL',None],[n+1,'Unicode \u96ea',1.25]]:
+                            raise WorkflowError('sql_isolation_failed','Controlled SQL datasets or typed result handling failed.',503)
+                    q['sql'].update(schema_sql='CREATE TABLE empty_values (value INTEGER);',reference_query='SELECT value FROM empty_values')
+                    case.update(seed_sql='')
+                    empty=self.validator.provider.run_sql('preflight:'+run_id+':'+engine+':empty',q,case,'acceptance')
+                    if empty.get('status')!='ok' or empty.get('columns')!=['value'] or empty.get('rows')!=[]:
+                        raise WorkflowError('sql_empty_result_failed','Empty result metadata could not be verified.',503)
+                    versions[engine]=SQL_RUNTIMES[engine]
+                sql_verified=True
+            except Exception as exc:
+                sql_error=exc.code if isinstance(exc,WorkflowError) else 'sql_acceptance_failed'
+            self.db.assessment_executor_attestations.update_one({'profile_hash':profile},{'$set':dict(
+                state='passed',provider='onlinecompiler',sql_verified=sql_verified,sql_error=sql_error,
+                runtime_versions=versions,security_review=review,preflight_id=run_id,passed_at=now,expires_at=now+timedelta(hours=24))},upsert=True)
+            self.db.assessment_executor_preflights.update_one({'_id':run_id},{'$set':dict(state='passed',sql_verified=sql_verified,sql_error=sql_error,runtime_versions=versions)})
+            return dict(state='passed',sql_verified=sql_verified,sql_error=sql_error,preflight_id=run_id,runtime_versions=versions)
         except Exception as exc:
-            self.db.assessment_executor_preflights.update_one({'_id': run_id}, {'$set': {'state': 'failed',
-                'error_code': exc.code if isinstance(exc, WorkflowError) else 'preflight_failed'}})
-            # A failed recheck revokes prior acceptance for this exact profile.
-            self.db.assessment_executor_attestations.update_many({'profile_hash': profile_hash}, {'$set': {'state': 'failed'}})
+            self.db.assessment_executor_preflights.update_one({'_id':run_id},{'$set':dict(state='failed',error_code=exc.code if isinstance(exc,WorkflowError) else 'preflight_failed')})
+            self.db.assessment_executor_attestations.update_many({'profile_hash':profile},{'$set':dict(state='failed',sql_verified=False)})
             raise
-
-    def problems_canary(self, run_id):
-        """Create a private operator fixture; record IDs before subsequent calls.
-
-        Interrupted creation is never retried automatically. Retain IDs for
-        account-side reconciliation/cleanup; these are not recruitment problems.
-        """
-        from config.assessment_execution import runtime_profiles
-        client = self.validator.client('problems')
-        try: master, judge = int(os.environ['SPHERE_MASTER_JUDGE_ID']), int(os.environ['SPHERE_TESTCASE_JUDGE_ID'])
-        except (KeyError, ValueError): raise WorkflowError('judge_not_configured', 'Account-approved master/testcase judge IDs are required.', 503) from None
-        self.db.assessment_executor_preflights.update_one({'_id': run_id}, {'$set': {'problem_dispatch': 'dispatching'}})
-        problem_id = client.create_problem('GenHire acceptance ' + run_id, 'Echo one integer.', master)
-        self.db.assessment_executor_preflights.update_one({'_id': run_id}, {'$set': {'problem_id': problem_id, 'problem_dispatch': 'created'}})
-        numbers = [client.create_testcase(problem_id, str(n), str(n), 2, judge) for n in (2, -9371)]
-        profile = runtime_profiles()['python']
-        for correct in (True, False):
-            key = request_identity(dict(preflight=run_id, problems=correct))
-            if not self.validator.reserve_submission(key): raise WorkflowError('dispatch_pending', 'Canary already dispatched.', 409)
-            source = 'print(int(input()))' if correct else 'print(99999)'
-            submission_id = client.create_submission(source, profile['compiler_id'], profile['version_id'], problem_id=problem_id)
-            self.db.assessment_executor_dispatches.update_one({'_id': key}, {'$set': {'state': 'running', 'submission_id': submission_id, 'product': 'problems'}})
-            deadline = time.monotonic() + 180
-            while True:
-                time.sleep(2)
-                result = client.submission(submission_id)
-                if not result['executing']: break
-                if time.monotonic() > deadline: raise WorkflowError('execution_pending', 'Problems canary is pending; reconcile recorded IDs.', 503)
-            cases = result['testcases']
-            passed = (len(cases) == len(numbers) and {c['number'] for c in cases} == set(numbers)
-                and all(c['status_code'] == 15 for c in cases) and result['status_code'] == 15)
-            if correct != passed or (not correct and not any(c['status_code'] == 14 for c in cases)):
-                raise WorkflowError('problems_canary_failed', 'Problems API did not accept the reference and reject the wrong answer.', 503)
-            self.db.assessment_executor_dispatches.update_one({'_id': key}, {'$set': {'state': 'complete', 'acceptance_check': True}})

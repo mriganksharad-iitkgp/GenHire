@@ -5,40 +5,36 @@ and identity for reconciliation; stale workers cannot overwrite newer results.
 """
 from copy import deepcopy
 from datetime import timedelta
-import math
 import os
 from bson import ObjectId
-from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from core.mongo_transactions import atomic
-from config.assessment_execution import runtime_profiles
 from models.hiring_workflow import WorkflowError
-from services.assessment_harness import function_source
 from services.assessment_scoring import comparison
-from services.hiring_progression_service import utc
 from services.managed_assessment_validator import ManagedAssessmentValidator
-from services.sql_execution_service import SqlExecutionService
 from services.workflow_service import request_identity
 from services.workflow_service import operation_key
 
 
 def ensure_execution_indexes(db):
     db.assessment_execution_tasks.create_index('identity', unique=True)
+    db.oa_provider_requests.create_index([('purpose',1),('created_at',-1)])
+    db.oa_provider_limits.create_index('expires_at',expireAfterSeconds=120)
     db.assessment_execution_tasks.create_index([('state', 1), ('next_poll_at', 1), ('created_at', 1)])
     db.assessment_execution_audit.create_index([('task_id', 1), ('occurred_at', 1)])
     db.assessment_execution_audit.create_index([('actor_id', 1), ('key', 1)], unique=True)
 
 
 def capacity_limit():
-    try: value = int(os.getenv('GENHIRE_OA_EXECUTION_CONCURRENCY', '2'))
+    try: value = int(os.getenv('OA_MAX_CONCURRENT_EXECUTIONS', '2'))
     except ValueError: value = 0
-    if not 1 <= value <= 4: raise WorkflowError('invalid_execution_capacity', 'Pilot execution concurrency must be 1–4.', 503)
+    if not 1 <= value <= 100: raise WorkflowError('invalid_execution_capacity', 'Execution concurrency must be 1-100.', 503)
     return value
 
 
 class AssessmentExecutionService:
-    def __init__(self, db, clock, executor=None, profiles=runtime_profiles):
-        self.db, self.clock, self.profiles = db, clock, profiles
+    def __init__(self, db, clock, executor=None):
+        self.db, self.clock = db, clock
         self.executor = executor or ManagedAssessmentValidator(db)
 
     def enqueue(self, identity, question, case_id, language, source, purpose, attempt_id, session=None):
@@ -47,9 +43,11 @@ class AssessmentExecutionService:
         q = deepcopy(question)
         if q['type'] == 'coding': q['coding']['reference_solutions'][language] = source
         else: q['sql']['reference_query'] = source
-        record = dict(_id=ObjectId(), identity=identity, question=q, case_id=case_id, language=language, purpose=purpose,
+        record = dict(_id=ObjectId(), identity=identity, question=q, case_id=case_id, language=language, purpose=purpose, provider='onlinecompiler',
             attempt_id=attempt_id, state='queued', created_at=self.clock(), next_poll_at=self.clock(), retries=0,
             payload_hash=request_identity(dict(question=q, case_id=case_id, language=language, purpose=purpose, attempt_id=attempt_id)))
+        attempt=self.db.assessment_attempts.find_one({'_id':ObjectId(attempt_id)}, {'pool':1,'owner_id':1},session=session) if ObjectId.is_valid(attempt_id) else None
+        record.update(pool=(attempt or {}).get('pool','recruitment'),owner_id=(attempt or {}).get('owner_id'))
         old = self.db.assessment_execution_tasks.find_one({'identity': identity}, session=session)
         if old:
             if old['payload_hash'] != record['payload_hash']: raise WorkflowError('execution_identity_conflict', 'Execution identity does not match immutable content.')
@@ -74,7 +72,7 @@ class AssessmentExecutionService:
         def claim(session):
             capacity = self.db.assessment_execution_capacity.find_one({'_id': 'global'}, session=session) or {}
             if capacity.get('active', 0) >= limit: return None
-            task = self.db.assessment_execution_tasks.find_one({'state': 'queued', 'next_poll_at': {'$lte': self.clock()}}, sort=[('created_at', 1), ('_id', 1)], session=session)
+            task = self.db.assessment_execution_tasks.find_one({'state': 'queued', 'next_poll_at': {'$lte': self.clock()}, 'provider':'onlinecompiler'}, sort=[('created_at', 1), ('_id', 1)], session=session)
             if not task: return None
             token = str(ObjectId())
             self.db.assessment_execution_capacity.update_one({'_id': 'global'}, {'$inc': {'active': 1}}, upsert=True, session=session)
@@ -87,90 +85,40 @@ class AssessmentExecutionService:
 
     def dispatch(self, task):
         q, token = task['question'], task['dispatch_token']
-        external_intent = False
+        identity = 'oa-case:'+str(task['_id'])+':'+str(task['retries'])
+        self.db.assessment_execution_tasks.update_one({'_id':task['_id'],'dispatch_token':token},
+            {'$set':{'provider_id':identity}})
         try:
-            if q['type'] == 'coding':
-                profile = self.profiles()[task['language']]
-                if profile['runtime_label'] != q['coding']['runtime_versions'][task['language']]: raise WorkflowError('runtime_changed', 'Runtime profile changed.', 503)
-                source = function_source(q, task['language'], task['case_id']) if q['coding']['contract'] == 'function' else q['coding']['reference_solutions'][task['language']]
-                case = next(t for t in q['coding']['tests'] if t['id'] == task['case_id'])
-                key = 'oa-case:'+str(task['_id'])+':'+str(task['retries'])
-                if not self.executor.reserve_submission(key):
-                    external_intent = True
-                    raise WorkflowError('dispatch_unknown', 'Existing dispatch intent requires reconciliation.', 503)
-                external_intent = True
-                provider_id = self.executor.client('compilers').create_submission(source, profile['compiler_id'], profile['version_id'],
-                    '' if q['coding']['contract'] == 'function' else case['input'], math.ceil(q['coding']['limits']['time_ms']/1000))
-            else:
-                # A fresh deterministic per-retry ID, never a repeated external POST.
-                provider_id = request_identity(dict(task=str(task['_id']), retry=task['retries']))[:24]
-                adapter = SqlExecutionService(self.db)
-                adapter.reserve(provider_id, q, task['case_id'])
-                self.db.assessment_execution_tasks.update_one({'_id': task['_id'], 'dispatch_token': token}, {'$set': {'provider_id': provider_id}})
-                external_intent = True
-                adapter.dispatch(provider_id)
-            self.db.assessment_execution_tasks.update_one({'_id': task['_id'], 'dispatch_token': token, 'state': 'dispatching'},
-                {'$set': dict(state='running', provider_id=provider_id, next_poll_at=self.clock(), poll_errors=0)})
+            if hasattr(self.executor,'provider'):
+                self.executor.provider.context={key:task.get(key) for key in ('attempt_id','pool','owner_id')}
+            self.executor.execute_case(identity,q,task['case_id'],task['language'],task['purpose'])
+            self.db.assessment_execution_tasks.update_one({'_id':task['_id'],'dispatch_token':token,'state':'dispatching'},
+                {'$set':dict(state='running',next_poll_at=self.clock(),poll_errors=0)})
         except Exception as exc:
-            code = exc.code if isinstance(exc, WorkflowError) else 'dispatch_unknown'
-            if q['type'] == 'sql' and external_intent:
-                journal = self.db.sql_execution_dispatches.find_one({'_id': provider_id})
-                if journal and journal['state'] == 'reserved':
-                    # Artifact upload failed before the adapter's durable POST
-                    # intent. Retry the same reserved identity, not a new SQL slot.
-                    external_intent = False
-                    code = 'sql_artifact_unavailable'
+            journal=self.db.oa_provider_requests.find_one({'_id':identity})
+            code=exc.code if isinstance(exc,WorkflowError) else 'executor_unavailable'
             def fail(session):
-                current = self.db.assessment_execution_tasks.find_one({'_id': task['_id'], 'dispatch_token': token, 'state': 'dispatching'}, session=session)
-                if not current: return
-                if external_intent:
-                    self.db.assessment_execution_tasks.update_one({'_id': task['_id']}, {'$set': dict(state='dispatch_unknown', error_code=code)}, session=session)
-                else:
-                    if code in {'sql_capacity', 'sql_artifact_unavailable', 'sphere_monthly_limit', 'sql_monthly_limit'}:
-                        self.db.assessment_execution_capacity.update_one({'_id': 'queue'}, {'$inc': {'count': 1}}, upsert=True, session=session)
-                    self.release(current, dict(state='queued' if code in {'sql_capacity', 'sql_artifact_unavailable', 'sphere_monthly_limit', 'sql_monthly_limit'} else 'blocked',
-                        error_code=code, next_poll_at=self.clock()+timedelta(seconds=30)), session)
-            atomic(self.db, fail)
+                current=self.db.assessment_execution_tasks.find_one({'_id':task['_id'],'dispatch_token':token,'state':'dispatching'},session=session)
+                if not current:return
+                retryable=code in {'provider_rate_limit','provider_capacity'} and (not journal or journal['state']=='rejected')
+                if retryable:
+                    self.db.assessment_execution_capacity.update_one({'_id':'queue'},{'$inc':{'count':1}},upsert=True,session=session)
+                    self.release(current,dict(state='queued',error_code=code,next_poll_at=self.clock()+timedelta(seconds=60)),session)
+                elif journal and journal['state']!='rejected':
+                    self.db.assessment_execution_tasks.update_one({'_id':task['_id']},
+                        {'$set':dict(state='running' if journal['state']=='complete' else 'dispatch_unknown',error_code=code)},session=session)
+                else:self.release(current,dict(state='blocked',error_code=code),session)
+            atomic(self.db,fail)
 
     def output(self, task):
-        q = task['question']
-        if q['type'] == 'sql':
-            result = SqlExecutionService(self.db).result(task['provider_id'])
-            if task['purpose'] == 'grading' and result.get('execution_evidence_version') != 2:
-                raise WorkflowError('sql_evidence_upgrade_required', 'SQL runner evidence v2 is required for grading.', 503)
-            if result.get('status') not in {'ok', 'runtime_error', 'time_limit', 'output_limit', 'infrastructure_error'}:
-                raise WorkflowError('invalid_execution_result', 'SQL result is invalid.', 503)
-            if result['status'] == 'ok' and (not isinstance(result.get('columns'), list) or not isinstance(result.get('rows'), list)):
-                raise WorkflowError('invalid_execution_result', 'SQL result is incomplete.', 503)
-            return {k: result[k] for k in ('status', 'columns', 'rows') if k in result}
-        client = self.executor.client('compilers'); raw = client.submission(task['provider_id'])
-        if raw['executing']: return None
-        if task['purpose'] == 'grading':
-            profile = self.profiles()[task['language']]
-            if raw.get('compiler_id') != profile['compiler_id'] or raw.get('compiler_version_id') != profile['version_id']:
-                raise WorkflowError('runtime_evidence_mismatch', 'Execution runtime evidence does not match its pin.', 503)
-        status = {11: 'compile_error', 12: 'runtime_error', 13: 'time_limit', 15: 'ok', 17: 'memory_limit', 19: 'runtime_error', 20: 'infrastructure_error'}.get(raw['status_code'])
-        if not status: raise WorkflowError('invalid_execution_result', 'Unknown execution status.', 503)
-        result = dict(status=status)
-        if status == 'ok':
-            limits = q['coding']['limits']
-            if type(raw.get('output_size')) is not int or raw['output_size'] < 0: raise WorkflowError('invalid_execution_result', 'Output evidence is missing.', 503)
-            if raw['output_size'] > limits['output_kb']*1024: result['status'] = 'output_limit'
-            else:
-                # Public output is useful even if the account omits timing. Private
-                # scoring requires finite actual resource evidence, never guesses.
-                if task['purpose'] == 'grading':
-                    if any(type(raw.get(k)) not in (int, float) or not math.isfinite(raw[k]) or raw[k] < 0 for k in ('time', 'memory_kb')):
-                        raise WorkflowError('invalid_execution_result', 'Resource evidence is missing.', 503)
-                    result.update(time_ms=raw['time']*1000, memory_kb=raw['memory_kb'])
-                    if result['time_ms'] > limits['time_ms']: result['status'] = 'time_limit'
-                    elif result['memory_kb'] > limits['memory_mb']*1024: result['status'] = 'memory_limit'
-                if result['status'] == 'ok': result['stdout'] = client.output(task['provider_id'], limits['output_kb']*1024)
-        # Candidate diagnostics are public-run only. Hidden harness literals and
-        # runtime exceptions must never enter any candidate result or report.
-        if task['purpose'] == 'public' and status in {'compile_error', 'runtime_error'} and hasattr(client, 'diagnostics'):
-            result['diagnostics'] = client.diagnostics(task['provider_id'], 'cmpinfo' if status == 'compile_error' else 'error')
-        return result
+        result=self.executor.execution_result(task['provider_id'],task['question'])
+        if not isinstance(result,dict) or result.get('status') not in {'ok','runtime_error','compile_error','time_limit','memory_limit','output_limit','infrastructure_error'}:
+            raise WorkflowError('invalid_execution_result','execution provider result is invalid.',503)
+        if task['question']['type']=='coding' and task['purpose']=='grading' and result['status']=='ok' and not result.get('native_judged') and not {'time_ms','memory_kb'} <= result.keys():
+            raise WorkflowError('invalid_execution_result','Resource evidence is missing.',503)
+        allowed=('status','stdout','columns','rows','time_ms','memory_kb','passed','native_judged')
+        if task['purpose']=='public':allowed+=('diagnostics',)
+        return {k:result[k] for k in allowed if k in result}
 
     def poll(self, task):
         try:
@@ -183,7 +131,7 @@ class AssessmentExecutionService:
                 cases = task['question'].get('coding', {}).get('tests', []) or task['question'].get('sql', {}).get('datasets', [])
                 case = next(c for c in cases if c['id'] == task['case_id'])
                 # Store only verdict/resource evidence, never hidden actual output.
-                output = dict(status=output['status'], passed=comparison(task['question'], case, output),
+                output = dict(status=output['status'], passed=output['passed'] if output.get('native_judged') is True and type(output.get('passed')) is bool else comparison(task['question'], case, output),
                     **{k: output[k] for k in ('time_ms', 'memory_kb') if k in output})
             def complete(session):
                 current = self.db.assessment_execution_tasks.find_one({'_id': task['_id'], 'state': 'running', 'dispatch_token': task['dispatch_token']}, session=session)
@@ -206,16 +154,26 @@ class AssessmentExecutionService:
                     needs_review=errors >= 8)})
 
     def tick(self):
+        def retire(session):
+            changed=self.db.assessment_execution_tasks.update_many({'state':'queued','provider':{'$ne':'onlinecompiler'}},
+                {'$set':{'state':'blocked','error_code':'retired_provider_reconciliation_required'}},session=session)
+            if changed.modified_count:
+                self.db.assessment_execution_capacity.update_one({'_id':'queue','count':{'$gte':changed.modified_count}},
+                    {'$inc':{'count':-changed.modified_count}},session=session)
+        atomic(self.db,retire)
+        self.db.assessment_execution_tasks.update_many({'provider':{'$ne':'onlinecompiler'},'state':{'$in':['running','dispatching','dispatch_unknown']}},
+            {'$set':{'needs_review':True,'error_code':'retired_provider_reconciliation_required'}})
         if not self.executor.capabilities()['available']: return False
-        self.db.assessment_execution_tasks.update_many({'state': 'dispatching', 'dispatched_at': {'$lte': self.clock()-timedelta(minutes=5)}},
+        self.db.assessment_execution_tasks.update_many({'provider':'onlinecompiler','state': 'dispatching', 'dispatched_at': {'$lte': self.clock()-timedelta(minutes=5)}},
             {'$set': {'state': 'dispatch_unknown', 'error_code': 'stale_dispatch'}})
         task = self.claim()
         if task: self.dispatch(task)
-        # A hash-bound private SQL artifact can resolve an ambiguous launch
-        # without another POST. Sphere requires operator binding to a known ID.
-        self.db.assessment_execution_tasks.update_many({'state': 'dispatch_unknown', 'question.type': 'sql', 'provider_id': {'$exists': True}},
-            {'$set': {'state': 'running', 'next_poll_at': self.clock()}})
-        for running in self.db.assessment_execution_tasks.find({'state': 'running', 'next_poll_at': {'$lte': self.clock()}}).sort('next_poll_at', 1).limit(20):
+        # Recover a result persisted before a worker died, without another POST.
+        for unknown in self.db.assessment_execution_tasks.find({'provider':'onlinecompiler','state':'dispatch_unknown','provider_id':{'$exists':True}}).limit(20):
+            journal=self.db.oa_provider_requests.find_one({'_id':unknown['provider_id'],'state':'complete'})
+            if journal:self.db.assessment_execution_tasks.update_one({'_id':unknown['_id'],'state':'dispatch_unknown'},
+                {'$set':dict(state='running',next_poll_at=self.clock())})
+        for running in self.db.assessment_execution_tasks.find({'provider':'onlinecompiler','state': 'running', 'next_poll_at': {'$lte': self.clock()}}).sort('next_poll_at', 1).limit(20):
             self.poll(running)
         return bool(task)
 
@@ -227,13 +185,13 @@ class AssessmentExecutionService:
             raise WorkflowError('invalid_reconciliation', 'Choose a supported action and document verified provider evidence.', 400)
         task = self.db.assessment_execution_tasks.find_one({'_id': ObjectId(task_id)}) if ObjectId.is_valid(task_id) else None
         if not task: raise WorkflowError('not_found', 'Execution task not found.', 404)
+        if task.get('provider')!='onlinecompiler':
+            raise WorkflowError('retired_provider_reconciliation_required','Review this historical task with its original provider evidence; it cannot be retried or rebound on the new provider.',409)
         if action == 'bind_provider':
-            if task['question']['type'] != 'coding' or type(provider_id) is not int or provider_id <= 0:
-                raise WorkflowError('invalid_provider_binding', 'Bind an account-verified Sphere submission ID.', 400)
-            if task.get('profile_hash') != self.executor.profile_hash(): raise WorkflowError('executor_profile_changed', 'Restore the original executor profile before reconciliation.', 503)
-            # Existence check is read-only, outside the transaction. The operator
-            # must verify account-side source/input ownership in their stated evidence.
-            self.executor.client('compilers').submission(provider_id)
+            if not isinstance(provider_id,str) or provider_id!=task.get('provider_id'):
+                raise WorkflowError('invalid_provider_binding','Bind only this task?s original completed execution provider journal.',400)
+            if task.get('profile_hash')!=self.executor.profile_hash():raise WorkflowError('executor_profile_changed','Restore the original executor profile.',503)
+            self.executor.execution_result(provider_id,task['question'])
         fingerprint = request_identity(dict(task_id=task_id, action=action, reason=reason, provider_id=provider_id))
         def reconcile(session):
             identity = dict(actor_id=str(actor['_id']), key=key)

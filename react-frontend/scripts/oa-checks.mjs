@@ -1,9 +1,9 @@
 // One portable entry point used locally and in CI. No live HTTP/provider calls.
 import { spawnSync } from 'node:child_process';
 const suites = ['test:public-env', 'test', 'test:question-editor', 'test:hiring-timing', 'test:landing', 'test:portals', 'test:interview-ui',
-  'test:job-setup', 'test:assessment-authoring', 'test:hiring-progression', 'test:assessment-runtime',
-  'test:assessment-evaluation', 'test:assessment-integrity', 'test:company-hiring', 'test:practice-assessment',
-  'lint:ci', 'build', 'build:kiosk'];
+  'test:job-setup', 'test:job-form-compact', 'test:assessment-authoring', 'test:hiring-progression', 'test:assessment-runtime',
+  'test:assessment-evaluation', 'test:assessment-integrity', 'test:company-hiring', 'test:practice-assessment', 'test:oa-preview',
+  'lint:ci', 'build', 'build:kiosk', 'test:oa-preview-exclusion'];
 for (const suite of suites) {
   console.log(`\nOA check: ${suite}`);
   // Windows npm is a .cmd shim, so execute the known npm CLI with Node directly.

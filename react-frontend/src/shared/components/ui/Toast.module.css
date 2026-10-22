@@ -2,8 +2,8 @@
   position: fixed;
   top: max(16px, env(safe-area-inset-top));
   right: max(16px, env(safe-area-inset-right));
-  background-color: white;
-  border-radius: 8px;
+  background-color: var(--portal-surface);
+  border-radius: var(--ui-radius-control);
   padding: 15px 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   display: flex;
@@ -16,7 +16,7 @@
   /* Ensure toast is above navbar (z-index 9998) and dropdown (9999) */
   z-index: 2147483000;
   transition: all 0.3s ease;
-  border-left: 4px solid #4a90e2;
+  border-left: 4px solid var(--portal-primary);
 }
 
 .toast.visible {
@@ -30,23 +30,23 @@
 }
 
 .toast.success {
-  border-left-color: #27ae60;
-  color: #27ae60;
+  border-left-color: var(--portal-success);
+  color: var(--portal-success);
 }
 
 .toast.error {
-  border-left-color: #e74c3c;
-  color: #e74c3c;
+  border-left-color: var(--portal-danger);
+  color: var(--portal-danger);
 }
 
 .toast.warning {
-  border-left-color: #f39c12;
-  color: #f39c12;
+  border-left-color: var(--portal-warning);
+  color: var(--portal-warning);
 }
 
 .toast.info {
-  border-left-color: #4a90e2;
-  color: #4a90e2;
+  border-left-color: var(--portal-primary);
+  color: var(--portal-primary);
 }
 
 .toast i {
@@ -55,7 +55,7 @@
 
 .toast span {
   flex: 1;
-  color: #333;
+  color: var(--portal-text);
   font-weight: 500;
 }
 

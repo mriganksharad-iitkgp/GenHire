@@ -37,7 +37,7 @@ def question_response_schema(kind, languages, contract='stdin_stdout'):
             tests=array(obj(dict(id=string,visibility=visibility,input=string,expected=string,weight=number,explanation=string)))))
     elif kind == 'sql':
         cell = {'anyOf':[{'type':t} for t in ('string','number','boolean','null')]}
-        common['sql'] = obj(dict(engine=enum('postgresql','mysql'), engine_version=string, schema_sql=string,
+        common['sql'] = obj(dict(engine=enum('sqlite','duckdb','postgresql'), engine_version=string, schema_sql=string,
             reference_query=string, ordered={'type':'boolean'}, numeric_tolerance=number, time_ms={'type':'integer'},
             datasets=array(obj(dict(id=string,visibility=visibility,seed_sql=string,columns=array(string),
                 expected_rows=array(array(cell)),weight=number,explanation=string)))))

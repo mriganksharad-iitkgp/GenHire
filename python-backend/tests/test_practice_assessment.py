@@ -43,9 +43,9 @@ class FakeLlm:
 
 class FakeValidator:
     available=True
-    def capabilities(self):return dict(available=self.available)
+    def capabilities(self):return dict(available=self.available,sql_available=self.available)
     def profile_hash(self):return 'TEST_ONLY_FAKE_PROFILE_NOT_REAL_ACCEPTANCE'
-    def acceptance_fence(self,session,now):return None  # Explicit injected test adapter, not a DB attestation.
+    def acceptance_fence(self,session,now,sql=False):return None  # Explicit injected test adapter, not a DB attestation.
     def validate(self,q,content_hash):
         runs=[]
         if q['type']=='coding':
@@ -71,7 +71,7 @@ class PracticeAssessmentTests(unittest.TestCase):
         self.config=deepcopy(self.base.config['oa']);self.config.update(source='ai',variant_count=1,advanced_analytics=False,plagiarism_check=False,proctoring_level='basic')
         self.admin=dict(_id=ObjectId(),user_type='admin',permissions=['applications.read','applications.write'])
         self.profile=patch('services.managed_assessment_validator.ManagedAssessmentValidator.profile_hash',return_value=self.validator.profile_hash());self.profile.start();self.addCleanup(self.profile.stop)
-        self.capabilities=patch('services.managed_assessment_validator.ManagedAssessmentValidator.capabilities',return_value={'available':True});self.capabilities.start();self.addCleanup(self.capabilities.stop)
+        self.capabilities=patch('services.managed_assessment_validator.ManagedAssessmentValidator.capabilities',return_value={'available':True,'sql_available':True});self.capabilities.start();self.addCleanup(self.capabilities.stop)
         self.fence=patch('services.managed_assessment_validator.ManagedAssessmentValidator.acceptance_fence',return_value=None);self.fence.start();self.addCleanup(self.fence.stop)
         labels=coding()['coding']['runtime_versions']
         self.profiles=patch('config.assessment_execution.runtime_profiles',return_value={l:dict(runtime_label=v,compiler_id=1,version_id=2) for l,v in labels.items()});self.profiles.start();self.addCleanup(self.profiles.stop)
@@ -218,7 +218,7 @@ class PracticeAssessmentTests(unittest.TestCase):
         self.assertEqual(result['score'],0);self.assertEqual(result['ai_feedback']['state'],'unavailable');self.assertEqual(self.wallet()['total_debited'],30)
 
     def test_code_and_sql_contract_matrix_validates_private_pool_without_hidden_report_disclosure(self):
-        for index,(kind,contract,engine) in enumerate([('coding','stdin_stdout','postgresql'),('coding','function','postgresql'),('sql','stdin_stdout','postgresql'),('sql','stdin_stdout','mysql')]):
+        for index,(kind,contract,engine) in enumerate([('coding','stdin_stdout','postgresql'),('coding','function','postgresql'),('sql','stdin_stdout','sqlite'),('sql','stdin_stdout','duckdb')]):
             self.config.update(coding_contract=contract,sql_engine=engine,sections=[dict(type=kind,count=1,difficulty=dict(easy=1,medium=0,hard=0),marks=[1],weight=100,duration_minutes=5)])
             self.ready('matrix-practice-'+str(index))
             q=self.db.question_versions.find_one({'pool':'practice','purchase_id':self.purchase['purchase_id']})

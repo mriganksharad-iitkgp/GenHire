@@ -53,7 +53,7 @@ class SetupContractTests(unittest.TestCase):
             ('qualification.interview_minimum', float('nan')), ('qualification.interview_minimum', True),
             ('qualification.oa_minimum', -1), ('qualification.proctoring_minimum', 101),
             ('oa.languages', [{}]), ('oa.languages', ['python', 'python']), ('oa.languages', ['ruby']),
-            ('oa.sections', None), ('oa.sql_engine', 'sqlite'), ('oa.variant_count', 6), ('oa.duration_minutes', 0),
+            ('oa.sections', None), ('oa.sql_engine', 'unsupported'), ('oa.variant_count', 6), ('oa.duration_minutes', 0),
             ('oa.duration_minutes', 31.5), ('oa.source', 'unknown'), ('oa.coding_contract', 'shell'),
             ('schedule.timezone', 'not/a_timezone'), ('schedule.application_closes_at', ''),
         ]

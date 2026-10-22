@@ -11,6 +11,8 @@ test('built kiosk serves runtime assets including the Monaco worker', () => {
   assert.ok(fs.existsSync(directory), 'Build react-frontend with build:kiosk first.');
   const assets = fs.readdirSync(directory).filter(name => /\.(js|css|svg|png|woff2?|wasm|tflite)$/.test(name));
   assert.ok(assets.some(name => /editor\.worker.*\.js$/.test(name)), 'Monaco worker must be packaged locally.');
+  assert.ok(assets.some(name => /clang-format.*\.wasm$/.test(name)), 'C/C++/Java/JavaScript formatter must be packaged locally.');
+  assert.ok(assets.some(name => /ruff_fmt.*\.wasm$/.test(name)), 'Python formatter must be packaged locally.');
   for (const name of assets) {
     assert.equal(resolvePublicFile(root, '/assets/'+name), path.join(directory, name));
   }

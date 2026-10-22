@@ -25,14 +25,14 @@ globalThis.fetch = async (url, options = {}) => {
     assert.ok(['OA scoped-token', 'OA renewed-scoped-token'].includes(options.headers.Authorization));
     if (pathname.endsWith('/preflight')) { assert.equal(body.consent_version, 'oa-integrity-v1'); value = { ready: true }; }
     else if (pathname.endsWith('/start')) value = { attempt_id: 'attempt-one', access_token: 'renewed-scoped-token' };
-    else if (pathname.endsWith('/assessment-attempts/attempt-one')) value = { attempt_id: 'attempt-one', state: 'in_progress', revision: 0, server_now: new Date().toISOString(), deadline: new Date(Date.now()+600000).toISOString(), timer_mode: 'shared', sections: [], questions: [], answers: {} };
+    else if (pathname.endsWith('/assessment-attempts/attempt-one')) value = { attempt_id: 'attempt-one', state: 'in_progress', revision: 0, server_now: new Date().toISOString(), deadline: new Date(Date.now()+600000).toISOString(), timer_mode: 'shared', sections: [], questions: [{ id: 'fixture-question', type: 'mcq', title: 'Secure launch fixture', statement: 'Select the even number.', marks: 1, mcq: { selection: 'single', options: [{ id: 'even', text: '2' }, { id: 'odd', text: '3' }] } }], answers: {} };
     else if (pathname.endsWith('/assessment-invitations/invite-one')) value = { state: 'invited', security_required: true, runtime_ready: true, integrity_policy: policy, duration_minutes: 5, opens_at: new Date().toISOString(), start_closes_at: new Date(Date.now()+60000).toISOString() };
     else throw new Error('Unexpected request '+pathname);
   }
   return new Response(JSON.stringify(value), { status: 200 });
 };
 const tick = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 25)); });
-const button = text => [...document.querySelectorAll('button')].find(node => node.textContent === text);
+const button = text => [...document.querySelectorAll('button')].find(node => node.textContent.trim() === text);
 async function click(node) { assert.ok(node); assert.equal(node.disabled, false); await act(async () => node.dispatchEvent(new MouseEvent('click', { bubbles: true }))); await tick(); }
 try {
   const out = await build({ stdin: { contents: `export {default as Scoped} from './src/features/assessment/components/ScopedAssessment.jsx'; export {default as Editor} from './src/shared/components/ui/CodeEditor.jsx';`, resolveDir: cwd, loader: 'jsx' },

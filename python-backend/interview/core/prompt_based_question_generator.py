@@ -20,6 +20,7 @@ from enum import Enum
 
 from ..llm.base import BaseLLM
 from .cost_tracker import CostTracker
+from services.shared_cache import cache, MISSING
 from ..config.settings import QuestionType, InterviewConfig
 from ..prompts import (
     CV_KEYWORDS_EXTRACTION_PROMPT,
@@ -46,10 +47,6 @@ from ..prompts import (
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache for the 4 LLM calls made during initialize_conversation().
-# Keyed on MD5(cv_text[:3000] + jd_text[:3000]) — same candidate+JD reuses results.
-_INIT_CACHE: Dict[str, Any] = {}
-_INIT_CACHE_MAX = 50
 # A stalled provider must not create an unlimited number of orphan requests.
 _GENERATION_SLOTS = threading.BoundedSemaphore(8)
 
@@ -294,8 +291,8 @@ class PromptBasedQuestionGenerator:
 
     @staticmethod
     def _init_cache_key(cv_content: str, jd_content: str) -> str:
-        combined = (cv_content[:3000] + "|" + jd_content[:3000]).encode("utf-8", errors="ignore")
-        return hashlib.md5(combined).hexdigest()
+        combined = json.dumps([cv_content, jd_content], ensure_ascii=False).encode('utf-8')
+        return hashlib.sha256(combined).hexdigest()
 
     def initialize_conversation(
         self, resume_sections: Dict[str, str], job_description: str = "", *, use_llm: bool = True
@@ -304,8 +301,13 @@ class PromptBasedQuestionGenerator:
         self.resume_sections = resume_sections
         self.cv_content = " ".join(resume_sections.values())
 
-        cache_key = self._init_cache_key(self.cv_content, job_description)
-        if not use_llm:
+        cache_key = [self._init_cache_key(self.cv_content, job_description),
+                     getattr(self.llm, 'model_name', type(self.llm).__name__) if use_llm else 'heuristic', 'extraction-v3']
+        prepared = cache.get('interview-preparation', cache_key)
+        if isinstance(prepared, list) and len(prepared) == 4:
+            logger.info('Shared interview preparation cache hit')
+            cv_keywords, jd_keywords, skill_level, difficulty_dist = prepared
+        elif not use_llm:
             cv_keywords = self._fallback_extract_cv_keywords(self.cv_content, job_description)
             jd_keywords = self._fallback_extract_cv_keywords("", job_description)
             skill_level = self._fallback_assess_skill_level(self.cv_content)
@@ -315,9 +317,6 @@ class PromptBasedQuestionGenerator:
                 "medium": {"easy": 0.3, "medium": 0.4, "hard": 0.3},
                 "hard": {"easy": 0.1, "medium": 0.3, "hard": 0.6},
             }[role_diff]
-        elif cache_key in _INIT_CACHE:
-            logger.info("init_cache HIT — reusing CV/JD keyword and skill extractions")
-            cv_keywords, jd_keywords, skill_level, difficulty_dist = _INIT_CACHE[cache_key]
         else:
             # Run the four LLM-based extractions in parallel so the background
             # init thread finishes in ~2-3 s instead of the 6-10 s it took when
@@ -333,10 +332,11 @@ class PromptBasedQuestionGenerator:
                 skill_level    = skill_future.result()
                 difficulty_dist = diff_future.result()
 
-            # Evict oldest entry when the cache is full (simple FIFO)
-            if len(_INIT_CACHE) >= _INIT_CACHE_MAX:
-                _INIT_CACHE.pop(next(iter(_INIT_CACHE)))
-            _INIT_CACHE[cache_key] = (cv_keywords, jd_keywords, skill_level, difficulty_dist)
+        if prepared is MISSING:
+            # Cache both preparation modes separately. Heuristic preparation is
+            # the common interview path; it previously bypassed Redis entirely.
+            cache.set('interview-preparation', cache_key,
+                      [cv_keywords, jd_keywords, skill_level, difficulty_dist], 600)
 
         # Extract job title from job description
         job_title = self._extract_job_title(job_description)

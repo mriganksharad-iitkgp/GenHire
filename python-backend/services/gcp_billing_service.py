@@ -26,26 +26,13 @@ import datetime
 import json
 import logging
 import os
-import time
+from services.shared_cache import cache
 
 logger = logging.getLogger(__name__)
 
-# Short in-process cache so timeline tweaks on the admin page don't fire a
-# BigQuery job per keystroke; billing export rows only update ~daily anyway.
-_CACHE_TTL_SECONDS = 600
-_cache = {}
+def _billing_cache_parts(key):
+    return [os.getenv('GCP_BILLING_EXPORT_BQ_TABLE', ''), os.getenv('GCP_BILLING_EXPORT_BQ_LOCATION', ''), key]
 
-
-def _cached(key):
-    hit = _cache.get(key)
-    if hit and (time.time() - hit[0]) < _CACHE_TTL_SECONDS:
-        return hit[1]
-    return None
-
-
-def _store(key, value):
-    _cache[key] = (time.time(), value)
-    return value
 
 # Maps BigQuery `service.description` values onto the admin page's fixed
 # GCP breakdown keys; anything unmatched lands in "other".
@@ -111,17 +98,17 @@ def _bq_client():
 
 
 def fetch_gcp_service_costs(start_dt, end_dt):
+    return cache.remember('gcp-billing', _billing_cache_parts(['range', start_dt.isoformat(), end_dt.isoformat()]),
+                          lambda: _fetch_service_costs(start_dt, end_dt), 600)
+
+
+def _fetch_service_costs(start_dt, end_dt):
     """Net cost (usage cost + credits, i.e. what actually gets billed) per
     service for [start_dt, end_dt), in the billing account's currency.
 
     Returns {'services': {key: inr}, 'total': inr, 'currency': str} or None
     when the export isn't configured/reachable.
     """
-    cache_key = ("range", start_dt.isoformat(), end_dt.isoformat())
-    cached_value = _cached(cache_key)
-    if cached_value is not None:
-        return cached_value
-
     client, table = _bq_client()
     if client is None:
         return None
@@ -171,20 +158,20 @@ def fetch_gcp_service_costs(start_dt, end_dt):
         services[key] += float(row.net_cost or 0.0)
         if row.currency:
             currency = row.currency
-    return _store(cache_key, {"services": services, "total": sum(services.values()), "currency": currency})
+    return {"services": services, "total": sum(services.values()), "currency": currency}
 
 
 def fetch_gcp_current_month_outstanding():
+    invoice_month = datetime.datetime.utcnow().strftime('%Y%m')
+    return cache.remember('gcp-billing', _billing_cache_parts(['outstanding', invoice_month]),
+                          _fetch_current_month_outstanding, 600)
+
+
+def _fetch_current_month_outstanding():
     """Accrued net cost for the current invoice month (invoice.month =
     YYYYMM) — on a postpaid billing account this is the amount outstanding
     to pay so far this month. Returns {'amount': float, 'currency': str,
     'invoice_month': 'YYYYMM'} or None."""
-    invoice_month_key = datetime.datetime.utcnow().strftime("%Y%m")
-    cache_key = ("outstanding", invoice_month_key)
-    cached_value = _cached(cache_key)
-    if cached_value is not None:
-        return cached_value
-
     client, table = _bq_client()
     if client is None:
         return None
@@ -210,9 +197,9 @@ def fetch_gcp_current_month_outstanding():
         return None
 
     if not rows or rows[0].net_cost is None:
-        return _store(cache_key, {"amount": 0.0, "currency": "INR", "invoice_month": invoice_month})
-    return _store(cache_key, {
+        return {"amount": 0.0, "currency": "INR", "invoice_month": invoice_month}
+    return {
         "amount": float(rows[0].net_cost),
         "currency": rows[0].currency or "INR",
         "invoice_month": invoice_month,
-    })
+    }

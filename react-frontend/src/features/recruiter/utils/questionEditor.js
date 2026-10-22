@@ -1,3 +1,5 @@
+const runtimeProfiles = { python: 'python-3.14', javascript: 'nodejs-24', nodejs: 'nodejs-24', java: 'openjdk-25', cpp: 'g++-15', c: 'gcc-15' };
+const sqlProfiles = { sqlite: 'sqlite-3', duckdb: 'duckdb-1.5', postgresql: '18' };
 const testCase = (id, visibility, contract) => ({ id, visibility, input: contract === 'function' ? '{"value":0}' : '',
   expected: contract === 'function' ? '0' : '', weight: 1, explanation: '' });
 
@@ -11,10 +13,10 @@ export function newQuestion(kind, oa) {
   if (kind === 'coding') value.coding = { contract, signature: contract === 'function' ? {
     name: 'solve', parameters: [{ name: 'value', type: 'integer' }], return_type: 'integer' } : null,
     harness_version: 'genhire_fn_v1', input_format: '', output_format: '', constraints: '', languages: [...oa.languages],
-    runtime_versions: Object.fromEntries(oa.languages.map(l => [l, { python: '3.12', javascript: '22', java: '21', cpp: 'C++20' }[l]])), starter_code: Object.fromEntries(oa.languages.map(l => [l, ''])),
-    reference_solutions: Object.fromEntries(oa.languages.map(l => [l, ''])), limits: { time_ms: 2000, memory_mb: 256, output_kb: 64 },
+    runtime_versions: Object.fromEntries(oa.languages.map(l => [l, runtimeProfiles[l]])), starter_code: Object.fromEntries(oa.languages.map(l => [l, ''])),
+    reference_solutions: Object.fromEntries(oa.languages.map(l => [l, ''])), limits: { time_ms: 2000, memory_mb: 512, output_kb: 64 },
     comparison: 'trim_trailing_whitespace', tests: Array.from({length:16},(_,i)=>testCase(`test${i+1}`,i<2?'sample':'hidden',contract)) };
-  if (kind === 'sql') value.sql = { engine: oa.sql_engine, engine_version: oa.sql_engine === 'postgresql' ? '17' : '8.4', schema_sql: '', reference_query: '',
+  if (kind === 'sql') value.sql = { engine: oa.sql_engine, engine_version: sqlProfiles[oa.sql_engine] || '', schema_sql: '', reference_query: '',
     ordered: false, numeric_tolerance: 0, time_ms: 2000, datasets: ['sample', 'hidden'].map((visibility, i) => ({
       id: `dataset${i + 1}`, visibility, seed_sql: '', columns: ['value'], expected_rows: '[[0]]', weight: 1, explanation: '',
     })) };

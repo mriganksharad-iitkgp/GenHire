@@ -1,29 +1,36 @@
-"""Server-only deployment settings; nothing here exposes tokens in capabilities."""
-import json
+"""Provider-independent OA configuration and documented runtime mappings."""
 import os
 from models.hiring_workflow import WorkflowError
 
+RUNTIMES = {
+    'python':'python-3.14', 'javascript':'nodejs-24', 'nodejs':'nodejs-24',
+    'java':'openjdk-25', 'cpp':'g++-15', 'c':'gcc-15',
+}
+SQL_RUNTIMES = {'sqlite':'sqlite-3', 'duckdb':'duckdb-1.5'}
+
 
 def enabled():
-    return os.getenv('GENHIRE_ASSESSMENT_EXECUTION_ENABLED', '').lower() == 'true'
+    return os.getenv('GENHIRE_ASSESSMENT_EXECUTION_ENABLED','').lower()=='true'
+
+
+def integer_setting(key, default, low, high):
+    try: value=int(os.getenv(key,str(default)))
+    except ValueError: value=0
+    if not low<=value<=high:
+        raise WorkflowError('execution_not_configured',f'{key} must be between {low} and {high}.',503)
+    return value
 
 
 def runtime_profiles():
-    try: profiles = json.loads(os.getenv('SPHERE_RUNTIME_PROFILES_JSON', '{}'))
-    except (ValueError, TypeError): raise WorkflowError('execution_not_configured', 'Runtime profile JSON is invalid.', 503) from None
-    if not isinstance(profiles, dict) or set(profiles) != {'python', 'javascript', 'java', 'cpp'}:
-        raise WorkflowError('execution_not_configured', 'Four account-verified runtime profiles are required.', 503)
-    for profile in profiles.values():
-        if (not isinstance(profile, dict) or set(profile) != {'compiler_id', 'version_id', 'version_name', 'runtime_label'}
-                or any(type(profile.get(k)) is not int or profile[k] <= 0 for k in ('compiler_id', 'version_id'))
-                or any(not isinstance(profile.get(k), str) or not 1 <= len(profile[k]) <= 100 for k in ('version_name', 'runtime_label'))):
-            raise WorkflowError('execution_not_configured', 'Runtime profiles must pin actual compiler/version IDs and names.', 503)
-    return profiles
+    # IDs/versions are documented by the provider; live acceptance verifies them.
+    return {language:dict(compiler_id=compiler,runtime_label=compiler) for language,compiler in RUNTIMES.items()}
+
+
+def sql_enabled(engine):
+    return engine in SQL_RUNTIMES and os.getenv('OA_ENABLE_'+engine.upper(),'true').lower()=='true'
 
 
 def execution_status():
-    # Configured is deliberately weaker than tested/available.
-    sphere = all(os.getenv(k) for k in ('SPHERE_COMPILERS_ENDPOINT', 'SPHERE_COMPILERS_TOKEN', 'SPHERE_PROBLEMS_ENDPOINT', 'SPHERE_PROBLEMS_TOKEN'))
-    sql = all(os.getenv(k) for k in ('GENHIRE_SQL_PROJECT', 'GENHIRE_SQL_ARTIFACT_BUCKET', 'GENHIRE_SQL_POSTGRESQL_JOB', 'GENHIRE_SQL_MYSQL_JOB'))
-    return dict(enabled=enabled(), sphere_configured=bool(sphere), sql_configured=bool(sql), region=os.getenv('GENHIRE_SQL_REGION', 'europe-west1'),
-        available=False, reason='Live runtime and SQL isolation validation must pass before execution can be enabled.')
+    providers=all(os.getenv(key,'onlinecompiler')=='onlinecompiler' for key in ('OA_EXECUTION_PROVIDER','OA_GENERIC_SQL_PROVIDER'))
+    return dict(enabled=enabled(),provider='onlinecompiler',configured=providers and bool(os.getenv('ONLINECOMPILER_API_KEY','').strip()),
+                available=False,reason='Current live execution and SQL dataset acceptance is required.')

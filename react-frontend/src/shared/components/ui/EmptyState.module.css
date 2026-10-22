@@ -46,7 +46,7 @@
 .title {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--portal-text);
   margin: 0 0 12px 0;
   animation: fadeInUp 0.6s ease;
 }
@@ -65,7 +65,7 @@
 
 .message {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--portal-muted);
   max-width: 400px;
   margin: 0 0 24px 0;
   line-height: 1.6;
@@ -87,11 +87,11 @@
 }
 
 .actionButton {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--portal-gradient);
   color: white;
   border: none;
   padding: 12px 32px;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-control);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;

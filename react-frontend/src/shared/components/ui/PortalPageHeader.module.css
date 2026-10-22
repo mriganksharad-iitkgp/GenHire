@@ -1,8 +1,8 @@
 .header {
   position: relative; isolation: isolate; display: flex; align-items: center;
-  justify-content: space-between; gap: 24px; padding: 28px 30px;
-  margin: 0 0 24px; border: 1px solid #dddafa; border-radius: 22px;
-  background: linear-gradient(120deg,#eef2ff 0%,#f3efff 65%,#e7e6ff 100%);
+  justify-content: space-between; gap: 24px; padding: 22px 24px;
+  margin: 0 0 24px; border: 1px solid var(--portal-border); border-radius: var(--ui-radius-card);
+  background: var(--portal-header);
   color: var(--portal-text); overflow: hidden; min-width: 0;
 }
 .intro { min-width: 0; position: relative; z-index: 1; }
@@ -10,7 +10,7 @@
 .header h1 { color: var(--portal-text); font-size: 30px; line-height: 1.2; letter-spacing: -.7px; font-weight: 750; margin: 0; overflow-wrap: anywhere; }
 .header p { color: var(--portal-secondary); font-size: 14px; line-height: 1.65; max-width: 66ch; margin: 10px 0 0; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0; z-index: 1; }
-.actions a, .actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 12px; min-height: 44px; padding: 10px 16px; }
+.actions a, .actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: var(--ui-radius-control); min-height: 44px; padding: 10px 16px; }
 .actions a { color: #fff; background: var(--portal-gradient); border: 1px solid transparent; }
 .actions a:hover { color: #fff; background: var(--portal-primary); }
 .actions a:focus-visible, .actions button:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }

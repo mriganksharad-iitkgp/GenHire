@@ -18,7 +18,7 @@ and the admin page falls back to the INFRA_MONTHLY_OPENAI_INR placeholder.
 
 import logging
 import os
-import time
+from services.shared_cache import cache
 
 import requests
 
@@ -26,10 +26,6 @@ logger = logging.getLogger(__name__)
 
 _COSTS_URL = "https://api.openai.com/v1/organization/costs"
 
-# Short in-process cache so timeline tweaks on the admin page don't hit the
-# OpenAI API repeatedly; cost buckets are daily anyway.
-_CACHE_TTL_SECONDS = 600
-_cache = {}
 
 
 def fetch_openai_costs_usd(start_dt, end_dt):
@@ -40,10 +36,11 @@ def fetch_openai_costs_usd(start_dt, end_dt):
     if not admin_key:
         return None
 
-    cache_key = (start_dt.isoformat(), end_dt.isoformat())
-    hit = _cache.get(cache_key)
-    if hit and (time.time() - hit[0]) < _CACHE_TTL_SECONDS:
-        return hit[1]
+    return cache.remember('openai-costs', [admin_key, start_dt.isoformat(), end_dt.isoformat()],
+                          lambda: _fetch_costs(admin_key, start_dt, end_dt), 600)
+
+
+def _fetch_costs(admin_key, start_dt, end_dt):
 
     headers = {"Authorization": f"Bearer {admin_key}"}
     params = {
@@ -81,7 +78,6 @@ def fetch_openai_costs_usd(start_dt, end_dt):
         logger.error("openai_billing: costs fetch failed: %s", e)
         return None
 
-    _cache[cache_key] = (time.time(), total_usd)
     return total_usd
 
 

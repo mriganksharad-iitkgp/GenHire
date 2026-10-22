@@ -5,15 +5,12 @@ from our recorded request usage, never from subtracting account balances.
 """
 import logging
 import os
-import time
 from datetime import datetime
-from threading import Lock
+from services.shared_cache import cache
 
 import requests
 
 logger = logging.getLogger(__name__)
-_lock = Lock()
-_cache = {"key": None, "at": 0, "value": None}
 
 
 def fetch_deepseek_balance():
@@ -23,9 +20,10 @@ def fetch_deepseek_balance():
     base = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com").rstrip("/")
     if base.endswith("/v1"):
         base = base[:-3]
-    with _lock:
-        if _cache["key"] == (key, base) and time.monotonic() - _cache["at"] < 60:
-            return _cache["value"]
+    return cache.remember('deepseek-balance', [key, base], lambda: _fetch_balance(key, base), 60) or {"status": "unavailable", "balances": []}
+
+
+def _fetch_balance(key, base):
     try:
         response = requests.get(base + "/user/balance",
                                 headers={"Authorization": "Bearer " + key}, timeout=10)
@@ -38,6 +36,4 @@ def fetch_deepseek_balance():
         # Do not expose headers, response bodies, keys or account details in logs.
         logger.warning("DeepSeek balance fetch failed (%s)", type(exc).__name__)
         value = {"status": "unavailable", "balances": []}
-    with _lock:
-        _cache.update(key=(key, base), at=time.monotonic(), value=value)
     return value

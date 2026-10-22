@@ -1,14 +1,11 @@
 """Bounded public/custom runs, isolated from hidden grading and web-host execution."""
 from copy import deepcopy
-from datetime import timedelta
 from bson import ObjectId
 from core.mongo_transactions import atomic
-from config.assessment_execution import runtime_profiles
 from models.assessment_content import validate_question
 from models.hiring_workflow import WorkflowError
 from services.assessment_authoring_service import object_id
 from services.managed_assessment_validator import ManagedAssessmentValidator
-from services.sql_execution_service import SqlExecutionService
 from services.workflow_service import operation_key, request_identity
 
 
@@ -33,7 +30,14 @@ class AssessmentPublicRunService:
             if not q: raise WorkflowError('invalid_question', 'Select a coding or SQL question.', 400)
             self.runtime.answer(q, answer)
             if not self.executor.capabilities()['available']: raise WorkflowError('executor_unavailable', 'Execution is unconfigured or awaiting live acceptance. Your saved work is retained.', 503)
-            if attempt.get('public_run_count', 0) >= 30: raise WorkflowError('run_limit', 'This pilot permits 30 public runs per attempt.', 429)
+            from config.assessment_execution import integer_setting
+            limit=integer_setting('OA_MAX_PRACTICE_RUNS_PER_QUESTION',10,1,100)
+            if self.db.assessment_public_runs.count_documents({'attempt_id':attempt_id,'question_id':question_id},session=session)>=limit:
+                raise WorkflowError('run_limit','Practice run limit reached for this question.',429)
+            from config.assessment_execution import sql_enabled
+            if q['type']=='sql' and not sql_enabled(q['sql']['engine']):raise WorkflowError('sql_engine_unavailable','This SQL engine is unavailable for candidate execution.',503)
+            if q['type']=='sql' and not self.executor.capabilities().get('sql_available'):
+                raise WorkflowError('sql_acceptance_required','SQL execution needs live dataset isolation acceptance.',503)
             if self.db.assessment_public_runs.find_one({'attempt_id': attempt_id, 'state': {'$in': ['queued', 'dispatching', 'running', 'dispatch_unknown', 'blocked']}}, session=session):
                 raise WorkflowError('run_pending', 'A run is already pending or requires operator reconciliation.', 409)
             record = self.db.question_versions.find_one({'_id': object_id(question_id)}, session=session)
@@ -44,7 +48,7 @@ class AssessmentPublicRunService:
             prepared, case_id = self.prepare(private, answer, custom_input)
             self.db.assessment_attempts.update_one({'_id': attempt['_id']}, {'$inc': {'public_run_count': 1}}, session=session)
             self.db.assessment_public_runs.insert_one(dict(_id=allocated, attempt_id=attempt_id, key=key, fingerprint=fingerprint,
-                question=prepared, case_id=case_id, language=answer['language'], state='queued', created_at=self.runtime.clock()), session=session)
+                question_id=question_id, question=prepared, case_id=case_id, language=answer['language'], state='queued', created_at=self.runtime.clock()), session=session)
             return str(allocated)
         return dict(run_id=atomic(self.db, enqueue))
 
@@ -70,11 +74,11 @@ class AssessmentPublicRunService:
         self.runtime.owned(actor, attempt_id)
         record = self.db.assessment_public_runs.find_one({'_id': object_id(identifier), 'attempt_id': attempt_id})
         if not record: raise WorkflowError('not_found', 'Run not found.', 404)
-        return dict(run_id=identifier, state=record['state'], result=record.get('result'))
+        return dict(run_id=identifier, question_id=record.get('question_id'), state=record['state'], result=record.get('result'))
 
     def tick(self):
         from services.assessment_execution_service import AssessmentExecutionService
-        engine = AssessmentExecutionService(self.db, self.runtime.clock, self.executor, profiles=runtime_profiles)
+        engine = AssessmentExecutionService(self.db, self.runtime.clock, self.executor)
         for record in self.db.assessment_public_runs.find({'state': 'queued'}).sort('created_at', 1).limit(10):
             q = record['question']
             source = q['coding']['reference_solutions'][record['language']] if q['type'] == 'coding' else q['sql']['reference_query']
@@ -93,28 +97,6 @@ class AssessmentPublicRunService:
             task = self.db.assessment_execution_tasks.find_one({'_id': object_id(record['execution_task_id'])})
             if task:
                 self.db.assessment_public_runs.update_one({'_id': record['_id']}, {'$set': dict(state=task['state'], **({'result': task['result']} if 'result' in task else {}))})
-        self._legacy_tick()
-
-    def _legacy_tick(self):
-        if not self.executor.capabilities()['available']: return False
-        self.db.assessment_public_runs.update_many({'state': 'dispatching', 'execution_task_id': {'$exists': False}, 'claimed_at': {'$lte': self.runtime.clock()-timedelta(minutes=5)}},
-            {'$set': {'state': 'dispatch_unknown'}})
-        # Preserve read-only result collection for already accepted Step 5 jobs.
-        # They never gain a new POST, new deadline or guessed capacity count.
-        for record in self.db.assessment_public_runs.find({'state': 'running', 'execution_task_id': {'$exists': False}}).limit(10):
-            try:
-                if record['question']['type'] == 'sql':
-                    output = SqlExecutionService(self.db).result(str(record['_id']))
-                    result = {k: output[k] for k in ('status', 'columns', 'rows') if k in output}
-                else:
-                    client = self.executor.client('compilers'); output = client.submission(record['provider_id'])
-                    if output['executing']: continue
-                    limit = record['question']['coding']['limits']['output_kb']*1024
-                    result = dict(status={11: 'compile_error', 12: 'runtime_error', 13: 'time_limit', 15: 'ok', 17: 'memory_limit'}.get(output['status_code'], 'execution_error'))
-                    if result['status'] == 'ok':
-                        if type(output.get('output_size')) is not int or output['output_size'] > limit: result['status'] = 'output_limit'
-                        else: result['stdout'] = client.output(record['provider_id'], limit)
-                self.db.assessment_public_runs.update_one({'_id': record['_id'], 'state': 'running'}, {'$set': {'state': 'complete', 'result': result}})
-            except Exception:
-                # Polling is read-only and retryable. Keep durable provider identity.
-                continue
+        # Retired-provider jobs cannot be rebound to a new paid execution.
+        self.db.assessment_public_runs.update_many({'state':{'$in':['running','dispatching']},'execution_task_id':{'$exists':False}},
+            {'$set':{'state':'blocked','error_code':'retired_provider_reconciliation_required'}})

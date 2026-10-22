@@ -81,7 +81,7 @@ def create_job_setup_routes(db):
         from services.role_assessment_templates import apply_template
         data = body({'operation_key', 'sql_engine', 'languages', 'specialization'})
         return apply_template(AssessmentAuthoringService(db), actor, role, data.get('operation_key'),
-            data.get('sql_engine', 'postgresql'), data.get('languages'), data.get('specialization', 'general'))
+            data.get('sql_engine', 'sqlite'), data.get('languages'), data.get('specialization', 'general'))
 
     @bp.get('/job-setup/catalog')
     @endpoint

@@ -249,7 +249,7 @@ try {
         styles(width,height);
         for(const field of ["department","location","experience","salary",...(name==="JobCreationModal"?["deadline"]:[])]){
           const input=document.querySelector(`input[name="${field}"]`);assert.ok(input);
-          assert.equal(getComputedStyle(input).minHeight,"44px");assert.equal(getComputedStyle(input).borderRadius,"10px");
+          assert.equal(getComputedStyle(input).minHeight,width<=600?"44px":"38px");assert.equal(getComputedStyle(input).borderRadius,"7px");
           assert.equal(getComputedStyle(input).fontSize,width<=600?"16px":"14px");
         }
       }

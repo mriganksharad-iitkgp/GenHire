@@ -10,6 +10,42 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = ('.env', '.env.example', '.env.production', '.env.production.example')
+# Retired OA provider settings must not be restored from older profiles.
+RETIRED_OA_SETTINGS = {
+    'GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS',
+    'GENHIRE_SQL_TASK_TIMEOUT_SECONDS',
+    'GENHIRE_SQL_MONTHLY_BUDGET_USD',
+    'SPHERE_COMPILERS_ENDPOINT',
+    'SPHERE_COMPILERS_TOKEN',
+    'SPHERE_PROBLEMS_ENDPOINT',
+    'SPHERE_PROBLEMS_TOKEN',
+    'SPHERE_RUNTIME_PROFILES_JSON',
+    'SPHERE_MASTER_JUDGE_ID',
+    'SPHERE_TESTCASE_JUDGE_ID',
+    'GENHIRE_SQL_PROJECT',
+    'GENHIRE_SQL_REGION',
+    'GENHIRE_SQL_ARTIFACT_BUCKET',
+    'GENHIRE_SQL_POSTGRESQL_JOB',
+    'GENHIRE_SQL_MYSQL_JOB',
+    'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT',
+    'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT',
+    'GENHIRE_OA_EXECUTION_CONCURRENCY',
+    'OA_JUDGE_PROVIDER',
+    'OA_SQL_MYSQL_JOB',
+    'OA_SQL_MYSQL_REGION',
+    'OA_SQL_POSTGRES_JOB',
+    'OA_SQL_POSTGRES_REGION',
+    'OA_SQL_PROVIDER',
+    'ONECOMPILER_API_BASE_URL',
+    'ONECOMPILER_API_KEY',
+    'ONECOMPILER_API_SECRET',
+    'ONECOMPILER_API_URL',
+    'ONECOMPILER_AUTH_TOKEN',
+    'SPHERE_COMPILERS_API_TOKEN',
+    'SPHERE_COMPILERS_API_URL',
+    'SPHERE_PROBLEMS_API_TOKEN',
+    'SPHERE_PROBLEMS_API_URL',
+}
 PUBLIC_REFERENCE_DEFAULTS = {
     'INTERVIEW_SILENCE_SECONDS', 'INTERVIEW_INITIAL_WAIT_SECONDS', 'INTERVIEW_MAX_ANSWER_SECONDS',
     'INTERVIEW_SPEECH_LEVEL', 'INTERVIEW_SPEECH_HOLD_MS', 'INTERVIEW_QUESTION_MAX_TOKENS',
@@ -27,23 +63,24 @@ OA = {
     'GENHIRE_EXTRA_VARIANTS_CREDITS': ('10', 'Credits per explicitly approved extra variant-generation batch; review/publish its content.'),
     'GENHIRE_PLAGIARISM_CHECK_CREDITS': ('10', 'Credits per approved recruitment similarity report; never an automatic cheating verdict. Practice similarity is deferred.'),
     'GENHIRE_ASSESSMENT_EXECUTION_ENABLED': ('false', 'Enable only for deliberate real acceptance, then approved isolated execution. Tokens alone do not establish security.'),
-    'SPHERE_COMPILERS_ENDPOINT': (None, 'Sphere dashboard > Compilers API v4 account endpoint: https://ACCOUNT.compilers.sphere-engine.com/api/v4 (no token/query in URL).'),
-    'SPHERE_COMPILERS_TOKEN': (None, 'Sphere dashboard > Compilers API access token. Store server-side locally or Secret Manager on GCP; never REACT_APP_*.'),
-    'SPHERE_PROBLEMS_ENDPOINT': (None, 'Sphere dashboard > Problems API v4 account endpoint: https://ACCOUNT.problems.sphere-engine.com/api/v4.'),
-    'SPHERE_PROBLEMS_TOKEN': (None, 'Sphere dashboard > Problems API access token; arrange access/billing for this product separately.'),
-    'SPHERE_RUNTIME_PROFILES_JSON': ('{}', 'Replace {} with one-line raw JSON from BOTH live /compilers catalogs: python/javascript/java/cpp each need compiler_id, version_id, version_name, runtime_label. Labels: 3.12, 22, 21, C++20. See owner guide step 5; do not invent IDs.'),
-    'SPHERE_MASTER_JUDGE_ID': (None, 'Run python scripts/admin/discover_sphere_account.py from backend; select the account Generic master judge ID for Problems acceptance. See docs/oa_sphere_sql_setup.md.'),
-    'SPHERE_TESTCASE_JUDGE_ID': (None, 'Run backend scripts/admin/discover_sphere_account.py; select the account Ignores extra white spaces testcase judge ID for the echo canary; do not guess IDs.'),
-    'GENHIRE_SQL_PROJECT': (None, 'Google Cloud Console project selector > existing GenHire PROJECT ID, not display name/project number. Use the project where SQL jobs are deployed.'),
-    'GENHIRE_SQL_REGION': ('europe-west1', 'Approved Belgium region; current SQL adapter requires exactly europe-west1.'),
-    'GENHIRE_SQL_ARTIFACT_BUCKET': (None, 'After infra/oa_sql Terraform apply, copy artifact_bucket output: bare private bucket name, no gs://. Separate from application evidence bucket.'),
-    'GENHIRE_SQL_POSTGRESQL_JOB': ('genhire-oa-sql-postgresql', 'Planned Terraform job name, not proof it exists. Deploy/verify the PostgreSQL 17 job in the selected project/region.'),
-    'GENHIRE_SQL_MYSQL_JOB': ('genhire-oa-sql-mysql', 'Planned Terraform job name, not proof it exists. Deploy/verify the MySQL 8.4 job in the selected project/region.'),
-    'GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT': ('200', 'Hard pilot range 1-200 dispatches per UTC month, including preflight/uncertain dispatches; not number of candidates.'),
-    'GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT': ('500', 'Hard pilot range 1-500 submissions/month including reference validation/preflight/public/final cases; see renewal/quota blocker in owner guide.'),
-    'GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS': ('1', 'Pilot SQL concurrency is fixed globally at one across both engines; this does not enable higher capacity.'),
-    'GENHIRE_SQL_TASK_TIMEOUT_SECONDS': ('60', 'Pilot SQL Cloud Run task timeout is fixed at 60 seconds; keep deployment consistent.'),
-    'GENHIRE_SQL_MONTHLY_BUDGET_USD': ('10', 'SQL-only monthly target, not a spending cap. Verify real Cloud Billing alerts; worker/AI/Sphere costs are separate.'),
+    'OA_EXECUTION_PROVIDER': ('onlinecompiler', 'Approved backend programming execution provider.'),
+    'OA_GENERIC_SQL_PROVIDER': ('onlinecompiler', 'SQLite/DuckDB candidate SQL provider; PostgreSQL is trusted authoring only.'),
+    'ONLINECOMPILER_API_BASE_URL': ('https://api.onlinecompiler.io', 'Official REST API base URL; HTTPS only.'),
+    'ONLINECOMPILER_API_KEY': (None, 'REQUIRED: API Keys page > REST API key. Store server-side; never use a widget key or expose this to the frontend.'),
+    'ONLINECOMPILER_TEST_BATCH_SIZE': ('4', 'Native judging tests per request; 4 fits the Free plan. Increase only within documented account limits.'),
+    'ONLINECOMPILER_RUNS_PER_MINUTE': ('30', 'Account run admission budget per UTC minute; match the actual plan and leave headroom for other account users.'),
+    'AIVEN_POSTGRES_URL': (None, 'REQUIRED FOR TRUSTED POSTGRES AUTHORING: dedicated genhire Aiven PostgreSQL 18 service URI; not the application database.'),
+    'AIVEN_POSTGRES_SSL_REQUIRED': ('true', 'TLS is mandatory; trusted validation forces verify-full hostname and CA verification.'),
+    'AIVEN_POSTGRES_SSL_ROOT_CERT': (None, 'Aiven service CA certificate file path available to the trusted validation process; mount privately in production.'),
+    'AIVEN_POSTGRES_PURPOSE': ('question_validation', 'Trusted operator-only reference validation; never candidate execution.'),
+    'OA_ENABLE_SQLITE': ('true', 'Allow SQLite generic SQL only after live typed-result/isolation acceptance.'),
+    'OA_ENABLE_DUCKDB': ('true', 'Allow DuckDB generic SQL only after live typed-result/isolation acceptance.'),
+    'OA_POSTGRES_QUESTION_AUTHORING_ENABLED': ('true', 'Enable the separate trusted PostgreSQL authoring command when Aiven credentials are present.'),
+    'OA_POSTGRES_CANDIDATE_EXECUTION_ENABLED': ('false', 'Must remain false. The shared Aiven service is never a candidate SQL judge.'),
+    'OA_EXECUTION_TIMEOUT_MS': ('30000', 'HTTP execution deadline in milliseconds; unknown paid POSTs are not blindly retried.'),
+    'OA_MAX_CONCURRENT_EXECUTIONS': ('2', 'Global active provider requests; default 2 for the Free account. Match real pending/running capacity before raising.'),
+    'OA_MAX_PRACTICE_RUNS_PER_QUESTION': ('10', 'Maximum public runs per question in an attempt, 1-100.'),
+    'ONLINECOMPILER_MONTHLY_PLAN_USD': ('0', 'Reporting allocation only: 0 for Free, actual paid monthly subscription amount after an approved upgrade.'),
     'GENHIRE_ASSESSMENT_GENERATION_ENABLED': ('false', 'Enable after funded supported AI credentials/JSON quality and authoring/practice workers are verified.'),
     'GENHIRE_OA_REGENERATION_CREDITS': ('10', 'Credits per explicitly approved regeneration; failed generation returns the applicable reservation.'),
     'GENHIRE_EXECUTOR_ISOLATION_POLICY_ID': (None, 'Choose a versioned ID only after an actual sandbox/image isolation review. Must match policy_id in private security-review JSON; no guessed approval.'),
@@ -53,7 +90,6 @@ OA = {
     'GENHIRE_OA_EVALUATION_ACCEPTED': ('false', 'Operator assertion ONLY after actual grading/failure/billing acceptance; a test double or key is not acceptance.'),
     'GENHIRE_OA_SECURITY_ACCEPTED': ('false', 'Operator assertion ONLY after secure launch/device/scoped-token/isolation and accommodation tests pass.'),
     'GENHIRE_OA_EVALUATION_ENABLED': ('false', 'Enable with supervised evaluation/execution worker. Keep evaluation running while draining already accepted attempts.'),
-    'GENHIRE_OA_EXECUTION_CONCURRENCY': ('2', 'Shared code/SQL task dispatcher pilot range 1-4. SQL retains its separate one-execution limit.'),
     'GENHIRE_OA_EXECUTION_QUEUE_LIMIT': ('1000', 'Shared queue bound, range 1-5000. Full queues return backpressure; unknown external POSTs must be reconciled.'),
     'GENHIRE_OA_GRADING_CASE_LIMIT': ('200', 'Maximum grading cases per attempt. This is not a provider monthly allowance.'),
     'GENHIRE_OA_INTEGRITY_ENABLED': ('false', 'Enable only after scoped launch/consent/preflight, kiosk/accommodation and retention checks.'),
@@ -140,9 +176,9 @@ def prepare(root):
         originals = {p: p.read_text(encoding='utf-8-sig') for p in paths}
         parsed = {p: blocks(text) for p, text in originals.items()}
         reference = parsed[root / folder / '.env.example']
-        order = [k for k in reference if k not in OA]
+        order = [k for k in reference if k not in OA and k not in RETIRED_OA_SETTINGS]
         for mapping in parsed.values():
-            order.extend(k for k in mapping if k not in order and k not in OA)
+            order.extend(k for k in mapping if k not in order and k not in OA and k not in RETIRED_OA_SETTINGS)
         if folder == 'python-backend': order += list(OA)
         for path in paths:
             mapping, output, added, defaulted = parsed[path], [], [], []
@@ -163,7 +199,7 @@ def prepare(root):
                         raw = json.dumps(default); defaulted.append(key)
                     if key == 'GENHIRE_WORKFLOW_ENABLED':
                         output += ['', '# ============================================================================', '# OA owner configuration - server only, deployment/acceptance flags stay off', '# ============================================================================']
-                    marker = '# OWNER ACTION: ' if default is None or key == 'SPHERE_RUNTIME_PROFILES_JSON' else '# SAFE DEFAULT: '
+                    marker = '# OWNER ACTION: ' if default is None else '# SAFE DEFAULT: '
                     if marker == '# OWNER ACTION: ' and not unfilled(raw): marker = '# SETUP NOTE: '
                     output += [marker+note, key+'='+raw]
                 else:
@@ -180,10 +216,12 @@ def prepare(root):
             # Guard against secret loss; only empty values can receive defaults.
             after = blocks(rendered)
             for key, (_, raw) in mapping.items():
+                if key in RETIRED_OA_SETTINGS: continue
                 if value(raw) and after[key][1] != raw:
                     raise ValueError('Refusing to change existing filled value: '+key)
             plans[path] = rendered
-            reports.append(dict(file=str(path.relative_to(root)), keys=len(after), added_keys=added, defaulted_empty_keys=defaulted))
+            reports.append(dict(file=str(path.relative_to(root)), keys=len(after), added_keys=added, defaulted_empty_keys=defaulted,
+                removed_keys=sorted(RETIRED_OA_SETTINGS.intersection(mapping))))
     return plans, reports
 
 

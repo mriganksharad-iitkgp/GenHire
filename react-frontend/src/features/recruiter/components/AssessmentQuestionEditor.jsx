@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import styles from './HiringSetupWizard.module.css';
 import QuestionAccordionGroup from './QuestionAccordionGroup';
 import CodeEditor from 'shared/components/ui/CodeEditor';
 
 const TYPES = ['integer', 'number', 'string', 'boolean', 'integer[]', 'number[]', 'string[]', 'boolean[]'];
-const languageNames = { python: 'Python', javascript: 'JavaScript', java: 'Java', cpp: 'C++' };
-function Text({ label, value, change, multiline = false, rows = 3 }) {
-  return <label className={styles.field}>{label}{multiline ? <textarea rows={rows} value={value} onChange={e => change(e.target.value)} /> : <input value={value} onChange={e => change(e.target.value)} />}</label>;
+const languageNames = { python: 'Python', javascript: 'JavaScript', java: 'Java', cpp: 'C++', c: 'C', nodejs: 'Node.js' };
+function Text({ label, value, change, multiline = false, rows = 2 }) {
+  const input = useRef(null);
+  useLayoutEffect(() => { if (input.current) { input.current.style.height = 'auto'; input.current.style.height = `${Math.min(220, Math.max(56, input.current.scrollHeight))}px`; } }, [value]);
+  return <label className={styles.field}>{label}{multiline ? <textarea ref={input} rows={rows} value={value} onChange={e => change(e.target.value)} /> : <input value={value} onChange={e => change(e.target.value)} />}</label>;
 }
 function NumberField({ label, value, change, min = 0, max = 1000, step = 1 }) {
   return <label className={styles.field}>{label}<input type="number" min={min} max={max} step={step} value={value ?? ''} onChange={e => change(e.target.value === '' ? null : Number(e.target.value))} /></label>;
@@ -21,9 +23,9 @@ export default function AssessmentQuestionEditor({ value: q, onChange, onSave, b
   const nested = (group, key, value) => set(group, { ...q[group], [key]: value });
   const editTest = (group, index, key, value) => nested(group, group === 'sql' ? 'datasets' : 'tests',
     q[group][group === 'sql' ? 'datasets' : 'tests'].map((t, i) => i === index ? { ...t, [key]: value } : t));
-  return <fieldset disabled={busy} className={styles.sectionCard}><legend>{q.type.toUpperCase()} question editor</legend>
+  return <fieldset disabled={busy} className={`${styles.sectionCard} ${styles.questionEditor}`}><legend>{q.type.toUpperCase()} question editor</legend>
     <Text label="Question title" value={q.title} change={v => set('title', v)} />
-    <Text label="Problem statement" value={q.statement} change={v => set('statement', v)} multiline rows={5} />
+    <Text label="Problem statement" value={q.statement} change={v => set('statement', v)} multiline rows={3} />
     <div className={styles.grid}>
       <Select label="Difficulty" value={q.difficulty} options={['easy', 'medium', 'hard']} change={v => set('difficulty', v)} />
       <NumberField label="Maximum marks" value={q.marks} change={v => set('marks', v)} min={0.01} step={0.01} />
@@ -32,7 +34,7 @@ export default function AssessmentQuestionEditor({ value: q, onChange, onSave, b
     <Text label="Private answer explanation and reviewer notes" value={q.explanation} change={v => set('explanation', v)} multiline />
     {q.mcq && <>
       <Select label="Answer selection" value={q.mcq.selection} options={['single', 'multiple']} change={v => set('mcq', { ...q.mcq, selection: v, correct_option_ids: [] })} />
-      {q.mcq.options.map((o, i) => <div key={o.id} className={styles.sectionCard}>
+      {q.mcq.options.map((o, i) => <div key={o.id} className={styles.optionRow}>
         <Text label={`Option ${i + 1}`} value={o.text} change={v => nested('mcq', 'options', q.mcq.options.map(option => option.id === o.id ? { ...option, text: v } : option))} />
         <label className={styles.toggle}><input type={q.mcq.selection === 'single' ? 'radio' : 'checkbox'} name="answer-key"
           checked={q.mcq.correct_option_ids.includes(o.id)} onChange={e => nested('mcq', 'correct_option_ids', q.mcq.selection === 'single' ? [o.id] :
@@ -66,8 +68,8 @@ export default function AssessmentQuestionEditor({ value: q, onChange, onSave, b
         <NumberField label="Output limit (KiB)" min={1} max={64} value={q.coding.limits.output_kb} change={v => nested('coding', 'limits', { ...q.coding.limits, output_kb: v })} />
         <Select label="Output comparison" value={q.coding.comparison} options={['exact', 'trim_trailing_whitespace']} change={v => nested('coding', 'comparison', v)} />
       </div>
-      {q.coding.languages.map(language => <details key={language} className={styles.sectionCard}><summary>{languageNames[language]} source and pinned runtime</summary>
-        <Text label={`${languageNames[language]} runtime version`} value={q.coding.runtime_versions[language]} change={v => nested('coding', 'runtime_versions', { ...q.coding.runtime_versions, [language]: v })} />
+      {q.coding.languages.map(language => <details key={language} className={styles.sectionCard}><summary>{languageNames[language]} source and runtime profile</summary>
+        <Text label={`${languageNames[language]} runtime profile`} value={q.coding.runtime_versions[language]} change={v => nested('coding', 'runtime_versions', { ...q.coding.runtime_versions, [language]: v })} />
         <CodeEditor readOnly={busy} label={`${languageNames[language]} starter code`} language={language} value={q.coding.starter_code[language]} onChange={v => nested('coding', 'starter_code', { ...q.coding.starter_code, [language]: v })} />
         <CodeEditor readOnly={busy} label={`${languageNames[language]} private reference solution`} language={language} value={q.coding.reference_solutions[language]} onChange={v => nested('coding', 'reference_solutions', { ...q.coding.reference_solutions, [language]: v })} />
       </details>)}

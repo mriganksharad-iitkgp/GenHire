@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 
 const cwd = process.cwd(), backend = path.resolve(cwd, '../python-backend');
 const python = process.env.GENHIRE_TEST_PYTHON || path.join(backend, process.platform === 'win32' ? 'venv/Scripts/python.exe' : 'venv/bin/python');
-const fixture = JSON.parse(execFileSync(python, ['-c', 'import json,sys; sys.path.insert(0,"tests"); from models.job_setup import default_setup; from assessment_test_fixtures import mcq,coding,sql; print(json.dumps(dict(configuration=default_setup(),mcq=mcq(),coding=coding("function"),sql=sql("mysql"))))'], { cwd: backend, encoding: 'utf8' }));
+const fixture = JSON.parse(execFileSync(python, ['-c', 'import json,sys; sys.path.insert(0,"tests"); from models.job_setup import default_setup; from assessment_test_fixtures import mcq,coding,sql; print(json.dumps(dict(configuration=default_setup(),mcq=mcq(),coding=coding("function"),sql=sql("duckdb"))))'], { cwd: backend, encoding: 'utf8' }));
 const tmp = await mkdtemp(path.join(cwd, '.assessment-smoke-'));
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost:3000' });
 for (const key of ['window', 'document', 'navigator', 'sessionStorage', 'localStorage', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'CustomEvent'])
@@ -120,11 +120,11 @@ try {
   console.log('PASS typed function editor, all-language source, IDE fallback and unavailable-executor gate');
   questions = new Map(); ids = []; revision = 0;
   const sql = record(fixture.sql); questions.set(sql._id, sql);
-  oa = { ...fixture.configuration.oa, sql_engine: 'mysql' };
+  oa = { ...fixture.configuration.oa, sql_engine: 'duckdb' };
   await mount(); await click(button(`Edit ${sql.content.title}`));
   await input(field('Dataset 1 expected rows JSON'), '[[3],[4]]'); await click(button('Save private question version'));
   const sqlCall = calls.filter(c => c.pathname.endsWith('/versions') && c.body?.content?.type === 'sql').at(-1);
-  assert.equal(sqlCall.body.content.sql.engine_version, '8.4');
+  assert.equal(sqlCall.body.content.sql.engine_version, 'duckdb-1.5');
   assert.deepEqual(sqlCall.body.content.sql.datasets[0].expected_rows, [[3], [4]]);
   assert.ok(field('Private reference query'));
   console.log('PASS MySQL editor keeps private query, separate datasets and parsed result rows');

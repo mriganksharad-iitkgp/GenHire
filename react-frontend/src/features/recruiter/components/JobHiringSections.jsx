@@ -5,9 +5,9 @@ import styles from './HiringSetupWizard.module.css';
 export function revealJobSection(dialog, name) {
   const section=dialog?.querySelector(`[data-job-section="${name}"]`);
   if(!section)return;
-  section.open=true;
+  if(section.tagName==='DETAILS')section.open=true;
   section.scrollIntoView?.({block:'start',behavior:'auto'});
-  section.querySelector('summary')?.focus({preventScroll:true});
+  section.querySelector('summary,input,textarea,select')?.focus({preventScroll:true});
 }
 
 export function revealInvalidJobField(event) {

@@ -125,7 +125,8 @@ COMMON_ITEMS = [
 'Which comparison is fair when exposure durations differ?|A rate normalized to a relevant exposure unit|Raw totals without context|Only the larger total|Only the most recent observation',
 'What is an appropriate response when evidence contradicts your proposal?|Update the proposal and record the reason|Hide the evidence|Change the success metric after seeing results|Exclude all unfavorable observations']
 
-RUNTIMES=dict(python='3.12',javascript='22',java='21',cpp='C++20')
+from config.assessment_execution import runtime_profiles, SQL_RUNTIMES
+RUNTIMES={language:profile['runtime_label'] for language,profile in runtime_profiles().items()}
 
 def base(kind,title,statement,difficulty,marks,explanation):
     return dict(schema_version=1,type=kind,title=title,statement=statement,difficulty=difficulty,topics=['role-fundamentals' if kind=='mcq' else kind],marks=marks,explanation=explanation)
@@ -183,23 +184,28 @@ def coding(task,difficulty,marks,languages):
         js="const n=Number(require('fs').readFileSync(0,'utf8').trim());let s=0;for(let p=1;p<=n;p*=2)s+=Math.floor((n+1)/(2*p))*p+Math.max(0,(n+1)%(2*p)-p);console.log(s);"
         java='import java.util.*; public class Main {public static void main(String[] args){long n=new Scanner(System.in).nextLong(),s=0;for(long p=1;p<=n;p*=2)s+=((n+1)/(2*p))*p+Math.max(0,(n+1)%(2*p)-p);System.out.println(s);}}'
         cpp='#include <iostream>\n#include <algorithm>\nint main(){long long n,s=0;std::cin>>n;for(long long p=1;p<=n;p*=2)s+=((n+1)/(2*p))*p+std::max(0LL,(n+1)%(2*p)-p);std::cout<<s<<"\\n";}'
-    refs=dict(zip(LANGUAGES,[py,js,java,cpp]))
-    starters=dict(python='# Read stdin and print the answer.\n',javascript="// Read stdin using fs.readFileSync(0,'utf8').\n",java='import java.util.*; public class Main {public static void main(String[] args){/* Read stdin and print the answer. */}}',cpp='#include <iostream>\nint main(){/* Read stdin and print the answer. */}\n')
+    if exprs:
+        c='#include <stdio.h>\nlong long gcd(long long a,long long b){while(b){long long t=a%b;a=b;b=t;}return a;}\nint main(){long long '+','.join(pyvars)+';scanf("'+(' '.join(['%lld']*len(pyvars)))+'",'+','.join('&'+v for v in pyvars)+');printf("%lld\\n",'+exprs[2]+');}'
+    else:
+        c='#include <stdio.h>\nint main(){long long n,s=0;scanf("%lld",&n);for(long long p=1;p<=n;p*=2){long long r=(n+1)%(2*p)-p;s+=((n+1)/(2*p))*p+(r>0?r:0);}printf("%lld\\n",s);}'
+    refs=dict(python=py,javascript=js,nodejs=js,java=java,cpp=cpp,c=c)
+    starters=dict(python='# Read stdin and print the answer.\n',javascript="// Read stdin using fs.readFileSync(0, 'utf8').\n",java='import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Read stdin and print the answer.\n    }\n}\n',cpp='#include <iostream>\n\nint main() {\n    // Read stdin and print the answer.\n    return 0;\n}\n')
+    starters.update(c='#include <stdio.h>\n\nint main() {\n    // Read stdin and print the answer.\n    return 0;\n}\n',nodejs=starters['javascript'])
     q=base('coding',title,statement,difficulty,marks,explanation)
-    q['coding']=dict(contract='stdin_stdout',signature=None,harness_version='genhire_fn_v1',input_format='One line containing '+read+' separated by spaces.',output_format='One integer followed by a newline.',constraints=constraints,languages=languages,runtime_versions={l:RUNTIMES[l] for l in languages},starter_code={l:starters[l] for l in languages},reference_solutions={l:refs[l] for l in languages},limits=dict(time_ms=1000,memory_mb=256,output_kb=64),comparison='trim_trailing_whitespace',tests=tests)
+    q['coding']=dict(contract='stdin_stdout',signature=None,harness_version='genhire_fn_v1',input_format='One line containing '+read+' separated by spaces.',output_format='One integer followed by a newline.',constraints=constraints,languages=languages,runtime_versions={l:RUNTIMES[l] for l in languages},starter_code={l:starters[l] for l in languages},reference_solutions={l:refs[l] for l in languages},limits=dict(time_ms=1000,memory_mb=512,output_kb=64),comparison='trim_trailing_whitespace',tests=tests)
     return q
 
 
 def sql_question(index,difficulty,marks,engine):
     if index==0:
-        schema='CREATE TABLE sales (id INTEGER PRIMARY KEY, team VARCHAR(40), amount INTEGER);'
-        query="SELECT COALESCE(team, 'Unassigned') AS team_name, SUM(amount) AS total FROM sales GROUP BY COALESCE(team, 'Unassigned') ORDER BY team_name;"
+        schema='CREATE TABLE sales (\n    id INTEGER PRIMARY KEY,\n    team VARCHAR(40),\n    amount INTEGER\n);'
+        query="SELECT\n    COALESCE(team, 'Unassigned') AS team_name,\n    SUM(amount) AS total\nFROM sales\nGROUP BY COALESCE(team, 'Unassigned')\nORDER BY team_name;"
         title='Revenue by team';statement="Return team_name and total revenue from sales. Treat NULL teams as Unassigned, ignore NULL amounts in SUM, retain groups whose total is NULL, and order by team_name ascending."
         fixtures=[([(1,'East',10),(2,'East',20),(3,'West',7)],[['East',30],['West',7]]),([],[]),([(1,None,8),(2,'Unassigned',2)],[['Unassigned',10]]),([(1,'East',None),(2,'West',0)],[['East',None],['West',0]]),([(1,'East',-5),(2,'East',5)],[['East',0]]),([(1,'East',4),(2,'East',4),(3,'West',9)],[['East',8],['West',9]])]
         cols=['team_name','total'];table='sales';explanation='Group by the normalized team expression; SUM preserves duplicate amounts and ignores NULL amounts.'
     else:
-        schema='CREATE TABLE customers (id INTEGER PRIMARY KEY, name VARCHAR(40)); CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER);'
-        query='SELECT c.id AS customer_id, c.name AS customer_name FROM customers c LEFT JOIN orders o ON o.customer_id=c.id WHERE o.id IS NULL ORDER BY c.id;'
+        schema='CREATE TABLE customers (\n    id INTEGER PRIMARY KEY,\n    name VARCHAR(40)\n);\n\nCREATE TABLE orders (\n    id INTEGER PRIMARY KEY,\n    customer_id INTEGER\n);'
+        query='SELECT\n    c.id AS customer_id,\n    c.name AS customer_name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nWHERE o.id IS NULL\nORDER BY c.id;'
         title='Customers with no orders';statement='Return customer_id and customer_name for customers with no matching orders, ordered by customer_id. Orphan and NULL order customer IDs must not remove customers.'
         fixtures=[(([(1,'Ada'),(2,'Ben')],[(1,1)]),[[2,'Ben']]),(([],[]),[]),(([(1,'Ada')],[]),[[1,'Ada']]),(([(1,'Ada')],[(1,1),(2,1)]),[]),(([(1,'Ada'),(2,'Ada')],[(1,None),(2,99)]),[[1,'Ada'],[2,'Ada']]),(([(3,'Cia'),(7,'Dee')],[(1,7)]),[[3,'Cia']])]
         cols=['customer_id','customer_name'];explanation='Use a left anti-join, testing the nonnullable order primary key. Keep customer identities distinct.'
@@ -210,14 +216,14 @@ def sql_question(index,difficulty,marks,engine):
         seed=inserts(table,rows) if index==0 else inserts('customers',rows[0])+inserts('orders',rows[1])
         datasets.append(dict(id='dataset'+str(i+1),visibility='sample' if i==0 else 'hidden',seed_sql=seed,columns=cols,expected_rows=expected,weight=1,explanation='Independent fixture covering empty, duplicate, NULL or unmatched data.'))
     q=base('sql',title,statement,difficulty,marks,explanation)
-    q['sql']=dict(engine=engine,engine_version='17' if engine=='postgresql' else '8.4',schema_sql=schema,reference_query=query,ordered=True,numeric_tolerance=0,time_ms=2000,datasets=datasets)
+    q['sql']=dict(engine=engine,engine_version=SQL_RUNTIMES.get(engine,'18'),schema_sql=schema,reference_query=query,ordered=True,numeric_tolerance=0,time_ms=2000,datasets=datasets)
     return q
 
 
-def build_template(role,engine='postgresql',languages=None,specialization='general'):
-    if engine not in ('postgresql','mysql') or specialization not in ('general','frontend','backend','full_stack'):
+def build_template(role,engine='sqlite',languages=None,specialization='general'):
+    if engine not in ('sqlite','duckdb','postgresql') or specialization not in ('general','frontend','backend','full_stack'):
         raise WorkflowError('invalid_template','Unsupported template settings.',400)
-    languages=LANGUAGES[:] if languages is None else languages
+    languages=LANGUAGES[:4] if languages is None else languages
     if not isinstance(languages,list) or not languages or any(not isinstance(l,str) or l not in LANGUAGES for l in languages) or len(set(languages))!=len(languages):
         raise WorkflowError('invalid_template','Choose supported unique languages.',400)
     preset=template(role);questions=[]
@@ -236,7 +242,7 @@ def build_template(role,engine='postgresql',languages=None,specialization='gener
     return dict(oa=oa,questions=questions,template_revision='2026-10-21-v1')
 
 
-def apply_template(authoring,actor,role,key,engine='postgresql',languages=None,specialization='general'):
+def apply_template(authoring,actor,role,key,engine='sqlite',languages=None,specialization='general'):
     authoring.authorize(actor,True)
     built=build_template(role,engine,languages,specialization)
     def save(session):

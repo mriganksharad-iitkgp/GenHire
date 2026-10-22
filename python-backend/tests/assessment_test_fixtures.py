@@ -21,11 +21,11 @@ def coding(contract='stdin_stdout'):
     return q
 
 
-def sql(engine='postgresql'):
+def sql(engine='sqlite'):
     q = mcq()
     q.pop('mcq')
     q.update(type='sql', title='List values', statement='Return values in ascending order.', topics=['SQL'])
-    q['sql'] = dict(engine=engine, engine_version='17' if engine == 'postgresql' else '8.4', schema_sql='CREATE TABLE values_table (value INTEGER);',
+    q['sql'] = dict(engine=engine, engine_version={'postgresql':'18','mysql':'8.4','sqlite':'sqlite-3','duckdb':'duckdb-1.5'}[engine], schema_sql='CREATE TABLE values_table (value INTEGER);',
         reference_query='SELECT value FROM values_table ORDER BY value', ordered=True, numeric_tolerance=0, time_ms=2000,
         datasets=[dict(id='sample1', visibility='sample', seed_sql='INSERT INTO values_table VALUES (2);', columns=['value'], expected_rows=[[2]], weight=1, explanation='Sample'),
             dict(id='hidden1', visibility='hidden', seed_sql='INSERT INTO values_table VALUES (9371);', columns=['value'], expected_rows=[[9371]], weight=2, explanation='PRIVATE_HIDDEN_EXPLANATION')])

@@ -6,11 +6,13 @@ import "shared/components/ui";
 import { BrowserRouter as Router } from "react-router-dom";
 import { AppProviders, SessionExpiredHandler } from "app/providers";
 import AppRoutes from "app/routes";
+import InterfaceTypography from "app/InterfaceTypography";
 
 function App() {
   return (
     <AppProviders>
       <Router>
+        <InterfaceTypography />
         <SessionExpiredHandler />
         <AppRoutes />
       </Router>

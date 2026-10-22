@@ -383,13 +383,14 @@ setAiPrompt(value.aiPrompt||'');
     <div className={styles.modalOverlay} onClick={handleOverlayClick}>
       <div ref={dialogRef} className={styles.modalContent} role="dialog" aria-modal="true" aria-labelledby="create-job-dialog-title">
         <div className={styles.modalHeader}>
-          <div><h2 id="create-job-dialog-title">Create job</h2><p className={styles.headerHint}>Create and review your job in one place. Changes autosave on this device.</p></div>
+          <div><h2 id="create-job-dialog-title">Create job</h2><p className={styles.headerHint}>Job details, assessment and hiring plan. Drafts autosave.</p></div>
           <div className={styles.headerActions}><button type="button" className={styles.aiShortcut} disabled={questionBusy || isSubmitting} onClick={()=>revealJobSection(dialogRef.current,'ai')}>Fill with AI</button></div>
           <button type="button" className={styles.closeButton} disabled={questionBusy || isSubmitting} onClick={handleCancel} aria-label="Close create job dialog">
             <i className="fa fa-times"></i>
           </button>
         </div>
 
+        <nav className={styles.workspaceNav} aria-label="Job workspace sections">{[['details','Details'],['oa','Assessment'],['schedule','Schedule & credits'],['ai','AI drafting']].map(([section,label])=><button key={section} type="button" onClick={()=>revealJobSection(dialogRef.current,section)}>{label}</button>)}</nav>
         <form onSubmit={handleSubmit} onInvalidCapture={revealInvalidJobField} className={styles.jobForm}>
           {createdJobId && <aside role="status" className={styles.selectionNotice}>Job saved. Finish attaching the saved questions below; this will not create another job.<button type="button" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting?'Attaching...':'Retry attaching questions'}</button></aside>}
           <fieldset disabled={isSubmitting || setup.saving || questionBusy || !!createdJobId} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -399,7 +400,7 @@ setAiPrompt(value.aiPrompt||'');
           <div>
           {authoringMode==='manual'&&<JobTemplatePicker onSelect={applyTemplate}/>}
 
-          <div className={styles.formGrid}>
+          <div className={styles.formGrid} data-job-section="details">
             {/* Job Title with Suggestions */}
             <div className={styles.formGroup}>
               <label htmlFor="create-job-title">Job Title *</label>

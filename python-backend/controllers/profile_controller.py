@@ -81,6 +81,8 @@ class ProfileController:
                 {'_id': ObjectId(user_id)},
                 {'$set': update_fields}
             )
+            from utils.company_resolver import invalidate_company
+            invalidate_company(self.users_collection, user_id)
             self._sync_company_to_jobs(user_id, update_fields)
 
         return {'message': 'Company profile updated successfully'}, 200

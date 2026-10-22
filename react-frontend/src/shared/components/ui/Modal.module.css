@@ -13,8 +13,10 @@
 }
 
 .content {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--portal-surface);
+  color: var(--portal-text);
+  border: 1px solid var(--portal-border);
+  border-radius: var(--ui-radius-dialog);
   max-width: 560px;
   width: 100%;
   max-height: 90vh;

@@ -1,5 +1,158 @@
 # GenHire OA integration and dynamic hiring pipeline
 
+## Final infrastructure migration — 21 October 2026
+
+**Credential verification update, 22 October:** the owner-filled OnlineCompiler key, Aiven URI and PEM CA passed live checks from the development machine using both saved profiles. Python, native hidden judging, SQLite and DuckDB passed; Aiven returned PostgreSQL 18.6 over verified TLS 1.3, and a trusted two-dataset reference check passed with rollback. The policy ID and acceptance record remain pending; no deployed environment was tested or changed. See [current verification and GCP steps](../AIVEN_GCP_AND_CREDENTIAL_CHECK.md). Statements below about initially blank Aiven credentials record the earlier migration checkpoint.
+
+**Current architecture: OnlineCompiler.io for coding and generic SQL; Aiven PostgreSQL 18 for trusted reference development only.** Follow [OA_FINAL_SETUP.md](../OA_FINAL_SETUP.md) for the exact fields to fill, commands, acceptance review and deployment checklist. Previous implementation notes below this migration section are historical; their retired provider instructions do not govern current execution.
+
+### Architecture and dependency graph
+
+```mermaid
+flowchart LR
+    V[Vercel frontend and Monaco] --> B[Existing GCP backend]
+    B --> Q[Existing MongoDB durable OA queue]
+    Q --> W[Existing evaluation workers]
+    W --> P[Provider interface and dispatch journal]
+    P --> O[OnlineCompiler.io coding and native judging]
+    P --> S[OnlineCompiler.io SQLite and DuckDB]
+    W --> R[Existing scoring reports and wallet settlement]
+    T[Explicit trusted operator CLI] --> A[Aiven PostgreSQL 18 development validation]
+```
+
+The existing application database, frontend routes, authentication, screening/AI services, invitation progression, answer autosave/timers, reports, credit prices and wallet ledger remain in place. Candidate source is sent by the backend; execution secrets never enter Monaco or frontend build settings. MCQs are scored in the backend and consume no compiler runs. There is no hosted challenge/iframe migration.
+
+The prior clients were OneCompiler and, earlier, Sphere Engine plus a custom GCP PostgreSQL/MySQL judge. Their active clients, discovery tools, parsers, obsolete tests and unused SQL judge infrastructure sources are removed. General GCP backend/storage/authentication configuration is retained. Historical documentation, legacy content engine identifiers, immutable question versions, provider IDs and stored results remain readable. No deployed resource, application database or stored result was deleted.
+
+### Implementation map
+
+| Area | Current files and behavior |
+|---|---|
+| Provider boundary | `services/oa_execution_provider.py` selects the approved provider and defines code/SQL execution/evaluation operations. |
+| REST transport and intent | `services/onlinecompiler_execution_provider.py`: strict official HTTPS destination, raw `Authorization` REST header, no redirect, bounded output/time, native test normalization, atomic reservation and journal. |
+| Generic SQL | `services/sql_result_codec.py`: one read query, fresh engine process per dataset, schema plus only that dataset's seed, actual column metadata and framed JSON results. |
+| Trusted PostgreSQL | `services/aiven_question_validator.py` and `scripts/admin/validate_postgres_question.py`: explicit trusted-reference gate, CA and hostname verification, PostgreSQL 18 check, isolated transaction schemas, rollback. No candidate route imports this module. |
+| Acceptance and queue | `managed_assessment_validator.py`, `assessment_executor_preflight.py`, `assessment_execution_service.py`: current profile acceptance, existing worker fencing, bounded queue, retry/reconciliation. |
+| Authoring and UX | Existing authoring/runtime/practice/public-run services, question contracts, generation prompts, role templates, recruiter settings/editor and mock selector updated for actual runtimes and SQLite/DuckDB. PostgreSQL is labeled authoring-only. |
+| Operations | `scripts/check_environment.py`, `scripts/prepare_oa_environment.py`, four backend env profiles, `scripts/admin/discover_oa_provider.py`, deployment/owner/evaluation guides and migration tests. |
+
+Paths in this table are relative to `python-backend` except the root scripts and frontend components. The runtime catalog is pinned to `python-3.14`, `g++-15`, `gcc-15`, `openjdk-25`, `nodejs-24`, `sqlite-3`, `duckdb-1.5`. JavaScript and the historical Node alias share the Node runtime. Historical runtime pins fail closed and need explicit revision and live revalidation.
+
+### Coding and SQL evaluation contracts
+
+Run Code uses `/api/run-code-sync/`; standard stdin/stdout final grading uses native `/api/run-tests/`, weighted tests and exact/trim checking. Each test is a billable run, regardless of request batching. Hidden native results provide only verdicts: missing hidden resource metrics are intentional and are never fabricated. The backend applies the existing case weights and immutable question marks; it does not trust an arbitrary provider score to change business rules. Function questions retain GenHire's typed JSON return comparison through the synchronous transport because native string comparison does not implement the existing typed contract.
+
+The provider supports bounded batches (default four); the existing durable application queue still dispatches one immutable case per task for independent recovery and scoring. Multi-case native judging is implemented and tested, but queue task aggregation is deferred. Public Run Code accepts custom stdin and returns safe diagnostics; hidden fixtures are never included in its payload. Candidate compile/runtime/time/memory/output failures produce the appropriate case verdict. Provider authentication, quota, infrastructure and ambiguous dispatch failures block/retry/reconcile without assigning a fabricated candidate zero.
+
+Each generic SQL dataset runs in its own fresh provider sandbox. The codec supports SELECT, JOIN, grouping/HAVING, subqueries, CTEs, window functions and aggregation within the selected dialect. It rejects multiple statements, client commands and obvious mutation/file commands. This query filter is an additional contract guard, **not an isolation boundary**. Fresh engine execution plus reviewed provider network/filesystem/resource isolation is required before release.
+
+Actual result columns, NULL versus the string `NULL`, Unicode, primitive numbers, duplicate rows, ordered/unordered rows and numeric tolerance are checked by backend typed comparison. Empty results still require actual column metadata; incomplete/truncated framing cannot pass. Ambiguous/nested result types must be cast to supported primitives. The implementation materializes the candidate query into a temporary result table; verify ordering-sensitive questions on the chosen engine during live reference acceptance. Expected hidden answers are never injected into candidate SQL. Native string/rows checking is not used where it would lose typed SQL semantics.
+
+SQLite/DuckDB are not PostgreSQL/MySQL replacements for dialect-specific syntax. PostgreSQL 18 references can be validated only by an explicitly trusted operator on the dedicated Aiven development service. Aiven requires a real CA file and `verify-full` TLS, restricts statement/lock time and result rows, creates separate dataset schemas and always rolls back. Trusted schema/seed code has database privileges; never pass candidate code or unreviewed generated SQL to this CLI. It returns validation evidence without authorizing candidate publication. PostgreSQL and legacy MySQL candidate starts, public runs and publication remain blocked even if another capability is stubbed or an env toggle is changed.
+
+### Configuration
+
+All four backend profiles now contain the final settings. Local/production private files remain gitignored; new credentials are blank for manual entry. Unrelated assignments were preserved. The frontend has no new private settings. Example rollout gates remain false; existing private gate values were preserved and do not establish acceptance.
+
+| New/retained field | Default or requirement |
+|---|---|
+| `OA_EXECUTION_PROVIDER`, `OA_GENERIC_SQL_PROVIDER` | `onlinecompiler` |
+| `ONLINECOMPILER_API_BASE_URL` | `https://api.onlinecompiler.io` |
+| `ONLINECOMPILER_API_KEY` | Owner supplies backend-only REST key |
+| `ONLINECOMPILER_TEST_BATCH_SIZE` | 4; confirm account batch cap before increasing |
+| `ONLINECOMPILER_RUNS_PER_MINUTE` | 30 conservative Free admission budget |
+| `ONLINECOMPILER_MONTHLY_PLAN_USD` | 0 reporting value; update after an approved purchase |
+| `OA_MAX_CONCURRENT_EXECUTIONS` | 2 distributed slots, matching the tested Free account |
+| `OA_EXECUTION_TIMEOUT_MS` | 30000 transport deadline |
+| `OA_MAX_PRACTICE_RUNS_PER_QUESTION` | 10 public runs |
+| `OA_ENABLE_SQLITE`, `OA_ENABLE_DUCKDB` | true |
+| `AIVEN_POSTGRES_URL`, `AIVEN_POSTGRES_SSL_ROOT_CERT` | Owner's dedicated PostgreSQL 18 URI and accessible CA file |
+| `AIVEN_POSTGRES_SSL_REQUIRED`, `AIVEN_POSTGRES_PURPOSE` | true; `question_validation` |
+| `OA_POSTGRES_QUESTION_AUTHORING_ENABLED` | true |
+| `OA_POSTGRES_CANDIDATE_EXECUTION_ENABLED` | false; candidate code never goes to Aiven |
+| `GENHIRE_EXECUTOR_ISOLATION_POLICY_ID` | Existing required policy identifier matching a completed review |
+
+#### Retired environment settings
+
+The cleanup tool removes and audit rejects these retired names; mentions here are a retirement inventory, not active configuration:
+
+```text
+ONECOMPILER_API_URL ONECOMPILER_API_BASE_URL ONECOMPILER_API_KEY
+ONECOMPILER_AUTH_TOKEN ONECOMPILER_API_SECRET
+OA_SQL_PROVIDER OA_JUDGE_PROVIDER
+SPHERE_PROBLEMS_ENDPOINT SPHERE_COMPILERS_ENDPOINT
+SPHERE_PROBLEMS_TOKEN SPHERE_COMPILERS_TOKEN
+SPHERE_PROBLEMS_API_URL SPHERE_COMPILERS_API_URL
+SPHERE_PROBLEMS_API_TOKEN SPHERE_COMPILERS_API_TOKEN
+SPHERE_RUNTIME_PROFILES_JSON SPHERE_MASTER_JUDGE_ID SPHERE_TESTCASE_JUDGE_ID
+GENHIRE_SPHERE_MONTHLY_SUBMISSION_LIMIT GENHIRE_OA_EXECUTION_CONCURRENCY
+OA_SQL_POSTGRES_JOB OA_SQL_MYSQL_JOB OA_SQL_POSTGRES_REGION OA_SQL_MYSQL_REGION
+GENHIRE_SQL_PROJECT GENHIRE_SQL_REGION GENHIRE_SQL_ARTIFACT_BUCKET
+GENHIRE_SQL_POSTGRESQL_JOB GENHIRE_SQL_MYSQL_JOB
+GENHIRE_SQL_TASK_TIMEOUT_SECONDS GENHIRE_SQL_MAX_CONCURRENT_EXECUTIONS
+GENHIRE_SQL_MONTHLY_EXECUTION_LIMIT GENHIRE_SQL_MONTHLY_BUDGET_USD
+```
+
+`OA_EXECUTION_PROVIDER` was changed from the old provider to `onlinecompiler`; the SQL selector is now `OA_GENERIC_SQL_PROVIDER`. The old execution concurrency name is replaced by `OA_MAX_CONCURRENT_EXECUTIONS`. Shared Google/GCS, MongoDB, auth, payment, AI and email settings were retained.
+
+### Real API checks and remaining acceptance
+
+Using the previously authorized OnlineCompiler.io key ephemerally, live checks returned successful execution for Python, JavaScript, Java, C++ and C. A three-case native judging request with weights 1/2/3 produced accepted/wrong-answer/accepted, two passed cases and the expected 66.67% weighted score. The hidden response contained only verdict/visibility. SQLite and DuckDB each successfully reused a schema name in independent requests with different seeds; typed NULL and string values were preserved. Usage increased from 1 to 13: exactly **12 executed runs** (five language runs, three judged tests, four SQL requests). No key was written into an artifact or printed in a result. The private temporary smoke artifact is not production acceptance evidence.
+
+Additional live checks verified hidden C++ compilation failure, Python runtime failure and timeout verdicts, plus joins, CTEs, GROUP BY/HAVING, window ranking and empty-result column metadata on both SQL engines. The first richer DuckDB check exposed numeric aggregates encoded as JSON strings; the decoder now uses actual engine column types to convert numeric values without converting text. All seven additional checks passed after that fix. Including the initial failed verification attempt and rerun, the account now reports 26/10,000 monthly runs consumed, 9,974 remaining. This is an account snapshot, not a per-OA cost guarantee.
+
+Aiven live connectivity is **not verified**: the new URI and CA are blank. The driver installed successfully; synthetic tests cover trust, TLS options, server version and rollback. Provider smoke results are not a network/filesystem isolation audit. Full operator security review and profile-bound live acceptance remain required, followed by the real staging cohort, native proctoring/device, payment and failure-recovery checks. Deployment environment inspection was unavailable because GCP/Vercel CLIs and an authenticated browser connection were absent. No deployed env settings were changed.
+
+### Automated regression verification
+
+The complete backend suite passed on a disposable local MongoDB replica set: **477 tests ran, 474 passed and three opt-in checks skipped**. After the final retired-task guard, the provider suite passed 19 tests and the evaluation suite passed 22 tests. Coverage includes native hidden-verdict collection through the durable dispatcher, real Mongo concurrency/idempotency, SQL typed results and retirement of old queued work. The environment unit suite passed 20 tests; schema audit passed with zero errors/notices across local/production and examples. Full local/production configuration audits correctly report the blank API key/policy fields, plus pending Aiven setup notices; schema parity alone is not readiness. Frontend `npm run check:oa` passed smoke tests, lint, web build and kiosk build; `npm test` passed 44 tests. Builds emit existing large-bundle and outdated Browserslist advisories. No separate TypeScript project check is configured. The PostgreSQL driver installed successfully. These checks exercise synthetic transports/local application integration; the live checks above are the distinct provider evidence.
+
+### Costs and separate usage ledgers
+
+The provider currently advertises Free 10,000 runs/month; Starter $10/150,000; Pro $49/1,000,000; Business $199/4,000,000 (coming soon); Enterprise custom. Recheck [official pricing and limits](https://onlinecompiler.io/) before purchase. Aiven's selected Free development service should add $0 if it qualifies; no paid database was provisioned. Existing backend, storage, AI, payment, proctoring and bandwidth costs are additional.
+
+For one OA with three coding questions, two SQL questions and twenty MCQs:
+
+`final_runs = sum(coding hidden-test counts) + sum(SQL dataset counts)`
+
+For example, three default 16-case coding questions (two samples and fourteen graded hidden tests each) plus two six-dataset SQL questions cost **54 final runs**. Twenty MCQs cost zero compiler runs. Ten public runs on each of five executable questions adds up to 50 runs, making **104 runs**. Authoring validation multiplies coding tests by enabled reference languages and adds SQL datasets; it is separate from candidate execution. Infrastructure retries and acceptance checks also consume allowance.
+
+| Plan | 54-run allowance cost | 104-run allowance cost | Maximum 54-run OAs before other use |
+|---|---:|---:|---:|
+| Free | ₹0 within allowance | ₹0 within allowance | 185/month |
+| Starter | ₹0.324 | ₹0.624 | 2,777/month |
+| Pro | ₹0.23814 | ₹0.45864 | 18,518/month |
+
+INR values use an **illustrative ₹90/USD**, not a live exchange quote, and assume the whole plan allowance is used; they exclude tax/payment fees and all other services. Actual allocated compiler expense is `monthly subscription INR / completed OAs that month`. For example, a $10 subscription spread over 300 OAs at that illustrative rate is ₹3/OA, even if the unused allowance calculation is ₹0.324. On Free, quota exhaustion stops work; it is not a promise of unlimited free OAs or paid overage handling.
+
+The new `oa_provider_requests` journal records request count, estimated/known actual runs, public/hidden usage, purpose, language, recruitment/practice pool, attempt/owner and unknown outcomes. The existing GenHire wallet/credit ledger remains separate and prices unchanged. `/api/usage/` snapshots are allowlisted and can be recorded with the admin discovery command; the existing admin evaluation operations response includes `provider_usage`, per-attempt runs and estimated allowance cost when a real allowance snapshot exists. Missing snapshots and ambiguous outcomes remain unknown, not zero or fabricated balance.
+
+### Scaling roadmap and operational limits
+
+Monthly allowance and simultaneous execution are separate constraints. The tested Free account allows two simultaneous runs, eight pending tests/request and 30 runs/minute. The application defaults to two distributed active requests and a conservative 30-run/minute reservation; a multi-test request can itself use multiple provider runners. A global bounded Mongo queue, durable task state, idempotency, lease fencing and backpressure already exist. Queue admission is not a throughput guarantee.
+
+Assuming one OA per active user daily for 30 days, excluding validation/retries:
+
+| DAU | Final-only 54 runs/OA | With 104 runs/OA | Planning action |
+|---:|---:|---:|---|
+| 10 | 16,200/month | 31,200/month | Free is for initial testing; even this daily volume exceeds it. Check actual demand before Starter. |
+| 50 | 81,000 | 156,000 | Starter may cover final-only usage; practice can exceed it. Verify rate/concurrency independently. |
+| 100 | 162,000 | 312,000 | Evaluate Pro, worker recovery and peak-window load tests. |
+| 2,000 | 3,240,000 | 6,240,000 | Negotiate available capacity/Enterprise; coming-soon Business is not a provisionable plan assumption. |
+
+At 30 runs/minute, 54 final runs alone require at least 1.8 minutes of aggregate dispatch budget, before compile latency or contention. Before a large exam, load-test queue wait and provider saturation, allocate fair organization quotas, review output/storage growth and alert on monthly allowance/429s/unknown dispatches. Organization fairness and a measured 2,000-user peak are future milestones, not delivered guarantees. PostgreSQL candidate isolation remains a separate future design requiring approval; do not build another GCP judge or run it on the shared Aiven service.
+
+### Cutover, rollback and next milestone
+
+Set manual credentials, install backend requirements, run the environment audit, complete trusted Aiven validation, and obtain live coding/generic-SQL acceptance. Explicitly revise and validate old pinned question versions. Reconcile/drain retired queued or ambiguous tasks before candidate cutover. Old provider tasks are blocked for review rather than replayed; their records and IDs remain. Unknown new POSTs retain their journal/slot and never retry automatically. Known pre-dispatch rate/capacity rejections can requeue safely; quota/auth failures require operator action.
+
+For rollback, pause new candidate starts, retain immutable submissions/results/credit records and all journals, then review the previous release and its original credentials/acceptance before separately approving a deployment. Never interpret old IDs on the new provider, translate candidate dialects automatically, or replay unknown paid execution. There is no automatic fallback to retired providers. No deploy, purchase, cloud deletion, commit or push was performed. After verified cutover, revoke retired provider credentials; audit unused GCP judge resources separately before any approved retirement.
+
+This milestone is ready for development configuration and staging acceptance, **not production deployment**. Next milestones require owner approval: actual Aiven connection, full isolation acceptance, staging cohort/device/failure rehearsal, measured peak capacity and eventual release. Stop after the migration milestone.
+
+### Historical workflow implementation record
+
+
 Planning and decision-finalization date: 2026-10-19 (Asia/Kolkata). Owner choices recorded: Q11 B, Q16 C, Q21 A+B, all other questions A.
 
 ## 1. Scope and execution contract
@@ -646,50 +799,11 @@ Historical checkpoint: Step 3 was not started at Step 2 handoff. The following r
 
 ## 17. Step 3 implementation record — Question bank and assessment authoring
 
-- Authorization: owner requested **Start Step 3**, selected providers below, then explicitly directed implementation to continue with placeholders without waiting for Sphere credentials. Latest instruction: **continue**.
-- Date: 2026-10-20. Status: **implementation delivered; live execution acceptance pending**. Formal Step 3 remains **In Progress** until its original real-execution acceptance gates pass. Steps 4–10 remain Not Started. This record distinguishes implemented source and local checks from tested cloud behavior.
-- Active backend `.env` was not edited. No production migration, cloud deployment/apply, candidate enrollment, real paid generation, managed execution, OA activation, commit or push was performed.
-
 ### Confirmed execution decisions
-
-| Item | Owner-approved choice and implementation |
-|---|---|
-| Managed code | Sphere Engine **Compilers API v4 and Problems API v4**, account-specific HTTPS endpoints and server-only tokens. Compiler/version IDs must come from the actual account catalogs. |
-| Languages | Python **3.12**, JavaScript/Node **22**, Java **21**, C++ **20**, subject to account availability. **C17 is deferred**. No silent runtime substitution. |
-| SQL | Google Cloud Run Jobs, disposable isolated PostgreSQL **17** / MySQL **8.4 LTS**, **europe-west1**. Use the existing GenHire project; no new project is proposed. |
-| Budget | Incremental SQL **$10/month target**. Terraform prepares budget alerts; alerts do not cap spending. Hard application pilot admission is one global SQL execution across both engines, up to 200 dispatches per UTC month, 60-second task timeout, no automatic task retries. Sphere separately permits up to 500 submissions/month. Both monthly ceilings are configurable downwards. |
-| Missing configuration | Continue independent implementation. Manual drafts and existing functionality remain usable. Code/SQL generation, approval and content publication require a configured, live-validated executor. No unsafe local execution fallback or fabricated passing validation. |
 
 ### Delivered behavior
 
-1. **Private, immutable question bank.** Recruiter-owned version lineage, stable operation receipts, paginated summaries, private source/answer access and audit records. Existing company display names do not grant shared access. Recruitment content has its own pool and cannot be mixed with practice content.
-2. **Manual editors integrated with job details.** The hiring setup summary opens question management. MCQs support stable option IDs, single/multiple answers, difficulty, marks and private explanation. Coding supports statements, input/output format, constraints, sample/hidden tests, weights, limits, reference solutions, public starter code and all four runtime labels. SQL supports engine/version, public schema, separate seed fixtures, private reference query, expected columns/rows, ordering and numeric tolerance. Invalid fixture JSON preserves the editor until corrected.
-3. **Local coding IDE component.** Self-hosted Monaco editor and worker assets load on demand with Python, JavaScript, Java, C++ and SQL support; no external editor CDN receives source. Accessible textarea fallback remains available. This milestone integrates the editor into recruiter authoring; candidate timed attempts, Run/Submit and recovery remain Steps 5–6.
-4. **One strict content contract.** Manual/generated questions use the same backend schema and size/type bounds. Function contracts use `genhire_fn_v1`, typed named arguments and typed return values; both stdin/stdout and function contracts are retained. Private candidate serialization uses an explicit allowlist and strips reference solutions, hidden inputs/outputs, hidden SQL datasets, correct option IDs and private explanations. There is no public candidate question endpoint in this step.
-5. **Durable validation and mandatory human review.** MCQs receive structural validation; code/SQL validations are worker jobs. Version hashes, complete case/runtime coverage and actual executor evidence are required. Mere `{passed: true}` is rejected. Each validation creates immutable evidence and clears the current review; explicit approval needs that current passing validation and a reason. Publication checks exact blueprint counts/difficulty/marks/contracts/languages/dialect, approved question versions and a matching unexpired executor attestation. Rejection/revalidation, setup changes and selection edits are fenced transactionally against concurrent publication.
-6. **Revisioned assessment selection and immutable content publication.** Recruiters select/reorder exact question versions and explicitly save the workspace revision. Stale saves fail. Publishing creates an immutable assessment content version; it does not activate an OA, publish a job, invite candidates or charge credits. Existing candidates are untouched. Reopening a prior job configuration cannot mutate its superseded blueprint.
-7. **Quoted AI/hybrid authoring.** Explicit 1–5-question batches with recruiter instructions, slot type/difficulty/marks and selective regeneration. Strict generated JSON rejects duplicates, nonfinite values, extra fields and mismatched slots. Manual-only blueprints cannot generate. AI drafts are privately validated but never automatically human-approved or published. Adding generated versions to a selection is explicit; saving selection is a separate action.
-8. **Atomic credit holds and compensation.** Binding 15-minute server quotes show a default **30-credit OA setup hold** and an additional default **10-credit selected regeneration batch**, both env configurable. Initial setup funds remain reserved for later activation rather than captured here. Successful regeneration captures only its separate approved quote after usable versions exist. Failed/interrupted work releases applicable holds. Quote consumption and enqueue are idempotent; concurrent retries cannot duplicate jobs or overdraw. Settlement retries do not regenerate. Recruiters can explicitly release an unactivated setup hold, including after generation/workflow writes are disabled; private content remains saved.
-9. **Standalone workers and safe provider transport.** Fenced renewable leases, current-principal checks at claim/commit, private status polling and durable resume. A crashed external LLM call is compensated rather than blindly called again. Sphere POST intent/submission IDs and SQL request hashes/operations are journaled before further work; unknown POST outcomes require reconciliation. Provider URLs containing access tokens, hidden outputs and raw SQL exceptions are never returned to the frontend. Code never runs on the Flask host.
-10. **Prepared SQL infrastructure and live acceptance command.** Two container definitions, restricted fixture writer/SELECT-only reader, actual engine-version checks, socket-only database listeners, per-query timeout and independent process-group kill, bounded result artifacts and private bucket lifecycle. Terraform prepares existing-project APIs, digest-pinned jobs, scoped service accounts/IAM, private artifacts and budget alerts. Operator live acceptance checks runtime pins/probes, both coding contracts across four languages, wrong output, Python timeout, SQL correctness/DDL denial/timeouts, and Problems API correct/wrong submissions. It requires a separate documented security review; passing acceptance expires after 24 hours and is bound to the runtime/project/jobs/bucket/policy profile.
-
 ### Files and boundaries
-
-| Files | Purpose |
-|---|---|
-| `python-backend/models/assessment_content.py` | Shared contracts, blueprint matching, typed function/SQL fixtures and candidate-safe serializer. |
-| `services/assessment_authoring_service.py`, `routes/assessment_authoring_routes.py` | Private bank/workspace/review/publication transactions and authenticated HTTP APIs. |
-| `services/assessment_generation_service.py` | Binding quotes, durable AI jobs, generation parser, immutable validated drafts, wallet reservations/settlement/compensation. |
-| `services/assessment_harness.py`, `assessment_validation.py` | Four-language function source generation and strict trusted-result comparison; no host execution. |
-| `services/sphere_engine_service.py`, `managed_assessment_validator.py`, `config/assessment_execution.py` | Managed v4 transport, pinned runtime profiles, quota/journals and live-attestation gate. |
-| `services/sql_execution_service.py` | Transactional global/monthly admission, private artifact dispatch and hash-bound result collection. |
-| `services/assessment_validation_jobs.py`, `scripts/workers/assessment_authoring_worker.py` | Durable reference validation and generation/compensation worker entry point. |
-| `services/assessment_executor_preflight.py`, `scripts/admin/validate_assessment_executors.py` | Explicit operator-only real execution acceptance; never run by imports, HTTP reads or offline tests. |
-| `config/database.py`, `core/factory.py`, `services/job_setup_service.py`, `.env.example` | Additive indexes/routes, capability flags and server-only configuration placeholders. |
-| `infra/oa_sql/` | PostgreSQL/MySQL Dockerfiles, runner/dependencies, Terraform plus provider lock and operational README. No images/cloud resources are claimed to exist. |
-| `react-frontend/src/features/recruiter/components/AssessmentAuthoringPanel.jsx`, `AssessmentQuestionEditor.jsx`, `AssessmentGenerationPanel.jsx`, `HiringSetupSummary.jsx` | Integrated private authoring, selection, validation/review, quoted generation and job progress UI. |
-| `features/recruiter/api/assessmentAuthoringApi.js`, `utils/questionEditor.js`, `shared/components/ui/CodeEditor.jsx`, `MonacoCodeEditor.jsx` | API boundary, editor serialization and local editor/worker loading. |
-| Backend `tests/assessment_test_fixtures.py`, `test_assessment_authoring.py`, `test_assessment_generation.py`, `test_assessment_executors.py`; frontend editor tests and authoring smoke | Explicit test-only executor/LLM fixtures, real Mongo transactions, offline rendered React interactions and transport contracts. Fakes never satisfy production publication. |
 
 Backend `services/`, `config/`, `scripts/`, `routes/`, `tests/` paths above are under `python-backend`; frontend abbreviated paths are under `react-frontend/src`.
 
@@ -718,38 +832,13 @@ Unique indexes protect logical question revision, blueprint workspace/content re
 
 ### Configuration and operator handoff
 
-- Defaults stay off: `GENHIRE_WORKFLOW_ENABLED`, `GENHIRE_ASSESSMENT_GENERATION_ENABLED`, `GENHIRE_ASSESSMENT_EXECUTION_ENABLED`. Manual authoring needs workflow enabled; code/SQL publication additionally requires actual live acceptance. MCQ-only manual authoring can validate/review/publish content independently of managed providers.
-- Configure the two Sphere endpoints/tokens, `SPHERE_RUNTIME_PROFILES_JSON`, approved judge IDs, SQL project/region/private bucket/job names and `GENHIRE_EXECUTOR_ISOLATION_POLICY_ID` **server-side**. Never put these secrets in Vite/frontend environment files. `.env.example` records placeholders; actual `.env` is unchanged.
-- `GENHIRE_OA_JOB_SETUP_CREDITS=30`, `GENHIRE_OA_REGENERATION_CREDITS=10`; existing optional feature/mock prices remain from Step 2. No unimplemented optional feature is sold here. Recruitment per-attempt price is still unset and must be resolved before paid activation.
-- Run the explicit worker from `python-backend`: `venv/Scripts/python.exe scripts/workers/assessment_authoring_worker.py` (`--once` for one pass). It uses the selected backend environment/database. Configure/deploy a worker before enabling generation; do not start it against production just to verify imports. Disabled generation still allows existing settlement/refund work to drain. Retain worker access until holds settle during rollback.
-- Follow [SQL infrastructure and live acceptance instructions](../infra/oa_sql/README.md). Terraform was formatted/validated locally, not applied. A usable project ID/authentication and image build environment are still needed; the configured credential-file path in this workspace did not exist. No replacement project/account or credentials were invented.
-- The preflight command is `python scripts/admin/validate_assessment_executors.py --execute-live --security-review PATH` from the backend. It intentionally consumes execution quota and writes private evidence in that configured database. It was **not run live**. It cannot replace actual account isolation/image-security review. Compiler availability, hard limits, SQL file/network/role escape, output caps and crash recovery must be checked before recording that review.
-- Pilot SQL monthly limit is 1–200; Sphere limit 1–500. Concurrency=1 and task timeout=60 seconds are fixed pilot values, documented by corresponding example fields; changing those fields alone cannot raise hard limits. Terraform's budget variables configure alerts; `GENHIRE_SQL_MONTHLY_BUDGET_USD` is descriptive and cannot enforce a dollar cap. Shared-project costs, registry/build/log costs and other account consumers must be monitored separately.
-
 ### Verification record
 
 Test execution uses disposable loopback Mongo replica sets and explicitly injected fake providers; no private application database or real paid provider was called.
 
-| Check | Result / reproduction |
-|---|---|
-| Complete backend regression | **274 passed**, including **35 new Step 3 checks**: 17 authoring, 8 generation and 10 executor/queue/preflight-contract checks. From repo root: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Final log `.tmp/oa-step3-backend-final.log`. |
-| Frontend unit checks | Existing `npm.cmd test`: **39 passed**; `npm.cmd run test:question-editor`: **3 passed**. The latter covers typed JSON/private fixture round trips, invalid-JSON preservation and SQL/MCQ settings. Log `.tmp/oa-step3-frontend-final.log`. |
-| Rendered UI integration | **8 setup + 6 authoring + 50 portal checks passed**. Run `npm.cmd run test:job-setup`, `npm.cmd run test:assessment-authoring`, `npm.cmd run test:portals` in `react-frontend`. Actual React components/API boundaries use offline fixtures. Authoring rerun after the final polling fix also passed. Logs `.tmp/oa-step3-frontend-final.log`, `.tmp/oa-step3-frontend-handoff.log`. |
-| Frontend lint/build | Final `npm.cmd run lint:ci` and `npm.cmd run build` both exit **0**. No new lint warnings. Monaco and worker compile successfully; the lazy Monaco chunk is approximately 2.85 MB / 738 KB gzip, so opening the IDE has a significant initial download. Existing Browserslist age and bundle-size advisories remain. Final log `.tmp/oa-step3-frontend-handoff.log`. |
-| Terraform | Official Terraform **1.13.5** download SHA256 verified; `init -backend=false -input=false`, `fmt`, `fmt -check` and `validate` pass, using locked Google provider **7.46.1**. No plan/apply/cloud authentication performed. Provider cache is ignored; `.terraform.lock.hcl` is retained. |
-| Python / whitespace | All new assessment/executor/route/worker/admin modules and SQL runner compile. `git diff --check` passes; Git line-ending notices are informational. Local canary schema construction verifies all 10 live fixture definitions without executing them. |
-| Browser check | Computer-use browser inventory returned **no connected browser surfaces**. No authenticated UI or native window was modified. Actual Monaco startup/worker interaction and responsive visual QA remain unverified; no claim of a passed browser run is made. |
-| Live providers / images | **Not run**: real Sphere execution, real AI generation, PostgreSQL/MySQL image builds/execution, cloud provisioning, real isolation/escape tests and live acceptance/publication. These remain explicitly gated. |
-
-Verification fixes: corrected Monaco imports for installed 0.57 package exports, declared its worker environment through the browser global, fixed validation polling dependencies, preserved failed editor saves and durable status resume, rejected malformed vendor endpoints, added global monthly Sphere quota and SQL version/job admission checks, and bound executor profiles to the private artifact bucket. The full backend run also exposed a pre-existing payment test isolation issue: equal-address mongomock clients shared a weak-reference plan cache. Reset that cache per test; the full rerun passes without changing production recharge behavior. The interrupted editor dependency install finished without leaving a process to stop; no rejected process-stop action was needed or performed.
-
-Provider contracts were checked against official [Compilers API v4](https://docs.sphere-engine.com/compilers/api/overview-version-4) and [Problems API v4](https://docs.sphere-engine.com/problems/api/overview-version-4) documentation. Local payload tests verify the implemented contracts; they cannot establish actual account runtime availability or execution behavior. Cloud deployment/budget references are linked in the infrastructure README.
-
 ### Remaining acceptance and next-step boundary
 
 The independent Step 3 source/UI/infrastructure preparation is delivered. **Do not label the original live-execution acceptance complete** until the actual account targets, both SQL images, Problems/Compilers API behavior and referenced isolation review pass. Missing credentials do not justify repeatedly stopping implementation or requesting them again.
-
-Remaining live work: provision/review the existing-project SQL resources and real image digests; resolve actual Sphere compiler/judge pins; run security/escape and typed edge-case checks; execute operator preflight; then verify reference validation, review and content publication end to end using real providers. Live AI quality/provider behavior and a real-browser Monaco worker/layout check also remain unverified. Offline React tests do not prove browser geometry or worker execution. Monthly quotas are cautious pilot controls, not measured production capacity.
 
 Operational limitation: unknown external POSTs and missing SQL results deliberately retain their journal/slot until provider-side reconciliation. Automated terminal Cloud Run execution reconciliation and canary resource cleanup are not implemented; operator instructions and recorded IDs are provided. Generation model/provider usage metadata is limited to job/source lineage; detailed cost attribution is later operational work. Assessment activation must capture or reauthorize setup funding in Step 4; content publication alone must never do so.
 
@@ -820,16 +909,6 @@ Outbox `queued`/expired `preparing` work can be retried safely before dispatch. 
 
 ### Verification
 
-| Check | Result / reproduction |
-|---|---|
-| Full backend regression | **293 tests passed**, including **19 Step 4 additions** (18 progression/policy/transaction/HTTP tests plus one actual interview-route cutoff check). From repo root: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Final acceptance log `.tmp/oa-step4-backend-acceptance.log`; earlier complete pass `.tmp/oa-step4-backend-final.log`. Uses disposable local replica sets, never an application Mongo URI. |
-| Focused handoff | **60 passed**: 18 progression, 21 workflow foundation and 21 interview flow. Same runner with `--pattern test_hiring_progression.py --pattern test_workflow_foundation.py --pattern test_interview_flow.py`. Log `.tmp/oa-step4-backend-handoff.log`. Includes BSON type identity protection so isolated test-file imports work as well as combined discovery. |
-| Frontend units | **43 passed**: `npm.cmd test` (39), `npm.cmd run test:question-editor` (3), `npm.cmd run test:hiring-timing` (1). The new timing case covers opening, exact close, unknown schedule, terminal lifecycle and evaluating stages. |
-| Rendered frontend integration | **98 checks passed**: `test:hiring-progression` (6), `test:job-setup` (8), `test:assessment-authoring` (6), `test:portals` (50), `test:interview-ui` (28). Commands are `npm.cmd run <name>` in `react-frontend`. Real React components/API interfaces run against offline fixtures; sockets/media/providers are simulated. |
-| Frontend lint/build | `npm.cmd run lint:ci` and `npm.cmd run build` both exit **0**; no new lint warnings. Existing Browserslist age and large lazy Monaco/interview bundle advisories remain. All frontend commands above completed with native exit 0; combined log `.tmp/oa-step4-frontend-final.log`. |
-| Syntax / whitespace | New/changed scheduling, routes, billing, models and completion modules compile; `git diff --check` passes. Git CRLF notices are informational. |
-| Live acceptance | **Not performed**: real Sphere/SQL execution or publication validation, actual AI screening/OA providers, live email delivery, browser/kiosk visual QA, deployment or production load. Required provider/runtime gates remain closed and no attempt player is claimed. |
-
 Real Mongo checks verify atomic activation/capture rollback, existing-hold reuse, concurrent replay, stale/changed prices and monitoring, rejected content, generation-release conflict, delayed evaluation, missing proctoring, manual-default/automatic invitation behavior, explicit version enrollment/protected invitations, exact entry cutoff, full accepted duration, retained access/JWT deadline, reschedule protection, withdrawal, late-screening review, unknown delivery behavior and owner/candidate/admin access. HTTP checks caught and fixed nested ObjectId serialization in hiring operations. UI checks exercise explicit quote approval and stable failure retries, separate clear/invite actions, pending-evaluation holds, reasoned rescheduling and retained candidate data after refresh failure.
 
 Other verification fixes: prevented a start-failure refund from reversing a shared debit after another worker already persisted a usable session; froze first server finish receipt before report generation; retained the server time of the final accepted answer; distinguished expired screening in its label; prevented generic workflow publication bypass for activated jobs; cancelled replaced queued reminders; preserved private candidate-version monitoring evidence in list displays. New tests initially imported payment configuration during discovery; moved those imports behind the test dotenv patch to keep the final suites independent of local credentials. The completion route’s extracted test now supports its local timestamp import, and shared BSON types initialize before scoped test-module stubs. No production recharge behavior was changed to accommodate tests.
@@ -839,8 +918,6 @@ Other verification fixes: prevented a start-failure refund from reversing a shar
 Unconfigured legacy jobs/applications retain their existing flow. Activated jobs route future applications through immutable enrollment pointers; existing candidates require explicit enrollment. Plain legacy status/score writes remain fenced against managed records. Stage counts are derived, including distinct `screening/completed/cleared`, `screening/.../review_required`, `oa/invited`, `oa/in_progress` and `oa/expired`, so the legacy `screening_cleared` compatibility bucket is not the detailed OA funnel.
 
 Rollback: disable new scheduling/email work with their flags, preserve versions, authorized reads, stage history, invitations, accepted attempts and wallet operations. Existing configured submission/start guards fail closed; disabling rollout cannot turn a managed record back into a legacy write target. Keep Step 3 settlement/compensation running as needed to release outstanding generation holds. Accepted attempt reservations must be retained until the real attempt lifecycle settles them; entry-window cleanup must never release them. No destructive migration is introduced.
-
-Remaining limitations: real Sphere/SQL acceptance and image deployment are still Step 3 gates; actual timed OA questions/answers/autosave/Run/Submit, section timers, deadline submission and runtime-readiness switching are Step 5; evaluation/capture/refund and production throughput are Step 6. The attempt record/JWT response here is their transactional foundation, not a working candidate OA player. Screening’s interview engine remains process-local as previously documented. Outbox delivery has local fake-provider verification, not live mail-provider acceptance. Visual browser/kiosk and cross-service production behavior remain unverified. Rescheduling more than 500 unstarted entries needs a later bulk-job implementation.
 
 Historical Step 4 checkpoint: the owner's subsequent **Start step 5** authorizes the work recorded below. Preserve the accepted-start transaction/deadline and existing flags; never create a second attempt, extend a deadline on reconnect, charge at invitation creation, capture an unevaluated attempt, publish unvalidated code/SQL, or auto-send company-round emails. All changes remain uncommitted for review.
 
@@ -852,28 +929,7 @@ Historical Step 4 checkpoint: the owner's subsequent **Start step 5** authorizes
 
 ### Delivered behavior
 
-1. **Atomic prepared start.** The existing invitation/start transaction now invokes a runtime preparation hook before insertion. It pins the published assessment, public question snapshot, immutable private version/hash bindings, section schedule and `oa-v1` consent alongside the original full-duration deadline and wallet reservation. Missing content or unavailable code/SQL acceptance rolls the entire transaction back. Concurrent/retried starts still create one attempt/reservation. A 5 MiB public-content pilot limit leaves room in Mongo's document limit for bounded answers.
-2. **Candidate-only workspace.** `/assessments/:invitationId` provides consent/preflight and opens the accepted attempt by its server-recorded ID. Candidate timeline links lead there when available, including accepted attempts after new-start rollout is disabled. Attempt reads, answer writes, Run and Submit independently check candidate ownership; recruiters/admins cannot use candidate attempt APIs through a display name or guessed ID. Server responses allowlist public content and result fields. MCQ keys, reference solutions, private explanations, hidden fixtures, credentials and vendor IDs/URLs are excluded.
-3. **MCQ, coding and SQL entry.** Single/multiple selections and clearing answers use server-validated option IDs. Coding shows statement, input/output formats, constraints, marks, public examples, function signature where applicable, approved runtime/language selection, starter code and the existing locally bundled Monaco editor with accessible textarea fallback. SQL shows PostgreSQL 17/MySQL 8.4 dialect, schema, sample data and expected rows. Both coding contracts support custom input; typed function JSON is validated server-side and empty stdin is an explicit valid custom run. SQL custom datasets are not accepted; runs use the displayed public dataset.
-4. **Authoritative timers.** Shared mode permits revisiting questions; fixed-section mode reveals only the current section's question content and rejects writes outside its original server window. Total/section countdowns use a server timestamp plus monotonic browser elapsed time, with periodic synchronization and boundary refresh. A local clock, reload, disconnect, late valid start or entry-window expiry cannot change an accepted deadline. The server rejects writes at the exact deadline even if the UI is delayed.
-5. **Acknowledged autosave and recovery.** Batched answers require the acknowledged attempt revision and an operation key. Durable receipts replay the same acknowledgment after a lost response; changed key payloads conflict. Concurrent different writes have one winner and reject the stale revision. The page serializes its saves, retries the original packet, shows unsaved/saving/acknowledged status, protects navigation while dirty and retains an unsent draft/pending packet in tab-scoped session storage. Reload restores those packets. Server answers remain authoritative; a conflict requires explicit reconciliation/reload, and the UI warns before discarding local work. A full local cache does not prevent a server save. Storage is best effort, not a promise to recover a closed tab/device or work never acknowledged before a deadline.
-6. **Submit locks one immutable snapshot.** Manual submission first flushes/acknowledges pending edits, requires the current revision and confirms locking. A transaction records one submission snapshot/hash, increments the attempt revision and moves the canonical OA stage to `submitted`. Duplicate submits replay terminal state. The runtime worker submits due attempts without a connected browser, and a due attempt read also finalizes it. Deadline submissions use the original deadline as effective submission time and separately retain recording time. Only acknowledged answers enter the snapshot. No automatic pass, fail, score, recruiter advancement, debit capture or refund is fabricated; the reservation remains held for Step 6 settlement.
-7. **Durable isolated public Run.** Coding uses the Compilers v4 adapter with pinned runtime profiles; SQL uses the existing Cloud Run/SQL adapter. Runs dispatch only the selected public sample or candidate custom input, never hidden evaluation fixtures. The function harness wraps candidate source, not the reference solution, for that input. Source and SQL are never executed on the web host. Work is queued separately from HTTP requests, provider identity persists for polling and a candidate refresh discovers the latest safe Run state/result. Output text/SQL tables are bounded; compile/runtime/time/memory/output failures have explicit statuses. This milestone returns public execution results, not final grading.
-8. **Pilot cost and ambiguity controls.** At most 30 public runs per attempt and one unresolved run per attempt are admitted transactionally. Runs share the existing global Sphere monthly quota (maximum 500 dispatch intents) and SQL global concurrency 1/monthly maximum 200. No new paid feature or price was introduced. Dispatch intent precedes an external POST; uncertain responses retain `dispatch_unknown`, and a stale five-minute `dispatching` claim becomes reconciliation-required without resending. Unknown runs keep their slot. Read-only polling is retryable. SQL capacity rejection may requeue before external dispatch. These are cautious pilot limits, not measured production throughput or a guaranteed $10 cloud spend cap.
-
 ### Files and APIs
-
-| Files | Change |
-|---|---|
-| `python-backend/services/assessment_runtime_service.py` | Atomic preparation hook, safe scoped snapshots, section/timer enforcement, revisioned answer receipts, submission locking and due-attempt finalization. |
-| `services/assessment_public_run_service.py` | Asynchronous public/custom execution admission, sample selection, typed candidate harness, existing Sphere/SQL dispatch/poll adapters, durable quota and unknown-outcome handling. |
-| `services/hiring_progression_service.py` | Optional transaction-local preparation hook; earlier foundation callers remain compatible. |
-| `routes/hiring_progression_routes.py`, `config/database.py` | Runtime-backed invitation/start, authenticated attempt/answer/run/submit APIs, recursive JSON encoding and additive indexes. |
-| `scripts/workers/assessment_runtime_worker.py` | Explicit deadline/public-run worker, independent of browser/web process lifetime; no import-time launch. |
-| `.env.example` | Three default-off candidate launch/acceptance settings; real `.env` untouched. |
-| `react-frontend/src/features/assessment/pages/Assessment.jsx`, `src/app/routes.jsx` | Protected preflight/workspace route, editor/MCQ/SQL controls, timers, autosave/recovery, Run results and final submission. |
-| Candidate `HiringProgressNotice.jsx` | Link from an available or accepted invitation to the scoped workspace. |
-| `python-backend/tests/test_assessment_runtime.py`, frontend `scripts/assessment-runtime-smoke.mjs`, `package.json` | Real Mongo persistence/race/boundary checks and offline rendered candidate flow checks; `test:assessment-runtime` command. |
 
 Abbreviated backend paths are under `python-backend`; candidate frontend paths are under `react-frontend/src/features/candidate/components`.
 
@@ -899,23 +955,11 @@ Rollback disables new starts; retain accepted attempt reads/saves/submissions, o
 
 ### Verification
 
-| Check | Result / reproduction |
-|---|---|
-| Full backend regression | **309 passed** (293 previous + 16 Step 5 tests). From repository root: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Log: `.tmp/oa-step5-backend-acceptance.log`; earlier 307-test checkpoint `.tmp/oa-step5-backend.log`. |
-| Final focused runtime | **16 passed**, covering start/credit rollback/concurrency, consent/gates, acknowledgment replay/conflicts, concurrent saves, deadline submission without a browser, exact section boundaries, owner/withdrawal checks, disabled rollout recovery, HTTP privacy, typed wrappers in all four languages, both SQL sample payloads, quotas and unknown-dispatch recovery. Final run includes the added private/no-store HTTP header assertion; log `.tmp/oa-step5-runtime-acceptance.log`. |
-| Frontend units | **43 passed**: `npm.cmd test` (39), `npm.cmd run test:question-editor` (3), `npm.cmd run test:hiring-timing` (1). |
-| Rendered frontend checks | **105 passed**: new `npm.cmd run test:assessment-runtime` (7) plus existing hiring-progression (6), assessment-authoring (6), job-setup (8), portals (50), interview-ui (28). New checks cover consent, MCQ/coding/SQL controls, exact failed-save retries, empty custom stdin, save-before-submit, accepted resume, persisted pending-draft recovery and editing another question during an in-flight save. |
-| Frontend lint/build | All **11** frontend command groups exited **0**, log `.tmp/oa-step5-frontend.log`. After the final save-race/read-order fixes, `test:assessment-runtime`, `lint:ci` and `build` each exited **0** again; log `.tmp/oa-step5-frontend-acceptance.log`. Existing Browserslist age and large Monaco/interview chunk advisories remain. |
-| Syntax/whitespace | Runtime, public-run, route and worker modules compile. `git diff --check` passes; CRLF notices are informational. |
-| Live acceptance | **Not performed**: actual Sphere/Cloud Run execution, cloud provisioning, real isolation tests, browser/Monaco worker/screen-reader/kiosk QA or production load. All corresponding rollout gates remain closed. |
-
 All Mongo checks use the disposable loopback replica-set runner with isolated test databases; no application Mongo URI is used. Frontend checks use rendered React and simulated HTTP/providers. They do not establish real browser geometry, Monaco worker behavior, native kiosk restrictions, cloud isolation, live judge execution or production capacity. Runtime HTTP responses use `Cache-Control: private, no-store`.
 
 Verification fixes: normalized receipt timestamps for stable first/replayed acknowledgments; corrected SQL test fixtures to supply unique question/version identities; kept edits to another question dirty when an earlier packet finishes; prevented an older snapshot response from replacing a newer acknowledged revision; preserved server saves when tab cache writes fail; exposed safe latest-run recovery after refresh. These fixes do not introduce any production execution attestation or score.
 
 ### Remaining acceptance and Step 6 handoff
-
-Step 5's independently implementable workspace/persistence/worker is delivered. Live Sphere/SQL executions, actual Monaco/browser accessibility/layout and full kiosk launch/proctoring remain unverified. Keyboard-oriented controls use native labels, fieldsets, buttons and an editor fallback, but a real browser/screen-reader audit remains required. Public runs currently execute the first displayed sample per request, or custom coding input; they do not offer arbitrary hidden/sample fixture IDs. Diagnostics expose safe status and successful bounded stdout/SQL rows; detailed compiler/stderr diagnostics remain future work. Local tab storage cannot recover never-saved work from a closed tab or failed device. Unknown external outcomes require operator reconciliation; polling currently retains pending provider IDs without a terminal canary/reconciliation service.
 
 Step 6 must consume each immutable `assessment_submissions` record exactly once, resolve/hash-check the pinned question versions, run hidden evaluation through isolated verified providers, compute deterministic weighted results and exact-match MCQ marks, persist truthful pending/failure states, and implement idempotent capture/refund/reconciliation. Reuse these accepted deadlines and answer snapshots; do not grade mutable editor drafts, trust client scores or rerun uncertain POSTs. Finish resource/error evidence, safe compiler diagnostics, leases/retries/fencing/backpressure, monitoring and production throughput acceptance. Reuse this runtime for Step 9 practice through an explicit practice-pool adapter; it does not create mock purchases or mix recruitment/private banks now. Step 7 owns secure-browser/proctoring/accommodations, and no screening kiosk path was repurposed prematurely.
 
@@ -929,29 +973,7 @@ Historical Step 5 checkpoint: the owner's subsequent **Start Step 6** authorizes
 
 ### Delivered behavior
 
-1. **Immutable evaluation input.** Durable submission reconciliation creates one evaluation job per attempt. Before grading and again inside settlement, it verifies the submitted answer hash, saved question/version/hash bindings, recruiter ownership/recruitment pool, published configuration and blueprint. It grades the submitted snapshot even if mutable attempt answers later differ. Corrupt/mismatched content is held for review rather than scored. Duplicate admission/results cannot create a second report or capture.
-2. **Objective marks.** Pure Decimal scoring implements exact-match multiple-correct MCQs, no negative marks, unanswered finalized questions as zero, weighted hidden-test coding partial credit and explicitly weighted SQL datasets (including public samples). Section scores normalize earned/possible and use the recruiter's section weights. Infrastructure-ungraded questions yield no final overall score. AI does not decide or replace marks. Private reports include an objective threshold recommendation; missing OA threshold means review, not an invented pass mark.
-3. **Shared bounded case execution.** Public Run and hidden grading now use the same durable dispatcher and global transaction-backed capacity. Defaults: two active executions, 1000 queued admissions and 200 grading fixtures per assessment; bounded ranges and monthly Sphere/SQL budgets are documented in the operations runbook. SQL concurrency remains one. In-flight capacity/quota returns can temporarily add at most the configured active limit to the queue. Candidate language selection executes only that language; the approved four-language/runtime matrix remains unchanged. Code and SQL never execute on the web host.
-4. **Real-evidence rules.** Coding dispatch uses pinned Compilers v4 runtime profiles and versioned function/stdin contracts. Private scoring verifies actual returned compiler/version IDs and finite time/memory evidence, then applies deterministic output/type/resource comparisons. Missing/unknown provider evidence remains pending/review; compiler/runtime/time/memory/output-limit candidate failures are genuine zero-credit cases. Hidden execution stores verdict/resource evidence, not raw actual stdout in reports. SQL requires hash-bound private artifacts and evidence version 2; bootstrap/fixture failure cannot masquerade as candidate query failure.
-5. **Leases, retries and recovery.** Evaluation metadata uses renewable 60-second token-fenced leases. Paid POST intent is durable before dispatch. Known terminal infrastructure errors retry at most twice; unknown POSTs never auto-resend and retain their slots. SQL artifact failures before POST reuse the same reserved identity/quota. GET polling backs off to five minutes and flags eight repeated errors for review without assigning a zero. Unknown SQL launches may recover from the original verified private result artifact. Administrator reconciliation can bind a verified Sphere submission ID, resume read polling or retry a proven safe block, with reason, idempotency and audit. No unsigned callback endpoint is exposed; polling is authoritative.
-6. **Atomic capture/return.** A usable report, canonical OA completion, submission/attempt terminal states and capture commit in one Mongo transaction. Wrong/unanswered/candidate-failing submissions remain usable, chargeable evaluations. Exhausted confirmed infrastructure failure records an unavailable result and returns the reservation in that transaction. Uncertain work keeps its hold; authorized administrator platform-failure settlement can release it once, fence unfinished evaluators and cancel unposted grading work. It cannot refund an already usable captured report through that endpoint. Existing general billing refund primitives are retained; no new post-capture refund policy is invented.
-7. **Recruitment privacy and progression.** Recruiter/admin report APIs and the candidate-action panel show safe base score/section data and recommendation, including genuine zero marks. Own candidates see evaluation status, never unreleased scores, recommendations, hidden fixtures, private explanations, sources or provider details. Canonical OA completion remains pending recruiter result release; no automatic company-stage advance or rejection occurs. Threshold recommendation is objective only; Step 7 integrity evidence and Step 8 release/advancement controls remain separate.
-8. **Operational visibility and compatibility.** An explicit evaluator worker, additive indexes, aggregate admin operations endpoint and detailed runbook cover queue/held-slot/review monitoring, safe reconciliation, rollout/rollback and cost limitations. Existing Step 5 running public jobs retain a read-only result-collection path. New public runs hash-check pinned content, share execution capacity and can show bounded redacted compiler/runtime diagnostics for public input only. Existing unrelated screening/payment/authoring flows remain covered by regression checks.
-
 ### Files, APIs and operations
-
-| Files | Change |
-|---|---|
-| `python-backend/services/assessment_scoring.py` | Pure deterministic per-question/section/overall scoring and typed/stdout/SQL comparisons. |
-| `services/assessment_execution_service.py` | Durable case tasks, shared capacity/queue admission, dispatch/poll fencing, resource evidence, bounded retries and administrator reconciliation. |
-| `services/assessment_evaluation_service.py` | Submission reconciliation, content verification, evaluation leases, private reports, transactional capture/return and reasoned platform-failure disposition. |
-| `services/assessment_public_run_service.py`, `assessment_runtime_service.py` | Shared dispatcher for new public runs, pinned-content checks, pre-start grading budget enforcement and compatibility for existing running jobs. |
-| `services/sphere_engine_service.py`, `managed_assessment_validator.py`, `models/assessment_content.py` | Official form transport, bounded redacted public diagnostics, actual runtime-ID evidence, executor contract v2 and source limits aligned with accepted runtime answers. |
-| `services/sql_execution_service.py`, `infra/oa_sql/runner.py` | Verified artifact recovery from unknown dispatch and evidence-v2 startup/query distinction. No image built/deployed. |
-| `routes/hiring_progression_routes.py`, `config/database.py`, `models/hiring_workflow.py` | Scoped evaluation/operator APIs, additive indexes and candidate-safe evaluated/awaiting-release label. |
-| `scripts/workers/assessment_evaluation_worker.py`, `assessment_runtime_worker.py`, `.env.example` | Explicit evaluator/shared executor operation and default-off/bounded configuration. |
-| Recruiter `AssessmentEvaluationReport.jsx`, `HiringCandidateActions.jsx`; candidate `Assessment.jsx` | Objective score/section view, refresh/error handling, withheld results and honest unavailable copy; public diagnostics. |
-| Backend `tests/test_assessment_evaluation.py`, `test_assessment_executors.py`, `test_assessment_runtime.py`; frontend smoke scripts | Meaningful Mongo transaction/concurrency/privacy/resource-contract checks and rendered report/candidate checks. |
 
 Abbreviated backend paths are under `python-backend`; recruiter components under `react-frontend/src/features/recruiter/components`; candidate workspace under `src/features/assessment/pages`.
 
@@ -963,23 +985,9 @@ See [OA evaluation operations](oa_evaluation_operations.md) for worker commands,
 
 ### Verification
 
-| Check | Result / reproduction |
-|---|---|
-| Full backend regression | **334 passed** (309 previous + 25 new Step 6 checks), final native exit **0**. From repository root: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Final log `.tmp/oa-step6-backend-final-acceptance.log`; prior complete passes **329**, **332** and **333** in `.tmp/oa-step6-backend.log`, `oa-step6-backend-final.log` and `oa-step6-backend-acceptance.log`. |
-| Step 6 coverage | **23 new evaluation/scoring tests** and **2 new executor checks**, plus adapted public-run regression checks for the shared dispatcher. Tests cover exact MCQs, weighted partial scores, missing evidence, source budget, hidden-input dispatch, four function wrappers with explicitly fake results, both SQL transport/artifact paths, provider startup versus query timeout, concurrency/backpressure, lease fencing, capture rollback, bounded infrastructure retries, returned holds, withheld results, HTTP access, polling recovery and unknown-post reconciliation. |
-| Frontend units | **43 passed**: `npm.cmd test` (39), `test:question-editor` (3), `test:hiring-timing` (1). |
-| Rendered frontend checks | **110 passed**: portals (50), interview-ui (28), job-setup (8), assessment-authoring (6), hiring-progression (6), assessment-runtime (9), new assessment-evaluation (3). Candidate completed/unavailable states do not expose invented or unreleased scores; recruiter zero-score/section rendering and report refresh recovery pass. |
-| Frontend lint/build | All **12 command groups exited 0**, log `.tmp/oa-step6-frontend.log`. Final workspace/report/hiring rendered checks, `lint:ci` and `build` each exited **0** again; log `.tmp/oa-step6-frontend-acceptance.log`. Existing Browserslist age and large Monaco/interview chunk advisories remain. |
-| Syntax / whitespace | Scoring/execution/evaluation services, provider/runtime/routes, evaluator worker and SQL runner compile; `git diff --check` passes. CRLF notices are informational. |
-| Live/provider/browser/production load | **Not performed**. No source was actually compiled/executed by Sphere, no SQL image/database was started, no native browser/kiosk was controlled and no production concurrency/cost claim is made. |
-
 Tests use isolated loopback Mongo replica sets, explicit fake managed transports and rendered offline React fixtures; no application database or live provider is used. The local queue/concurrency check admits 5 of 20 concurrent enqueue requests with a configured queue limit of 5, and 2 of 10 competing claims with concurrency 2; it verifies bounded admission/fencing rather than measuring production execution capacity or the $10 cost target.
 
-Verification fixes: corrected Sphere form encoding against official documentation; added actual runtime-ID/resource evidence checks; classified SQL startup errors independently; aligned code/SQL contract limits with accepted 64,000-byte runtime answers; fenced old poll responses after operator rebinding; reused unposted SQL artifact reservations; retained holds and truthful unavailable state for unknown/incomplete evidence. No fake execution attestation or automatic candidate failure was introduced.
-
 ### Remaining live acceptance and Step 7 handoff
-
-Actual Sphere account/compiler/version correctness across all four languages and both contracts, real Problems API acceptance, SQL image builds/execution, timeout/OOM/output bounds, egress/file/role abuse, cloud crash recovery, real worker/load/latency/cost measurement and browser/kiosk accessibility remain unverified. Those checks cannot be replaced by mocked output, a successful build or a configuration flag. The production-load portion of Step 6 acceptance remains open alongside the original Step 3 live gates. No credentials were requested again and independent implementation was not paused for them.
 
 Public and hidden per-case execution currently uses Compilers v4 with local deterministic verdicts; the existing Problems adapter/canary remains part of account acceptance, not an invented/unvalidated Problems judge binding. No push-callback integration is required for recovery: authenticated operator reconciliation and bounded polling are delivered. Unknown provider outcomes and missing SQL artifacts can retain slots until operator action. The metadata queue is bounded; production fairness, worker counts and wider capacity still need measurements. Already captured usable attempts are not automatically refundable through the platform-failure endpoint. Detailed company reporting, result release, bulk shortlisting and admin UI remain Step 8.
 
@@ -1006,17 +1014,6 @@ Status: **Independent implementation delivered; local checks passed; live native
 - Native source/package version **1.3.0**: OA capability launch, runtime metadata IPC, camera-only OA permission policy, preserved screening microphone behavior, credential-redacted malformed launch handling and bounded dotted Monaco worker asset resolution. Web/kiosk assets were built; native installation/signing/publication was not performed.
 
 ### Verification
-
-| Check | Result / evidence |
-|---|---|
-| Full backend regression | **355 passed** (334 previous + 21 new integrity tests), exit 0. Reproduction: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Final log: `.tmp/oa-step7-backend-final-acceptance.log`. |
-| Integrity coverage | Launch expiry/hash/nonce/audience; scoped HTTP isolation/revocation/concurrent redemption; consent/accommodation revision and rollback; required dual samples; unavailable media gating; bounded events; idempotent extensions/reviews; signed evidence access/errors; retention deletion retry/holds/withdrawal; immutable scores/history; quoted pools/similarity and replay-safe billing. Mongo transactions are real isolated loopback tests; media, detector and provider outcomes are explicit fixtures. |
-| Frontend unit / rendered checks | **43 units and 114 rendered checks passed**, including four new integrity checks. Earlier authoring, screening, portals, timing, candidate/recruiter runtime and evaluation checks remain passing. Full run: `.tmp/oa-step7-frontend.log`; final integrity/runtime/evaluation/hiring rerun: `.tmp/oa-step7-frontend-acceptance.log`. |
-| Frontend lint / builds | `lint:ci`, `build` and `build:kiosk` exited 0. Kiosk build reran after final launch error handling: `.tmp/oa-step7-kiosk-final.log`. Existing large-chunk/Browserslist advisories remain. |
-| Native policy modules | **9 passed** using `node --test tests/runtime-security.test.js tests/media-permissions.test.js` from `secure-browser-kiosk`, including OA microphone denial, scoped launch payloads and malformed-payload redaction. These are module tests, not an installed native test. |
-| Kiosk runtime assets | Built runtime assets resolve through the bounded native allowlist, including the generated Monaco editor worker. This verifies file resolution, not real browser worker startup. |
-| Syntax / whitespace | Changed backend integrity/runtime/routes/worker files compile and `git diff --check` passes; CRLF notices are informational. |
-| Actual providers/devices/cloud/load | **Not performed.** No actual camera/phone/native session, Sphere execution, SQL deployment, GCS upload/signing/deletion or production capacity/cost claim is made. |
 
 Verification fixes included canonical replayable extension deadlines, concurrent session revocation fencing, effective deadline retention, signed-link failure handling, preservation/deletion race fencing, camera-only native grants and Monaco worker filename resolution. No mocked execution/security acceptance record or production bypass was added.
 
@@ -1072,8 +1069,6 @@ Final company UI (all 8 checks), lint and web build also exited 0 after aligning
 
 Before rollout validate sender identity/provider credentials/timeouts, supervised worker restart/unknown-dispatch alerts and reconciliation, actual responsive/accessibility behavior and realistic comparison/export/campaign load. `sent` records provider acceptance, not inbox delivery. There is no bounce/webhook/automatic failover integration or exactly-once external email guarantee. A state change after the last dispatch check cannot recall already accepted mail. A released result snapshot does not auto-update after later evidence reviews; advancement/release checks current binding and reviewers can explicitly withdraw publication.
 
-Do not enable earlier OA/security gates based on these local company tests. Actual Sphere/SQL acceptance, native/device/GCS/detector validation and wider production measurements remain open in sections 17/20/21. All changes remain uncommitted for review.
-
 Historical Step 8 checkpoint: Step 9 required separate authorization. The owner's subsequent **Start step 9** instruction authorized section 23 below. Step 10 retains final rollout/load/migration/security/accessibility hardening.
 
 ## 23. Step 9 — Mock OA, educational reporting and pricing completion
@@ -1097,22 +1092,9 @@ New backend: `services/practice_assessment_service.py`, `services/assessment_pri
 
 New frontend: `MockAssessmentPanel.jsx`, `PracticeAssessmentReport.jsx`, `PracticeAssessmentOperations.jsx`, `BillingOperationsPanel.jsx`, `usePricingCatalog.js`; integrated Practice mode selection, scoped workspace teaching reports/return behavior, admin Candidate support, both wallet pages, landing pricing and invite fee/retry copy. No new third-party library was installed.
 
-`.env.example` adds `GENHIRE_MOCK_OA_ENABLED=false` and `GENHIRE_MOCK_OA_CONTENT_ACCEPTED=false`. Existing `GENHIRE_MOCK_OA_CREDITS=30`, camera/dual prices, regeneration/setup/attempt/report settings remain authoritative. Restart backend/worker processes after changing env prices. Existing workflow/generation/runtime/evaluation/security/integrity and real executor/media approvals are still required. Missing Sphere/SQL credentials or acceptance block code/SQL purchase/publication/start; no request for credentials was repeated. The new global generation admission is deliberately one worker lease for the pilot; production generation throughput is not claimed.
-
 Supervise the practice worker for generation, advice and ready-entry expiry; continue existing runtime/public-Run/evaluation and retention workers. Workers were not run against the application database during implementation. Purchase/refund history has a separate records-retention policy; Step 7 raw-media cleanup does not delete it. No new cloud resource or actual monthly-cost measurement was introduced.
 
 ### Verification
-
-| Check | Result / evidence |
-|---|---|
-| Full backend regression | **395 passed** (374 previous + 21 new practice checks), final native exit 0. Reproduction: `python-backend/venv/Scripts/python.exe python-backend/scripts/dev/run_workflow_integration.py --mongod .tmp/oa-step1-mongo/mongod.exe --combined --pattern "test_*.py"`. Final log `.tmp/oa-step9-backend-acceptance.log`; earlier full **394** passes in `.tmp/oa-step9-backend.log` and `.tmp/oa-step9-backend-final.log`, original shared regression **374** in `.tmp/oa-step9-foundation.log`. |
-| New backend coverage | Candidate reserve/capture/start/resume, quote approval/expiry/reprice/concurrency, failed/partial/rejected/unknown/disabled generation compensation, multiple batched purchases under existing indexes, live pool collision/substitution, both coding contracts/all four language reference fixtures and both SQL engines, no hidden report disclosure, deterministic zero/blank grading, advice outage, original price/history privacy, optional media gating, ready expiry/full deadline/public Run, admin accommodation, prestart/active/evaluation technical returns and immutable retained answers, private HTTP/catalog scopes and the real acceptance fence refusing missing attestation even when capability output is stubbed. All AI/judge outputs in these checks are explicitly fake, not live acceptance. |
-| Frontend units | **43 passed**; existing unit suites preserved. |
-| Rendered UI | **131 passed** (122 previous + 9 new practice checks). New suite verifies no purchase on load, server prices/unavailable monitoring, quote invalidation/approval, retry-key preservation/resume, pending versus zero/teaching results, AI advice unavailable state, ledger refunds, admin accommodation/no practice similarity, server-driven landing/recharge values and pricing-outage recovery without clearing login. Log `.tmp/oa-step9-practice-ui-final.log`. |
-| Frontend regression/lint/build | Initial complete run `.tmp/oa-step9-frontend.log` passed all except a portal fixture returning an invalid pricing payload; the client now validates missing price data and the fixture models the new catalog. Final portal/job-setup/runtime/integrity/company suites, `lint:ci`, `build` and `build:kiosk` all exited 0 in `.tmp/oa-step9-frontend-final.log`. Existing Browserslist age/large chunk advisories remain. |
-| Native policy and assets | **9 native policy tests passed**. Built kiosk runtime allowlist resolves **17 assets**, including the Monaco editor worker. No installed Electron/worker startup/device behavior is implied by those checks. |
-| Syntax / whitespace | New/changed practice, pricing, runtime, evaluation, integrity, media, executor, refund and worker files compile; `git diff --check` passes. CRLF notices are informational. |
-| Actual providers/devices/production | **Not performed.** No real AI quality audit, Sphere compilation, SQL image/database execution, GCS media, phone/native geometry, billing against application accounts or production generation/latency/cost/load result is claimed. |
 
 Verification fixes included compound-index-safe pool identities, recruitment scheduler/overview exclusion, strict bounded AI critique/advice JSON, truthful missing pricing, replay-safe purchase keys, current executor acceptance fencing and atomic prestart/active technical returns. Shared screening/company regressions remain passing. Test doubles do not create a real passed executor attestation.
 
@@ -1227,16 +1209,6 @@ judge runtimes, SQL isolation, provider quotas and actual cloud cost are exclude
 
 ### Remaining release gates and handoff
 
-All seven journeys have component/service coverage; an actual 23-question SDE
-cohort and real mixed provider/device journeys are **not** certified end to end.
-Real executor credentials/profile attestation, isolated Cloud Run SQL jobs,
-actual AI quality, GCS/detector/native/phone/accessibility, staging HTTP/Redis/load,
-hosted CI, provider quotas/cost, working budget alerts and production backup/PITR
-restore remain required. The $10 SQL target is not a dollar spending cap.
-No owner pricing/threshold default is invented. Existing screening cannot be
-horizontally scaled using OA's durable workers alone. No cloud changes, actual
-`.env` edits, real emails, public activation, commits or deployments occur here.
-
 After independent implementation/verification, stop at the documented live
 acceptance gates. Explicit owner rollout authorization and real evidence are
 required before activating a private cohort; passing local checks does not
@@ -1244,34 +1216,7 @@ automatically complete formal Step 10 release acceptance.
 
 ## 25. Owner setup handoff — documentation follow-up
 
-Owner requested an explicit local and production setup checklist. Created
-[OA owner setup guide](oa_owner_setup_guide.md) with ordered provider/account,
-local replica-set Mongo/Redis, AI/GCS/email/payment, Sphere runtime/judge pins,
-SQL image/Terraform/IAM/ADC, complete OA env block, pricing, local workers,
-installer, real acceptance, flag staging, GCP API/continuous workers, Vercel,
-staging verification, migration, monitoring and rollback actions. It links
-current primary platform documentation and separates configuration from actual
-acceptance and remaining engineering work. Actual `.env` values were not read
-or changed; no runtime/cloud/provider/deployment action was taken.
-
 Additional handoff findings from source inspection:
-
-- Backend Dockerfile still uses Python 3.11 versus local/CI verification on 3.12;
-  final image alignment/validation needs a reviewed deployment change.
-- Seven continuous worker entry points exist, but SQL Terraform does not deploy
-  them and no complete OA worker supervisor/deployment manifest is supplied.
-- Live executor acceptance expires after 24 hours and requires a security review
-  within seven days. Current fresh successful canary definitions imply roughly
-  **28 Sphere submissions + 12 SQL executions** per preflight. Daily repetition
-  for 30 days would require **840 + 360**, exceeding pilot hard monthly caps
-  **500 + 200** before candidate traffic. Continuous-production renewal/quota/
-  budget design is therefore unresolved; do not create a blind daily renewal
-  cron, forge attestations or raise env values beyond hard limits.
-- Global rollout flags do not implement per-recruiter pilot admission. Use a
-  separate controlled staging environment or engineer the required cohort gate.
-- Local 18.5-second start p95, real provider/device/isolation/backup evidence and
-  production worker cost remain release gates; adding credentials alone does
-  not establish production readiness.
 
 These documentation findings do not invalidate the previously recorded local
 test results or claim any new live verification. Follow the guide's completion
@@ -1354,15 +1299,6 @@ worker deployment and remaining live/staging/device/backup gates remain intact.
 No sustainable renewal design or production capacity claim is inferred from
 these fixes; follow the updated owner guide before rollout.
 
-## 27. Sphere product research and owner-requested local activation (20 October 2026)
-
-Researched official Compilers v4, Problems v4/judges and Containers project/API
-documentation against the implementation. Added
-[Sphere/SQL setup](oa_sphere_sql_setup.md) with product boundaries, judge lookup,
-weighted scoring, SQL provisioning and outstanding custom-dataset limitations.
-Containers is an optional future adapter, not a dependency of the current GCP
-SQL implementation. Tokens alone cannot provision/validate either SQL design.
-
 Filled the owner's supplied public Compilers/Problems endpoints only where empty
 in the two private backend profiles. At inspection both saved profiles still had
 empty product-token fields; no screenshot token was used or copied. Existing
@@ -1374,17 +1310,6 @@ flags-disabled state for those three local keys. Production/example switches and
 all execution, candidate-runtime, security/evaluation/media/content acceptance
 gates remain unchanged. Local Mongo connectivity was not confirmed; configured
 AI credentials were not live-tested. These switches do not attest readiness.
-
-Added `scripts/admin/discover_sphere_account.py`: authenticated read-only tests,
-runtime catalogs and bounded/paginated Problems testcase/master judge discovery.
-No submissions, problems, database writes or environment writes. The transport
-rejects auth override query parameters, does not follow vendor paging URLs and
-returns only judge IDs/names/types. CLI output redacts configured tokens even
-inside provider labels. Three new tests and the existing 12 executor + 2 preflight
-safety tests passed against the isolated local test harness (17 total). The local
-environment checker reports zero errors and notices for remaining owner fields
-and the existing missing payment-webhook secret. Real discovery safely reports
-`execution_not_configured` until saved tokens exist; no live execution was claimed.
 
 ## 28. Website messaging and UX update (20 October 2026)
 
@@ -1400,15 +1325,6 @@ now have real retry paths. Added landing and outage/recovery regression checks.
 This update does not enable execution gates or deploy the website.
 
 ## 29. Discoverable job OA setup and role starters (20 October 2026)
-
-The owner explicitly requested all OA switches on for experimentation. Set all
-17 `_ENABLED` / `_ACCEPTED` keys true in `.env` and `.env.production`, preserving
-tokens and prices and keeping examples disabled. Normalized bare Sphere account
-hosts to HTTPS `/api/v4` endpoints. These are owner opt-ins, not completed security,
-grading, media or content acceptance; no live attestation was fabricated. Existing
-provider/isolation/attestation requirements still block unvalidated execution.
-The active local API reported its old disabled mock switch after edits; a full
-backend restart is required to load the new environment. No cloud deployment.
 
 Create/edit now share 19 job starters and 16 backend OA presets, including design,
 security, marketing, sales, HR, customer support and finance. The first step shows
@@ -1557,12 +1473,6 @@ semantic review. Local trusted reference programs passed 192 case executions;
 three known O(N) native baselines each passed 6/16 and timed out on 10/16.
 See [measured evidence and provider limitations](oa_template_validation.md).
 
-Pricing is unchanged: complete JD + requested OA AI draft = 10 credits, manual
-starters and editing = free, extra OA setup = 0. No cloud deployment, paid AI,
-Sphere execution or application email was initiated. Backend/worker restart and
-frontend rebuild/deploy are required to expose the changes. Existing live execution,
-SQL provisioning and explicit publication requirements still apply.
-
 Final validation: 66 isolated backend tests (role templates, combined drafting,
 existing generation, job setup and authoring), 19 rendered create/edit checks,
 53 portal regressions, 7 authoring checks, 5 compact UI/template/notification checks
@@ -1610,10 +1520,6 @@ Added shared hover, pressed, keyboard-focus and touch feedback for site buttons,
 links, summaries and form actions. Positioning transforms are preserved. Fixed the
 unstyled full-OA-template action outside its nested panel. Busy/loading text and
 explicit replacement confirmation remain in place.
-
-Live route checks are unauthenticated and must return 401 for protected authoring
-POSTs; this proves registration, not successful paid generation or publication.
-No test AI purchase, new Sphere execution or SQL deployment was initiated.
 
 
 Validation for this fix: **136 checks passed**: 44 isolated backend tests

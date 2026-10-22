@@ -9,6 +9,13 @@ fields from it using a single bulk lookup rather than one query per job.
 """
 
 from bson import ObjectId
+import uuid
+from services.shared_cache import cache, MISSING
+
+
+def invalidate_company(users_collection, owner_id):
+    # Versioned entries fence concurrent readers that started before the edit.
+    cache.set('company-revision', [users_collection.database.name, str(owner_id)], uuid.uuid4().hex, 3600)
 
 
 def load_company_map(users_collection, owner_ids):
@@ -25,13 +32,30 @@ def load_company_map(users_collection, owner_ids):
     if not object_ids:
         return {}
 
-    return {
-        str(user['_id']): user
-        for user in users_collection.find(
-            {'_id': {'$in': object_ids}},
+    object_ids = list(dict.fromkeys(object_ids))
+    scope = users_collection.database.name
+    parts = [[scope, str(owner)] for owner in object_ids]
+    versions = cache.get_many('company-revision', parts)
+    keys = [part + [version if version is not MISSING else '0'] for part, version in zip(parts, versions)]
+    hits = cache.get_many('company-display', keys)
+    result, missing, key_by_id = {}, [], {}
+    for owner, key, hit in zip(object_ids, keys, hits):
+        if isinstance(hit, dict) and set(hit) <= {'company_name', 'company_logo'}:
+            result[str(owner)] = hit
+        else:
+            missing.append(owner)
+            key_by_id[str(owner)] = key
+    if not missing:
+        return result
+    for user in users_collection.find(
+            {'_id': {'$in': missing}},
             {'company_name': 1, 'company_logo': 1},
-        )
-    }
+        ):
+        identifier = str(user['_id'])
+        display = {key: user.get(key) for key in ('company_name', 'company_logo')}
+        result[identifier] = display
+        cache.set('company-display', key_by_id[identifier], display, 60)
+    return result
 
 
 def attach_company_info(users_collection, jobs):

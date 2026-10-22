@@ -42,13 +42,25 @@ class AssessmentRuntimeService(HiringProgressionService):
         value = self.db.assessment_invitations.find_one({'_id': object_id(invitation_id)})
         if value and value.get('pool') == 'practice':
             from services.practice_assessment_service import PracticeAssessmentService
-            return PracticeAssessmentService(self.db, self.clock, runtime=self).invitation(actor, value)
+            result=PracticeAssessmentService(self.db, self.clock, runtime=self).invitation(actor, value)
+            return self.invitation_summary(result,value)
         result = super().invitation(actor, invitation_id)
         value = self.db.assessment_invitations.find_one({'_id': object_id(invitation_id)})
         result['attempt_id'] = value.get('attempt_id')
         from services.assessment_integrity_service import AssessmentIntegrityService, enabled
         result['security_required'] = enabled()
         if enabled(): result['integrity_policy'] = AssessmentIntegrityService(self).policy(value)
+        return self.invitation_summary(result,value)
+
+    def invitation_summary(self,result,value):
+        """Public format metadata only, after the existing invitation access check."""
+        version=self.db.assessment_versions.find_one({'_id':object_id(value['assessment_version_id']),'state':'published'}, {'configuration':1}) if value.get('assessment_version_id') else None
+        if version:
+            configuration=version['configuration']
+            sections=[{key:section[key] for key in ('type','count','duration_minutes') if key in section} for section in configuration.get('sections',[])]
+            job=self.db.jobs.find_one({'_id':object_id(value['job_id'])},{'title':1}) if value.get('job_id') else None
+            title=(job or {}).get('title')
+            result['assessment_summary']=dict(title=(title[:160]+' assessment') if isinstance(title,str) and title.strip() else 'Your GenHire assessment',sections=sections,question_count=sum(section.get('count',0) for section in sections),timer_mode=configuration.get('timer_mode','shared'))
         return result
 
     @property
@@ -76,7 +88,12 @@ class AssessmentRuntimeService(HiringProgressionService):
             raise WorkflowError('content_too_large', 'Candidate content exceeds the pilot workspace limit.', 503)
         if any(q['type'] != 'mcq' for q in questions):
             from services.managed_assessment_validator import ManagedAssessmentValidator
-            if not ManagedAssessmentValidator(self.db).capabilities()['available']:
+            from config.assessment_execution import sql_enabled
+            if any(q['type']=='sql' and not sql_enabled(q['sql']['engine']) for q in questions):raise WorkflowError('sql_engine_unavailable','This assessment SQL engine is unavailable. Saved work is retained.',503)
+            capabilities=ManagedAssessmentValidator(self.db).capabilities()
+            if any(q['type']=='sql' for q in questions) and not capabilities.get('sql_available'):
+                raise WorkflowError('sql_acceptance_required','SQL requires current live isolation acceptance.',503)
+            if not capabilities['available']:
                 raise WorkflowError('executor_unavailable', 'Live execution acceptance is required.', 503)
         sections, opening = [], attempt['started_at']
         for index, section in enumerate(configuration['sections']):
@@ -126,7 +143,7 @@ class AssessmentRuntimeService(HiringProgressionService):
         return dict(attempt_id=identifier, state=attempt['state'], revision=attempt['revision'], server_now=now,
             deadline=attempt['deadline'], sections=sections, timer_mode=attempt['configuration']['timer_mode'],
             questions=[q for q in attempt['questions'] if q['id'] in visible],
-            latest_run=dict(run_id=str(latest_run['_id']), state=latest_run['state'], result=latest_run.get('result')) if latest_run else None,
+            latest_run=dict(run_id=str(latest_run['_id']), question_id=latest_run.get('question_id'), state=latest_run['state'], result=latest_run.get('result')) if latest_run else None,
             answers={k: v for k, v in attempt['answers'].items() if k in visible}, submitted_at=attempt.get('submitted_at'))
 
     def writable(self, attempt, question_id=None, session=None):

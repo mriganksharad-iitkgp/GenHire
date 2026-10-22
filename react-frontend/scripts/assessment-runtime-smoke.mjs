@@ -47,7 +47,7 @@ globalThis.fetch = async (url, options = {}) => {
   return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
 };
 const tick = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
-const button = text => [...document.querySelectorAll('button')].find(n => n.textContent === text);
+const button = text => [...document.querySelectorAll('button')].find(n => n.textContent.trim() === text);
 async function click(node) { assert.ok(node); assert.equal(node.disabled, false); await act(async () => node.dispatchEvent(new MouseEvent('click', { bubbles: true }))); await tick(); }
 let Page;
 async function mount() {
@@ -67,10 +67,13 @@ try {
   assert.equal(button('Start assessment').disabled, true);
   await click(document.querySelector('input[type=checkbox]')); await click(button('Start assessment'));
   assert.equal(sessionStorage.getItem('companyxyz-token'), 'extended-token');
-  assert.equal(document.querySelector('[aria-label="Database schema"]').textContent, 'CREATE TABLE t (n INT);');
+  await click(document.querySelector('[aria-label="Go to question 3: List rows"]'));
+  assert.ok(document.querySelector('[aria-label="Database schema"]').textContent.includes('CREATE TABLE t (n INT);'));
+  await click(document.querySelector('[aria-label="Go to question 2: Echo stdin"]'));
   assert.ok(document.querySelector('textarea[aria-label="Answer for Echo stdin"]'));
   assertNamedControls(document);
-  await click(document.querySelector('[aria-label="Go to question 2: Echo stdin"]'));assert.equal(document.activeElement.id,'oa-question-q2');
+  await click(document.querySelector('[aria-label="Go to question 2: Echo stdin"]'));assert.equal(document.activeElement.textContent,'Echo stdin');
+  await click(document.querySelector('[aria-label="Go to question 1: Select an even number"]'));
   console.log('PASS preflight requires consent, starts once and renders MCQ/coding/SQL with accessible editor fallback');
 
   await click(document.querySelector('input[type=radio]')); failSave = true;
@@ -84,11 +87,13 @@ try {
   assert.ok(document.body.textContent.includes('All changes acknowledged by server'));
   console.log('PASS failed save retains local work and retries the same revision and operation key');
 
+  await click(document.querySelector('[aria-label="Go to question 2: Echo stdin"]'));
   await click(button('Run custom input'));
   assert.equal(calls.find(c => c.pathname.endsWith('/runs')).body.custom_input, '');
   assert.equal(calls.find(c => c.pathname.endsWith('/runs')).body.answer.source, 'print(input())');
   console.log('PASS empty custom stdin is sent explicitly and public runs remain separate from final submission');
 
+  await click(document.querySelector('[aria-label="Go to question 1: Select an even number"]'));
   await click(document.querySelectorAll('input[type=radio]')[1]);
   await click(button('Submit and lock assessment'));
   assert.ok(button('Keep working'));
@@ -128,6 +133,7 @@ try {
   await click(document.querySelectorAll('input[type=radio]')[0]);
   holdSave = new Promise(resolve => { releaseSave = resolve; });
   await click(button('Retry / save answers'));
+  await click(document.querySelector('[aria-label="Go to question 2: Echo stdin"]'));
   await act(async () => {
     const editor = document.querySelector('textarea[aria-label="Answer for Echo stdin"]');
     Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(editor, 'print("edited during save")');

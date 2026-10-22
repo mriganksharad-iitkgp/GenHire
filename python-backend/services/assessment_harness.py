@@ -89,7 +89,7 @@ def function_source(question, language, case_id):
     if language == 'python':
         encoded = repr(json.dumps(values, ensure_ascii=True, allow_nan=False))
         return solution + f'\nimport json as ghJson\nghArgs = ghJson.loads({encoded})\nprint(ghJson.dumps({name}(*ghArgs), allow_nan=False, ensure_ascii=True))\n'
-    if language == 'javascript':
+    if language in ('javascript', 'nodejs'):
         # JSON.parse avoids __proto__ object literal semantics; args are typed scalars/arrays.
         encoded = json.dumps(json.dumps(values, ensure_ascii=True, allow_nan=False))
         return solution + f'\nconst ghArgs = JSON.parse({encoded});\nprocess.stdout.write(JSON.stringify({name}(...ghArgs)));\n'

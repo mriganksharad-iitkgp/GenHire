@@ -53,7 +53,7 @@ export default function JobAIDraftBuilder({mode,onMode,setup,prompt,onPrompt,fil
     return()=>{cancelled=true;clearInterval(timer);};
   },[isOpen,generation?.key,generation?.state,busy]);
   const c=setup.configuration, price=setup.catalog?.prices?.ai_jd;
-  const changeOA=(key,value)=>setup.setConfiguration(current=>({...current,oa:{...current.oa,[key]:value}}));
+  const changeOA=(key,value)=>setup.setConfiguration(current=>({...current,oa:{...current.oa,[key]:value,...(key==='coding_contract'&&value==='function'?{languages:current.oa.languages.filter(language=>language!=='c')}:{})}}));
   const start=async(retry=false)=>{
     if(busy||(pending&&!retry)||!c||!price)return;
     if(!prompt.trim()&&!file){setError('Describe the job or upload its JD.');return;}
@@ -123,12 +123,12 @@ export default function JobAIDraftBuilder({mode,onMode,setup,prompt,onPrompt,fil
               const level=e.target.value;
               changeOA('sections',c.oa.sections.map(s=>({...s,difficulty:level==='balanced'?{easy:Math.floor(s.count/3),medium:s.count-2*Math.floor(s.count/3),hard:Math.floor(s.count/3)}:{easy:0,medium:0,hard:0,[level]:s.count}})));
             }}><option value="balanced">Balanced / custom mix</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
-            {c.oa.sections.some(s=>s.type==='sql'&&s.count>0)&&<label className={styles.field}>SQL engine<select value={c.oa.sql_engine} onChange={e=>changeOA('sql_engine',e.target.value)}><option value="postgresql">PostgreSQL 17</option><option value="mysql">MySQL 8.4</option></select></label>}
+            {c.oa.sections.some(s=>s.type==='sql'&&s.count>0)&&<label className={styles.field}>SQL engine<select value={c.oa.sql_engine} onChange={e=>changeOA('sql_engine',e.target.value)}><option value="sqlite">SQLite</option><option value="duckdb">DuckDB</option><option value="postgresql">PostgreSQL 18 (authoring only)</option></select></label>}
             {c.oa.sections.some(s=>s.type==='mcq'&&s.count>0)&&<label className={styles.field}>MCQ answers<select value={c.oa.mcq_mode} onChange={e=>changeOA('mcq_mode',e.target.value)}><option value="single">Single correct</option><option value="multiple">Multiple correct</option><option value="mixed">Both types</option></select></label>}
           </div>
           {c.oa.sections.some(s=>s.type==='coding'&&s.count>0)&&<details className={styles.compactHelp}><summary>Coding languages and format</summary>
             <label className={styles.field}>Coding format<select value={c.oa.coding_contract} onChange={e=>changeOA('coding_contract',e.target.value)}><option value="stdin_stdout">Standard input/output</option><option value="function">Function signature</option></select></label>
-            <div className={styles.languageChoices}>{[['python','Python'],['javascript','JavaScript'],['java','Java'],['cpp','C++']].map(([language,name])=><label key={language} className={styles.toggle}><input type="checkbox" checked={c.oa.languages.includes(language)} onChange={e=>changeOA('languages',e.target.checked?[...c.oa.languages,language]:c.oa.languages.filter(l=>l!==language))}/>{name}</label>)}</div>
+            <div className={styles.languageChoices}>{[['python','Python'],['javascript','JavaScript'],['java','Java'],['cpp','C++'],...(c.oa.coding_contract==='stdin_stdout'?[['c','C']]:[])].map(([language,name])=><label key={language} className={styles.toggle}><input type="checkbox" checked={c.oa.languages.includes(language)} onChange={e=>changeOA('languages',e.target.checked?[...c.oa.languages,language]:c.oa.languages.filter(l=>l!==language))}/>{name}</label>)}</div>
           </details>}
           <p className={styles.hint}>AI supplies statements, answer keys, explanations, reference solutions and sample/hidden tests. You can edit every field afterwards.</p>
         </>}

@@ -6,7 +6,7 @@ engineering blockers, follow [the owner setup guide](oa_owner_setup_guide.md).
 This document supplements [the integration record](oa_integration.md),
 [evaluation operations](oa_evaluation_operations.md), [integrity operations](oa_integrity_operations.md),
 [company hiring](company_hiring_operations.md), [practice operations](practice_oa_operations.md)
-and [SQL isolation infrastructure](../infra/oa_sql/README.md).
+and [OnlineCompiler.io acceptance](../OA_FINAL_SETUP.md).
 
 ## Evidence and release decision
 
@@ -92,7 +92,7 @@ Record admission-to-dispatch, submission-to-result, maximum queue depth/age,
 429/503, Mongo pool waits, Redis failures, capture/refund reconciliation and
 incremental provider/cloud cost. A slow successful burst is not a capacity pass.
 
-Use existing `GENHIRE_OA_EXECUTION_CONCURRENCY` (1–4, default 2), queue limit
+Use `OA_MAX_CONCURRENT_EXECUTIONS` (1-100, default 20), queue limit
 (1–5000, default 1000), SQL concurrency (default 1) and monthly quotas. Unknown
 dispatches retain slots. Increasing API replicas cannot overcome judge quota or
 the single-payer wallet transaction hotspot. Do not promise 100 simultaneous Run

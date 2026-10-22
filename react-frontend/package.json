@@ -9,6 +9,8 @@
     "@ffmpeg/util": "^0.12.2",
     "@mediapipe/tasks-vision": "0.10.32",
     "@react-oauth/google": "^0.12.2",
+    "@wasm-fmt/clang-format": "23.1.1",
+    "@wasm-fmt/ruff_fmt": "0.15.20",
     "axios": "^1.8.4",
     "chart.js": "^4.5.0",
     "lucide-react": "^0.562.0",
@@ -19,9 +21,12 @@
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.1.5",
     "socket.io-client": "^4.8.1",
+    "sql-formatter": "15.9.0",
     "three": "0.180.0"
   },
   "scripts": {
+    "test:oa-preview": "node scripts/oa-developer-preview-smoke.mjs",
+    "test:oa-preview-exclusion": "node scripts/check-oa-preview-exclusion.mjs",
     "test:landing": "node scripts/landing-smoke.mjs",
     "test:public-env": "node --test config/public-environment.test.mjs",
     "check:oa": "node scripts/oa-checks.mjs",

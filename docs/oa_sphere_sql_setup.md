@@ -1,3 +1,5 @@
+> ARCHIVED: historical provider/provisioning record. Do not follow these deployment or credential instructions. Current setup: [OA_FINAL_SETUP.md](../OA_FINAL_SETUP.md).
+
 # Sphere Engine and SQL setup
 
 Updated 20 October 2026. Official documentation was researched; no real provider

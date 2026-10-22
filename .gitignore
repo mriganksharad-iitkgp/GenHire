@@ -113,6 +113,7 @@ pip_list.txt
 
 # Isolated local verification databases and downloaded test tools
 .tmp/
+secure-browser-kiosk/.format-smoke-user-data/
 .terraform/
 *.tfstate
 *.tfstate.*

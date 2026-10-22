@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--execute-live', action='store_true', help='Dispatch real paid canaries; no automatic retries.')
-    parser.add_argument('--security-review', type=Path, help='Private JSON operator isolation review; see infra/oa_sql/README.md.')
+    parser.add_argument('--execute-live', action='store_true', help='Dispatch real paid canaries; only known pre-dispatch capacity/rate rejections may retry.')
+    parser.add_argument('--security-review', type=Path, help='Private JSON operator isolation review; see docs/oa_integration.md.')
     args = parser.parse_args()
     if not args.execute_live or not args.security_review:
         parser.error('Live acceptance requires --execute-live and --security-review; importing this script performs no work.')

@@ -14,7 +14,7 @@ class EnvironmentChecks(unittest.TestCase):
     def test_oa_defaults_are_safe_but_missing_provider_values_are_actionable(self):
         errors, notices = checks.inspect_oa({'GENHIRE_WORKFLOW_ENABLED':'false'})
         self.assertEqual(errors, [])
-        self.assertTrue(any('SPHERE_COMPILERS_TOKEN' in message for message in notices))
+        self.assertTrue(any('ONLINECOMPILER_API_KEY' in message for message in notices))
 
     def test_oa_launch_dependencies_and_invalid_prices_fail_closed(self):
         errors, _ = checks.inspect_oa({'GENHIRE_OA_RUNTIME_ENABLED':'true', 'GENHIRE_MOCK_OA_CREDITS':'-30'})
@@ -23,14 +23,14 @@ class EnvironmentChecks(unittest.TestCase):
 
     def test_oa_executor_validation_redacts_values_and_rejects_bad_profiles(self):
         errors, _ = checks.inspect_oa({'GENHIRE_WORKFLOW_ENABLED':'false', 'GENHIRE_ASSESSMENT_EXECUTION_ENABLED':'true',
-            'SPHERE_COMPILERS_ENDPOINT':'https://private-token-fixture@wrong.example/api/v4',
-            'SPHERE_RUNTIME_PROFILES_JSON':'{"private":"fixture"}'})
-        self.assertTrue(any('SPHERE_RUNTIME_PROFILES_JSON' in message for message in errors))
+            'ONLINECOMPILER_API_BASE_URL':'https://private-token-fixture@wrong.example',
+            'OA_MAX_CONCURRENT_EXECUTIONS':'invalid'})
+        self.assertTrue(any('OA_MAX_CONCURRENT_EXECUTIONS' in message for message in errors))
         self.assertNotIn('private-token-fixture', ' '.join(errors))
 
     def test_frontend_rejects_prefixed_judge_token_even_without_secret_in_name(self):
-        errors = checks.inspect_frontend({'REACT_APP_SPHERE_TOKEN':'private-fixture'}, {}, False)
-        self.assertTrue(any('REACT_APP_SPHERE_TOKEN' in error for error in errors))
+        errors = checks.inspect_frontend({'REACT_APP_ONECOMPILER_TOKEN':'private-fixture'}, {}, False)
+        self.assertTrue(any('REACT_APP_ONECOMPILER_TOKEN' in error for error in errors))
         self.assertNotIn('private-fixture', ' '.join(errors))
 
     def test_runtime_redis_secret_requires_explicit_file_audit_opt_in(self):
@@ -103,6 +103,25 @@ class EnvironmentChecks(unittest.TestCase):
             with patch.object(checks, "ROOT", root):
                 errors, _ = checks.audit(schema_only=True)
             self.assertTrue(any("keys or order differ" in error for error in errors))
+
+    def test_only_production_redis_can_be_omitted_with_runtime_secret_opt_in(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for app in ("python-backend", "react-frontend"):
+                (root / app).mkdir()
+                for name in (".env", ".env.example", ".env.production", ".env.production.example"):
+                    content = 'A="1"\nREDIS_URL=""\nB="2"\n'
+                    if app == "python-backend" and name == ".env.production":
+                        content = content.replace('REDIS_URL=""\n', '')
+                    (root / app / name).write_text(content, encoding="utf-8")
+            with patch.object(checks, "ROOT", root):
+                strict, _ = checks.audit(schema_only=True)
+                deferred, _ = checks.audit(schema_only=True, allow_runtime_secrets=True)
+                self.assertTrue(strict)
+                self.assertEqual(deferred, [])
+                (root / "python-backend/.env.production").write_text('A="1"\n', encoding="utf-8")
+                errors, _ = checks.audit(schema_only=True, allow_runtime_secrets=True)
+                self.assertTrue(any("keys or order differ" in error for error in errors))
 
     def test_obsolete_provider_settings_are_reported_without_values(self):
         with tempfile.TemporaryDirectory() as folder:

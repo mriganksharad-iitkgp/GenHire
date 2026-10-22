@@ -22,6 +22,8 @@ gunicorn==23.0.0
 
 # --- Database & cache ---
 pymongo==4.13.2
+# Dedicated Aiven trusted-reference validation; never candidate SQL.
+psycopg2-binary==2.9.11
 dnspython==2.7.0
 redis==8.0.1
 

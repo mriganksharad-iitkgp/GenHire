@@ -12,7 +12,7 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       GENHIRE_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?replicaSet=oaTest
       GENHIRE_DISABLE_JOBS: '1'
@@ -45,6 +45,10 @@ jobs:
         run: python -m unittest discover -s python-backend/tests -p 'test_*.py' -v
       - name: Offline environment schemas, preparation and credential redaction
         run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Build Linux Cloud Run image without application secrets
+        run: docker build --platform linux/amd64 --tag genhire-backend:ci python-backend
+      - name: Production container startup, shared cache and Redis outage smoke
+        run: python python-backend/scripts/dev/check_container.py --image genhire-backend:ci
       - uses: actions/upload-artifact@v4
         if: always()
         with:
