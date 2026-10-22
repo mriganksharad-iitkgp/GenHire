@@ -3,6 +3,9 @@
 
 pytest==8.4.1
 mongomock==4.3.0
+fakeredis[lua]==2.39.0
+# The heartbeat regression uses a real WebSocket client, not polling fallback.
+websocket-client==1.9.0
 pytest-asyncio==1.1.0
 pytest-repeat==0.9.4
 pytest-rerunfailures==12.0

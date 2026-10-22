@@ -60,8 +60,19 @@ jobs:
   frontend-and-kiosk:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
+    env:
+      # UI smoke tests serialize the real Python authoring contracts. Hosted
+      # runners do not contain the developer's ignored backend virtualenv.
+      GENHIRE_TEST_PYTHON: python
+      # Exercise the Vercel build environment on every hosted UI check.
+      VITE_VERCEL_GIT_REPO_ID: ci-build-metadata-not-public
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python catalog fixture dependency (no app startup)
+        run: python -m pip install pymongo==4.13.2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
